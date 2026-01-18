@@ -2160,7 +2160,9 @@
                         const gameSpeed = baseAccel * 0.15; // 40% SLOWER
                         // CLICK SPEED UPDATE: Reduced by another 40% from 0.12 -> 0.072
                         const clickSpeed = gameSpeed * 0.072;
-                        const readingSpeed = baseAccel * 0.13; // 30% FASTER
+
+                        // SYNCED: Reading Speed = Game Speed
+                        const readingSpeed = gameSpeed;
 
                         const isReading = player.isReadingMode; // or check player.isReadingMode getter
 

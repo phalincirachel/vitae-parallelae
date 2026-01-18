@@ -305,6 +305,23 @@
             }
         }
 
+        #debugLog {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            padding: 10px;
+            border-radius: 4px;
+            z-index: 9999;
+            pointer-events: none;
+            max-width: 300px;
+            display: block;
+            /* Visible by default for now */
+        }
+
         /* AUDIO PLAYER UI */
         #audioPlayerUI {
             position: fixed;
@@ -2145,6 +2162,30 @@
                 console.log('Alle Sprites geladen!');
             }
         }
+
+        // DEBUG HELPER
+        window.logDebug = function (msg) {
+            console.log("[DEBUG]", msg);
+            const d = document.getElementById('debugLog');
+            if (d) {
+                d.innerHTML += msg + "<br>";
+                const lines = d.innerHTML.split("<br>");
+                if (lines.length > 6) d.innerHTML = lines.slice(lines.length - 6).join("<br>");
+            }
+        };
+
+        window.addEventListener('load', () => {
+            const pal = document.getElementById('pal-filter');
+            const glitch = document.getElementById('glitch-filter');
+            logDebug("Filters: PAL=" + (pal ? "OK" : "NO") + " GLITCH=" + (glitch ? "OK" : "NO"));
+
+            const canvas = document.getElementById('gameCanvas');
+            if (canvas) {
+                const style = window.getComputedStyle(canvas);
+                const filter = style.getPropertyValue('filter');
+                logDebug("Canvas Filter: " + ((filter && filter !== 'none') ? "ACTIVE" : "NONE"));
+            }
+        });
 
         loadAllSprites();
 
