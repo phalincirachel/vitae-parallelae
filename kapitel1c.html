@@ -2857,9 +2857,9 @@
 
                     if (spawnPixel) {
                         // Adjust spawn: move player UP and LEFT from the blue marker
-                        // The -50 for Y moves the player higher to avoid spawning at map edge
+                        // FIX: Reduced offset from 50 to 16 to prevent spawning in walls
                         player.x = spawnPixel.x - 8;
-                        player.y = Math.max(50, spawnPixel.y - 50); // Ensure not stuck at bottom
+                        player.y = Math.max(50, spawnPixel.y - 16);
                         console.log(`Spawn Point: (${spawnPixel.x}, ${spawnPixel.y}) -> Player: (${player.x}, ${player.y})`);
                     } else {
                         player.x = mapW / 2;

@@ -1228,7 +1228,7 @@
                 let touchStartMouseX = 0;
                 let touchStartMouseY = 0;
                 let isTouchDragging = false;
-                let isTouchValid = false; // Optimization: Check UI only on start
+                let isTouchValid = true; // FIX: Default true so clicks work from start
 
                 // Helper: Check if touch is on UI elements
                 function isTouchOnUI(touch) {
@@ -2286,7 +2286,8 @@
                                 if (dist < 0.2) {
                                     moveTarget = null;
                                     cameraLookTarget = null;
-                                    velocity.set(0, 0, 0); // Stoppt sofort jegliche Restbewegung und Animation
+                                    velocity.set(0, 0, 0); // Full stop
+                                    // Skip remaining movement logic this frame
                                 } else {
                                     const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
 

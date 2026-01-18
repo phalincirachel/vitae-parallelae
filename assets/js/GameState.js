@@ -146,6 +146,16 @@ export const GameState = {
         return false; // Already unlocked
     },
 
+    async reset() {
+        console.log("[GameState] Resetting all saved data...");
+        this.state = {
+            collectedLore: [],
+            collectedLights: {}
+        };
+        await this.save();
+        console.log("[GameState] State Reset Complete!");
+    },
+
     async save() {
         if (window.electronAPI) {
             await window.electronAPI.saveGame(this.state);
