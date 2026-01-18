@@ -2856,10 +2856,26 @@
                     if (ls) ls.style.display = 'none';
 
                     if (spawnPixel) {
-                        // Adjust spawn: move player UP and LEFT from the blue marker
-                        // FIX: Reduced offset from 50 to 16 to prevent spawning in walls
-                        player.x = spawnPixel.x - 8;
-                        player.y = Math.max(50, spawnPixel.y - 16);
+                        // Spawn: Try to find a valid position near the blue marker
+                        // Start with offset, then search upward if in collision
+                        let spawnX = spawnPixel.x - 8;
+                        let spawnY = spawnPixel.y - 32; // Increased offset
+
+                        // Safety: Search upward for non-collision tile
+                        for (let tryY = spawnY; tryY > Math.max(50, spawnY - 100); tryY -= 10) {
+                            const checkX = Math.floor(spawnX);
+                            const checkY = Math.floor(tryY);
+                            if (checkY >= 0 && checkY < mapH && checkX >= 0 && checkX < mapW) {
+                                if (!collisionData[checkY] || !collisionData[checkY][checkX]) {
+                                    spawnY = tryY;
+                                    console.log(`Valid spawn found at Y=${spawnY}`);
+                                    break;
+                                }
+                            }
+                        }
+
+                        player.x = spawnX;
+                        player.y = Math.max(50, spawnY);
                         console.log(`Spawn Point: (${spawnPixel.x}, ${spawnPixel.y}) -> Player: (${player.x}, ${player.y})`);
                     } else {
                         player.x = mapW / 2;

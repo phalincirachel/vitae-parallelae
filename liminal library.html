@@ -2129,7 +2129,23 @@
                 });
 
                 // Animate
+                let lastFrameTime = performance.now();
+                let frameCount = 0;
+                let fpsLogTimer = 0;
+
                 function animate() {
+                    // FPS Diagnostic
+                    const now = performance.now();
+                    const frameDelta = now - lastFrameTime;
+                    lastFrameTime = now;
+                    frameCount++;
+                    fpsLogTimer += frameDelta;
+                    if (fpsLogTimer > 3000) {
+                        console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
+                        frameCount = 0;
+                        fpsLogTimer = 0;
+                    }
+
                     // Check Pause
                     if (window.gamePaused) {
                         requestAnimationFrame(animate);
