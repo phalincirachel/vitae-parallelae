@@ -2265,8 +2265,23 @@
                 window.gamePaused = false;
             });
 
-            const menuBtn = document.getElementById('menuBtn');
-            if (menuBtn) menuBtn.addEventListener('click', toggleArchive);
+            // ROBUST MENU BUTTON LISTENER
+            window.addEventListener('load', () => {
+                const menuBtn = document.getElementById('menuBtn');
+                if (menuBtn) {
+                    menuBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log("Menu Button Clicked");
+                        toggleArchive();
+                    });
+                    // Force pointer events
+                    menuBtn.style.pointerEvents = "auto";
+                    menuBtn.style.cursor = "pointer";
+                } else {
+                    console.error("CRITICAL: Menu Button NOT FOUND");
+                }
+            });
 
             // Toggle on 'M' key
             window.addEventListener('keydown', (e) => {
@@ -2548,7 +2563,9 @@
             // ============================================
             // KEYBOARD
             // ============================================
-            const keys = {}; // RESTORED MISSING DEFINITION
+            // KEYBOARD
+            // ============================================
+            var keys = {}; // CHANGED TO VAR FOR SAFETY
 
             // FIX: Handle Audio when Tab is hidden (Mobile/Desktop)
             document.addEventListener('visibilitychange', () => {

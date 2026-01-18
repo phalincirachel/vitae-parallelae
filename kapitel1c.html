@@ -2299,7 +2299,7 @@
                 isBehindForeground: false
             };
 
-            const keys = {};
+            var keys = {}; // CHANGED TO VAR FOR SAFETY
 
             // FIX: Handle Audio when Tab is hidden (Mobile/Desktop)
             document.addEventListener('visibilitychange', () => {
@@ -2335,8 +2335,22 @@
                 archiveModal.style.display = 'none';
             });
 
-            const menuBtn = document.getElementById('menuBtn');
-            if (menuBtn) menuBtn.addEventListener('click', toggleArchive);
+            // ROBUST MENU BUTTON LISTENER
+            window.addEventListener('load', () => {
+                const menuBtn = document.getElementById('menuBtn');
+                if (menuBtn) {
+                    menuBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log("Menu Button Clicked (1c)");
+                        toggleArchive();
+                    });
+                    menuBtn.style.pointerEvents = "auto";
+                    menuBtn.style.cursor = "pointer";
+                } else {
+                    console.error("CRITICAL: Menu Button NOT FOUND in 1c");
+                }
+            });
 
             // Toggle on 'M' key
             window.addEventListener('keydown', (e) => {
