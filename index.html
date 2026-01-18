@@ -2805,8 +2805,23 @@
                     if (ls) ls.style.display = 'none';
 
                     if (spawnPixel) {
-                        player.x = spawnPixel.x - 8;
-                        player.y = spawnPixel.y - 16;
+                        // FIX: Blue pixel marks FOOT position, not sprite top
+                        // Robust: use the same spriteH logic as checkCollisionAt
+
+                        // 1. Update scale for spawn depth (initial guess)
+                        if (mapH > 0) {
+                            const yNorm = Math.max(0, Math.min(1, spawnPixel.y / mapH));
+                            const depthFactor = 0.5 + (0.8 * yNorm);
+                            SPRITE.scale = SPRITE.baseScale * depthFactor;
+                        }
+
+                        const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+                        const FOOT_OFFSET_Y = 15; // Must match checkCollisionAt
+
+                        player.x = spawnPixel.x - 8; // Center horizontally
+                        player.y = spawnPixel.y - spriteH - FOOT_OFFSET_Y; // Feet at spawnPixel.y
+
+                        console.log(`Spawn: Blue(${spawnPixel.x},${spawnPixel.y}) -> Feet at Y=${spawnPixel.y}, SpriteH=${spriteH.toFixed(1)}, Player.y=${player.y.toFixed(1)}`);
                     } else {
                         player.x = mapW / 2;
                         player.y = mapH / 2;
