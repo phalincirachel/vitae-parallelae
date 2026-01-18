@@ -1042,7 +1042,52 @@
     <div id="debugLog">DEBUG LOG STARTED</div>
     <div id="processingInfo">
         <div class="spinner"></div>
-        <div>Verarbeite Karte...</div>
+        <div id="debugHUD">Invoking System...</div>
+    </div>
+
+    <!-- ARCHIVE MODAL (Global Save UI) -->
+    <div id="archiveModal" style="display: none;">
+        <div class="archive-card">
+            <div class="archive-header">
+                <div class="archive-title">Inhalt</div>
+                <button class="close-btn" id="closeArchiveBtn">&times;</button>
+            </div>
+            <div class="archive-content">
+                <!-- LINKS: KAPITEL -->
+                <div class="col-left" id="chapterList">
+                    <div class="col-header">Kapitel</div>
+                    <div class="menu-item active" id="chapter1Btn">
+                        <div class="item-main-text">Kapitel 1</div>
+                        <div class="item-sub-text">Der Marktplatz (Hier)</div>
+                    </div>
+                    <div class="menu-item" id="chapter1bBtn">
+                        <div class="item-main-text">Kapitel 1b</div>
+                        <div class="item-sub-text">Liminal Library</div>
+                    </div>
+                    <!-- Chapter 1c -->
+                    <div class="menu-item" id="chapter1cBtn">
+                        <div class="item-main-text">Kapitel 1c</div>
+                        <div class="item-sub-text">Steingasse</div>
+                    </div>
+                </div>
+                <!-- RECHTS: LORE -->
+                <div class="col-right" id="loreList">
+                    <div class="col-header">Lore</div>
+                    <!-- Dynamisch gefüllt -->
+                </div>
+            </div>
+            <!-- SAVE/LOAD FOOTER -->
+            <div class="archive-footer"
+                style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: flex; gap: 20px; justify-content: center;">
+                <button id="btnSaveData"
+                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">SAVE
+                    (Export)</button>
+                <button id="btnLoadData"
+                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">LOAD
+                    (Import)</button>
+                <input type="file" id="fileInputSave" style="display: none;" accept=".json">
+            </div>
+        </div>
     </div>
 
     <!-- UI OVERLAY -->
@@ -1618,21 +1663,25 @@
         }, 3000);
 
         function createGlowSprite() {
-            const size = 64;
+            const size = 128; // Increased resolution
             const half = size / 2;
             const c = document.createElement('canvas');
             c.width = size;
             c.height = size;
             const ctx = c.getContext('2d');
 
-            const grad = ctx.createRadialGradient(half, half, 2, half, half, half);
-            // Sehr subtiler Nebel
-            grad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-            grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.1)');
+            // Draw refined gradient
+            const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
+            // More "Cloud-like" diffuse stops
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+            grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.05)');
             grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
             ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, size, size);
+            // Draw clean circle to avoid artifacts
+            ctx.beginPath();
+            ctx.arc(half, half, half, 0, Math.PI * 2);
+            ctx.fill();
 
             return c;
         }
@@ -2006,6 +2055,26 @@
 
             isUnlocked(id) {
                 return this.state.collectedLore.includes(parseInt(id));
+            },
+
+            exportState() {
+                return JSON.stringify(this.state, null, 2);
+            },
+
+            importState(jsonString) {
+                try {
+                    const data = JSON.parse(jsonString);
+                    if (Array.isArray(data.collectedLore)) {
+                        this.state = data;
+                        if (!this.state.collectedLights) this.state.collectedLights = {};
+                        this.save();
+                        console.log("[LoreSystem] Imported State:", this.state);
+                        return true;
+                    }
+                } catch (e) {
+                    console.error("[LoreSystem] Import Error:", e);
+                }
+                return false;
             }
         };
 
@@ -2127,7 +2196,78 @@
             isBehindForeground: false
         };
 
-        const keys = {};
+        // ARCHIVE / SAVE UI HANDLERS
+        const archiveModal = document.getElementById('archiveModal');
+        const closeArchiveBtn = document.getElementById('closeArchiveBtn');
+        const btnSave = document.getElementById('btnSaveData');
+        const btnLoad = document.getElementById('btnLoadData');
+        const fileInput = document.getElementById('fileInputSave');
+
+        function toggleArchive() {
+            if (!archiveModal) return;
+            if (archiveModal.style.display === 'none') {
+                archiveModal.style.display = 'flex';
+                window.gamePaused = true;
+            } else {
+                archiveModal.style.display = 'none';
+                window.gamePaused = false;
+            }
+        }
+
+        if (closeArchiveBtn) closeArchiveBtn.addEventListener('click', () => {
+            archiveModal.style.display = 'none';
+            window.gamePaused = false;
+        });
+
+        // Toggle on 'M' key
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'm' || e.key === 'M') {
+                toggleArchive();
+            }
+            if (e.key === 'Escape' && archiveModal && archiveModal.style.display !== 'none') {
+                archiveModal.style.display = 'none';
+                window.gamePaused = false;
+            }
+        });
+
+        if (btnSave) {
+            btnSave.addEventListener('click', () => {
+                const json = LoreSystem.exportState();
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'liminal_save_' + Date.now() + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        if (btnLoad) {
+            btnLoad.addEventListener('click', () => {
+                if (fileInput) fileInput.click();
+            });
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const success = LoreSystem.importState(ev.target.result);
+                    if (success) {
+                        alert("Daten importiert! Seite wird neu geladen...");
+                        window.location.reload();
+                    } else {
+                        alert("Fehlerhafter Spielstand.");
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
 
         // ============================================
         // SPRITES LADEN (alle 4 Richtungen)

@@ -1720,21 +1720,25 @@
         }, 3000);
 
         function createGlowSprite() {
-            const size = 64;
+            const size = 128; // Increased resolution for softer gradient
             const half = size / 2;
             const c = document.createElement('canvas');
             c.width = size;
             c.height = size;
             const ctx = c.getContext('2d');
 
-            const grad = ctx.createRadialGradient(half, half, 2, half, half, half);
-            // Sehr subtiler Nebel
-            grad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-            grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.1)');
+            // Draw refined gradient
+            const grad = ctx.createRadialGradient(half, half, 0, half, half, half);
+            // More "Cloud-like" diffuse stops
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.25)');
+            grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.05)');
             grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
             ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, size, size);
+            // Draw clean circle to avoid artifacts
+            ctx.beginPath();
+            ctx.arc(half, half, half, 0, Math.PI * 2);
+            ctx.fill();
 
             return c;
         }
@@ -2108,6 +2112,26 @@
 
             isUnlocked(id) {
                 return this.state.collectedLore.includes(parseInt(id));
+            },
+
+            exportState() {
+                return JSON.stringify(this.state, null, 2);
+            },
+
+            importState(jsonString) {
+                try {
+                    const data = JSON.parse(jsonString);
+                    if (Array.isArray(data.collectedLore)) {
+                        this.state = data;
+                        if (!this.state.collectedLights) this.state.collectedLights = {};
+                        this.save();
+                        console.log("[LoreSystem] Imported State:", this.state);
+                        return true;
+                    }
+                } catch (e) {
+                    console.error("[LoreSystem] Import Error:", e);
+                }
+                return false;
             }
         };
 
@@ -2230,6 +2254,77 @@
         };
 
         const keys = {};
+
+        // ARCHIVE / SAVE UI HANDLERS
+        const archiveModal = document.getElementById('archiveModal');
+        const closeArchiveBtn = document.getElementById('closeArchiveBtn');
+        const btnSave = document.getElementById('btnSaveData');
+        const btnLoad = document.getElementById('btnLoadData');
+        const fileInput = document.getElementById('fileInputSave');
+
+        function toggleArchive() {
+            if (!archiveModal) return;
+            if (archiveModal.style.display === 'none') {
+                archiveModal.style.display = 'flex';
+                // window.gamePaused = true;
+            } else {
+                archiveModal.style.display = 'none';
+                // window.gamePaused = false;
+            }
+        }
+
+        if (closeArchiveBtn) closeArchiveBtn.addEventListener('click', () => {
+            archiveModal.style.display = 'none';
+        });
+
+        // Toggle on 'M' key
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'm' || e.key === 'M') {
+                toggleArchive();
+            }
+            if (e.key === 'Escape' && archiveModal && archiveModal.style.display !== 'none') {
+                archiveModal.style.display = 'none';
+            }
+        });
+
+        if (btnSave) {
+            btnSave.addEventListener('click', () => {
+                const json = LoreSystem.exportState();
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'liminal_save_c1c_' + Date.now() + '.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+
+        if (btnLoad) {
+            btnLoad.addEventListener('click', () => {
+                if (fileInput) fileInput.click();
+            });
+        }
+
+        if (fileInput) {
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const success = LoreSystem.importState(ev.target.result);
+                    if (success) {
+                        alert("Daten importiert! Seite wird neu geladen...");
+                        window.location.reload();
+                    } else {
+                        alert("Fehlerhafter Spielstand.");
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
 
         // ============================================
         // SPRITES LADEN (alle 4 Richtungen)
@@ -2758,11 +2853,12 @@
                     if (document.getElementById('dropZone')) document.getElementById('dropZone').classList.add('hidden');
 
                     if (spawnPixel) {
-                        // Adjust spawn: move player UP and LEFT from the blue marker
-                        // The -50 for Y moves the player higher to avoid spawning at map edge
-                        player.x = spawnPixel.x - 8;
-                        player.y = Math.max(50, spawnPixel.y - 50); // Ensure not stuck at bottom
-                        console.log(`Spawn Point: (${spawnPixel.x}, ${spawnPixel.y}) -> Player: (${player.x}, ${player.y})`);
+                        // FIX: Spawn Player DIRECTLY at Blue Pixel (with slight foot offset)
+                        // User reported being "stuck" or "too far down/right".
+                        // Removing large hardcoded offsets (-8, -50).
+                        player.x = spawnPixel.x;
+                        player.y = Math.max(20, spawnPixel.y - 10); // 10px Up for feet alignment
+                        console.log(`Spawn Point Adjusted: Blue(${spawnPixel.x}, ${spawnPixel.y}) -> Player(${player.x}, ${player.y})`);
                     } else {
                         player.x = mapW / 2;
                         player.y = mapH / 2;
