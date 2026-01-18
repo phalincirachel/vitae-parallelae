@@ -1943,9 +1943,11 @@
                     }
 
                     if (target) {
-                        // SET 3D CAMERA LOOK TARGET (the actual 3D point clicked)
-                        // Camera will smoothly rotate to look at this point
-                        cameraLookTarget = target.clone();
+                        // SET 3D CAMERA LOOK TARGET (MOBILE ONLY)
+                        // Desktop: Camera is controlled by mouse only
+                        if (window.innerWidth <= 768) {
+                            cameraLookTarget = target.clone();
+                        }
 
                         // Clamp X to hallway bounds for movement
                         if (target.x < -2.5) target.x = -2.5;
