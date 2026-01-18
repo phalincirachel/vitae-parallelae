@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Liminal Archive - FIXED</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: monospace;
+            user-select: none;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            background: radial-gradient(circle, transparent 50%, rgba(0, 0, 0, 0.8) 100%);
+            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.9);
+        }
+
+        #noise {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.08;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+            pointer-events: none;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border: 1px solid #333;
+            cursor: pointer;
+            z-index: 20;
+        }
+
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: #444;
+            transition: opacity 1s ease;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top-color: #666;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* AUDIO PLAYER UI */
+        #audioPlayerUI {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            pointer-events: none;
+            transition: all 0.5s ease;
+        }
+
+        #audioPlayerUI.reading-mode {
+            top: 10%;
+            bottom: 10%;
+            height: 80vh;
+            justify-content: center;
+        }
+
+        #subtitleContainer {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0);
+            transition: background 0.5s ease, max-height 0.4s ease;
+            max-height: 120px;
+            overflow: hidden;
+        }
+
+        #audioPlayerUI.reading-mode #subtitleContainer {
+            max-height: 70vh;
+            background: rgba(0, 0, 0, 0.85);
+            overflow-y: auto;
+        }
+
+        .subtitle-line {
+            text-align: left;
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.5);
+            text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
+            transition: color 0.3s, opacity 0.3s;
+            opacity: 1;
+        }
+
+        .subtitle-current {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .subtitle-line.fade-far {
+            opacity: 0.4;
+        }
+
+        .subtitle-line.fade-mid {
+            opacity: 0.6;
+        }
+
+        #audioControls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0);
+            transition: background 0.5s ease, opacity 0.3s ease;
+            pointer-events: auto;
+        }
+
+        .controls-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 4px;
+            transition: opacity 0.3s ease;
+        }
+
+        #audioPlayerUI.reading-mode .controls-row {
+            flex-direction: column;
+        }
+
+        .audio-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            transition: transform 0.2s, opacity 0.3s ease;
+            opacity: 0.7;
+        }
+
+        .audio-btn:hover {
+            transform: scale(1.15);
+            opacity: 1;
+        }
+
+        .audio-btn svg {
+            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
+            width: 24px;
+            height: 24px;
+        }
+
+        #audioToggleBtn svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        #readingModeBtn svg,
+        #gameModeBtn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        #gameModeBtn {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+            transition: opacity 0.3s ease;
+        }
+
+        #audioPlayerUI.reading-mode #readingModeBtn {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        #audioPlayerUI.reading-mode #gameModeBtn {
+            opacity: 1 !important;
+            pointer-events: auto;
+            position: relative;
+            display: block !important;
+        }
+
+        .mode-btn-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            min-width: 32px;
+            min-height: 32px;
+        }
+
+        #audioPlayerUI.mode-switching #audioControls {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+
+<body>
+    <div id="loading">
+        <h1>ARCHIVE_ERROR_LOG_2025</h1>
+        <p>[KLICKEN ZUM STARTEN]</p>
+        <p style="font-size: 0.8em; color: #444;">WASD = Bewegen | MAUS = Schauen</p>
+    </div>
+
+    <div id="ui-layer">
+        <div id="noise"></div>
+    </div>
+
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <p>INITIALIZING LIMINAL ARCHIVE...</p>
+    </div>
+
+    <!-- AUDIO PLAYER UI -->
+    <div id="audioPlayerUI" style="display:none;">
+        <div id="subtitleContainer"></div>
+        <div id="audioControls">
+            <div class="controls-row">
+                <button id="skipBackBtn" class="audio-btn" title="-15 Sekunden">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <path
+                            d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+                        <text x="12" y="15" text-anchor="middle" font-size="7" fill="white">15</text>
+                    </svg>
+                </button>
+                <button id="audioToggleBtn" class="audio-btn">
+                    <svg id="iconPlay" viewBox="0 0 24 24" fill="white">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg id="iconPause" viewBox="0 0 24 24" fill="white" style="display:none;">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                </button>
+                <button id="skipForwardBtn" class="audio-btn" title="+15 Sekunden">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <path
+                            d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
+                        <text x="12" y="15" text-anchor="middle" font-size="7" fill="white">15</text>
+                    </svg>
+                </button>
+            </div>
+            <div class="mode-btn-wrapper">
+                <button id="readingModeBtn" class="audio-btn" title="Lesemodus">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <path d="M10 12h4" stroke="white" stroke-width="2" />
+                    </svg>
+                </button>
+                <button id="gameModeBtn" class="audio-btn" title="Spielmodus">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <path d="M10 12h4" stroke="white" stroke-width="2" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GLOBAL ERROR HANDLER -->
+    <script>
+        window.onerror = function (msg, url, line, col, error) {
+            const loading = document.getElementById('loading-screen');
+            if (loading) {
+                loading.innerHTML += `<div style="color:red; background:rgba(0,0,0,0.8); padding:10px; text-align:left; white-space:pre-wrap; font-family:monospace; margin-top:20px;">ERROR: ${msg}\nLine: ${line}:${col}</div>`;
+            }
+            console.error("Global Error:", msg, url, line, col, error);
+            return false;
+        };
+    </script>
+
+    <!-- MAIN APPLICATION LOGIC -->
+    <script type="module">
+        console.log("DEBUG: Script Start");
+        import * as THREE from 'three';
+        import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+        console.log("DEBUG: Imports Loaded");
+
+        // --- CONFIG ---
+        const config = {
+            roomWidth: 8,
+            roomHeight: 9,
+            segmentLength: 20,
+            shelfDepth: 1.2
+        };
+        console.log("DEBUG: Config Set");
+
+        // --- GLOBAL VARIABLES ---
+        const loreData = {
+            audio: { 1: 'lore1.mp3' },
+            text: {},
+            resumeTimes: {}
+        };
+        const mainAudioState = { time: 0, wasPlaying: false, tracks: [] };
+
+        // UI Access
+        const uiContainer = document.getElementById('audioPlayerUI');
+        const subtitleContainer = document.getElementById('subtitleContainer');
+        const playBtn = document.getElementById('audioToggleBtn');
+        const skipBackBtn = document.getElementById('skipBackBtn');
+        const skipForwardBtn = document.getElementById('skipForwardBtn');
+        const readingModeBtn = document.getElementById('readingModeBtn');
+        const gameModeBtn = document.getElementById('gameModeBtn');
+        const iconPlay = document.getElementById('iconPlay');
+        const iconPause = document.getElementById('iconPause');
+
+        let audioPlayer = new Audio();
+        let subtitleTracks = [];
+        let currentSubtitleIndex = -1;
+        let isReadingMode = false;
+        let isLoreMode = false;
+        let activeLoreId = null;
+
+        // --- SCENE SETUP ---
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x0a0806, 0.12);
+        scene.background = new THREE.Color(0x050403);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.6, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.9;
+        document.body.appendChild(renderer.domElement);
+
+        // --- CONTROLS ---
+        const controls = new PointerLockControls(camera, document.body);
+        const blocker = document.getElementById('loading');
+        let isLoading = true;
+
+        blocker.addEventListener('click', () => {
+            if (!isLoading) controls.lock();
+        });
+
+        controls.addEventListener('lock', () => {
+            blocker.style.display = 'none';
+        });
+
+        controls.addEventListener('unlock', () => {
+            if (!isReadingMode) blocker.style.display = 'block';
+        });
+
+        // --- TEXTURES ---
+        function createWoodTexture() {
+            const canvas = document.createElement('canvas');
+            canvas.width = 512; canvas.height = 512;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#2a1a10';
+            ctx.fillRect(0, 0, 512, 512);
+            for (let i = 0; i < 100; i++) {
+                ctx.strokeStyle = `rgba(0,0,0, ${Math.random() * 0.2})`; ctx.lineWidth = Math.random() * 3;
+                ctx.beginPath(); ctx.moveTo(Math.random() * 512, 0); ctx.lineTo(Math.random() * 512, 512); ctx.stroke();
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function createCarpetTexture() {
+            const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 512, 512);
+            const imgData = ctx.getImageData(0, 0, 512, 512);
+            for (let i = 0; i < imgData.data.length; i += 4) {
+                const noise = (Math.random() - 0.5) * 15; imgData.data[i] += noise + 10;
+                imgData.data[i + 1] += noise + 10; imgData.data[i + 2] += noise + 10;
+            }
+            ctx.putImageData(imgData, 0, 0);
+            const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
+        }
+
+        const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
+        const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
+        const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+        const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+        const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+        const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
+
+        // --- CLASSES ---
+        class YellowLight {
+            constructor(zPos) {
+                this.position = new THREE.Vector3(0, 3.5, zPos);
+                this.group = new THREE.Group();
+                this.group.position.copy(this.position);
+
+                // Bulb
+                const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.1, 16, 16), bulbMat);
+                this.group.add(bulb);
+
+                // Light
+                this.light = new THREE.PointLight(0xffaa00, 40, 15);
+                this.light.castShadow = true;
+                this.group.add(this.light);
+
+                // Cord
+                const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 3), cordMat);
+                cord.position.y = 1.5;
+                this.group.add(cord);
+
+                this.baseIntensity = 40;
+                this.seed = Math.random() * 100;
+            }
+
+            update(time, playerPos) {
+                const flicker = Math.sin(time * 20) * 0.05 + Math.random() * 0.1;
+                let boost = 0;
+                if (isLoreMode && activeLoreId) {
+                    const dist = this.position.distanceTo(playerPos);
+                    if (dist < 5) {
+                        boost = 20 + Math.sin(time * 5) * 10;
+                    }
+                }
+                this.light.intensity = this.baseIntensity + flicker * 10 + boost;
+                this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
+                this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+            }
+        }
+
+        class HallwaySegment {
+            constructor(zStart, length) {
+                this.zStart = zStart;
+                this.length = length;
+                this.meshGroup = new THREE.Group();
+                this.lights = [];
+
+                // 1. Floor & Ceiling
+                const planeGeo = new THREE.PlaneGeometry(config.roomWidth, length);
+                const floor = new THREE.Mesh(planeGeo, floorMaterial);
+                floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = true;
+                this.meshGroup.add(floor);
+
+                const ceiling = new THREE.Mesh(planeGeo, wallMaterial);
+                ceiling.rotation.x = Math.PI / 2; ceiling.position.y = config.roomHeight; ceiling.position.z = zStart - length / 2;
+                this.meshGroup.add(ceiling);
+
+                // 2. Shelves
+                const shelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, length);
+                const leftShelf = new THREE.Mesh(shelfGeo, woodMaterial);
+                leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = true; leftShelf.receiveShadow = true;
+                this.meshGroup.add(leftShelf);
+
+                const rightShelf = new THREE.Mesh(shelfGeo, woodMaterial);
+                rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = true; rightShelf.receiveShadow = true;
+                this.meshGroup.add(rightShelf);
+
+                // 3. Plank Levels
+                const plankGeo = new THREE.BoxGeometry(1.2, 0.05, length);
+                const levels = 9;
+                for (let i = 0; i < levels; i++) {
+                    const y = (config.roomHeight / levels) * i + 0.4;
+                    const pLeft = new THREE.Mesh(plankGeo, woodMaterial); pLeft.position.set(-2.6, y, zStart - length / 2); this.meshGroup.add(pLeft);
+                    const pRight = new THREE.Mesh(plankGeo, woodMaterial); pRight.position.set(2.6, y, zStart - length / 2); this.meshGroup.add(pRight);
+                }
+
+                // 4. Books (InstancedMesh)
+                this.createBooks(zStart, length, levels);
+
+                // 5. Light (One per segment)
+                const light = new YellowLight(zStart - length / 2);
+                this.lights.push(light);
+                this.meshGroup.add(light.group);
+                scene.add(this.meshGroup);
+            }
+
+            createBooks(zStart, length, levels) {
+                const bookCount = 2000;
+                const bookGeo = new THREE.BoxGeometry(1, 1, 1);
+                const meshBooks = new THREE.InstancedMesh(bookGeo, bookMat, bookCount);
+                meshBooks.castShadow = true; meshBooks.receiveShadow = true;
+
+                const dummy = new THREE.Object3D();
+                const color = new THREE.Color();
+                const bookColors = [0x4a3c31, 0x2f1e15, 0x6e2c2c, 0x1a2e1f, 0x0d0d0d, 0x5c5040];
+
+                let index = 0;
+                for (let side of [-1, 1]) {
+                    const shelfX = side * 2.6;
+                    for (let i = 0; i < levels; i++) {
+                        const y = (config.roomHeight / levels) * i + 0.7; // On plank 
+                        if (y > config.roomHeight - 0.5) continue;
+
+                        let currentZ = zStart - 1;
+                        while (currentZ > zStart - length) {
+                            if (index >= bookCount) break;
+                            if (Math.random() > 0.05) {
+                                const height = 0.5 + Math.random() * 0.3;
+                                const thick = 0.05 + Math.random() * 0.08;
+                                const depth = 0.7 + Math.random() * 0.15;
+                                const xOffset = (Math.random() - 0.5) * 0.1;
+
+                                dummy.position.set(shelfX + xOffset, y - 0.3 + height / 2, currentZ);
+                                dummy.scale.set(depth, height, thick);
+                                dummy.rotation.set(0, 0, 0);
+                                if (side === 1) dummy.rotation.y = Math.PI;
+                                dummy.rotation.z = (Math.random() - 0.5) * 0.1;
+                                dummy.rotation.y += (Math.random() - 0.5) * 0.1;
+                                dummy.updateMatrix();
+
+                                meshBooks.setMatrixAt(index, dummy.matrix);
+                                color.setHex(bookColors[Math.floor(Math.random() * bookColors.length)]);
+                                color.r += (Math.random() - 0.5) * 0.1;
+                                color.g += (Math.random() - 0.5) * 0.1;
+                                color.b += (Math.random() - 0.5) * 0.1;
+                                meshBooks.setColorAt(index, color);
+                                index++;
+                            }
+                            currentZ -= 0.06 + Math.random() * 0.02;
+                        }
+                    }
+                }
+                meshBooks.instanceMatrix.needsUpdate = true;
+                if (meshBooks.instanceColor) meshBooks.instanceColor.needsUpdate = true;
+                this.meshGroup.add(meshBooks);
+            }
+
+            dispose() {
+                scene.remove(this.meshGroup);
+            }
+        }
+
+        const segments = [];
+        const segmentLength = config.segmentLength;
+
+        function updateSegments(playerZ) {
+            if (segments.length === 0) {
+                addSegment(10);
+                addSegment(-10);
+                addSegment(-30);
+            }
+
+            const lastSeg = segments[segments.length - 1];
+            const firstSeg = segments[0];
+
+            if (playerZ < lastSeg.zStart + 10) {
+                addSegment(lastSeg.zStart - segmentLength);
+            }
+            if (playerZ < firstSeg.zStart - segmentLength - 40) {
+                firstSeg.dispose();
+                segments.shift();
+            }
+        }
+
+        function addSegment(zStart) {
+            const seg = new HallwaySegment(zStart, segmentLength);
+            segments.push(seg);
+        }
+
+        // --- AUDIO & UI SUBSYSTEM ---
+        function updateSubtitleDisplay(index) {
+            if (index === currentSubtitleIndex) return;
+            currentSubtitleIndex = index;
+            renderSubtitleLines(Math.max(0, index));
+        }
+
+        function renderSubtitleLines(centerIndex) {
+            subtitleContainer.innerHTML = '';
+            if (subtitleTracks.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'subtitle-line subtitle-current'; div.innerText = 'Warte auf Audio...';
+                subtitleContainer.appendChild(div); return;
+            }
+            const maxLines = isReadingMode ? 15 : 3;
+            const halfLines = Math.floor(maxLines / 2);
+            let startIdx = centerIndex - halfLines;
+            let endIdx = centerIndex + halfLines;
+            if (startIdx < 0) { endIdx = Math.min(subtitleTracks.length - 1, endIdx - startIdx); startIdx = 0; }
+            if (endIdx >= subtitleTracks.length) {
+                startIdx = Math.max(0, startIdx - (endIdx - subtitleTracks.length + 1));
+                endIdx = subtitleTracks.length - 1;
+            }
+            if (!isReadingMode) {
+                startIdx = Math.max(0, centerIndex - 1);
+                endIdx = Math.min(subtitleTracks.length - 1, centerIndex + 1);
+            }
+            for (let i = startIdx; i <= endIdx; i++) {
+                const div = document.createElement('div');
+                div.className = 'subtitle-line';
+                const distance = Math.abs(i - centerIndex);
+                if (i === centerIndex) div.classList.add('subtitle-current');
+                else if (distance >= 5) div.classList.add('fade-far');
+                else if (distance >= 3) div.classList.add('fade-mid');
+                div.innerText = subtitleTracks[i].text;
+                subtitleContainer.appendChild(div);
+                if (i === centerIndex && isReadingMode) {
+                    setTimeout(() => div.scrollIntoView({ behavior: 'smooth', block: 'center' }), 10);
+                }
+            }
+        }
+
+        function parseSubtitles(rawText) {
+            subtitleTracks = [];
+            currentSubtitleIndex = -1;
+            const lines = rawText.split('\n');
+            const timeReg = /\[(\d{2}):(\d{2}(?:\.\d+)?)\](.*)/;
+            lines.forEach(line => {
+                const match = line.match(timeReg);
+                if (match) {
+                    const minutes = parseFloat(match[1]);
+                    const seconds = parseFloat(match[2]);
+                    const text = match[3].trim();
+                    subtitleTracks.push({ time: minutes * 60 + seconds, text: text });
+                }
+            });
+            subtitleTracks.sort((a, b) => a.time - b.time);
+        }
+
+        // --- HELPER FUNCTIONS FOR LORE ---
+        function fadeAudio(audio, targetVolume, duration, callback) {
+            const startVolume = audio.volume;
+            const diff = targetVolume - startVolume;
+            const startTime = Date.now();
+            function tick() {
+                const now = Date.now();
+                const progress = Math.min(1, (now - startTime) / duration);
+                audio.volume = startVolume + diff * progress;
+                if (progress < 1) requestAnimationFrame(tick); else if (callback) callback();
+            }
+            tick();
+        }
+
+        function startLoreMode(id) {
+            if (isLoreMode) return;
+            isLoreMode = true;
+            console.log("Lore Started");
+            mainAudioState.wasPlaying = !audioPlayer.paused;
+            mainAudioState.time = audioPlayer.currentTime;
+            mainAudioState.tracks = [...subtitleTracks];
+
+            fadeAudio(audioPlayer, 0, 1000, () => {
+                audioPlayer.src = loreData.audio[id];
+                subtitleTracks = [];
+                renderSubtitleLines(0);
+                audioPlayer.volume = 0;
+                audioPlayer.play();
+                fadeAudio(audioPlayer, 1.0, 1000);
+            });
+        }
+
+        function endLoreMode() {
+            if (!isLoreMode) return;
+            isLoreMode = false;
+            activeLoreId = null;
+            console.log("Lore Ended");
+
+            fadeAudio(audioPlayer, 0, 1000, () => {
+                if (window.mainAudioUrl) {
+                    audioPlayer.src = window.mainAudioUrl;
+                    subtitleTracks = mainAudioState.tracks;
+                    const resumeTime = Math.max(0, mainAudioState.time - 5);
+                    audioPlayer.currentTime = resumeTime;
+                    if (mainAudioState.wasPlaying) {
+                        audioPlayer.volume = 0;
+                        audioPlayer.play();
+                        fadeAudio(audioPlayer, 1.0, 1000);
+                    }
+                }
+            });
+        }
+
+        function checkLoreProximity() {
+            if (segments.length === 0) return;
+            const pPos = camera.position;
+
+            let closestLight = null;
+            let minD = Infinity;
+
+            segments.forEach(seg => {
+                seg.lights.forEach(l => {
+                    const d = l.position.distanceTo(pPos);
+                    if (d < minD) { minD = d; closestLight = l; }
+                });
+            });
+
+            const TRIGGER_DIST = 3.0;
+            const EXIT_DIST = 5.0;
+
+            if (closestLight && minD < TRIGGER_DIST && !isLoreMode && !activeLoreId) {
+                startLoreMode(1);
+                activeLoreId = 1;
+            } else if (isLoreMode && minD > EXIT_DIST) {
+                endLoreMode();
+            }
+        }
+
+        // --- HANDLERS ---
+        playBtn.addEventListener('click', () => {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+            } else {
+                audioPlayer.pause();
+                iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+            }
+        });
+        skipBackBtn.addEventListener('click', () => audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 15));
+        skipForwardBtn.addEventListener('click', () => audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 15));
+
+        readingModeBtn.addEventListener('click', () => {
+            uiContainer.classList.add('mode-switching');
+            isReadingMode = true;
+            uiContainer.classList.add('reading-mode');
+            controls.unlock();
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            setTimeout(() => uiContainer.classList.remove('mode-switching'), 150);
+        });
+
+        gameModeBtn.addEventListener('click', () => {
+            uiContainer.classList.add('mode-switching');
+            isReadingMode = false;
+            uiContainer.classList.remove('reading-mode');
+            controls.lock();
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            setTimeout(() => uiContainer.classList.remove('mode-switching'), 150);
+        });
+
+        audioPlayer.addEventListener('timeupdate', () => {
+            const t = audioPlayer.currentTime;
+            let newIndex = -1;
+            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                if (t >= subtitleTracks[i].time) { newIndex = i; break; }
+            }
+            updateSubtitleDisplay(newIndex);
+        });
+
+        audioPlayer.addEventListener('ended', () => {
+            if (isLoreMode) endLoreMode();
+            else { iconPlay.style.display = 'block'; iconPause.style.display = 'none'; }
+        });
+
+        // --- DRAG & DROP ---
+        window.addEventListener('dragover', e => e.preventDefault());
+        window.addEventListener('drop', e => {
+            e.preventDefault();
+            const files = e.dataTransfer.files;
+            for (let file of files) {
+                if (file.name.includes('kapitel1.mp3') || file.name.endsWith('.mp3')) {
+                    const url = URL.createObjectURL(file);
+                    window.mainAudioUrl = url;
+                    audioPlayer.src = url;
+                    audioPlayer.volume = 1.0;
+                    uiContainer.style.display = 'flex';
+                    renderSubtitleLines(0);
+                }
+                if (file.name.includes('kapitel1.txt') || file.name.endsWith('.txt')) {
+                    const reader = new FileReader();
+                    reader.onload = ev => {
+                        window.mainTextContent = ev.target.result;
+                        parseSubtitles(ev.target.result);
+                        renderSubtitleLines(0);
+                    };
+                    reader.readAsText(file);
+                }
+                if (file.name.includes('lore1.mp3')) {
+                    loreData.audio[1] = URL.createObjectURL(file);
+                }
+            }
+        });
+
+        // --- LOOP ---
+        const clock = new THREE.Clock();
+        const velocity = new THREE.Vector3();
+        const direction = new THREE.Vector3();
+        const move = { f: false, b: false, l: false, r: false };
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'KeyW') move.f = true;
+            if (e.code === 'KeyS') move.b = true;
+            if (e.code === 'KeyA') move.l = true;
+            if (e.code === 'KeyD') move.r = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            if (e.code === 'KeyW') move.f = false;
+            if (e.code === 'KeyS') move.b = false;
+            if (e.code === 'KeyA') move.l = false;
+            if (e.code === 'KeyD') move.r = false;
+        });
+
+        let headBob = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if (controls.isLocked) {
+                direction.z = Number(move.f) - Number(move.b);
+                direction.x = Number(move.r) - Number(move.l);
+                direction.normalize();
+
+                if (move.f || move.b) velocity.z -= direction.z * 40.0 * delta;
+                if (move.l || move.r) velocity.x -= direction.x * 40.0 * delta;
+
+                velocity.x -= velocity.x * 10.0 * delta;
+                velocity.z -= velocity.z * 10.0 * delta;
+
+                controls.moveRight(-velocity.x * delta);
+                controls.moveForward(-velocity.z * delta);
+
+                if (camera.position.x < -1.8) { camera.position.x = -1.8; velocity.x = 0; }
+                if (camera.position.x > 1.8) { camera.position.x = 1.8; velocity.x = 0; }
+
+                if (velocity.length() > 0.5) {
+                    headBob += delta * 10;
+                    camera.position.y = 1.6 + Math.sin(headBob) * 0.05;
+                }
+            }
+
+            updateSegments(camera.position.z);
+            checkLoreProximity();
+            segments.forEach(seg => {
+                seg.lights.forEach(l => l.update(time, camera.position));
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        // --- INIT ---
+        setTimeout(() => {
+            isLoading = false;
+            const ls = document.getElementById('loading-screen');
+            ls.style.opacity = 0;
+            setTimeout(() => ls.style.display = 'none', 1000);
+            updateSegments(camera.position.z);
+            animate();
+        }, 2000);
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+
+</html>

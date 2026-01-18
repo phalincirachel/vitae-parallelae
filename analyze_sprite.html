@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+
+<body>
+    <canvas id="canvas"></canvas>
+    <div id="results"></div>
+    <script>
+        const img = new Image();
+        img.onload = function () {
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            const markers = {
+                foot: [], // 237, 28, 36
+                head: []  // 0, 162, 232
+            };
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    const r = data[idx];
+                    const g = data[idx + 1];
+                    const b = data[idx + 2];
+                    const a = data[idx + 3];
+
+                    if (a < 128) continue;
+
+                    if (r === 237 && g === 28 && b === 36) markers.foot.push({ x, y });
+                    if (r === 0 && g === 162 && b === 232) markers.head.push({ x, y });
+                }
+            }
+
+            document.getElementById('results').innerText = JSON.stringify(markers);
+        };
+        img.src = 'spriteneu.png';
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,3228 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heidelberg RPG</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            height: 100vh;
+            /* Volle Höhe für Filter */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            overflow: hidden;
+        }
+
+        #dropZone {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
+            z-index: 100;
+            transition: opacity 0.5s ease, visibility 0.5s ease;
+        }
+
+        #dropZone.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        #dropZone.dragover {
+            background: linear-gradient(135deg, #1a1a3e 0%, #2a2a4e 100%);
+        }
+
+        .drop-content {
+            text-align: center;
+            color: #888;
+            pointer-events: none;
+        }
+
+        .drop-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            opacity: 0.6;
+        }
+
+        .drop-title {
+            font-size: 28px;
+            font-weight: 300;
+            color: #ccc;
+            margin-bottom: 15px;
+        }
+
+        .drop-subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .color-hints {
+            display: flex;
+            gap: 30px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .color-hint {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .color-swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .color-swatch.magenta {
+            background: #FF00FF;
+        }
+
+        .color-swatch.cyan {
+            background: #00FFFF;
+        }
+
+        .color-label {
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .color-desc {
+            font-size: 11px;
+            color: #666;
+            margin-top: 3px;
+        }
+
+        .file-input-wrapper {
+            margin-top: 20px;
+        }
+
+        .file-input-wrapper input {
+            display: none;
+        }
+
+        .file-btn {
+            padding: 14px 32px;
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            pointer-events: all;
+        }
+
+        .file-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.4);
+        }
+
+        /* FILTER UI */
+        #filterControls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+            color: #ccc;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: opacity 0.3s;
+        }
+
+        #filterControls:hover {
+            opacity: 1;
+        }
+
+        .filter-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .filter-option input {
+            accent-color: #3b82f6;
+        }
+
+        /* CANVAS WRAPPER für OVERLAYS */
+        #gameWrapper {
+            position: relative;
+            line-height: 0;
+            /* Kein Gap unten */
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
+        }
+
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+
+        /* FILTER 1: PAL OPTIK 
+           Kombination aus SVG Filter (Blur/H-Smear) und CSS Filter (Sättigung/Kontrast) */
+        .effect-pal #gameCanvas {
+            filter: url(#pal-filter) contrast(1.1) brightness(1.15) saturate(0.85);
+        }
+
+        /* FILTER 2: GLITCH (Störung) 
+           Displacement Map via SVG */
+        .effect-glitch #gameCanvas {
+            filter: url(#glitch-filter);
+        }
+
+        /* Kombinationen ermöglichen */
+        .effect-pal.effect-glitch #gameCanvas {
+            filter: url(#pal-filter) url(#glitch-filter) contrast(1.1) brightness(1.15) saturate(0.85);
+        }
+
+        /* FILTER 3: CRT OVERLAY - NUR VIGNETTE (Scanlines entfernt wg. Moiré) */
+        #crtOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 10;
+            /* Keine Scanlines mehr - verursachten diagonale Artefakte */
+            background: transparent;
+        }
+
+        .effect-crt #crtOverlay {
+            opacity: 1;
+        }
+
+        /* Vignette für CRT Look */
+        #crtOverlay::after {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle, rgba(0, 0, 0, 0) 60%, rgba(0, 0, 0, 0.4) 100%);
+            pointer-events: none;
+        }
+
+
+        #controlsHint {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: #888;
+            font-size: 12px;
+            opacity: 0;
+            transition: opacity 0.5s;
+            pointer-events: none;
+        }
+
+        #controlsHint.visible {
+            opacity: 1;
+        }
+
+        .key {
+            display: inline-block;
+            background: #333;
+            padding: 3px 8px;
+            border-radius: 4px;
+            margin: 0 3px;
+            font-family: monospace;
+            border: 1px solid #555;
+        }
+
+        #processingInfo {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 30px 50px;
+            border-radius: 12px;
+            color: white;
+            text-align: center;
+            z-index: 200;
+            display: none;
+        }
+
+        #processingInfo .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #333;
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* AUDIO PLAYER UI */
+        #audioPlayerUI {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 95%;
+            max-width: 800px;
+            display: flex;
+            align-items: center;
+            /* Buttons auf Höhe der mittleren Zeile */
+            gap: 15px;
+            z-index: 1000;
+            transition: bottom 0.4s ease, transform 0.4s ease;
+        }
+
+        #audioPlayerUI.reading-mode {
+            bottom: 50%;
+            transform: translateX(-50%) translateY(50%);
+        }
+
+        /* Während Modus-Wechsel: Buttons ausblenden */
+        #audioPlayerUI.mode-switching #audioControls {
+            opacity: 0 !important;
+            pointer-events: none;
+        }
+
+        #subtitleContainer {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0);
+            transition: background 0.5s ease, max-height 0.4s ease;
+            max-height: 120px;
+            overflow: hidden;
+        }
+
+        #audioPlayerUI.reading-mode #subtitleContainer {
+            max-height: 70vh;
+            background: rgba(0, 0, 0, 0.85);
+            overflow-y: auto;
+            pointer-events: auto;
+            /* Ensure interactions work */
+            /* Scrollen ermöglichen */
+
+            /* Custom Scrollbar Styles */
+            scrollbar-width: thin;
+            /* Firefox */
+            scrollbar-color: #444 transparent;
+            /* Firefox */
+        }
+
+        /* Webkit Scrollbar Styling (Chrome, Edge, Safari) */
+        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-track {
+            background: transparent;
+            /* Immer transparent, auch bei Hover */
+        }
+
+        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb {
+            background-color: transparent;
+            /* Default unsichtbar */
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+
+        /* Sichtbar bei Hover oder beim Scrollen per JS-Klasse */
+        #audioPlayerUI.reading-mode #subtitleContainer:hover::-webkit-scrollbar-thumb,
+        #audioPlayerUI.reading-mode #subtitleContainer.is-scrolling::-webkit-scrollbar-thumb {
+            background-color: #555;
+            /* Dunkelgrauer Regler */
+        }
+
+        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb:hover {
+            background-color: #777;
+            /* Etwas heller beim Anfassen */
+        }
+
+        .subtitle-line {
+            text-align: left;
+            font-size: 18px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.5);
+            text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
+            transition: color 0.3s, opacity 0.3s;
+            opacity: 1;
+        }
+
+        .subtitle-current {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Lesemodus: NOCH deutlicherer diffuse Umwölkung hinter den Buchstaben */
+        #audioPlayerUI.reading-mode .subtitle-line {
+            text-shadow:
+                0 0 5px rgba(0, 0, 0, 1),
+                0 0 10px rgba(0, 0, 0, 1),
+                0 0 20px rgba(0, 0, 0, 1),
+                0 0 30px rgba(0, 0, 0, 1),
+                0 0 45px rgba(0, 0, 0, 1);
+            opacity: 1 !important;
+        }
+
+        /* Zeilen die weit vom Zentrum entfernt sind verblassen */
+        .subtitle-line.fade-far {
+            opacity: 0.4;
+        }
+
+        .subtitle-line.fade-mid {
+            opacity: 0.6;
+        }
+
+        /* Controls Container - Kreuz-Layout */
+        #audioControls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            flex-shrink: 0;
+            padding: 8px;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0);
+            transition: background 0.5s ease, opacity 0.3s ease;
+        }
+
+        /* Horizontale Reihe: Zurück - Play - Vor (im Spielmodus) */
+        .controls-row {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 4px;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Im Lesemodus: Alles vertikal */
+        #audioPlayerUI.reading-mode .controls-row {
+            flex-direction: column;
+        }
+
+        .audio-btn {
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            padding: 6px;
+            transition: transform 0.2s, opacity 0.3s ease;
+            opacity: 0.7;
+        }
+
+        .audio-btn:hover {
+            transform: scale(1.15);
+            opacity: 1;
+        }
+
+        .audio-btn svg {
+            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
+            width: 24px;
+            height: 24px;
+        }
+
+        #audioToggleBtn svg {
+            width: 32px;
+            height: 32px;
+        }
+
+        /* Modus-Button-Styling - Fade statt display toggle */
+        #readingModeBtn svg,
+        #gameModeBtn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        #gameModeBtn {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+            transition: opacity 0.3s ease;
+        }
+
+        #readingModeBtn {
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+        }
+
+        #audioPlayerUI.reading-mode #readingModeBtn {
+            opacity: 0;
+            pointer-events: none;
+            position: absolute;
+        }
+
+        #audioPlayerUI.reading-mode #gameModeBtn {
+            opacity: 1 !important;
+            /* Force Visibility */
+            pointer-events: auto;
+            position: relative;
+            display: block !important;
+        }
+
+        .mode-btn-wrapper {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            min-width: 32px;
+            min-width: 32px;
+            min-height: 32px;
+            gap: 8px;
+            /* Abstand zwischen Mode-Icon und Fullscreen-Icon */
+            align-items: center;
+        }
+
+        /* Im Lesemodus: Vertikale Anordnung der Mode-Buttons (Mode + Fullscreen) */
+        #audioPlayerUI.reading-mode .mode-btn-wrapper {
+            flex-direction: column;
+            margin-top: 4px;
+            /* Etwas Abstand zur Steuer-Reihe darüber */
+        }
+
+        #fullscreenBtn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        /* =========================================
+           MOBILE OPTIMIZATIONS (Max-width: 768px) 
+           ========================================= */
+        @media (max-width: 768px) {
+
+            /* 1. Canvas responsive machen */
+            #gameWrapper {
+                width: 100% !important;
+                height: 100vh !important;
+                /* Volle Bildschirmhöhe für Filter */
+                display: flex;
+                justify-content: center;
+                align-items: flex-start;
+                /* Oben ausrichten */
+            }
+
+            #gameCanvas {
+                width: 100% !important;
+                height: 100% !important;
+                max-width: 100%;
+                /* Keine feste Aspect-Ratio auf Mobile, da wir dynamisch resizen */
+                object-fit: fill;
+            }
+
+            /* 2. Audio Player UI: Unten angedockt, volle Breite */
+            #audioPlayerUI {
+                width: 100%;
+                max-width: 100%;
+                bottom: 10px;
+                padding: 0 10px;
+                flex-direction: column;
+                /* Stapeln für bessere Raumnutzung */
+                align-items: stretch;
+                /* Volle Breite nutzen */
+                gap: 8px;
+            }
+
+            /* Controls Row horizontal zentriert */
+            .controls-row {
+                justify-content: center;
+                width: 100%;
+            }
+
+            /* Game Mode UI etwas hoeher schieben damit Text nicht abgeschnitten wird */
+            #audioPlayerUI:not(.reading-mode) {
+                bottom: 20px;
+                /* War 10px */
+            }
+
+            #audioControls {
+                width: 100%;
+                /* Volle Breite für Flexibilität */
+                flex-direction: row;
+                /* Buttons nebeneinander */
+                justify-content: space-between;
+                /* Verteilen: Skip links, Play mitte, Toggle rechts */
+                padding: 5px 15px;
+                /* Mehr Touch-Fläche */
+                background: rgba(0, 0, 0, 0.6) !important;
+                /* Hintergrund immer leicht sichtbar machen auf Mobile */
+            }
+
+            /* Buttons größer für Touch */
+            .audio-btn svg {
+                width: 28px;
+                height: 28px;
+            }
+
+            #audioToggleBtn svg {
+                width: 36px;
+                height: 36px;
+            }
+
+            /* 3. Untertitel Container: Spielmodus */
+            #subtitleContainer {
+                align-items: flex-start;
+                text-align: left;
+                background: rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(2px);
+                margin-bottom: 5px;
+                /* Dynamische Höhe: zeige komplette Timestamps */
+                max-height: 200px;
+                min-height: 80px;
+                overflow-y: auto;
+                /* Scrollen wenn nötig */
+            }
+
+            .subtitle-line {
+                text-align: left;
+                /* User-Wunsch: Flattersatz (Linksbuendig) */
+                font-size: 16px;
+                width: 100%;
+            }
+
+            /* 4. Lesemodus Mobile: Unten positionieren, Buttons nebeneinander */
+            #audioPlayerUI.reading-mode {
+                bottom: 20px;
+                top: auto;
+                /* Desktop setzt top, das müssen wir überschreiben */
+                transform: translateX(-50%);
+                /* Nur horizontal zentriert */
+            }
+
+            /* Buttons nebeneinander wie im Spielmodus */
+            #audioPlayerUI.reading-mode .controls-row {
+                flex-direction: row;
+            }
+
+            #audioPlayerUI.reading-mode #audioControls,
+            #audioPlayerUI.reading-mode #gameModeBtn {
+                pointer-events: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+
+
+    <!-- SVG Filter Definitionen -->
+    <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" version="1.1"
+        xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <!-- PAL Filter: Horizontal Blur + leichte Farbverschiebung -->
+            <filter id="pal-filter">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.6 0" result="blur" />
+                <feColorMatrix in="blur" type="matrix" values="
+                    0.9 0.1 0.0 0 0
+                    0.0 0.9 0.1 0 0
+                    0.0 0.0 0.9 0 0
+                    0   0   0   1 0" result="colored" />
+            </filter>
+
+            <!-- Glitch Filter: Turbulenz Displacement -->
+            <!-- <filter id="glitch-filter" x="-20%" y="-20%" width="140%" height="140%">
+                <feTurbulence type="fractalNoise" baseFrequency="0.002 0.005" numOctaves="3" seed="0" result="noise">
+                    <animate attributeName="baseFrequency" dur="60s" values="0.002 0.005;0.005 0.01;0.002 0.005"
+                        repeatCount="indefinite" />
+                    <animate attributeName="seed" dur="3s" values="0;100;0" repeatCount="indefinite" />
+                </feTurbulence>
+                <feDisplacementMap in="SourceGraphic" in2="noise" scale="10" xChannelSelector="R"
+                    yChannelSelector="G" />
+            </filter> -->
+        </defs>
+    </svg>
+
+    <div id="dropZone">
+        <div class="drop-content">
+            <div class="drop-icon">🗺️</div>
+            <div class="drop-title">Karte hierher ziehen</div>
+            <div class="drop-subtitle">oder klicken zum Auswählen</div>
+
+            <div class="color-hints">
+                <div class="color-hint">
+                    <div class="color-swatch magenta"></div>
+                    <div>
+                        <div class="color-label">Magenta (#FF00FF)</div>
+                        <div class="color-desc">Wände / Kollision</div>
+                    </div>
+                </div>
+                <!-- <div class="color-hint">
+                    <div class="color-swatch cyan"></div>
+                    <div>
+                        <div class="color-label">Cyan (#00FFFF)</div>
+                        <div class="color-desc">Vordergrund (Figur dahinter)</div>
+                    </div>
+                </div> -->
+                <!-- Cyan Hinweis ist momentan deaktiviert/optional -->
+                <div class="color-hint">
+                    <div class="color-swatch" style="background: #00FF00;"></div>
+                    <div>
+                        <div class="color-label">Grün (#00FF00)</div>
+                        <div class="color-desc">Magischer Fluss (Lichter)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="file-input-wrapper">
+                <button class="file-btn" onclick="document.getElementById('fileInput').click()">Bild auswählen</button>
+                <input type="file" id="fileInput" accept="image/*">
+            </div>
+        </div>
+    </div>
+
+    <div id="processingInfo">
+        <div class="spinner"></div>
+        <div>Verarbeite Karte...</div>
+    </div>
+
+    <!-- MAIN GAME AREA -->
+    <div id="gameWrapper">
+        <canvas id="gameCanvas"></canvas>
+        <div id="crtOverlay"></div>
+    </div>
+
+    <div id="audioPlayerUI" style="display:none;">
+        <div id="subtitleContainer">
+            <!-- Dynamisch generierte Zeilen -->
+        </div>
+        <div id="audioControls">
+            <div class="controls-row">
+                <button id="skipBackBtn" class="audio-btn" title="-15 Sekunden">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <path
+                            d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+                        <text x="12" y="15" text-anchor="middle" font-size="7" fill="white">15</text>
+                    </svg>
+                </button>
+                <button id="audioToggleBtn" class="audio-btn">
+                    <svg id="iconPlay" viewBox="0 0 24 24" fill="white">
+                        <path d="M8 5v14l11-7z" />
+                    </svg>
+                    <svg id="iconPause" viewBox="0 0 24 24" fill="white" style="display:none;">
+                        <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+                    </svg>
+                </button>
+                <button id="skipForwardBtn" class="audio-btn" title="+15 Sekunden">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <path
+                            d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
+                        <text x="12" y="15" text-anchor="middle" font-size="7" fill="white">15</text>
+                    </svg>
+                </button>
+            </div>
+            <div class="mode-btn-wrapper">
+                <button id="readingModeBtn" class="audio-btn" title="Lesemodus">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <path d="M10 12h4" stroke="white" stroke-width="2" />
+                    </svg>
+                </button>
+                <button id="gameModeBtn" class="audio-btn" title="Spielmodus">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <path d="M10 12h4" stroke="white" stroke-width="2" />
+                    </svg>
+                </button>
+                <button id="fullscreenBtn" class="audio-btn" title="Vollbild">
+                    <!-- ENTER FULLSCREEN (Corners pointing OUT) -->
+                    <svg id="iconFsEnter" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="square">
+                        <path d="M7 10V7h3" />
+                        <path d="M17 10V7h-3" />
+                        <path d="M17 14v3h-3" />
+                        <path d="M7 14v3h3" />
+                    </svg>
+                    <!-- EXIT FULLSCREEN (Corners pointing IN) -->
+                    <svg id="iconFsExit" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="square" style="display:none;">
+                        <path d="M4 14h6v6" />
+                        <path d="M20 14h-6v6" />
+                        <path d="M20 10h-6V4" />
+                        <path d="M4 10h6V4" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // SETUP & FILTER LOGIK
+        // ============================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const dropZone = document.getElementById('dropZone');
+        const controlsHint = document.getElementById('controlsHint');
+        const processingInfo = document.getElementById('processingInfo');
+        const gameWrapper = document.getElementById('gameWrapper');
+
+        // PAL + CRT Effekte permanent aktiviert
+        gameWrapper.classList.add('effect-pal');
+        gameWrapper.classList.add('effect-crt');
+
+        // Turbulenz für Glitch laufend aktualisieren für "Randomness"
+        // const turb = document.querySelector('#glitch-filter feTurbulence');
+        // const disp = document.querySelector('#glitch-filter feDisplacementMap');
+
+        // Glitch Loop: Manchmal stärker, manchmal schwächer
+        // setInterval(() => {
+        //     if (Math.random() > 0.95) {
+        //         // Kurzer starker Glitch
+        //         disp.setAttribute('scale', (Math.random() * 30 + 10).toString());
+        //         turb.setAttribute('seed', Math.floor(Math.random() * 100).toString());
+        //         setTimeout(() => {
+        //             disp.setAttribute('scale', '4'); // Zurück zu subtil
+        //         }, 100);
+        //     }
+        // }, 500);
+
+        let gameReady = false;
+        let bgImage = null;
+        let foregroundImage = null;
+        let spriteReady = false;
+        let collisionData = [];   // true = Wand
+        let foregroundData = [];  // true = Vordergrund (verdeckt Spieler)
+        let flowData = [];        // true = Magischer Fluss (Grün)
+        let magentaPixels = [];
+        let cyanPixels = new Set();
+        let greenPixels = [];     // Zum Verstecken
+
+        // ============================================
+        // LORE SYSTEM & VARIABLES
+        // ============================================
+        const yellowLights = [];
+        const loreData = {
+            audio: {}, // { 1: "lore1.mp3", ... }
+            text: {},  // { 1: "text content", ... }
+            resumeTimes: {} // { 1: 15.5, ... }
+        };
+        let mainAudioState = { time: 0, wasPlaying: false, tracks: [] };
+        let activeLoreId = null;
+        let activeLightSourceId = null; // ID des aktiven gelben Lichts
+        let isLoreMode = false;
+        let loreResumeTimeout = null;
+
+        // AUTO-LOAD: Audio-Dateien direkt laden (funktioniert mit file://)
+        // lore1.mp3 - wird vom audioPlayer direkt abgespielt
+        loreData.audio[1] = 'lore1.mp3';
+
+        // kapitel1.mp3 als Haupt-Audio
+        window.mainAudioUrl = 'kapitel1.mp3';
+
+        // TEXT-DATEIEN: Müssen per Drag&Drop geladen werden ODER hier direkt einbetten:
+        // Wenn du den Text direkt hier einbetten willst, füge ihn so ein:
+        // loreData.text[1] = `[00:00.00] Erste Zeile...\n[00:05.00] Zweite Zeile...`;
+        // window.mainTextContent = `[00:00.00] Erster Satz...\n...`;
+
+        // Falls keine Dateien gedroppt werden, zeige Hinweis
+        console.log('Text-Dateien per Drag&Drop laden: kapitel1.txt, lore1.txt');
+
+        // YellowLight Klasse für visualisierte Lore-Trigger
+        class YellowLight {
+            constructor(x, y, id) {
+                this.x = x;
+                this.y = y;
+                this.id = id;
+                this.seed = Math.random() * 100;
+                this.activeFactor = 0; // 0.0 bis 1.0 (Soft Transition Status)
+            }
+
+            draw(ctx) {
+                const time = Date.now() / 1000;
+                const swayX = Math.sin(time + this.seed) * 1.5;
+                const swayY = Math.cos(time * 1.2 + this.seed) * 1.5;
+                const isActive = (isLoreMode && this.id === activeLightSourceId);
+
+                // Smooth Animation für Zustandswechsel (kein Springen)
+                const targetFactor = isActive ? 1.0 : 0.0;
+                // Sehr weicher Übergang (0.02 pro Frame)
+                this.activeFactor += (targetFactor - this.activeFactor) * 0.02;
+
+                // Radius: 10 (Inaktiv) -> 25 (Aktiv/2.5-fach)
+                const currentBaseRadius = 10 + this.activeFactor * 15;
+
+                // Pulsieren: Amplitude wächst leicht mit (2px -> 4px)
+                const pulseAmp = 2 + this.activeFactor * 2;
+
+                // WICHTIG: Frequenz MUSS konstant bleiben, sonst gibt es Phasensprünge (Flackern) bei Änderung!
+                const radius = currentBaseRadius + Math.sin(time * 3 + this.seed) * pulseAmp;
+
+                // Alpha
+                const alpha = 0.7 + Math.sin(time * 2 + this.seed) * 0.2;
+
+                ctx.save();
+                ctx.globalCompositeOperation = 'lighter';
+
+                const grad = ctx.createRadialGradient(this.x + swayX, this.y + swayY, 0, this.x + swayX, this.y + swayY, radius);
+
+                // IMMER die helle Farbe ("richtige Farbe"), egal ob aktiv oder inaktiv
+                // Fast Weiß im Kern, helles Gold außen
+                grad.addColorStop(0, `rgba(255, 255, 240, ${alpha})`);
+                grad.addColorStop(0.6, `rgba(255, 240, 100, ${alpha * 0.6})`);
+                grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(this.x + swayX, this.y + swayY, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Click-to-Move für Mobile
+        let moveTarget = null; // {x, y} oder null
+
+        // ============================================
+        // PARTIKEL SYSTEM
+        // ============================================
+        const particles = [];
+        const NUM_PARTICLES = 300; // Reduziert um 50%
+        let particleSprite = null;
+
+        // Spotlight-System: Sammelt Lichtquellen mit Richtung und Intensität
+        let nearbyLights = []; // {x, y, intensity}
+
+        // Dust-Particles: Staubwolken beim Laufen
+        const dustParticles = [];
+
+        // Screen-Shake bei Kollision
+        let screenShake = 0;
+
+        // Wolken-System (Parallax, selten)
+        const clouds = [];
+        const MAX_CLOUDS = 3;
+        let cloudSpawnTimer = 0;
+
+        class Cloud {
+            constructor(startX, startY) {
+                // WELT-Koordinaten - Wolken sind an der KARTE fixiert
+                this.x = startX !== undefined ? startX : mapW + 100;
+                this.y = startY !== undefined ? startY : Math.random() * mapH;
+                this.speed = 0.15 + Math.random() * 0.1; // Langsame Drift über Karte
+                this.size = 100 + Math.random() * 150;
+                this.alpha = 0.5;
+            }
+            update() {
+                this.x -= this.speed;
+                // Wrap: links raus -> rechts wieder rein
+                if (this.x < -this.size * 2) {
+                    this.x = mapW + this.size;
+                    this.y = Math.random() * mapH;
+                }
+            }
+            draw(ctx, camX, camY) {
+                // WELT-Koordinaten - ctx ist bereits mit Kamera translated
+                // KEIN setTransform Reset! Dadurch bewegen sich Wolken mit Karte
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                ctx.filter = 'blur(25px)';
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.ellipse(this.x, this.y, this.size, this.size * 0.35, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Wolken initialisieren - gleichmäßig über KARTE verteilt
+        function initClouds() {
+            clouds.length = 0;
+            if (mapW <= 0 || mapH <= 0) return;
+
+            // Wolken verteilt über die Kartenfläche
+            const numClouds = Math.max(3, Math.floor((mapW * mapH) / 150000));
+            for (let i = 0; i < numClouds; i++) {
+                const x = Math.random() * mapW;
+                const y = Math.random() * mapH;
+                clouds.push(new Cloud(x, y));
+            }
+            console.log("Clouds initialized:", clouds.length, "for map", mapW, "x", mapH);
+        }
+
+        // ============================================
+        // AUDIO SYSTEM
+        // ============================================
+        const footstepSound = new Audio('footsteps.mp3');
+        footstepSound.volume = 0.25;
+        footstepSound.loop = true;
+
+        const shimmerSound = new Audio('shimmer.mp3');
+        shimmerSound.volume = 0.4; // Angenehme Lautstärke
+        let lastShimmerLightId = null; // Speichert ID des zuletzt vertonten Lichts
+        let footstepPlaying = false;
+
+        // Fallback: Manueller Loop falls Browser-Loop nicht funktioniert
+        footstepSound.addEventListener('ended', () => {
+            if (footstepPlaying) {
+                footstepSound.currentTime = 0;
+                footstepSound.play().catch(() => { });
+            }
+        });
+
+        let audioUnlocked = false;
+
+        // Ambient-Sound (permanent)
+        const ambientSound = new Audio('medieval_town.mp3');
+        ambientSound.loop = true;
+        ambientSound.volume = 0.04;
+
+        // Fallback: Manueller Loop für Ambient
+        ambientSound.addEventListener('ended', () => {
+            ambientSound.currentTime = 0;
+            ambientSound.play().catch(() => { });
+        });
+
+        // Audio entsperren bei erstem User-Input
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            audioUnlocked = true;
+            // Starte Ambient-Sound
+            ambientSound.play().catch(() => { });
+        }
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+
+        // Periodisch Ambient neu starten falls gestoppt
+        setInterval(() => {
+            if (audioUnlocked && ambientSound.paused) {
+                ambientSound.play().catch(() => { });
+            }
+        }, 3000);
+
+        function createGlowSprite() {
+            const size = 64;
+            const half = size / 2;
+            const c = document.createElement('canvas');
+            c.width = size;
+            c.height = size;
+            const ctx = c.getContext('2d');
+
+            const grad = ctx.createRadialGradient(half, half, 2, half, half, half);
+            // Sehr subtiler Nebel
+            grad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+            grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.1)');
+            grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+
+            return c;
+        }
+
+        class Particle {
+            constructor(startX, startY) {
+                this.sizeMod = 0.5 + Math.random() * 1.5;
+                this.resetVelocity();
+                if (startX !== undefined && startY !== undefined) {
+                    this.x = startX;
+                    this.y = startY;
+                } else {
+                    this.reset();
+                }
+            }
+
+            resetVelocity() {
+                // Etwas langsamer
+                const angle = Math.random() * Math.PI * 2;
+                const speed = 0.2 + Math.random() * 0.4;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+
+                this.life = Math.random();
+                this.pulseSpeed = 0.01 + Math.random() * 0.02;
+                this.maxLife = 0.5 + Math.random() * 0.5;
+                this.onFlow = false;
+            }
+
+            resetTo(x, y) {
+                this.x = x;
+                this.y = y;
+                this.resetVelocity();
+            }
+
+            reset() {
+                if (greenPixels.length > 0) {
+                    // Versuche bis zu 10 mal eine gültige Position zu finden
+                    for (let attempt = 0; attempt < 10; attempt++) {
+                        const idx = Math.floor(Math.random() * greenPixels.length);
+                        const gp = greenPixels[idx];
+
+                        // Jitter NUR wenn kein Wall
+                        let testX = gp.x + (Math.random() - 0.5) * 8;
+                        let testY = gp.y + (Math.random() - 0.5) * 8;
+
+                        const ix = Math.floor(testX), iy = Math.floor(testY);
+
+                        // Prüfe ob Position NICHT in Wand ist
+                        if (ix >= 0 && ix < mapW && iy >= 0 && iy < mapH) {
+                            if (!collisionData[iy][ix]) {
+                                this.resetTo(testX, testY);
+                                return;
+                            }
+                        }
+                    }
+                    // Fallback: Exakt auf grünem Pixel (ohne Jitter)
+                    const gp = greenPixels[Math.floor(Math.random() * greenPixels.length)];
+                    this.resetTo(gp.x, gp.y);
+                } else {
+                    this.x = Math.random() * mapW;
+                    this.y = Math.random() * mapH;
+                    this.resetVelocity();
+                }
+            }
+
+            update() {
+                // SOFORTIGER WALL-CHECK: Bin ich in/nahe einer Wand? -> Reset!
+                const myX = Math.floor(this.x), myY = Math.floor(this.y);
+                const wallCheckR = 2;
+                let inWall = false;
+                for (let cy = -wallCheckR; cy <= wallCheckR && !inWall; cy++) {
+                    for (let cx = -wallCheckR; cx <= wallCheckR && !inWall; cx++) {
+                        const checkX = myX + cx, checkY = myY + cy;
+                        if (checkX >= 0 && checkX < mapW && checkY >= 0 && checkY < mapH) {
+                            if (collisionData[checkY][checkX]) {
+                                inWall = true;
+                            }
+                        }
+                    }
+                }
+                if (inWall) {
+                    this.reset();
+                    return;
+                }
+
+                // 1. Mehr Chaos & Torkeln (Abweichung)
+                this.vx += (Math.random() - 0.5) * 0.2;
+                this.vy += (Math.random() - 0.5) * 0.2;
+
+                // 2. Weiche Anziehung zum Fluss (falls wir zu weit abkommen)
+                if (!this.isOnFlow(this.x, this.y)) {
+                    const bestDir = this.scanForFlow();
+                    if (bestDir) {
+                        this.vx += bestDir.x * 0.08;
+                        this.vy += bestDir.y * 0.08;
+                    }
+                }
+
+                // 3. Speed Limit (50% langsamer)
+                const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                const maxSpeed = 0.375; // 50% langsamer
+                if (speed > maxSpeed) {
+                    this.vx = (this.vx / speed) * maxSpeed;
+                    this.vy = (this.vy / speed) * maxSpeed;
+                }
+
+                // 3b. Kollision mit anderen Partikeln (Abstoßung)
+                const collisionRadius = 8; // Größe wie Männchen-Kopf
+                for (const other of particles) {
+                    if (other === this) continue;
+                    const dx = this.x - other.x;
+                    const dy = this.y - other.y;
+                    const distSq = dx * dx + dy * dy;
+                    const minDist = collisionRadius * 2;
+
+                    if (distSq < minDist * minDist && distSq > 0) {
+                        const dist = Math.sqrt(distSq);
+                        const overlap = minDist - dist;
+                        // Normalisierte Richtung weg vom anderen
+                        const nx = dx / dist;
+                        const ny = dy / dist;
+                        // Abstoßung proportional zur Überlappung
+                        this.vx += nx * overlap * 0.1;
+                        this.vy += ny * overlap * 0.1;
+                    }
+                }
+
+                // 4. Kollision mit Wänden - DICKERE PRÜFUNG (3x3 Bereich)
+                const nextX = this.x + this.vx;
+                const nextY = this.y + this.vy;
+
+                let hitWall = false;
+                // Prüfe 3x3 Bereich um die nächste Position
+                const checkRadius = 2;
+                for (let checkY = -checkRadius; checkY <= checkRadius && !hitWall; checkY++) {
+                    for (let checkX = -checkRadius; checkX <= checkRadius && !hitWall; checkX++) {
+                        const ix = Math.floor(nextX + checkX);
+                        const iy = Math.floor(nextY + checkY);
+                        if (ix >= 0 && ix < mapW && iy >= 0 && iy < mapH) {
+                            if (collisionData[iy][ix]) {
+                                hitWall = true;
+                            }
+                        }
+                    }
+                }
+
+                if (hitWall) {
+                    // Abprallen
+                    this.vx *= -0.5;
+                    this.vy *= -0.5;
+                    this.vx += (Math.random() - 0.5) * 0.3;
+                    this.vy += (Math.random() - 0.5) * 0.3;
+                } else {
+                    this.x = nextX;
+                    this.y = nextY;
+                }
+
+                // 5. Spieler Beleuchtung - Sammle nur NAHE Lichtquellen
+                if (typeof player !== 'undefined') {
+                    const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
+                    const refH = Math.floor(SPRITE.frameHeight * SPRITE.scale);
+                    const visualShiftY = Math.floor(refH / 3) - 4;
+
+                    // Zentrum des gerenderten Sprites (Präzise Mitte der Bounding Box)
+                    const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
+                    const px = coords.x + coords.w / 2;
+                    const py = coords.y + coords.h / 2;
+
+                    const ddx = this.x - px;
+                    const ddy = this.y - py;
+                    const distSq = ddx * ddx + ddy * ddy;
+
+                    // Radius = ca 65px (4225 squared) für sehr großzügige Erfassung
+                    if (distSq < 4225) {
+                        const dist = Math.sqrt(distSq);
+                        nearbyLights.push({
+                            x: this.x,
+                            y: this.y,
+                            dist: dist,
+                            life: this.life
+                        });
+                    }
+                }
+
+                // Lifecycle
+                this.life += this.pulseSpeed;
+                if (this.life > this.maxLife || this.life < 0.1) this.pulseSpeed *= -1;
+
+                // Out of Bounds Reset
+                if (this.x < -50 || this.x > mapW + 50 || this.y < -50 || this.y > mapH + 50) {
+                    this.reset();
+                }
+            }
+
+            isOnFlow(x, y) {
+                const ix = Math.floor(x);
+                const iy = Math.floor(y);
+                const r = 4;
+
+                for (let dy = -r; dy <= r; dy++) {
+                    for (let dx = -r; dx <= r; dx++) {
+                        const cx = ix + dx, cy = iy + dy;
+                        if (cx >= 0 && cx < mapW && cy >= 0 && cy < mapH) {
+                            if (flowData[cy][cx]) return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            scanForFlow() {
+                const angles = [-0.5, 0.5, -1.0, 1.0, -1.5, 1.5];
+                const currentAngle = Math.atan2(this.vy, this.vx);
+                const scanDist = 10;
+
+                for (let a of angles) {
+                    const checkAngle = currentAngle + a;
+                    const dx = Math.cos(checkAngle);
+                    const dy = Math.sin(checkAngle);
+                    const cx = this.x + dx * scanDist;
+                    const cy = this.y + dy * scanDist;
+
+                    if (this.isOnFlow(cx, cy)) {
+                        return { x: dx, y: dy };
+                    }
+                }
+                return null;
+            }
+
+            draw(ctx, camX, camY) {
+                const drawSize = 64 * this.sizeMod;
+
+                // Culling (Screen Check)
+                const sx = this.x - camX;
+                const sy = this.y - camY;
+
+                if (sx < -drawSize || sx > SCREEN_W + drawSize || sy < -drawSize || sy > SCREEN_H + drawSize) return;
+
+                const alpha = Math.max(0, Math.min(1, this.life));
+
+                // Partikel-Schatten (sanft nach unten)
+                ctx.globalAlpha = alpha * 0.12;
+                ctx.drawImage(particleSprite,
+                    this.x - drawSize / 2 + 3,
+                    this.y - drawSize / 2 + drawSize * 0.35,
+                    drawSize, drawSize * 0.35);
+
+                // Partikel selbst
+                ctx.globalAlpha = alpha;
+                ctx.drawImage(particleSprite, this.x - drawSize / 2, this.y - drawSize / 2, drawSize, drawSize);
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        function initParticles() {
+            if (!particleSprite) particleSprite = createGlowSprite();
+
+            particles.length = 0;
+            if (greenPixels.length > 0) {
+                for (let i = 0; i < NUM_PARTICLES; i++) {
+                    // Versuche gültige Position zu finden
+                    let startX, startY;
+                    let found = false;
+
+                    for (let attempt = 0; attempt < 5; attempt++) {
+                        const idx = Math.floor(Math.random() * greenPixels.length);
+                        const gp = greenPixels[idx];
+
+                        startX = gp.x + (Math.random() - 0.5) * 8;
+                        startY = gp.y + (Math.random() - 0.5) * 8;
+
+                        const ix = Math.floor(startX), iy = Math.floor(startY);
+                        if (ix >= 0 && ix < mapW && iy >= 0 && iy < mapH) {
+                            if (!collisionData[iy][ix]) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Fallback: Exakt auf grünem Pixel
+                    if (!found) {
+                        const gp = greenPixels[Math.floor(Math.random() * greenPixels.length)];
+                        startX = gp.x;
+                        startY = gp.y;
+                    }
+
+                    particles.push(new Particle(startX, startY));
+                }
+            } else {
+                for (let i = 0; i < NUM_PARTICLES; i++) particles.push(new Particle());
+            }
+        }
+
+        let mapW = 0, mapH = 0;
+
+        // Dynamische Auflösung
+        let SCREEN_W = 320;
+        let SCREEN_H = 240;
+
+        function updateDimensions() {
+            // Check for Mobile (einfache Prüfung via Width)
+            const isMobile = window.innerWidth <= 768;
+
+            if (isMobile) {
+                // Mobile: Feste Breite (Pixeldichte), variable Höhe basierend auf Aspect Ratio
+                // Das sorgt dafür, dass auf einem Smartphone der Bildschirm vertikal ausgefüllt wird ("Taller View")
+                SCREEN_W = 320;
+                // Aspect Ratio des Fensters:
+                const ratio = window.innerHeight / window.innerWidth;
+                SCREEN_H = Math.floor(SCREEN_W * ratio);
+            } else {
+                // Desktop: Klassisches 320x240
+                SCREEN_W = 320;
+                SCREEN_H = 240;
+            }
+
+            // Canvas Größe aktualisieren
+            if (canvas) {
+                canvas.width = SCREEN_W;
+                canvas.height = SCREEN_H;
+            }
+            console.log(`Resolution updated: ${SCREEN_W}x${SCREEN_H} (Mobile: ${isMobile})`);
+        }
+
+        // Initial und bei Resize
+        updateDimensions();
+        window.addEventListener('resize', () => {
+            updateDimensions();
+            // Auch Subtitles neu rendern falls nötig
+            if (isReadingMode && subtitleTracks.length > 0) {
+                renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            }
+        });
+
+        let camX = 0, camY = 0;
+        let targetCamX = 0, targetCamY = 0;
+
+        // Sprite Sheet Konfiguration
+        const SPRITE = {
+            frameWidth: 0,   // Wird berechnet
+            frameHeight: 0,  // Wird berechnet
+            cols: 4,         // 4 Frames pro Reihe
+            scale: 0.15      // Größere Skalierung (etwa doppelt so groß wie vorher)
+        };
+
+        // Spieler
+        const player = {
+            x: 50, y: 50,
+            w: 14, h: 8,      // Kollisionsbox (Füße)
+            speed: 1.0,
+            dir: 0,           // 0=down, 1=up, 2=left, 3=right
+            frame: 0,         // 0-3 für Animation
+            animTimer: 0,
+            isMoving: false,
+            isBehindForeground: false
+        };
+
+        const keys = {};
+
+        // ============================================
+        // SPRITES LADEN (alle 4 Richtungen)
+        // ============================================
+        let spriteFront = null;   // Frontalansicht (down)
+        let spriteBack = null;    // Rückenansicht (up)
+        let spriteSide = null;    // Seitenansicht (right, links wird gespiegelt)
+        let spritesLoaded = 0;
+        const TOTAL_SPRITES = 3;
+
+        function loadAllSprites() {
+            // Frontal (nach unten schauend, NEU: spriteneu.png)
+            spriteFront = new Image();
+            spriteFront.onload = function () {
+                // WICHTIG: Math.floor() für ganzzahlige Frame-Breite!
+                SPRITE.frameWidth = Math.floor(this.width / SPRITE.cols); // Fallback-Wert, wird für DrawCoords überschrieben
+                SPRITE.frameHeight = this.height;
+                spritesLoaded++;
+                checkAllSpritesLoaded();
+                console.log(`Sprite Front (New) geladen: ${this.width}x${this.height}`);
+            };
+            spriteFront.onerror = () => console.warn('spriteneu.png nicht gefunden');
+            spriteFront.src = 'spriteneu.png';
+
+            // Rücken (nach oben schauend, NEU: spriterueckenneu.png)
+            spriteBack = new Image();
+            spriteBack.onload = function () {
+                spritesLoaded++;
+                checkAllSpritesLoaded();
+                console.log('Sprite Back (New) geladen');
+            };
+            spriteBack.onerror = () => console.warn('spriterueckenneu.png nicht gefunden');
+            spriteBack.src = 'spriterueckenneu.png';
+
+            // Seitlich (für rechts, links wird gespiegelt)
+            spriteSide = new Image();
+            spriteSide.onload = function () {
+                spritesLoaded++;
+                checkAllSpritesLoaded();
+                console.log('Sprite Side (New) geladen');
+            };
+            spriteSide.onerror = () => console.warn('seitlichneu.png nicht gefunden');
+            spriteSide.src = 'seitlichneu.png';
+        }
+
+        // Front (spriteneu.png)
+        const FRONT_SPRITE_DATA = [
+            { left: 38, width: 141, footX: 106, footY: 267 },
+            { left: 201, width: 138, footX: 273, footY: 265 },
+            { left: 361, width: 140, footX: 436, footY: 270 },
+            { left: 534, width: 137, footX: 604, footY: 268 }
+        ];
+        // Ping-Pong Animation für Front (0-1-2-3-2-1)
+        const FRONT_ANIM_CYCLE = [0, 1, 2, 3, 2, 1];
+
+        // Back (spriterueckenneu.png)
+        const BACK_SPRITE_DATA = [
+            { left: 16, width: 147, footX: 90, footY: 282 },
+            { left: 177, width: 144, footX: 253, footY: 283 },
+            { left: 336, width: 152, footX: 417, footY: 285 }
+        ];
+        // Ping-Pong Animation für Back (0-1-2-1)
+        const BACK_ANIM_CYCLE = [0, 1, 2, 1];
+
+        // NEU: Marker-Daten für seitlichneu.png (X, Y)
+        const SIDE_SPRITE_DATA = [
+            { left: 20, footX: 92, footY: 275 },
+            { left: 200, footX: 268, footY: 281 },
+            { left: 372, footX: 440, footY: 280 },
+            { left: 528, footX: 595, footY: 284 }
+        ];
+
+        // Ping-Pong Animation für Seitlich (0-1-2-3-2-1)
+        const SIDE_ANIM_CYCLE = [0, 1, 2, 3, 2, 1];
+
+        function checkAllSpritesLoaded() {
+            if (spritesLoaded >= TOTAL_SPRITES) {
+                spriteReady = true;
+                console.log('Alle Sprites geladen!');
+            }
+        }
+
+        loadAllSprites();
+
+        // ============================================
+        // DRAG & DROP
+        // ============================================
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        // Variable um Click nach Drop zu verhindern
+        let justDropped = false;
+
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropZone.classList.remove('dragover');
+            justDropped = true;
+            setTimeout(() => { justDropped = false; }, 300); // 300ms Debounce
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                loadImageFile(file);
+            }
+        });
+
+        dropZone.addEventListener('click', e => {
+            if (e.target.classList.contains('file-btn')) return;
+            if (justDropped) return; // Ignoriere Click direkt nach Drop
+            document.getElementById('fileInput').click();
+        });
+
+        document.getElementById('fileInput').addEventListener('change', e => {
+            if (e.target.files[0]) loadImageFile(e.target.files[0]);
+        });
+
+        function loadImageFile(file) {
+            processingInfo.style.display = 'block';
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = new Image();
+                img.onload = () => setTimeout(() => processMap(img), 50);
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // ============================================
+        // KEYBOARD
+        // ============================================
+        window.addEventListener('keydown', e => {
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+            keys[e.key.toLowerCase()] = true;
+            keys[e.key] = true;
+            // Tastendruck bricht Click-to-Move ab
+            moveTarget = null;
+        });
+
+        window.addEventListener('keyup', e => {
+            keys[e.key.toLowerCase()] = false;
+            keys[e.key] = false;
+        });
+
+        // Click-to-Move für Mobile
+        function handleClickMove(screenX, screenY) {
+            if (!gameReady) return;
+
+            // Berechne Welt-Koordinaten aus Screen-Koordinaten
+            const rect = canvas.getBoundingClientRect();
+            const canvasX = screenX - rect.left;
+            const canvasY = screenY - rect.top;
+
+            // Welt-Position = Canvas-Position + Kamera-Offset
+            const worldX = canvasX + camX;
+            const worldY = canvasY + camY;
+
+            // Setze Ziel (Spieler-Mitte soll dort hin)
+            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+
+            moveTarget = {
+                x: worldX - spriteW / 2,
+                y: worldY - spriteH / 2
+            };
+        }
+
+        canvas.addEventListener('click', e => {
+            handleClickMove(e.clientX, e.clientY);
+        });
+
+        canvas.addEventListener('touchstart', e => {
+            e.preventDefault();
+            if (e.touches.length > 0) {
+                handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
+            }
+        }, { passive: false });
+
+        // ============================================
+        // MAP PROCESSING
+        // ============================================
+        function processMap(img) {
+            mapW = img.width;
+            mapH = img.height;
+
+            SCREEN_W = Math.min(mapW, window.innerWidth);
+            SCREEN_H = Math.min(mapH, window.innerHeight);
+            canvas.width = SCREEN_W;
+            canvas.height = SCREEN_H;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = mapW;
+            tempCanvas.height = mapH;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(img, 0, 0);
+
+            const imgData = tempCtx.getImageData(0, 0, mapW, mapH);
+            const data = imgData.data;
+
+            // Initialisieren
+            collisionData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false));
+            foregroundData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false));
+            flowData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false));
+
+            magentaPixels = [];
+            cyanPixels = new Set();
+            greenPixels = [];
+            yellowLights.length = 0;
+            let spawnPixel = null; // Speichert den gefundenen Spawn-Punkt (Blau)
+
+            // 1. Scan-Pass: Farben erkennen
+            for (let y = 0; y < mapH; y++) {
+                for (let x = 0; x < mapW; x++) {
+                    const i = (y * mapW + x) * 4;
+                    const r = data[i], g = data[i + 1], b = data[i + 2];
+
+                    // Magenta = Kollision
+                    if (r > 200 && g < 80 && b > 200) {
+                        collisionData[y][x] = true;
+                        magentaPixels.push({ x, y, i });
+                    }
+                    // Cyan = Vordergrund
+                    else if (r < 80 && g > 200 && b > 200) {
+                        cyanPixels.add(`${x},${y}`);
+                    }
+                    // Grün = Flow (Lichter)
+                    else if (r < 80 && g > 200 && b < 80) {
+                        flowData[y][x] = true;
+                        greenPixels.push({ x, y, i });
+                    }
+                    // GELB = Lore Trigger (#FFFF00)
+                    else if (r > 250 && g > 250 && b < 10) {
+                        const id = yellowLights.length + 1;
+                        yellowLights.push(new YellowLight(x, y, id));
+                    }
+                    // BLAU = Spawn Punkt (#0000FF)
+                    else if (r < 50 && g < 50 && b > 200) {
+                        if (!spawnPixel) {
+                            spawnPixel = { x, y, i };
+                        }
+                        // Pixel merken zum Verstecken (nutze greenPixels Liste der Einfachheit halber oder eigene Logik)
+                        // Da es nur einer sein sollte, können wir ihn einfach am Ende behandeln.
+                    }
+                }
+            }
+
+            console.log(`Magenta: ${magentaPixels.length}, Cyan: ${cyanPixels.size}, Grün: ${greenPixels.length}, Gelb (Lore): ${yellowLights.length}`);
+
+            // 2. Flood Fill für Cyan
+            if (cyanPixels.size > 0) {
+                findEnclosedAreas(cyanPixels, mapW, mapH);
+            }
+
+            // 3. Pixel-Pulling: Farben verstecken / ersetzen
+
+            // Erst Flow (Grün) verstecken
+            for (const gp of greenPixels) {
+                const repl = pullNearbyPixel(data, gp.x, gp.y, mapW, mapH, cyanPixels);
+                data[gp.i] = repl.r;
+                data[gp.i + 1] = repl.g;
+                data[gp.i + 2] = repl.b;
+            }
+
+            // Gelbe Lore-Pixel verstecken
+            for (const yl of yellowLights) {
+                const i = (yl.y * mapW + yl.x) * 4;
+                const repl = pullNearbyPixel(data, yl.x, yl.y, mapW, mapH, cyanPixels);
+                data[i] = repl.r;
+                data[i + 1] = repl.g;
+                data[i + 2] = repl.b;
+            }
+
+            // Blauen Spawn-Pixel verstecken
+            if (spawnPixel) {
+                const repl = pullNearbyPixel(data, spawnPixel.x, spawnPixel.y, mapW, mapH, cyanPixels);
+                data[spawnPixel.i] = repl.r;
+                data[spawnPixel.i + 1] = repl.g;
+                data[spawnPixel.i + 2] = repl.b;
+            }
+
+            // Dann Kollision (Magenta) - mit Multi-Pass
+            let remainingMagenta = [...magentaPixels];
+            const maxPasses = 10;
+
+            for (let pass = 0; pass < maxPasses && remainingMagenta.length > 0; pass++) {
+                const stillRemaining = [];
+                for (const mp of remainingMagenta) {
+                    const repl = pullNearbyPixel(data, mp.x, mp.y, mapW, mapH, cyanPixels);
+                    if (repl.r !== 60 || repl.g !== 55 || repl.b !== 50) {
+                        data[mp.i] = repl.r;
+                        data[mp.i + 1] = repl.g;
+                        data[mp.i + 2] = repl.b;
+                    } else {
+                        stillRemaining.push(mp);
+                    }
+                }
+                remainingMagenta = stillRemaining;
+            }
+            // Fallback
+            for (const mp of remainingMagenta) {
+                const repl = pullNearbyPixel(data, mp.x, mp.y, mapW, mapH, cyanPixels);
+                data[mp.i] = repl.r;
+                data[mp.i + 1] = repl.g;
+                data[mp.i + 2] = repl.b;
+            }
+
+            // Cyan Cleanup (Foreground Pixels im Background Image auch verstecken)
+            for (const cp of cyanPixels) {
+                // Wir verstecken Cyan Pixel im Background Image NICHT zwingend, 
+                // da wir ein separates Foreground Image bauen. 
+                // ABER: Für einen sauberen Look "drunter" machen wir es trotzdem.
+                const [x, y] = cp.split(',').map(Number);
+                const i = (y * mapW + x) * 4;
+                const repl = pullNearbyPixel(data, x, y, mapW, mapH, cyanPixels);
+                data[i] = repl.r;
+                data[i + 1] = repl.g;
+                data[i + 2] = repl.b;
+            }
+
+            // Bilder erstellen
+            const bgData = new Uint8ClampedArray(data);
+            const fgData = new Uint8ClampedArray(data.length);
+            // FG komplett transparent init
+            for (let i = 0; i < fgData.length; i += 4) fgData[i + 3] = 0;
+
+            for (let y = 0; y < mapH; y++) {
+                for (let x = 0; x < mapW; x++) {
+                    if (foregroundData[y][x]) {
+                        const i = (y * mapW + x) * 4;
+                        // Hier müssen wir aufpassen: Das data[] Array hat jetzt schon ersetzte Pixel!
+                        // Wir wollen aber eigentlich das ORIGINAL Cyan Pixel gar nicht im Foreground haben?
+                        // DOCH, wir wollen die Pixel, die WIRKLICH Foreground sind (Dächer).
+                        // Aber wir haben 'data' schon modifiziert (Cyan versteckt).
+                        // => Wir nutzen einfach die Pixel aus 'data' (die jetzt Textur haben)
+                        fgData[i] = data[i];
+                        fgData[i + 1] = data[i + 1];
+                        fgData[i + 2] = data[i + 2];
+                        fgData[i + 3] = 255;
+                    }
+                }
+            }
+
+            const bgCanvas = document.createElement('canvas');
+            bgCanvas.width = mapW;
+            bgCanvas.height = mapH;
+            bgCanvas.getContext('2d').putImageData(new ImageData(bgData, mapW, mapH), 0, 0);
+
+            const fgCanvas = document.createElement('canvas');
+            fgCanvas.width = mapW;
+            fgCanvas.height = mapH;
+            fgCanvas.getContext('2d').putImageData(new ImageData(fgData, mapW, mapH), 0, 0);
+
+            bgImage = new Image();
+            bgImage.src = bgCanvas.toDataURL();
+
+            foregroundImage = new Image();
+            foregroundImage.src = fgCanvas.toDataURL();
+
+            bgImage.onload = () => {
+                gameReady = true;
+                processingInfo.style.display = 'none';
+                dropZone.classList.add('hidden');
+                // controlsHint wurde entfernt
+
+                if (spawnPixel) {
+                    // Spieler auf blauen Pixel setzen (zentriert auf den Punkt)
+                    player.x = spawnPixel.x - 8;
+                    player.y = spawnPixel.y - 16;
+                    console.log(`Spawn bei Blau: ${player.x}, ${player.y}`);
+                } else {
+                    // Fallback: Suche sichere Startposition in der Mitte
+                    player.x = mapW / 2 - 8;
+                    player.y = mapH / 2 - 8;
+                    findSafeStart();
+                }
+
+                // Ensure SCREEN dimensions are up to date!
+                SCREEN_W = Math.min(mapW, window.innerWidth);
+                SCREEN_H = Math.min(mapH, window.innerHeight);
+                canvas.width = SCREEN_W;
+                canvas.height = SCREEN_H;
+
+                camX = targetCamX = Math.max(0, Math.min(player.x - SCREEN_W / 2 + 10, mapW - SCREEN_W));
+                camY = targetCamY = Math.max(0, Math.min(player.y - SCREEN_H * 0.30 + 10, mapH - SCREEN_H));
+
+                // Partikel initialisieren
+                initParticles();
+
+                // Wolken initialisieren
+                initClouds();
+
+                // Ambient Audio starten (User Interaction "Drop/File Load" sollte reichen)
+                ambientAudio.play().catch(e => console.warn("Ambient Autoplay prevented:", e));
+
+                requestAnimationFrame(gameLoop);
+            };
+        }
+
+        // Fallback: Audio starten bei erster Interaktion, falls Autoplay blockiert wurde
+        document.addEventListener('click', () => {
+            if (gameReady && ambientAudio.paused) {
+                ambientAudio.play().catch(e => console.warn("Ambient play failed:", e));
+            }
+        }, { once: true }); // Nur einmal ausführen
+
+        function findSafeStart() {
+            // Suche ausgehend von der Mitte nach einer Position ohne Kollision
+            const startX = Math.floor(mapW / 2);
+            const startY = Math.floor(mapH / 2);
+
+            for (let radius = 0; radius < 100; radius++) {
+                for (let dy = -radius; dy <= radius; dy++) {
+                    for (let dx = -radius; dx <= radius; dx++) {
+                        const x = startX + dx;
+                        const y = startY + dy;
+                        if (x >= 0 && x < mapW - 16 && y >= 0 && y < mapH - 16) {
+                            if (!checkCollisionAt(x, y)) {
+                                player.x = x;
+                                player.y = y;
+                                return;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ============================================
+        // FLOOD FILL MIT DILATATION
+        // ============================================
+        function findEnclosedAreas(cyanPixels, w, h) {
+            const visited = new Array(h).fill(null).map(() => new Array(w).fill(0));
+
+            // Dilatation der Cyan-Grenzen
+            const dilationRadius = 2;
+            for (const cp of cyanPixels) {
+                const [x, y] = cp.split(',').map(Number);
+                for (let dy = -dilationRadius; dy <= dilationRadius; dy++) {
+                    for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
+                        if (Math.abs(dx) + Math.abs(dy) <= dilationRadius) {
+                            const nx = x + dx, ny = y + dy;
+                            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                                visited[ny][nx] = 2;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Flood Fill vom Rand
+            const queue = [];
+            for (let x = 0; x < w; x++) {
+                if (visited[0][x] === 0) queue.push([x, 0]);
+                if (visited[h - 1][x] === 0) queue.push([x, h - 1]);
+            }
+            for (let y = 0; y < h; y++) {
+                if (visited[y][0] === 0) queue.push([0, y]);
+                if (visited[y][w - 1] === 0) queue.push([w - 1, y]);
+            }
+
+            let idx = 0;
+            while (idx < queue.length) {
+                const [x, y] = queue[idx++];
+                if (x < 0 || x >= w || y < 0 || y >= h || visited[y][x] !== 0) continue;
+                visited[y][x] = 1;
+                queue.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+            }
+
+            // Innere Bereiche markieren
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    if (visited[y][x] === 0 || visited[y][x] === 2) {
+                        foregroundData[y][x] = true;
+                    }
+                }
+            }
+
+            // Original Cyan-Pixel auch markieren
+            for (const cp of cyanPixels) {
+                const [x, y] = cp.split(',').map(Number);
+                foregroundData[y][x] = true;
+            }
+        }
+
+        // ============================================
+        // PIXEL-PULLING (Spiralförmige Suche für alle Linienrichtungen)
+        // ============================================
+        function pullNearbyPixel(data, x, y, w, h, cyanPixels) {
+            // Spiralförmige Suche: Sucht in expandierenden Kreisen
+            // Funktioniert für horizontale, vertikale UND diagonale Linien
+            const maxRadius = 15;  // Maximaler Suchradius
+
+            for (let radius = 1; radius <= maxRadius; radius++) {
+                // Alle Punkte auf dem aktuellen "Quadrat-Ring" durchsuchen
+                for (let dx = -radius; dx <= radius; dx++) {
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        // Nur Randpunkte des Quadrats (nicht innere)
+                        if (Math.abs(dx) !== radius && Math.abs(dy) !== radius) continue;
+
+                        const nx = x + dx, ny = y + dy;
+                        if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+
+                        const ni = (ny * w + nx) * 4;
+                        const r = data[ni], g = data[ni + 1], b = data[ni + 2];
+
+                        // Skip Magenta (Kollision) und Cyan (Vordergrund)
+                        if (r > 200 && g < 80 && b > 200) continue;
+                        if (r < 80 && g > 200 && b > 200) continue;
+                        if (cyanPixels.has(`${nx},${ny}`)) continue;
+
+                        // Gültiges Pixel gefunden!
+                        return { r, g, b };
+                    }
+                }
+            }
+
+            // Fallback: Neutrales Grau-Braun (passt zu den meisten Umgebungen)
+            return { r: 60, g: 55, b: 50 };
+        }
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        function gameLoop() {
+            update();
+            updateLoreSystem(); // Lore-Proximity prüfen
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        // ============================================
+        // UPDATE - MIT ROBUSTER KOLLISION
+        // ============================================
+        function update() {
+            if (!gameReady) return;
+
+            let dx = 0, dy = 0;
+            player.isMoving = false;
+
+            // Input von Tastatur
+            if (keys['w'] || keys['arrowup'] || keys['ArrowUp']) { dy = -1; player.dir = 1; }
+            if (keys['s'] || keys['arrowdown'] || keys['ArrowDown']) { dy = 1; player.dir = 0; }
+            if (keys['a'] || keys['arrowleft'] || keys['ArrowLeft']) { dx = -1; player.dir = 2; }
+            if (keys['d'] || keys['arrowright'] || keys['ArrowRight']) { dx = 1; player.dir = 3; }
+
+            // Click-to-Move: Wenn kein Tastatur-Input und Ziel gesetzt
+            if (dx === 0 && dy === 0 && moveTarget) {
+                const tdx = moveTarget.x - player.x;
+                const tdy = moveTarget.y - player.y;
+                const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+
+                // Ziel erreicht? (innerhalb von 3px)
+                if (tdist < 3) {
+                    moveTarget = null;
+                } else {
+                    // Richtung zum Ziel
+                    dx = tdx / tdist;
+                    dy = tdy / tdist;
+
+                    // Blickrichtung setzen
+                    if (Math.abs(tdx) > Math.abs(tdy)) {
+                        player.dir = tdx > 0 ? 3 : 2; // Rechts oder Links
+                    } else {
+                        player.dir = tdy > 0 ? 0 : 1; // Unten oder Oben
+                    }
+                }
+            }
+
+            if (dx !== 0 || dy !== 0) {
+                player.isMoving = true;
+
+                // Normalisieren für diagonale Bewegung
+                const len = Math.sqrt(dx * dx + dy * dy);
+                dx = (dx / len) * player.speed;
+                dy = (dy / len) * player.speed;
+
+                // ========================================
+                // SMOOTH WALL SLIDING MIT NUDGE
+                // ========================================
+
+                const targetX = player.x + dx;
+                const targetY = player.y + dy;
+
+                if (!checkCollisionAt(targetX, targetY)) {
+                    // Freie Bahn!
+                    player.x = targetX;
+                    player.y = targetY;
+                } else {
+                    // Versuche X-only und Y-only
+                    const canMoveX = !checkCollisionAt(targetX, player.y);
+                    const canMoveY = !checkCollisionAt(player.x, targetY);
+
+                    if (canMoveX) {
+                        player.x = targetX;
+                    }
+                    if (canMoveY) {
+                        player.y = targetY;
+                    }
+
+                    // Wenn BEIDE blockiert: Nudge zur Seite für Ecken-Handling
+                    if (!canMoveX && !canMoveY) {
+                        // Versuche leichten Versatz in jede Richtung
+                        const nudgeAmount = 1.5;
+
+                        // Horizontale Nudges
+                        if (!checkCollisionAt(player.x + nudgeAmount, player.y + dy)) {
+                            player.x += nudgeAmount * 0.5;
+                            player.y = player.y + dy;
+                        } else if (!checkCollisionAt(player.x - nudgeAmount, player.y + dy)) {
+                            player.x -= nudgeAmount * 0.5;
+                            player.y = player.y + dy;
+                        }
+                        // Vertikale Nudges
+                        else if (!checkCollisionAt(player.x + dx, player.y + nudgeAmount)) {
+                            player.x = player.x + dx;
+                            player.y += nudgeAmount * 0.5;
+                        } else if (!checkCollisionAt(player.x + dx, player.y - nudgeAmount)) {
+                            player.x = player.x + dx;
+                            player.y -= nudgeAmount * 0.5;
+                        } else {
+                            // Komplett blockiert - Screen-Shake!
+                            screenShake = 2;
+                        }
+                    }
+                }
+
+                // Animation
+                player.animTimer++;
+                if (player.animTimer > 4) {
+                    // Modulo 12 deckt sowohl 4er (Front/Back) als auch 6er (Seitlich Ping-Pong) Zyklen ab
+                    player.frame = (player.frame + 1) % 12;
+                    player.animTimer = 0;
+                }
+
+                // Schrittgeräusch starten wenn nicht läuft
+                if (audioUnlocked && !footstepPlaying) {
+                    footstepSound.play().catch(() => { });
+                    footstepPlaying = true;
+                }
+
+                // Dust-Particles spawnen
+                if (Math.random() > 0.7) {
+                    const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+                    const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+
+                    // Exakter Fußpunkt berechnen (analog zu drawPlayer)
+                    const offsetY = Math.floor(spriteH * 0.22);
+                    const shiftY = Math.floor(spriteH / 3) - 4;
+                    const anchorY = player.y + spriteH + offsetY + shiftY;
+
+                    dustParticles.push({
+                        x: player.x + spriteW / 2 + (Math.random() - 0.5) * 6,
+                        y: anchorY - 15 + (Math.random() - 0.5) * 2, // 15px höher als Fußpunkt
+                        vx: (Math.random() - 0.5) * 0.5,
+                        vy: -Math.random() * 0.3,
+                        life: 1.0,
+                        size: 2 + Math.random() * 2
+                    });
+                }
+            } else {
+                player.frame = 0;
+                // Schrittgeräusch stoppen
+                if (footstepPlaying) {
+                    footstepSound.pause();
+                    footstepPlaying = false;
+                }
+            }
+
+            // Dust-Particles updaten
+            for (let i = dustParticles.length - 1; i >= 0; i--) {
+                const d = dustParticles[i];
+                d.x += d.vx;
+                d.y += d.vy;
+                d.life -= 0.04;
+                if (d.life <= 0) dustParticles.splice(i, 1);
+            }
+
+            // Map-Begrenzung
+            player.x = Math.max(0, Math.min(player.x, mapW - 20));
+            player.y = Math.max(0, Math.min(player.y, mapH - 20));
+
+            // Vordergrund-Check
+            player.isBehindForeground = checkForeground(player.x, player.y);
+
+            // Smooth Camera
+            targetCamX = player.x - SCREEN_W / 2 + 10;
+            targetCamY = player.y - SCREEN_H * 0.30 + 10; // Spieler bei 30% Höhe (weit über den Untertiteln)
+            targetCamX = Math.max(0, Math.min(targetCamX, Math.max(0, mapW - SCREEN_W)));
+            targetCamY = Math.max(0, Math.min(targetCamY, Math.max(0, mapH - SCREEN_H)));
+            camX += (targetCamX - camX) * 0.1;
+            camY += (targetCamY - camY) * 0.1;
+
+            // Partikel Update
+            nearbyLights = []; // Spotlight-Liste leeren
+            for (const p of particles) p.update();
+
+            // Wolken Update (wrap-around ist in Cloud.update)
+            for (const c of clouds) c.update();
+        }
+
+        // ============================================
+        // KOLLISIONSPRÜFUNG - ROBUST
+        // ============================================
+        function checkCollisionAt(px, py) {
+            // Spielergröße für Kollision (basierend auf Sprite-Skalierung)
+            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+
+            // Kollisionsbox: Nur unterer Teil (Füße)
+            const boxLeft = Math.floor(px + spriteW * 0.2);
+            const boxRight = Math.floor(px + spriteW * 0.8);
+            const boxTop = Math.floor(py + spriteH * 0.7);
+            const boxBottom = Math.floor(py + spriteH);
+
+            // Alle Pixel in der Kollisionsbox prüfen
+            for (let y = boxTop; y <= boxBottom; y++) {
+                for (let x = boxLeft; x <= boxRight; x++) {
+                    if (y >= 0 && y < mapH && x >= 0 && x < mapW) {
+                        if (collisionData[y][x]) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function checkForeground(px, py) {
+            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+
+            const cx = Math.floor(px + spriteW / 2);
+            const cy = Math.floor(py + spriteH / 2);
+
+            if (cy >= 0 && cy < mapH && cx >= 0 && cx < mapW) {
+                return foregroundData[cy][cx];
+            }
+            return false;
+        }
+
+        // ============================================
+        // DRAWING
+        // ============================================
+        function draw() {
+            // LCD Ghosting: Vorherigen Frame mit Transparenz beibehalten
+            // Erzeugt den typischen "Schmier"-Effekt alter LCD-Displays
+            ctx.save();
+            ctx.globalAlpha = 0.85;
+            ctx.drawImage(canvas, 0, 0);
+            ctx.restore();
+
+            // Leicht abdunkeln statt komplett überschreiben
+            ctx.fillStyle = 'rgba(10, 10, 15, 0.15)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!gameReady) return;
+
+            ctx.save();
+            // Screen-Shake anwenden
+            const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+            const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
+            ctx.translate(-Math.floor(camX) + shakeX, -Math.floor(camY) + shakeY);
+            screenShake *= 0.8; // Schnell abklingen
+
+            // Hintergrund
+            if (bgImage) ctx.drawImage(bgImage, 0, 0);
+
+            // Partikel (Additives Leuchten)
+            ctx.save();
+            ctx.globalCompositeOperation = 'lighter';
+            for (const p of particles) p.draw(ctx, camX, camY);
+            ctx.restore();
+
+            // Gelbe Lore-Lichter zeichnen
+            for (const light of yellowLights) {
+                light.draw(ctx);
+
+                // Beleuchtung hinzufügen wenn aktiv!
+                if (activeLightSourceId === light.id && isLoreMode) {
+                    const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
+                    const px = coords.x + coords.w / 2;
+                    const py = coords.y + coords.h / 2;
+
+                    const ddx = light.x - px;
+                    const ddy = light.y - py;
+                    const dist = Math.sqrt(ddx * ddx + ddy * ddy);
+                    nearbyLights.push({
+                        x: light.x,
+                        y: light.y,
+                        dist: dist,
+                        life: 1.0,
+                        isYellow: true
+                    });
+                }
+            }
+
+            // Spieler-Schatten (diffuse Ellipse unter den Füßen)
+            {
+                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+
+                // Offsets identisch zu drawPlayer berechnen
+                const offsetY = Math.floor(spriteH * 0.22);
+                const shiftY = Math.floor(spriteH / 3) - 4;
+                const totalYOffset = offsetY + shiftY;
+
+                // Schatten-Position: exakt unter den Füßen des Sprites
+                const shadowCenterX = player.x + spriteW / 2;
+                const shadowCenterY = player.y + totalYOffset + spriteH - 15; // Korrigiert
+
+                // Schatten-Größe: klein und diffus
+                const shadowWidth = spriteW * 0.4;
+                const shadowHeight = 3;
+
+                // Schatten-Deckkraft
+                let shadowAlpha = 0.35;
+
+                if (nearbyLights.length > 0) {
+                    const light = nearbyLights[0];
+                    const distFactor = 1 - (light.dist / 35);
+                    shadowAlpha = 0.25 + distFactor * 0.15;
+                }
+
+                // Diffuser Schatten mit radialem Gradient
+                ctx.save();
+                const gradient = ctx.createRadialGradient(
+                    shadowCenterX, shadowCenterY, 0,
+                    shadowCenterX, shadowCenterY, shadowWidth
+                );
+                gradient.addColorStop(0, `rgba(0, 0, 0, ${shadowAlpha})`);
+                gradient.addColorStop(0.5, `rgba(0, 0, 0, ${shadowAlpha * 0.4})`);
+                gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.ellipse(shadowCenterX, shadowCenterY, shadowWidth, shadowHeight, 0, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+
+            // Spieler NORMAL zeichnen (keine Transparenz!)
+            drawPlayer(ctx, player.x, player.y, player.dir, player.frame);
+
+            // Beleuchtung: Direktional mit Gradient
+            if (nearbyLights.length > 0) {
+                nearbyLights.sort((a, b) => a.dist - b.dist);
+
+                const maxRadius = 65; // Erhöht (war 35) für weichere Übergänge
+                let totalIntensity = 0;
+                let avgDx = 0, avgDy = 0;
+                let useYellow = false;
+
+                const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
+                const spriteW = coords.w;
+                const spriteH = coords.h;
+                const playerCX = coords.x + spriteW / 2;
+                const playerCY = coords.y + spriteH / 2;
+
+                const numLights = Math.min(2, nearbyLights.length);
+                for (let i = 0; i < numLights; i++) {
+                    const light = nearbyLights[i];
+                    if (light.isYellow) useYellow = true;
+
+                    // Distanz-Modulation: 0% am Rand, 100% direkt am Spieler
+                    const distFactor = (1 - (light.dist / maxRadius));
+                    // Gelbes Licht etwas intensiver
+                    const intensity = distFactor * light.life * (light.isYellow ? 1.5 : 1.0);
+                    totalIntensity += intensity * 0.4; // Subtiler (war 0.6)
+
+                    // Richtung vom Licht zum Spieler (normalisiert)
+                    const dx = playerCX - light.x;
+                    const dy = playerCY - light.y;
+                    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+                    avgDx += (dx / len) * intensity;
+                    avgDy += (dy / len) * intensity;
+                }
+
+                // Max 50% Aufhellung (subtiler Effekt), Gelb darf etwas heller sein (70%)
+                totalIntensity = Math.min(useYellow ? 0.7 : 0.5, totalIntensity);
+
+                if (totalIntensity > 0.02) {
+                    // Normalisiere Durchschnittsrichtung
+                    const dirLen = Math.sqrt(avgDx * avgDx + avgDy * avgDy) || 1;
+                    const ndx = avgDx / dirLen;
+                    const ndy = avgDy / dirLen;
+
+                    // OffScreen-Canvas für Gradient-Beleuchtung
+                    const lightCanvas = document.createElement('canvas');
+                    lightCanvas.width = spriteW;
+                    lightCanvas.height = spriteH;
+                    const lightCtx = lightCanvas.getContext('2d');
+
+                    // Zeichne Sprite exakt so wie es auf dem Hauptcanvas erscheint, aber relativ zu (0,0)
+                    lightCtx.save();
+                    lightCtx.translate(-coords.x, -coords.y);
+                    drawPlayer(lightCtx, player.x, player.y, player.dir, player.frame);
+                    lightCtx.restore();
+
+                    // Gleichmäßigere Beleuchtung (statt harter Gradient)
+                    // Wir füllen das Sprite fast gleichmäßig auf (mit sehr weichem Rand-Ausfall)
+                    const r = useYellow ? 255 : 255;
+                    const g = useYellow ? 220 : 255;
+                    const b = useYellow ? 50 : 255;
+
+                    lightCtx.globalCompositeOperation = 'source-in';
+                    // Fast gleichmäßige Füllung basierend auf Intensität
+                    lightCtx.fillStyle = `rgba(${r}, ${g}, ${b}, ${totalIntensity * 0.8})`;
+                    lightCtx.fillRect(0, 0, spriteW, spriteH);
+
+                    // Ein ganz dezenter Gradient für Dreidimensionalität
+                    const rad = Math.max(spriteW, spriteH) * 2;
+                    const gradient = lightCtx.createRadialGradient(
+                        spriteW / 2 + ndx * (spriteW / 2),
+                        spriteH / 2 + ndy * (spriteH / 2),
+                        0,
+                        spriteW / 2,
+                        spriteH / 2,
+                        rad
+                    );
+                    gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${totalIntensity * 0.2})`);
+                    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+                    lightCtx.fillStyle = gradient;
+                    lightCtx.fillRect(0, 0, spriteW, spriteH);
+
+                    // Zeichne beleuchtetes Sprite an die berechnete Sprite-Position
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.drawImage(lightCanvas, coords.x, coords.y);
+                    ctx.restore();
+                }
+            }
+
+            // Dust-Particles zeichnen
+            ctx.save();
+            for (const d of dustParticles) {
+                ctx.globalAlpha = d.life * 0.4;
+                ctx.fillStyle = '#a89070';
+                ctx.beginPath();
+                ctx.arc(d.x, d.y, d.size * d.life, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Vordergrund
+            if (foregroundImage) ctx.drawImage(foregroundImage, 0, 0);
+
+            // Graue Silhouette IMMER berechnen (Pixel-genaues Masking)
+            if (foregroundImage && spriteReady) {
+                const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
+                const px = coords.x;
+                const py = coords.y;
+                const dw = coords.w;
+                const dh = coords.h;
+
+                // OffScreen-Canvas für Masking
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = dw + 4;
+                maskCanvas.height = dh + 4;
+                const maskCtx = maskCanvas.getContext('2d');
+
+                // 1. Zeichne den Foreground-Ausschnitt über dem Spieler
+                maskCtx.drawImage(foregroundImage,
+                    px - 2, py - 2, dw + 4, dh + 4,
+                    0, 0, dw + 4, dh + 4);
+
+                // 2. Source-In: Nur wo Foreground-Pixel existieren
+                maskCtx.globalCompositeOperation = 'source-in';
+
+                // 3. Zeichne graues Sprite
+                const graySprite = createGraySpriteCanvas();
+                if (graySprite) {
+                    maskCtx.drawImage(graySprite, 2, 2);
+                }
+
+                // 4. Zeichne das Ergebnis
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.drawImage(maskCanvas, px - 2, py - 2);
+                ctx.restore();
+            }
+
+            // Wolken-Layer (Parallax, über allem)
+            for (const c of clouds) c.draw(ctx, camX, camY);
+
+            ctx.restore();
+        }
+
+        // NEU: Hilfsfunktion für konsistente Koordinatenberechnung
+        function getPlayerDrawCoords(x, y, dir, frame) {
+            const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
+            const refH = Math.floor(SPRITE.frameHeight * SPRITE.scale);
+            const visualShiftY = Math.floor(refH / 3) - 4;
+            const flipX = (dir === 3);
+
+            // FRONT (Marker-basiert, 6-Step)
+            if (dir === 0) {
+                const cycleIdx = frame % 6;
+                const frameIdx = FRONT_ANIM_CYCLE[cycleIdx];
+                const data = FRONT_SPRITE_DATA[frameIdx];
+                const footRelX = data.footX - data.left;
+                const footRelY = data.footY;
+
+                const sw = data.width;
+                const dw = Math.floor(sw * SPRITE.scale);
+                const dh = Math.floor(spriteFront.height * SPRITE.scale);
+
+                const dx = Math.floor(x + refW / 2 - footRelX * SPRITE.scale);
+                const dy = Math.floor(y + refH + visualShiftY - footRelY * SPRITE.scale);
+
+                return {
+                    x: dx, y: dy, w: dw, h: dh,
+                    isSide: false, frameIdx: frameIdx,
+                    sx: data.left, sw: sw, sh: spriteFront.height,
+                    footRelX: footRelX * SPRITE.scale,
+                    flipX: false
+                };
+            }
+            // BACK (NEU: Marker-basiert, 4-Step Cycle)
+            else if (dir === 1) {
+                const cycleIdx = frame % 4;
+                const frameIdx = BACK_ANIM_CYCLE[cycleIdx];
+                const data = BACK_SPRITE_DATA[frameIdx];
+                const footRelX = data.footX - data.left;
+                const footRelY = data.footY;
+
+                const sw = data.width;
+                const dw = Math.floor(sw * SPRITE.scale);
+                const dh = Math.floor(spriteBack.height * SPRITE.scale);
+
+                const dx = Math.floor(x + refW / 2 - footRelX * SPRITE.scale);
+                const dy = Math.floor(y + refH + visualShiftY - footRelY * SPRITE.scale);
+
+                return {
+                    x: dx, y: dy, w: dw, h: dh,
+                    isSide: false, frameIdx: frameIdx,
+                    sx: data.left, sw: sw, sh: spriteBack.height,
+                    footRelX: footRelX * SPRITE.scale,
+                    flipX: false
+                };
+            }
+            // SIDE (Marker-basiert, 6-Step Ping-Pong)
+            else if (dir === 2 || dir === 3) {
+                const cycleIdx = frame % 6;
+                const frameIdx = SIDE_ANIM_CYCLE[cycleIdx];
+                const data = SIDE_SPRITE_DATA[frameIdx];
+                const footRelX = data.footX - data.left;
+                const footRelY = data.footY;
+
+                const sw = 175;
+                const dw = Math.floor(sw * SPRITE.scale);
+                const dh = Math.floor(spriteSide.height * SPRITE.scale);
+
+                let dx;
+                if (flipX) {
+                    // Gespiegelt: Ankerpunkt (x + refW/2) ist die Achse.
+                    // Die linke Kante ist (Anker + verschobener_Anker) - Breite
+                    dx = Math.floor((x + refW / 2 + footRelX * SPRITE.scale) - dw);
+                } else {
+                    dx = Math.floor(x + refW / 2 - footRelX * SPRITE.scale);
+                }
+                const dy = Math.floor(y + refH + visualShiftY - footRelY * SPRITE.scale);
+
+                return {
+                    x: dx, y: dy, w: dw, h: dh,
+                    isSide: true, frameIdx: frameIdx,
+                    sx: data.left, sw: sw, sh: spriteSide.height,
+                    footRelX: footRelX * SPRITE.scale,
+                    flipX: flipX
+                };
+            } else {
+                let sprite = (dir === 1) ? (spriteBack || spriteFront) : spriteFront;
+                const sw = Math.floor(sprite.width / SPRITE.cols);
+                const sh = sprite.height;
+                const dw = Math.floor(sw * SPRITE.scale);
+                const dh = Math.floor(sh * SPRITE.scale);
+                const offsetY = Math.floor(dh * 0.22);
+
+                const frameIdx = frame % 4;
+                const sx = frameIdx * sw;
+
+                const finalX = Math.floor(x);
+                const finalY = Math.floor(y + offsetY + visualShiftY);
+                return {
+                    x: finalX, y: finalY, w: dw, h: dh,
+                    isSide: false, frameIdx: frameIdx,
+                    sx: sx, sw: sw, sh: sh,
+                    flipX: false
+                };
+            }
+        }
+
+        // ============================================
+        // SPIELER SPRITE ZEICHNEN
+        // ============================================
+        function drawPlayer(ctx, x, y, dir, frame) {
+            if (!spriteReady) return;
+
+            const coords = getPlayerDrawCoords(x, y, dir, frame);
+            const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
+            const refH = Math.floor(SPRITE.frameHeight * SPRITE.scale);
+            const visualShiftY = Math.floor(refH / 3) - 4;
+
+            ctx.save();
+            let sprite;
+            if (dir === 0) sprite = spriteFront;
+            else if (dir === 1) sprite = spriteBack || spriteFront;
+            else sprite = spriteSide || spriteFront;
+
+            // DEBUG-DOT an der Fuß-Koordinate
+            if (window.debugFoot) {
+                ctx.save();
+                ctx.globalCompositeOperation = 'source-over';
+                ctx.fillStyle = 'rgba(255, 0, 0, 0.4)';
+                ctx.beginPath();
+                ctx.arc(x + refW / 2, y + refH + visualShiftY, 20, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'red';
+                ctx.fillRect(x + refW / 2 - 2, y + refH + visualShiftY - 2, 4, 4);
+                ctx.restore();
+            }
+
+            if (coords.isSide && coords.flipX) {
+                // Spiegeln: Translate zur EXAKT berechneten linken Kante + Breite
+                ctx.translate(coords.x + coords.w, coords.y);
+                ctx.scale(-1, 1);
+                ctx.drawImage(sprite, coords.sx, 0, coords.sw, coords.sh, 0, 0, coords.w, coords.h);
+            } else {
+                ctx.drawImage(sprite, coords.sx, 0, coords.sw, coords.sh, coords.x, coords.y, coords.w, coords.h);
+            }
+
+            ctx.restore();
+        }
+
+        window.debugFoot = false;
+
+        // Erstellt ein einfarbig graues Sprite-Canvas
+        function createGraySpriteCanvas() {
+            if (!spriteReady) return null;
+
+            const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
+            const flipX = (player.dir === 3);
+
+            let sprite;
+            if (player.dir === 0) sprite = spriteFront;
+            else if (player.dir === 1) sprite = spriteBack || spriteFront;
+            else sprite = spriteSide || spriteFront;
+
+            const c = document.createElement('canvas');
+            c.width = coords.w;
+            c.height = coords.h;
+            const gc = c.getContext('2d');
+
+            if (coords.isSide && flipX) {
+                gc.translate(coords.w, 0);
+                gc.scale(-1, 1);
+            }
+            gc.drawImage(sprite, coords.sx, 0, coords.sw, coords.sh, 0, 0, coords.w, coords.h);
+
+            gc.globalCompositeOperation = 'source-in';
+            gc.fillStyle = 'rgb(180, 180, 180)';
+            gc.fillRect(0, 0, coords.w, coords.h);
+
+            return c;
+        }
+
+        function drawPlayerOutline(ctx, x, y) {
+            if (!spriteReady || !spriteFront) return;
+
+            const dir = player.dir;
+            let sprite;
+            let flipX = false;
+
+            switch (dir) {
+                case 0: sprite = spriteFront; break;
+                case 1: sprite = spriteBack || spriteFront; break;
+                case 2: sprite = spriteSide || spriteFront; break;
+                case 3: sprite = spriteSide || spriteFront; flipX = true; break;
+                default: sprite = spriteFront;
+            }
+
+            const spriteW = Math.floor(sprite.width / SPRITE.cols);
+            const spriteH = sprite.height;
+            const drawW = Math.floor(spriteW * SPRITE.scale);
+            const drawH = Math.floor(spriteH * SPRITE.scale);
+            const frame = player.frame % SPRITE.cols;
+
+            // Erstelle OffScreen-Canvas für einfarbige Silhouette
+            const offCanvas = document.createElement('canvas');
+            offCanvas.width = drawW;
+            offCanvas.height = drawH;
+            const offCtx = offCanvas.getContext('2d');
+
+            // Zeichne Sprite ins OffScreen-Canvas
+            if (flipX) {
+                offCtx.translate(drawW, 0);
+                offCtx.scale(-1, 1);
+            }
+            offCtx.drawImage(sprite, frame * spriteW, 0, spriteW, spriteH, 0, 0, drawW, drawH);
+
+            // Wandle alle sichtbaren Pixel in einheitliches Grau
+            offCtx.globalCompositeOperation = 'source-in';
+            offCtx.fillStyle = 'rgb(200, 200, 200)'; // Helles Grau
+            offCtx.fillRect(0, 0, drawW, drawH);
+
+            // Zeichne die graue Silhouette halbtransparent
+            ctx.save();
+            ctx.globalAlpha = 0.6;
+            ctx.drawImage(offCanvas, Math.floor(x), Math.floor(y));
+            ctx.restore();
+        }
+
+        // ============================================
+        // AUDIO & SUBTITLE SYSTEM
+        // ============================================
+
+        const audioPlayer = new Audio();
+        let subtitleTracks = []; // Array aus { time: sekunden, text: string }
+        let currentSubtitleIndex = -1;
+        let isReadingMode = false;
+
+        const uiContainer = document.getElementById('audioPlayerUI');
+        const subtitleContainer = document.getElementById('subtitleContainer');
+        const audioControlsEl = document.getElementById('audioControls');
+        const playBtn = document.getElementById('audioToggleBtn');
+        const skipBackBtn = document.getElementById('skipBackBtn');
+        const skipForwardBtn = document.getElementById('skipForwardBtn');
+        const readingModeBtn = document.getElementById('readingModeBtn');
+        const gameModeBtn = document.getElementById('gameModeBtn');
+        const iconPlay = document.getElementById('iconPlay');
+        const iconPause = document.getElementById('iconPause');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const iconFsEnter = document.getElementById('iconFsEnter');
+        const iconFsExit = document.getElementById('iconFsExit');
+
+        // Ambient und Schritte Audio mit 75% Lautstärke (25% leiser als Standard)
+        const ambientAudio = new Audio('medieval_town.mp3');
+        ambientAudio.loop = true;
+        ambientAudio.volume = 0.75;
+
+        const footstepsAudio = new Audio('footsteps.mp3');
+        footstepsAudio.loop = true;
+        footstepsAudio.volume = 0.75;
+
+        // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
+        function getMaxVisibleLines() {
+            if (!isReadingMode) return 3;
+            const lineHeight = 28; // Ungefähre Zeilenhöhe in px
+            const availableHeight = window.innerHeight * 0.6; // 60% der Bildschirmhöhe
+            return Math.min(15, Math.max(5, Math.floor(availableHeight / lineHeight)));
+        }
+
+        // Generiert die Untertitel-Zeilen dynamisch
+        function renderSubtitleLines(centerIndex) {
+            // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
+            if (isReadingMode) {
+                // Nur neu bauen, wenn Anzahl nicht stimmt (Performance!)
+                if (subtitleContainer.children.length !== subtitleTracks.length) {
+                    subtitleContainer.innerHTML = '';
+                    subtitleTracks.forEach((track, i) => {
+                        const div = document.createElement('div');
+                        div.className = 'subtitle-line';
+                        div.innerText = track.text;
+                        div.dataset.index = i;
+                        subtitleContainer.appendChild(div);
+                    });
+                }
+
+                // Highlighting aktualisieren
+                const oldActive = subtitleContainer.querySelector('.subtitle-current');
+                if (oldActive) oldActive.classList.remove('subtitle-current');
+
+                if (subtitleContainer.children[centerIndex]) {
+                    const activeEl = subtitleContainer.children[centerIndex];
+                    activeEl.classList.add('subtitle-current');
+
+                    // Auto-Scroll nur, wenn User nicht gerade selbst scrollt
+                    if (!subtitleContainer.classList.contains('is-scrolling')) {
+                        activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                    }
+                }
+                return;
+            }
+
+            // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
+            subtitleContainer.innerHTML = '';
+
+            if (subtitleTracks.length === 0) {
+                const div = document.createElement('div');
+                div.className = 'subtitle-line subtitle-current';
+                div.innerText = 'Warte auf Audio/Text...';
+                subtitleContainer.appendChild(div);
+                return;
+            }
+
+            // Fixe 3 Zeilen im Spielmodus
+            const startIdx = Math.max(0, centerIndex - 1);
+            const endIdx = Math.min(subtitleTracks.length - 1, centerIndex + 1);
+
+            for (let i = startIdx; i <= endIdx; i++) {
+                const div = document.createElement('div');
+                div.className = 'subtitle-line';
+
+                const distance = Math.abs(i - centerIndex);
+
+                if (i === centerIndex) {
+                    div.classList.add('subtitle-current');
+                } else {
+                    // Verblassen
+                    if (distance >= 5) div.classList.add('fade-far');
+                    else if (distance >= 3) div.classList.add('fade-mid');
+                }
+
+                div.innerText = subtitleTracks[i].text;
+                subtitleContainer.appendChild(div);
+            }
+        }
+
+        // 1. DropZone Logik erweitern (inkl. Lore-Dateien)
+        dropZone.addEventListener('drop', e => {
+            const files = e.dataTransfer.files;
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+
+                // LORE-DATEIEN ERKENNEN (lore1.mp3, lore2.txt, etc.)
+                const loreMatch = file.name.match(/^lore(\d+)\.(mp3|txt|lrc)$/i);
+                if (loreMatch) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    justDropped = true;
+                    setTimeout(() => { justDropped = false; }, 500);
+
+                    const id = parseInt(loreMatch[1]);
+                    const ext = loreMatch[2].toLowerCase();
+
+                    if (ext === 'mp3') {
+                        loreData.audio[id] = URL.createObjectURL(file);
+                        console.log(`Lore Audio ${id} registriert.`);
+                    } else {
+                        const reader = new FileReader();
+                        reader.onload = ev => {
+                            loreData.text[id] = ev.target.result;
+                            console.log(`Lore Text ${id} geladen.`);
+                        };
+                        reader.readAsText(file);
+                    }
+                    continue;
+                }
+
+                // A) HAUPT Audio Datei (kapitel1.mp3 oder andere Audio-Dateien)
+                if (file.type.startsWith('audio/') || file.name.toLowerCase() === 'kapitel1.mp3') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    justDropped = true;
+                    setTimeout(() => { justDropped = false; }, 500);
+                    const url = URL.createObjectURL(file);
+                    window.mainAudioUrl = url; // Speichern für Resume
+                    audioPlayer.src = url;
+                    uiContainer.style.display = 'flex';
+                    currentSubtitleIndex = -1;
+                    renderSubtitleLines(0);
+                    console.log(`Haupt-Audio geladen: ${file.name}`);
+                    continue;
+                }
+
+                // B) HAUPT Text Datei (kapitel1.txt oder andere .txt/.lrc)
+                if (file.name.endsWith('.txt') || file.name.endsWith('.lrc') || file.name.toLowerCase() === 'kapitel1.txt') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    justDropped = true;
+                    setTimeout(() => { justDropped = false; }, 500);
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        window.mainTextContent = ev.target.result; // Speichern für Resume
+                        parseSubtitles(ev.target.result);
+                        uiContainer.style.display = 'flex';
+                        currentSubtitleIndex = -1;
+                        renderSubtitleLines(0);
+                        console.log("Haupt-Text geladen (gespeichert als mainTextContent)");
+                    };
+                    reader.readAsText(file);
+                }
+            }
+        });
+
+        // 2. Parser für Timestamps: [mm:ss.xx] Text
+        function parseSubtitles(rawText) {
+            subtitleTracks = [];
+            currentSubtitleIndex = -1;
+            const lines = rawText.split('\n');
+            const timeReg = /\[(\d{2}):(\d{2}(?:\.\d+)?)\](.*)/;
+
+            lines.forEach(line => {
+                const match = line.match(timeReg);
+                if (match) {
+                    const minutes = parseFloat(match[1]);
+                    const seconds = parseFloat(match[2]);
+                    const text = match[3].trim();
+                    const totalSeconds = minutes * 60 + seconds;
+
+                    subtitleTracks.push({
+                        time: totalSeconds,
+                        text: text
+                    });
+                }
+            });
+            subtitleTracks.sort((a, b) => a.time - b.time);
+        }
+
+        // 3. Update-Funktion für Anzeige
+        function updateSubtitleDisplay(index) {
+            if (index === currentSubtitleIndex) return;
+            currentSubtitleIndex = index;
+            renderSubtitleLines(Math.max(0, index));
+        }
+
+        // 4. Synchronisation (läuft bei jedem Audio-Update)
+        audioPlayer.addEventListener('timeupdate', () => {
+            const t = audioPlayer.currentTime;
+
+            let newIndex = -1;
+            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                if (t >= subtitleTracks[i].time) {
+                    newIndex = i;
+                    break;
+                }
+            }
+
+            updateSubtitleDisplay(newIndex);
+        });
+
+        // 10. Scrollbar Auto-Hide Logic
+        let scrollTimeout;
+        subtitleContainer.addEventListener('scroll', () => {
+            subtitleContainer.classList.add('is-scrolling');
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                subtitleContainer.classList.remove('is-scrolling');
+            }, 1000); // 1 Sekunde nach Scroll-Ende ausblenden
+        });
+
+        // 5. Play/Pause Steuerung
+        playBtn.addEventListener('click', () => {
+            if (audioPlayer.paused) {
+                audioPlayer.play();
+                iconPlay.style.display = 'none';
+                iconPause.style.display = 'block';
+            } else {
+                audioPlayer.pause();
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
+            }
+        });
+
+        // 6. Skip Buttons (±15 Sekunden)
+        skipBackBtn.addEventListener('click', () => {
+            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 15);
+        });
+
+        skipForwardBtn.addEventListener('click', () => {
+            audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 15);
+        });
+
+        // 7. Modus-Wechsel mit schneller Animation
+        readingModeBtn.addEventListener('click', () => {
+            uiContainer.classList.add('mode-switching');
+            // Sofort umschalten, Buttons faden währenddessen
+            isReadingMode = true;
+            uiContainer.classList.add('reading-mode');
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            // Nach kurzer Zeit Buttons wieder einblenden
+            setTimeout(() => {
+                uiContainer.classList.remove('mode-switching');
+            }, 150);
+        });
+
+        gameModeBtn.addEventListener('click', () => {
+            uiContainer.classList.add('mode-switching');
+            isReadingMode = false;
+            uiContainer.classList.remove('reading-mode');
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            setTimeout(() => {
+                uiContainer.classList.remove('mode-switching');
+            }, 150);
+        });
+
+        // 8. Wenn Audio zu Ende ist, Reset
+        audioPlayer.addEventListener('ended', () => {
+            iconPlay.style.display = 'block';
+            renderSubtitleLines(subtitleTracks.length - 1);
+        });
+
+        // 9. Bei Fenster-Resize: Canvas anpassen & Zeilen neu berechnen
+        window.addEventListener('resize', () => {
+            // A) Canvas Resize Logic (Vollbild Unterstützung)
+            if (mapW > 0 && mapH > 0 && gameReady) {
+                SCREEN_W = Math.min(mapW, window.innerWidth);
+                SCREEN_H = Math.min(mapH, window.innerHeight);
+                canvas.width = SCREEN_W;
+                canvas.height = SCREEN_H;
+
+                // Kamera neu zentrieren
+                camX = Math.max(0, Math.min(player.x - SCREEN_W / 2 + 10, mapW - SCREEN_W));
+                camY = Math.max(0, Math.min(player.y - SCREEN_H * 0.30 + 10, mapH - SCREEN_H));
+            }
+
+            // B) Untertitel Logic: Force Rebuild bei Resize
+            if (isReadingMode && subtitleTracks.length > 0) {
+                // Leere Container um Rebuild zu erzwingen (Fix für Scrollbar Resize Bug)
+                subtitleContainer.innerHTML = '';
+                renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            }
+        });
+
+        // 10. Fullscreen Logic
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
+
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
+                iconFsEnter.style.display = 'none';
+                iconFsExit.style.display = 'block';
+            } else {
+                iconFsEnter.style.display = 'block';
+                iconFsExit.style.display = 'none';
+            }
+        });
+
+        // 11. Custom Fullscreen Button (siehe oben)
+        let lastBrightness = 0;
+
+
+        function checkBackgroundBrightness() {
+            // Im Lesemodus immer dunkler Hintergrund
+            if (isReadingMode) {
+                requestAnimationFrame(checkBackgroundBrightness);
+                return;
+            }
+
+            if (!gameReady || uiContainer.style.display === 'none') {
+                requestAnimationFrame(checkBackgroundBrightness);
+                return;
+            }
+
+            try {
+                const uiRect = uiContainer.getBoundingClientRect();
+                const canvasRect = canvas.getBoundingClientRect();
+
+                const sampleX = Math.max(0, (uiRect.left - canvasRect.left) * (canvas.width / canvasRect.width));
+                const sampleY = Math.max(0, (uiRect.top - canvasRect.top) * (canvas.height / canvasRect.height));
+                const sampleW = Math.min(canvas.width - sampleX, uiRect.width * (canvas.width / canvasRect.width));
+                const sampleH = Math.min(canvas.height - sampleY, uiRect.height * (canvas.height / canvasRect.height));
+
+                if (sampleW > 0 && sampleH > 0 && sampleX >= 0 && sampleY >= 0) {
+                    const imageData = ctx.getImageData(
+                        Math.floor(sampleX),
+                        Math.floor(sampleY),
+                        Math.floor(Math.min(sampleW, 100)),
+                        Math.floor(Math.min(sampleH, 60))
+                    );
+
+                    let totalBrightness = 0;
+                    const pixels = imageData.data;
+                    const pixelCount = pixels.length / 4;
+
+                    for (let i = 0; i < pixels.length; i += 16) {
+                        const r = pixels[i];
+                        const g = pixels[i + 1];
+                        const b = pixels[i + 2];
+                        const brightness = (0.299 * r + 0.587 * g + 0.114 * b);
+                        totalBrightness += brightness;
+                    }
+
+                    const avgBrightness = totalBrightness / (pixelCount / 4);
+                    lastBrightness = lastBrightness * 0.85 + avgBrightness * 0.15;
+
+                    // Stärkerer Kontrast: noch früher einsetzen, höhere Basis
+                    const threshold = 60;
+                    const maxBrightness = 180;
+                    const baseOpacity = 0.35;
+                    const maxAdditionalOpacity = 0.6;
+
+                    if (lastBrightness > threshold) {
+                        const dynamicOpacity = ((lastBrightness - threshold) / (maxBrightness - threshold)) * maxAdditionalOpacity;
+                        const opacity = Math.min(0.95, baseOpacity + dynamicOpacity);
+                        const bgValue = `rgba(0, 0, 0, ${opacity.toFixed(2)})`;
+                        subtitleContainer.style.background = bgValue;
+                        audioControlsEl.style.background = bgValue;
+                    } else {
+                        subtitleContainer.style.background = 'rgba(0, 0, 0, 0)';
+                        audioControlsEl.style.background = 'rgba(0, 0, 0, 0)';
+                    }
+                }
+            } catch (e) {
+                // Canvas-Zugriff kann bei bestimmten Bedingungen fehlschlagen
+            }
+
+            requestAnimationFrame(checkBackgroundBrightness);
+        }
+
+        // Starte die Hintergrund-Prüfung
+        requestAnimationFrame(checkBackgroundBrightness);
+
+        // ============================================
+        // LORE PROXIMITY SYSTEM
+        // ============================================
+        function updateLoreSystem() {
+            if (!gameReady || yellowLights.length === 0) return;
+
+            const refW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+            const refH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+            const offsetY = Math.floor(refH * 0.22);
+            const hatOffset = Math.floor(refH * 0.15);
+
+            // Bounding Box des Charakters (synchron mit der visuellen Anzeige)
+            // Nur der "Körper" (Hut bis Füße) löst den Trigger aus
+            const pLeft = player.x;
+            const pRight = player.x + refW;
+            const pTop = player.y + offsetY + hatOffset;
+            const pBottom = player.y + offsetY + refH;
+
+            // Finde das nächste Licht und die Distanz zur Bounding Box
+            let nearestId = null;
+            let minDist = Infinity;
+
+            yellowLights.forEach(light => {
+                // Finde den nächsten Punkt auf der Bounding Box zum Licht
+                const closestX = Math.max(pLeft, Math.min(light.x, pRight));
+                const closestY = Math.max(pTop, Math.min(light.y, pBottom));
+
+                const dx = light.x - closestX;
+                const dy = light.y - closestY;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < minDist) {
+                    minDist = dist;
+                    nearestId = light.id;
+                }
+            });
+
+            const TRIGGER_DIST = 20;
+            const EXIT_DIST = 35; // Hysterese etwas vergrößert
+
+            // SHIMMER SOUND TRIGGER (Unabhängig vom Text)
+            if (nearestId && minDist < TRIGGER_DIST) {
+                if (lastShimmerLightId !== nearestId) {
+                    shimmerSound.currentTime = 0;
+                    shimmerSound.play().catch(() => { });
+                    lastShimmerLightId = nearestId;
+                }
+            } else if (!nearestId || minDist > EXIT_DIST) {
+                // Reset, wenn man den Einflussbereich verlassen hat
+                lastShimmerLightId = null;
+            }
+
+            // START LORE - ALLE Lichter lösen lore1 aus (vorerst)
+            if (nearestId && minDist < TRIGGER_DIST && !isLoreMode) {
+                activeLightSourceId = nearestId; // Setze aktives Licht
+                const loreId = 1;
+                if (loreData.audio[loreId]) {
+                    startLoreMode(loreId);
+                }
+            }
+            // STOP LORE (Spieler läuft weg)
+            else if (isLoreMode && minDist > EXIT_DIST) {
+                endLoreMode();
+            }
+        }
+
+        function startLoreMode(id) {
+            if (isLoreMode) return;
+            isLoreMode = true;
+            activeLoreId = id;
+
+            if (loreResumeTimeout) clearTimeout(loreResumeTimeout);
+
+            // Haupt-Audio Status sichern
+            mainAudioState.wasPlaying = !audioPlayer.paused;
+            mainAudioState.time = audioPlayer.currentTime;
+            mainAudioState.tracks = [...subtitleTracks];
+
+            // Sanftes Ausblenden (Main Audio) - 2 Sekunden
+            fadeAudio(audioPlayer, 0, 2000, () => {
+                audioPlayer.pause();
+
+                // UI Feedback
+                uiContainer.classList.add('mode-switching');
+
+                setTimeout(() => {
+                    // Lore laden
+                    audioPlayer.src = loreData.audio[id];
+
+                    // Rewind 5s beim Wiederaufnehmen (User-Wunsch)
+                    const lastPos = loreData.resumeTimes[id] || 0;
+                    audioPlayer.currentTime = Math.max(0, lastPos - 5);
+
+                    if (loreData.text[id]) {
+                        parseSubtitles(loreData.text[id]);
+                    } else {
+                        subtitleTracks = [];
+                        subtitleContainer.innerHTML = '<div class="subtitle-line subtitle-current">♪ Lore Audio ♪</div>';
+                    }
+
+                    audioPlayer.volume = 0;
+                    audioPlayer.play();
+                    fadeAudio(audioPlayer, 1.0, 1000); // Sanftes Einblenden - 1 Sekunde (verkürzt)
+
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+
+                    audioPlayer.onended = () => {
+                        loreData.resumeTimes[id] = 0; // Reset wenn fertig
+                        endLoreMode();
+                    };
+
+                    uiContainer.classList.remove('mode-switching');
+                    console.log(`Lore ${id} gestartet bei ${audioPlayer.currentTime.toFixed(1)}s`);
+                }, 250);
+            });
+        }
+
+        function endLoreMode() {
+            if (!isLoreMode) return;
+            isLoreMode = false;
+
+            const id = activeLoreId;
+            // Fortschritt speichern
+            if (id) loreData.resumeTimes[id] = audioPlayer.currentTime;
+            activeLoreId = null;
+            activeLightSourceId = null; // Licht zurücksetzen
+
+            fadeAudio(audioPlayer, 0, 2000, () => {
+                audioPlayer.pause();
+                audioPlayer.onended = null;
+
+                uiContainer.classList.add('mode-switching');
+                subtitleContainer.innerHTML = '';
+
+                // 1 Sekunde Pause vor Resume (wie vom User gewünscht)
+                loreResumeTimeout = setTimeout(() => {
+                    if (window.mainAudioUrl) {
+                        audioPlayer.src = window.mainAudioUrl;
+
+                        if (window.mainTextContent) {
+                            parseSubtitles(window.mainTextContent);
+                        } else {
+                            subtitleTracks = [...mainAudioState.tracks];
+                        }
+
+                        // Rewind 5s beim Wiederaufnehmen (User-Wunsch)
+                        const resumeTime = Math.max(0, mainAudioState.time - 5);
+                        audioPlayer.currentTime = resumeTime;
+
+                        if (mainAudioState.wasPlaying) {
+                            audioPlayer.volume = 0;
+                            audioPlayer.play();
+                            fadeAudio(audioPlayer, 1.0, 2000); // 2 Sekunden Einblenden
+                            iconPlay.style.display = 'none';
+                            iconPause.style.display = 'block';
+                        } else {
+                            audioPlayer.volume = 1.0;
+                            iconPlay.style.display = 'block';
+                            iconPause.style.display = 'none';
+                        }
+
+                        audioPlayer.onended = () => {
+                            iconPlay.style.display = 'block';
+                            iconPause.style.display = 'none';
+                            renderSubtitleLines(subtitleTracks.length - 1);
+                        };
+
+                        console.log(`Haupt-Audio fortgesetzt bei ${resumeTime.toFixed(1)}s`);
+                    }
+                    uiContainer.classList.remove('mode-switching');
+                }, 1000); // 1 Sekunde Pause
+            });
+        }
+
+        // Hilfsfunktion für Audio-Fading
+        function fadeAudio(audio, targetVolume, duration, callback) {
+            const startVolume = audio.volume;
+            const diff = targetVolume - startVolume;
+            const startTime = Date.now();
+
+            function tick() {
+                const now = Date.now();
+                const progress = Math.min(1, (now - startTime) / duration);
+                audio.volume = startVolume + diff * progress;
+
+                if (progress < 1) {
+                    requestAnimationFrame(tick);
+                } else if (callback) {
+                    callback();
+                }
+            }
+            tick();
+        }
+    </script>
+</body>
+
+</html>
