@@ -2073,10 +2073,10 @@
         const debugCanvas = document.getElementById('gameCanvas');
 
         window.addEventListener('keydown', (e) => {
-            // Select Parameter
-            if (e.key === '1') { activeParam = 'brightness'; dispSel.innerText = 'Brightness'; }
-            if (e.key === '2') { activeParam = 'contrast'; dispSel.innerText = 'Contrast'; }
-            if (e.key === '3') { activeParam = 'saturate'; dispSel.innerText = 'Saturation'; }
+            // Select Parameter (only if debug elements exist)
+            if (e.key === '1') { activeParam = 'brightness'; if (dispSel) dispSel.innerText = 'Brightness'; }
+            if (e.key === '2') { activeParam = 'contrast'; if (dispSel) dispSel.innerText = 'Contrast'; }
+            if (e.key === '3') { activeParam = 'saturate'; if (dispSel) dispSel.innerText = 'Saturation'; }
 
             // Adjust
             if (e.key === '+' || e.key === 'Add' || e.key === '=') {
@@ -2091,11 +2091,11 @@
         function updateVisuals() {
             // Apply override to canvas
             // Standard PAL structure
-            debugCanvas.style.filter = `url(#pal-filter) contrast(${params.contrast}) brightness(${params.brightness}) saturate(${params.saturate})`;
+            if (debugCanvas) debugCanvas.style.filter = `url(#pal-filter) contrast(${params.contrast}) brightness(${params.brightness}) saturate(${params.saturate})`;
 
-            dispBrit.innerText = params.brightness.toFixed(2);
-            dispCont.innerText = params.contrast.toFixed(2);
-            dispSat.innerText = params.saturate.toFixed(2);
+            if (dispBrit) dispBrit.innerText = params.brightness.toFixed(2);
+            if (dispCont) dispCont.innerText = params.contrast.toFixed(2);
+            if (dispSat) dispSat.innerText = params.saturate.toFixed(2);
 
             console.log(`Params: B=${params.brightness}, C=${params.contrast}, S=${params.saturate}`);
         }
