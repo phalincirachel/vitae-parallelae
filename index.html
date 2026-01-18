@@ -1036,7 +1036,7 @@
     </svg>
 
     <!-- DropZone removed for Electron App -->
-
+    <div id="debugLog">DEBUG LOG STARTED</div>
     <div id="processingInfo">
         <div class="spinner"></div>
         <div>Verarbeite Karte...</div>
@@ -2672,6 +2672,45 @@
                 ambientAudio.play().catch(e => console.warn("Ambient play failed:", e));
             }
         }, { once: true }); // Nur einmal ausführen
+
+        // ============================================
+        // AUDIO BACKGROUND HANDLING (FIX FOR FIREFOX MOBILE)
+        // ============================================
+        let wasAmbientPlaying = false;
+        let wasPlayerPlaying = false;
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // APP BACKGROUNDED -> PAUSE ALL
+                if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
+                    wasAmbientPlaying = true;
+                    ambientAudio.pause();
+                } else {
+                    wasAmbientPlaying = false;
+                }
+
+                if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
+                    wasPlayerPlaying = true;
+                    audioPlayer.pause();
+                } else {
+                    wasPlayerPlaying = false;
+                }
+
+                if (typeof footstepSound !== 'undefined') footstepSound.pause();
+
+            } else {
+                // APP FOREGROUND -> RESUME IF WAS PLAYING
+                // Small timeout to ensure browser is ready
+                setTimeout(() => {
+                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
+                        ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
+                    }
+                    if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
+                        audioPlayer.play().catch(e => console.warn("Resume player failed", e));
+                    }
+                }, 100);
+            }
+        });
 
         function findSafeStart() {
             // Suche ausgehend von der Mitte nach einer Position ohne Kollision

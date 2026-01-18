@@ -2057,6 +2057,42 @@
                         console.warn("Shader compilation failed:", e);
                     }
 
+                    // ============================================
+                    // AUDIO BACKGROUND HANDLING (FIX FOR FIREFOX MOBILE)
+                    // ============================================
+                    let wasAmbientPlaying = false;
+                    let wasPlayerPlaying = false;
+
+                    document.addEventListener('visibilitychange', () => {
+                        if (document.hidden) {
+                            // APP BACKGROUNDED -> PAUSE ALL
+                            if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
+                                wasAmbientPlaying = true;
+                                ambientAudio.pause();
+                            } else {
+                                wasAmbientPlaying = false;
+                            }
+
+                            if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
+                                wasPlayerPlaying = true;
+                                audioPlayer.pause();
+                            } else {
+                                wasPlayerPlaying = false;
+                            }
+
+                        } else {
+                            // APP FOREGROUND -> RESUME IF WAS PLAYING
+                            setTimeout(() => {
+                                if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
+                                    ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
+                                }
+                                if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
+                                    audioPlayer.play().catch(e => console.warn("Resume player failed", e));
+                                }
+                            }, 100);
+                        }
+                    });
+
                     // Start Animation Loop only after preload
                     animate();
                 }
