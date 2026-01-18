@@ -2856,10 +2856,15 @@
                     if (ls) ls.style.display = 'none';
 
                     if (spawnPixel) {
-                        // Spawn exactly at blue pixel position (no offsets)
-                        player.x = spawnPixel.x;
-                        player.y = spawnPixel.y;
-                        console.log(`Spawn Point: (${spawnPixel.x}, ${spawnPixel.y}) -> Player: (${player.x}, ${player.y})`);
+                        // FIX: Blue pixel marks FOOT position, not sprite top
+                        // Calculate player.y so feet land exactly on blue pixel
+                        const FOOT_OFFSET_Y = 15; // Must match checkCollisionAt
+                        const refH = 20; // Fallback sprite height
+
+                        player.x = spawnPixel.x - 8; // Center horizontally
+                        player.y = spawnPixel.y - refH - FOOT_OFFSET_Y; // Feet at spawnPixel.y
+
+                        console.log(`Spawn: Blue(${spawnPixel.x},${spawnPixel.y}) -> Feet at Y=${spawnPixel.y}, Player.y=${player.y}`);
                     } else {
                         player.x = mapW / 2;
                         player.y = mapH / 2;
