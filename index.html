@@ -2509,8 +2509,11 @@
 
             // Berechne Welt-Koordinaten aus Screen-Koordinaten
             const rect = canvas.getBoundingClientRect();
-            const canvasX = screenX - rect.left;
-            const canvasY = screenY - rect.top;
+            // CSS-Pixel zu Canvas-Pixel Umrechnung
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const canvasX = (screenX - rect.left) * scaleX;
+            const canvasY = (screenY - rect.top) * scaleY;
 
             // Welt-Position = Canvas-Position + Kamera-Offset
             const worldX = canvasX + camX;
@@ -3247,8 +3250,8 @@
                     dustParticles.push({
                         x: player.x + spriteW / 2 + (Math.random() - 0.5) * 6,
                         y: anchorY - 15 + (Math.random() - 0.5) * 2,
-                        vx: (Math.random() - 0.5) * 10 * dt, // scale speed by time? No, internal updates use dt.
-                        vy: -Math.random() * 10 * dt,
+                        vx: (Math.random() - 0.5) * 10,  // px/sec (no dt at spawn)
+                        vy: -Math.random() * 10,
                         life: 1.0,
                         size: 2 + Math.random() * 2
                     });
@@ -3265,15 +3268,20 @@
             // Update Dust
             for (let i = dustParticles.length - 1; i >= 0; i--) {
                 const d = dustParticles[i];
-                d.x += d.vx * 60 * dt; // Normalize visually to prev 60hz
-                d.y += d.vy * 60 * dt;
+                d.x += d.vx * dt;  // Frame-rate independent
+                d.y += d.vy * dt;
                 d.life -= 2.5 * dt;
                 if (d.life <= 0) dustParticles.splice(i, 1);
             }
 
-            // Map Bounds
-            player.x = Math.max(0, Math.min(player.x, mapW - 20));
-            player.y = Math.max(0, Math.min(player.y, mapH - 20));
+            // Map Bounds (with sprite size and foot offset)
+            {
+                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+                const FOOT_OFFSET_Y = 15;
+                player.x = Math.max(0, Math.min(player.x, mapW - spriteW));
+                player.y = Math.max(0, Math.min(player.y, mapH - spriteH - FOOT_OFFSET_Y));
+            }
 
             // Foreground Check
             player.isBehindForeground = checkForeground(player.x, player.y);
@@ -4518,10 +4526,10 @@
                 // Update UI
                 renderSubtitleLines(Math.max(0, currentSubtitleIndex)); // Will re-find index based on time
 
-                // Resume Playback if it was playing or if we want auto-resume
-                if (mainAudioState.wasPlaying || true) { // Always resume for smooth flow?
+                // Resume Playback only if it was playing before
+                if (mainAudioState.wasPlaying) {
                     audioPlayer.volume = 0;
-                    audioPlayer.play();
+                    audioPlayer.play().catch(e => console.warn("Resume blocked:", e));
                     fadeAudio(audioPlayer, 1, 800);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';

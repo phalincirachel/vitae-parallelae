@@ -2124,6 +2124,97 @@
             }
         }
 
+        // ============================================
+        // LORE LIGHT PERSISTENCE LOGIC
+        // ============================================
+        class YellowLight {
+            constructor(x, y, id) {
+                this.x = x;
+                this.y = y;
+                this.id = id;
+                this.baseY = y;
+                this.timer = Math.random() * 100;
+                // States: IDLE, COLLECTING, SHRINKING, DONE
+                this.state = 'IDLE';
+                this.radius = 1; // Grows during IDLE/COLLECTING
+                this.maxRadius = 30; // Peak size before shrink
+                this.collectSpeed = 2.0;
+                this.shrinkSpeed = 4.0;
+            }
+
+            draw(ctx) {
+                if (this.state === 'DONE') return;
+
+                // Pulsate in IDLE
+                if (this.state === 'IDLE') {
+                    this.timer += 0.05;
+                    this.radius = 4 + Math.sin(this.timer) * 1.5;
+                }
+
+                // Grow in COLLECTING
+                if (this.state === 'COLLECTING') {
+                    this.radius += this.collectSpeed;
+                    if (this.radius > this.maxRadius) {
+                        this.triggerUnlock();
+                        this.state = 'SHRINKING';
+                    }
+                }
+
+                // Shrink in SHRINKING
+                if (this.state === 'SHRINKING') {
+                    this.radius -= this.shrinkSpeed;
+                    if (this.radius <= 0) {
+                        this.radius = 0;
+                        this.state = 'DONE';
+                    }
+                }
+
+                // Draw Light Source
+                if (this.radius > 0) {
+                    const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
+                    gradient.addColorStop(0, "rgba(255, 255, 200, 0.9)");
+                    gradient.addColorStop(0.4, "rgba(255, 220, 100, 0.5)");
+                    gradient.addColorStop(1, "rgba(255, 180, 50, 0)");
+
+                    ctx.save();
+                    ctx.globalCompositeOperation = 'lighter';
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            // Called when player touches it
+            collect() {
+                if (this.state === 'IDLE') {
+                    this.state = 'COLLECTING';
+                    // Optional: Play sound here
+                    // if (sfxCollect) sfxCollect.play();
+                }
+            }
+
+            triggerUnlock() {
+                // Unlock Lore via ID
+                // Note: The map generation assigns IDs 1, 2, 3...
+                // We use 'kapitel1c' as scene key key for persistence.
+                if (window.GameState) {
+                    // Check if already collected logic usually happens at spawn,
+                    // but we do it gracefully here too.
+                    window.GameState.collectLight('kapitel1c', this.id).then(unlockedLoreId => {
+                        if (unlockedLoreId) {
+                            console.log("New Lore Unlocked:", unlockedLoreId);
+                            // Optional: Trigger UI notification
+                        }
+                    });
+                } else if (typeof LoreSystem !== 'undefined') {
+                    // Fallback to local LoreSystem if GameState not globally exposed yet
+                    LoreSystem.unlock(this.id);
+                }
+            }
+        }
+
         function initParticles() {
             if (!particleSprite) particleSprite = createGlowSprite();
 
@@ -2556,8 +2647,11 @@
 
             // Berechne Welt-Koordinaten aus Screen-Koordinaten
             const rect = canvas.getBoundingClientRect();
-            const canvasX = screenX - rect.left;
-            const canvasY = screenY - rect.top;
+            // CSS-Pixel zu Canvas-Pixel Umrechnung
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const canvasX = (screenX - rect.left) * scaleX;
+            const canvasY = (screenY - rect.top) * scaleY;
 
             // Welt-Position = Canvas-Position + Kamera-Offset
             const worldX = canvasX + camX;
@@ -2710,7 +2804,21 @@
                         // GELB = Lore Trigger (#FFFF00)
                         else if (r > 250 && g > 250 && b < 10) {
                             const id = yellowLights.length + 1;
-                            yellowLights.push(new YellowLight(x, y, id));
+                            // Check Persistence: Skip if already collected
+                            let isCollected = false;
+                            if (window.GameState) {
+                                isCollected = window.GameState.isLightCollected('kapitel1c', id);
+                            } else if (typeof LoreSystem !== 'undefined') {
+                                // Fallback
+                                // (Note: LoreSystem local state lacks specific light IDs, so we rely on global GameState mostly)
+                            }
+
+                            if (!isCollected) {
+                                yellowLights.push(new YellowLight(x, y, id));
+                            } else {
+                                // Optional: Debug log
+                                // console.log(`Skipping collected light ${id}`);
+                            }
                         }
                         // BLAU = Spawn Punkt (#0000FF)
                         else if (r < 50 && g < 50 && b > 200) {
@@ -3114,8 +3222,13 @@
                 SPRITE.scale = SPRITE.baseScale * depthFactor;
             }
 
+            // --- MOVEMENT ---
+            let didAutoWalk = false;
+
             // --- AUTO-WALK (READING MODE & COASTDOWN) ---
             if ((isReadingMode || (player.slowdownTimer > 0)) && autoWalkPath.length > 0) {
+                didAutoWalk = true;
+
                 if (isReadingMode) {
                     player.slowdownTimer = 1.0;
                 } else {
@@ -3163,103 +3276,97 @@
                         }
 
                         player.animTimer += dt;
-                        // 50% Slower Animation for Front/Back
                         let animThreshold = (player.dir === 0 || player.dir === 1) ? 0.30 : 0.15;
 
                         if (player.animTimer > animThreshold) {
                             player.animTimer = 0;
                             player.frame = (player.frame + 1) % 12;
                         }
+                    } else {
+                        player.isMoving = false;
                     }
+                } else {
+                    player.isMoving = false;
                 }
 
                 player.debugFootX = undefined;
-                return; // Auto-Walk takes precedence
             }
 
-            let dx = 0, dy = 0;
-            player.isMoving = false;
+            // --- MANUAL MOVEMENT (only if not auto-walking) ---
+            if (!didAutoWalk) {
+                let dx = 0, dy = 0;
+                player.isMoving = false;
 
-            // Keyboard
-            if (keys['w'] || keys['arrowup'] || keys['ArrowUp']) { dy = -1; player.dir = 1; }
-            if (keys['s'] || keys['arrowdown'] || keys['ArrowDown']) { dy = 1; player.dir = 0; }
-            if (keys['a'] || keys['arrowleft'] || keys['ArrowLeft']) { dx = -1; player.dir = 2; }
-            if (keys['d'] || keys['arrowright'] || keys['ArrowRight']) { dx = 1; player.dir = 3; }
+                // Keyboard
+                if (keys['w'] || keys['arrowup'] || keys['ArrowUp']) { dy = -1; player.dir = 1; }
+                if (keys['s'] || keys['arrowdown'] || keys['ArrowDown']) { dy = 1; player.dir = 0; }
+                if (keys['a'] || keys['arrowleft'] || keys['ArrowLeft']) { dx = -1; player.dir = 2; }
+                if (keys['d'] || keys['arrowright'] || keys['ArrowRight']) { dx = 1; player.dir = 3; }
 
-            // Click-to-Move
-            if (dx === 0 && dy === 0 && moveTarget && !isReadingMode) {
-                const tdx = moveTarget.x - player.x;
-                const tdy = moveTarget.y - player.y;
-                const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
+                // Click-to-Move
+                if (dx === 0 && dy === 0 && moveTarget && !isReadingMode) {
+                    const tdx = moveTarget.x - player.x;
+                    const tdy = moveTarget.y - player.y;
+                    const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
 
-                const moveStep = player.speed * dt;
+                    const moveStep = player.speed * dt;
 
-                if (tdist < moveStep) {
-                    player.x = moveTarget.x;
-                    player.y = moveTarget.y;
-                    moveTarget = null;
+                    if (tdist < moveStep) {
+                        player.x = moveTarget.x;
+                        player.y = moveTarget.y;
+                        moveTarget = null;
+                    } else {
+                        dx = tdx / tdist;
+                        dy = tdy / tdist;
+
+                        if (Math.abs(tdx) > Math.abs(tdy)) player.dir = tdx > 0 ? 3 : 2;
+                        else player.dir = tdy > 0 ? 0 : 1;
+                    }
+                }
+
+                // Normalisieren & Move
+                if (dx !== 0 || dy !== 0) {
+                    player.isMoving = true;
+
+                    if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
+                        const inv = 0.7071;
+                        dx *= inv; dy *= inv;
+                    }
+
+                    const amount = player.speed * dt;
+                    const vx = dx * amount;
+                    const vy = dy * amount;
+
+                    const targetX = player.x + vx;
+                    const targetY = player.y + vy;
+
+                    if (!checkCollisionAt(targetX, targetY)) {
+                        player.x = targetX;
+                        player.y = targetY;
+                    } else {
+                        if (!checkCollisionAt(targetX, player.y)) player.x = targetX;
+                        else if (!checkCollisionAt(player.x, targetY)) player.y = targetY;
+                    }
+
+                    player.animTimer += dt;
+                    let animThreshold = (player.dir === 0 || player.dir === 1) ? 0.30 : 0.15;
+
+                    if (player.animTimer > animThreshold) {
+                        player.animTimer = 0;
+                        player.frame = (player.frame + 1) % 12;
+                    }
                 } else {
-                    dx = tdx / tdist;
-                    dy = tdy / tdist;
-
-                    if (Math.abs(tdx) > Math.abs(tdy)) player.dir = tdx > 0 ? 3 : 2;
-                    else player.dir = tdy > 0 ? 0 : 1;
+                    player.frame = 1; // Stand
                 }
             }
 
-            // Normalisieren & Move
-            if (dx !== 0 || dy !== 0) {
-                player.isMoving = true;
-
-                // Normalize only if it's keyboard input (length > 1)
-                // Click movement is already normalized direction vector
-                if (Math.abs(dx) === 1 && Math.abs(dy) === 1) {
-                    const inv = 0.7071;
-                    dx *= inv; dy *= inv;
-                }
-
-                const amount = player.speed * dt;
-
-                // Scale velocity
-                // If it came from click-to-move, dx/dy are normalized unit vectors
-                // If from keyboard, they are roughly unit vectors now.
-                const vx = dx * amount;
-                const vy = dy * amount;
-
-                // Collision
-                const targetX = player.x + vx;
-                const targetY = player.y + vy;
-
-                // Slide Logic
-                if (!checkCollisionAt(targetX, targetY)) {
-                    player.x = targetX;
-                    player.y = targetY;
-                } else {
-                    if (!checkCollisionAt(targetX, player.y)) player.x = targetX;
-                    else if (!checkCollisionAt(player.x, targetY)) player.y = targetY;
-                }
-
-                // Anim
-                player.animTimer += dt;
-                // 50% Slower Animation for Front/Back
-                let animThreshold = (player.dir === 0 || player.dir === 1) ? 0.30 : 0.15;
-
-                if (player.animTimer > animThreshold) {
-                    player.animTimer = 0;
-                    player.frame = (player.frame + 1) % 12;
-                }
-            } else {
-                player.frame = 1; // Stand
-            }
+            // --- ALWAYS RUN: Sound, Dust, Camera, Particles ---
 
             // Sound handling
             if (player.isMoving) {
                 if (audioUnlocked && !footstepPlaying) {
                     footstepSound.play().catch(() => { });
                     footstepPlaying = true;
-                }
-                if (Math.random() > 0.9) { // Dust
-                    // ... (Simplified dust spawn for brevity, assumes identical to index)
                 }
             } else {
                 if (footstepPlaying) {
@@ -3268,20 +3375,25 @@
                 }
             }
 
-            // Dust Update
+            // Dust Update (no spawn in kapitel1c per user decision)
             for (let i = dustParticles.length - 1; i >= 0; i--) {
                 const d = dustParticles[i];
-                d.x += d.vx * 60 * dt;
-                d.y += d.vy * 60 * dt;
+                d.x += d.vx * dt;  // Frame-rate independent
+                d.y += d.vy * dt;
                 d.life -= 2.5 * dt;
                 if (d.life <= 0) dustParticles.splice(i, 1);
             }
 
-            player.x = Math.max(0, Math.min(player.x, mapW - 20));
-            player.y = Math.max(0, Math.min(player.y, mapH - 20));
+            // Map Bounds (with sprite size and foot offset)
+            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+            const FOOT_OFFSET_Y = 15;
+            player.x = Math.max(0, Math.min(player.x, mapW - spriteW));
+            player.y = Math.max(0, Math.min(player.y, mapH - spriteH - FOOT_OFFSET_Y));
 
             player.isBehindForeground = checkForeground(player.x, player.y);
 
+            // Camera
             targetCamX = player.x - SCREEN_W / 2 + 10;
             targetCamY = player.y - SCREEN_H * 0.30 + 10;
             targetCamX = Math.max(0, Math.min(targetCamX, Math.max(0, mapW - SCREEN_W)));
@@ -3290,8 +3402,9 @@
             camX += (targetCamX - camX) * 5.0 * dt;
             camY += (targetCamY - camY) * 5.0 * dt;
 
+            // Particles
             nearbyLights = [];
-            for (const p of particles) p.update(); // Add dt if Particle class supported
+            for (const p of particles) p.update(dt);
             for (const c of clouds) c.update(dt);
         }
 
