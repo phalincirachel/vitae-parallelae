@@ -2383,7 +2383,7 @@
                     const c = document.getElementById('gameCanvas');
                     c.width = window.innerWidth;
                     c.height = window.innerHeight;
-                    requestAnimationFrame(gameLoop);
+                    startGameLoop();
                 }
             }, 3000);
 
@@ -2823,10 +2823,7 @@
                     // Start Audio
                     if (typeof ambientAudio !== 'undefined') ambientAudio.play().catch(() => { });
 
-                    if (!window.gameLoopRunning) {
-                        window.gameLoopRunning = true;
-                        requestAnimationFrame(gameLoop);
-                    }
+                    startGameLoop();
                     console.log("Map Processed & Ready.");
                 };
 
@@ -2838,7 +2835,7 @@
                 foregroundImage = null;
                 collisionData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false)); // Safe init
                 gameReady = true;
-                if (!window.gameLoopRunning) requestAnimationFrame(gameLoop);
+                startGameLoop();
             }
         }
 
@@ -3012,6 +3009,14 @@
         // ============================================
         // GAME LOOP
         // ============================================
+        function startGameLoop() {
+            if (window.gameLoopRunning) return;
+            window.gameLoopRunning = true;
+            lastTime = 0;
+            console.log("startGameLoop");
+            requestAnimationFrame(gameLoop);
+        }
+
         // Global vars for timing
         let lastTime = 0;
 
@@ -3026,10 +3031,10 @@
             lastTime = timestamp;
 
             // Clamp DT to prevent speed spikes (e.g. after lag/pause)
-            if (dt > 0.05) dt = 0.05;
+            if (dt > 0.1) dt = 0.1;
 
             // Cap delta time (prevent spirals of death)
-            if (dt > 0.05) dt = 0.05;
+            if (dt > 0.1) dt = 0.1;
 
             // Update Game Logic
             update(dt);

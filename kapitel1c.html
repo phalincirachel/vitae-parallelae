@@ -2316,7 +2316,7 @@
         const player = {
             x: 50, y: 50,
             w: 14, h: 8,      // Kollisionsbox (Füße)
-            speed: 0.54, // 40% Slower (was 0.9)
+            speed: 35,        // Pixels per second (unified with index.html)
             dir: 0,           // 0=down, 1=up, 2=left, 3=right
             frame: 0,         // 0-3 für Animation
             animTimer: 0,
@@ -2461,7 +2461,7 @@
                     const c = document.getElementById('gameCanvas');
                     c.width = window.innerWidth;
                     c.height = window.innerHeight;
-                    requestAnimationFrame(gameLoop);
+                    startGameLoop();
                 }
             }, 3000);
 
@@ -2881,10 +2881,7 @@
                     // Start Audio
                     if (typeof ambientAudio !== 'undefined') ambientAudio.play().catch(() => { });
 
-                    if (!window.gameLoopRunning) {
-                        window.gameLoopRunning = true;
-                        requestAnimationFrame(gameLoop);
-                    }
+                    startGameLoop();
                     console.log("Map Processed & Ready.");
                 };
 
@@ -2896,7 +2893,7 @@
                 foregroundImage = null;
                 collisionData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false)); // Safe init
                 gameReady = true;
-                if (!window.gameLoopRunning) requestAnimationFrame(gameLoop);
+                startGameLoop();
             }
         }
 
@@ -3066,6 +3063,17 @@
             return { r: 60, g: 55, b: 50 };
         }
 
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        function startGameLoop() {
+            if (window.gameLoopRunning) return;
+            window.gameLoopRunning = true;
+            lastTime = 0;
+            console.log("startGameLoop");
+            requestAnimationFrame(gameLoop);
+        }
+
         // Global vars for timing
         let lastTime = 0;
 
@@ -3079,7 +3087,7 @@
             let dt = (timestamp - lastTime) / 1000;
             lastTime = timestamp;
 
-            if (dt > 0.05) dt = 0.05;
+            if (dt > 0.1) dt = 0.1;
 
             update(dt);
             updateLoreSystem();
