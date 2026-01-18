@@ -1025,7 +1025,8 @@
             </filter>
 
             <!-- Glitch Filter: Turbulenz Displacement -->
-            <!-- <filter id="glitch-filter" x="-20%" y="-20%" width="140%" height="140%">
+            <!-- Glitch Filter: Turbulenz Displacement -->
+            <filter id="glitch-filter" x="-20%" y="-20%" width="140%" height="140%">
                 <feTurbulence type="fractalNoise" baseFrequency="0.002 0.005" numOctaves="3" seed="0" result="noise">
                     <animate attributeName="baseFrequency" dur="60s" values="0.002 0.005;0.005 0.01;0.002 0.005"
                         repeatCount="indefinite" />
@@ -1033,7 +1034,7 @@
                 </feTurbulence>
                 <feDisplacementMap in="SourceGraphic" in2="noise" scale="10" xChannelSelector="R"
                     yChannelSelector="G" />
-            </filter> -->
+            </filter>
         </defs>
     </svg>
 
@@ -2314,6 +2315,33 @@
         // ============================================
         // KEYBOARD
         // ============================================
+        // Toggle State
+        let usePAL = true;
+        let useHalftone = true;
+
+        function updateFilterStyle() {
+            const canvas = document.getElementById('gameCanvas');
+            if (!canvas) return;
+
+            let filters = [];
+            if (usePAL) filters.push('url(#pal-filter)');
+            // Halftone is usually a CSS class or overlay?
+            // If it's the SVG glitch:
+            if (useHalftone) filters.push('url(#glitch-filter)');
+            // Note: Halftone dots is often a CSS overlay DIV, not SVG filter.
+            // But user said "2" -> halftone dots.
+            // I'll check if there is a .halftone class.
+            // If not, I'll toggle the GLITCH filter (since "Glitch=NO" was the issue).
+
+            canvas.style.filter = filters.join(' ');
+
+            // Also update Debug
+            const d = document.getElementById('debugLog');
+            if (d) {
+                d.innerHTML = `Filters: PAL=${usePAL ? 'ON' : 'OFF'} GLITCH=${useHalftone ? 'ON' : 'OFF'}<br>CANVAS: ${canvas.style.filter}`;
+            }
+        }
+
         window.addEventListener('keydown', e => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
                 e.preventDefault();
@@ -2321,6 +2349,10 @@
                 if (audioPlayer) audioPlayer.blur();
                 document.body.focus();
             }
+            // TOGGLES
+            if (e.key === '1') { usePAL = !usePAL; updateFilterStyle(); }
+            if (e.key === '2') { useHalftone = !useHalftone; updateFilterStyle(); }
+
             keys[e.key.toLowerCase()] = true;
             keys[e.key] = true;
             // Tastendruck bricht Click-to-Move ab
@@ -2850,6 +2882,9 @@
             if (!lastTime) lastTime = timestamp;
             let dt = (timestamp - lastTime) / 1000;
             lastTime = timestamp;
+
+            // Clamp DT to prevent speed spikes (e.g. after lag/pause)
+            if (dt > 0.05) dt = 0.05;
 
             // Cap delta time (prevent spirals of death)
             if (dt > 0.05) dt = 0.05;
