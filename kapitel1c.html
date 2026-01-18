@@ -2856,9 +2856,9 @@
                     if (ls) ls.style.display = 'none';
 
                     if (spawnPixel) {
-                        // Match index.html spawn logic exactly
-                        player.x = spawnPixel.x - 8;
-                        player.y = spawnPixel.y - 16;
+                        // Spawn exactly at blue pixel position (no offsets)
+                        player.x = spawnPixel.x;
+                        player.y = spawnPixel.y;
                         console.log(`Spawn Point: (${spawnPixel.x}, ${spawnPixel.y}) -> Player: (${player.x}, ${player.y})`);
                     } else {
                         player.x = mapW / 2;
