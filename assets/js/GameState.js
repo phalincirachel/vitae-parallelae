@@ -159,5 +159,30 @@ export const GameState = {
                 console.warn("[GameState] Save failed:", e);
             }
         }
+    },
+
+    exportState() {
+        return JSON.stringify(this.state, null, 2);
+    },
+
+    async importState(jsonString) {
+        try {
+            const data = JSON.parse(jsonString);
+            // Basic validation
+            if (Array.isArray(data.collectedLore)) {
+                this.state = data;
+                // Ensure defaults
+                if (!this.state.collectedLights) this.state.collectedLights = {};
+
+                await this.save();
+                console.log("[GameState] Imported State:", this.state);
+                return true;
+            } else {
+                console.warn("[GameState] Invalid Save File Format");
+            }
+        } catch (e) {
+            console.error("[GameState] Import Error:", e);
+        }
+        return false;
     }
 };

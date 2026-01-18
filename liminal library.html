@@ -843,6 +843,17 @@
                     <!-- Dynamisch gefüllt -->
                 </div>
             </div>
+            <!-- SAVE/LOAD FOOTER -->
+            <div class="archive-footer"
+                style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: flex; gap: 20px; justify-content: center;">
+                <button id="btnSaveData"
+                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">SAVE
+                    (Export)</button>
+                <button id="btnLoadData"
+                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">LOAD
+                    (Import)</button>
+                <input type="file" id="fileInputSave" style="display: none;" accept=".json">
+            </div>
         </div>
     </div>
 
@@ -2418,6 +2429,54 @@
                 const closeArchiveBtn = document.getElementById('closeArchiveBtn');
                 const chapter1Btn = document.getElementById('chapter1Btn');
                 const loreList = document.getElementById('loreList');
+
+                // SAVE / LOAD LOGIC
+                const btnSave = document.getElementById('btnSaveData');
+                const btnLoad = document.getElementById('btnLoadData');
+                const fileInput = document.getElementById('fileInputSave');
+
+                if (btnSave) {
+                    btnSave.addEventListener('click', () => {
+                        if (!window.GameState) return;
+                        const json = window.GameState.exportState();
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'liminal_save_' + Date.now() + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    });
+                }
+
+                if (btnLoad) {
+                    btnLoad.addEventListener('click', () => {
+                        if (fileInput) fileInput.click();
+                    });
+                }
+
+                if (fileInput) {
+                    fileInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (ev) => {
+                            if (window.GameState) {
+                                // Explicitly import via GameState
+                                const success = await window.GameState.importState(ev.target.result);
+                                if (success) {
+                                    alert("Save Data Imported Successfully! Reloading...");
+                                    window.location.reload();
+                                } else {
+                                    alert("Invalid Save File.");
+                                }
+                            }
+                        };
+                        reader.readAsText(file);
+                    });
+                }
 
                 if (bookBtn) {
                     bookBtn.addEventListener('click', () => {

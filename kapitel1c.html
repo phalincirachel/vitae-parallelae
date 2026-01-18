@@ -2069,6 +2069,50 @@
             }
         }
 
+        // ============================================
+        // LORE PERSISTENCE HELPER
+        // ============================================
+        const LoreSystem = {
+            key: 'liminal_save',
+            state: {
+                collectedLore: [],
+                collectedLights: {}
+            },
+
+            load() {
+                try {
+                    const raw = localStorage.getItem(this.key);
+                    if (raw) {
+                        this.state = JSON.parse(raw);
+                        console.log("[LoreSystem] Loaded:", this.state);
+                    }
+                } catch (e) { console.warn("Lore Load Error:", e); }
+            },
+
+            save() {
+                try {
+                    localStorage.setItem(this.key, JSON.stringify(this.state));
+                    // console.log("[LoreSystem] Saved:", this.state);
+                } catch (e) { console.warn("Lore Save Error:", e); }
+            },
+
+            unlock(id) {
+                id = parseInt(id);
+                if (!this.state.collectedLore.includes(id)) {
+                    this.state.collectedLore.push(id);
+                    this.save();
+                    return true;
+                }
+                return false;
+            },
+
+            isUnlocked(id) {
+                return this.state.collectedLore.includes(parseInt(id));
+            }
+        };
+
+        LoreSystem.load();
+
         let mapW = 0, mapH = 0;
 
         // Dynamische Auflösung
@@ -4272,20 +4316,25 @@
                 }
 
                 // Check if this specific light was already collected
-                if (window.GameState.isLightCollected(SCENE_NAME, nearestId)) {
+                // Check if this specific light was already collected
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
+                if (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId)) {
                     return;
                 }
 
                 activeLightSourceId = nearestId;
-                window.GameState.collectLight(SCENE_NAME, nearestId).then(newLoreId => {
-                    if (newLoreId) {
-                        startLoreMode(newLoreId);
-                    } else {
-                        // Play shimmer if no new lore
-                        shimmerSound.currentTime = 0;
-                        shimmerSound.play().catch(() => { });
-                    }
-                });
+
+                // Track Light
+                if (!LoreSystem.state.collectedLights[sc]) LoreSystem.state.collectedLights[sc] = [];
+                LoreSystem.state.collectedLights[sc].push(nearestId);
+                LoreSystem.save(); // Save light state
+
+                // Unlock Lore directly (Light ID -> Lore ID)
+                const newLoreId = nearestId;
+                if (LoreSystem.unlock(newLoreId)) {
+                    console.log("New Lore Unlocked via System:", newLoreId);
+                }
+                startLoreMode(newLoreId);
             }
             // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
             else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {

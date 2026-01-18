@@ -1967,6 +1967,50 @@
             }
         }
 
+        // ============================================
+        // LORE PERSISTENCE HELPER
+        // ============================================
+        const LoreSystem = {
+            key: 'liminal_save',
+            state: {
+                collectedLore: [],
+                collectedLights: {}
+            },
+
+            load() {
+                try {
+                    const raw = localStorage.getItem(this.key);
+                    if (raw) {
+                        this.state = JSON.parse(raw);
+                        console.log("[LoreSystem] Loaded:", this.state);
+                    }
+                } catch (e) { console.warn("Lore Load Error:", e); }
+            },
+
+            save() {
+                try {
+                    localStorage.setItem(this.key, JSON.stringify(this.state));
+                    // console.log("[LoreSystem] Saved:", this.state);
+                } catch (e) { console.warn("Lore Save Error:", e); }
+            },
+
+            unlock(id) {
+                id = parseInt(id);
+                if (!this.state.collectedLore.includes(id)) {
+                    this.state.collectedLore.push(id);
+                    this.save();
+                    return true;
+                }
+                return false;
+            },
+
+            isUnlocked(id) {
+                return this.state.collectedLore.includes(parseInt(id));
+            }
+        };
+
+        LoreSystem.load();
+
         let mapW = 0, mapH = 0;
 
         // Dynamische Auflösung
@@ -4261,7 +4305,10 @@
             // SHIMMER SOUND TRIGGER (Unabhängig vom Text)
             if (nearestId && minDist < TRIGGER_DIST) {
                 // BUGFIX: Do not play shimmer if already collected!
-                if (!window.GameState.isLightCollected(SCENE_NAME, nearestId)) {
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                const alreadyCollected = LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId);
+
+                if (!alreadyCollected) {
                     if (lastShimmerLightId !== nearestId) {
                         shimmerSound.currentTime = 0;
                         shimmerSound.play().catch(() => { });
@@ -4273,8 +4320,6 @@
                 lastShimmerLightId = null;
             }
 
-            // START LORE - ALLE Lichter lösen lore1 aus (vorerst)
-            // START LORE - ALLE Lichter lösen lore1 aus (vorerst)
             // START LORE - Dynamic Sequential Unlock
             if (nearestId && minDist < TRIGGER_DIST && !isLoreMode) {
                 // Safety Check: Ignore if Player or Light is at (0,0) (Spawn Glitch)
@@ -4284,25 +4329,24 @@
                 }
 
                 // Check if this specific light was already collected
-                if (window.GameState.isLightCollected(SCENE_NAME, nearestId)) {
-                    // Do nothing (light is faded, lore potentially unlocked)
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                if (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId)) {
                     return;
                 }
 
-                // Not collected yet! Collect and Unlock next Lore
                 activeLightSourceId = nearestId;
 
-                window.GameState.collectLight(SCENE_NAME, nearestId).then(newLoreId => {
-                    if (newLoreId) {
-                        // A new lore was unlocked! Play it.
-                        startLoreMode(newLoreId);
-                    } else {
-                        // Nothing new (maybe all unlocked), but we collected the light.
-                        // Play shimmer sound?
-                        shimmerSound.currentTime = 0;
-                        shimmerSound.play().catch(() => { });
-                    }
-                });
+                // Track Light
+                if (!LoreSystem.state.collectedLights[sc]) LoreSystem.state.collectedLights[sc] = [];
+                LoreSystem.state.collectedLights[sc].push(nearestId);
+                LoreSystem.save();
+
+                // Unlock Lore (Light ID -> Lore ID for now)
+                const newLoreId = nearestId;
+                if (LoreSystem.unlock(newLoreId)) {
+                    console.log("[LoreSystem] Unlocked Lore:", newLoreId);
+                }
+                startLoreMode(newLoreId);
 
             }
             // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
