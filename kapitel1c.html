@@ -2124,97 +2124,6 @@
             }
         }
 
-        // ============================================
-        // LORE LIGHT PERSISTENCE LOGIC
-        // ============================================
-        class YellowLight {
-            constructor(x, y, id) {
-                this.x = x;
-                this.y = y;
-                this.id = id;
-                this.baseY = y;
-                this.timer = Math.random() * 100;
-                // States: IDLE, COLLECTING, SHRINKING, DONE
-                this.state = 'IDLE';
-                this.radius = 1; // Grows during IDLE/COLLECTING
-                this.maxRadius = 30; // Peak size before shrink
-                this.collectSpeed = 2.0;
-                this.shrinkSpeed = 4.0;
-            }
-
-            draw(ctx) {
-                if (this.state === 'DONE') return;
-
-                // Pulsate in IDLE
-                if (this.state === 'IDLE') {
-                    this.timer += 0.05;
-                    this.radius = 4 + Math.sin(this.timer) * 1.5;
-                }
-
-                // Grow in COLLECTING
-                if (this.state === 'COLLECTING') {
-                    this.radius += this.collectSpeed;
-                    if (this.radius > this.maxRadius) {
-                        this.triggerUnlock();
-                        this.state = 'SHRINKING';
-                    }
-                }
-
-                // Shrink in SHRINKING
-                if (this.state === 'SHRINKING') {
-                    this.radius -= this.shrinkSpeed;
-                    if (this.radius <= 0) {
-                        this.radius = 0;
-                        this.state = 'DONE';
-                    }
-                }
-
-                // Draw Light Source
-                if (this.radius > 0) {
-                    const gradient = ctx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius * 2);
-                    gradient.addColorStop(0, "rgba(255, 255, 200, 0.9)");
-                    gradient.addColorStop(0.4, "rgba(255, 220, 100, 0.5)");
-                    gradient.addColorStop(1, "rgba(255, 180, 50, 0)");
-
-                    ctx.save();
-                    ctx.globalCompositeOperation = 'lighter';
-                    ctx.fillStyle = gradient;
-                    ctx.beginPath();
-                    ctx.arc(this.x, this.y, this.radius * 2, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                }
-            }
-
-            // Called when player touches it
-            collect() {
-                if (this.state === 'IDLE') {
-                    this.state = 'COLLECTING';
-                    // Optional: Play sound here
-                    // if (sfxCollect) sfxCollect.play();
-                }
-            }
-
-            triggerUnlock() {
-                // Unlock Lore via ID
-                // Note: The map generation assigns IDs 1, 2, 3...
-                // We use 'kapitel1c' as scene key key for persistence.
-                if (window.GameState) {
-                    // Check if already collected logic usually happens at spawn,
-                    // but we do it gracefully here too.
-                    window.GameState.collectLight('kapitel1c', this.id).then(unlockedLoreId => {
-                        if (unlockedLoreId) {
-                            console.log("New Lore Unlocked:", unlockedLoreId);
-                            // Optional: Trigger UI notification
-                        }
-                    });
-                } else if (typeof LoreSystem !== 'undefined') {
-                    // Fallback to local LoreSystem if GameState not globally exposed yet
-                    LoreSystem.unlock(this.id);
-                }
-            }
-        }
-
         function initParticles() {
             if (!particleSprite) particleSprite = createGlowSprite();
 
@@ -2804,21 +2713,7 @@
                         // GELB = Lore Trigger (#FFFF00)
                         else if (r > 250 && g > 250 && b < 10) {
                             const id = yellowLights.length + 1;
-                            // Check Persistence: Skip if already collected
-                            let isCollected = false;
-                            if (window.GameState) {
-                                isCollected = window.GameState.isLightCollected('kapitel1c', id);
-                            } else if (typeof LoreSystem !== 'undefined') {
-                                // Fallback
-                                // (Note: LoreSystem local state lacks specific light IDs, so we rely on global GameState mostly)
-                            }
-
-                            if (!isCollected) {
-                                yellowLights.push(new YellowLight(x, y, id));
-                            } else {
-                                // Optional: Debug log
-                                // console.log(`Skipping collected light ${id}`);
-                            }
+                            yellowLights.push(new YellowLight(x, y, id));
                         }
                         // BLAU = Spawn Punkt (#0000FF)
                         else if (r < 50 && g < 50 && b > 200) {
