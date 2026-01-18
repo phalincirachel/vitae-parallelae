@@ -2759,9 +2759,12 @@
         // ============================================
         let wasAmbientPlaying = false;
         let wasPlayerPlaying = false;
+        window.gamePaused = false;
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                window.gamePaused = true;
+
                 // APP BACKGROUNDED -> PAUSE ALL
                 if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
                     wasAmbientPlaying = true;
@@ -2781,6 +2784,9 @@
 
             } else {
                 // APP FOREGROUND -> RESUME IF WAS PLAYING
+                lastTime = 0;
+                window.gamePaused = false;
+
                 setTimeout(() => {
                     if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                         ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
@@ -2918,6 +2924,11 @@
         let lastTime = 0;
 
         function gameLoop(timestamp) {
+            if (window.gamePaused) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+
             if (!lastTime) lastTime = timestamp;
             let dt = (timestamp - lastTime) / 1000;
             lastTime = timestamp;

@@ -2062,10 +2062,13 @@
                     // ============================================
                     let wasAmbientPlaying = false;
                     let wasPlayerPlaying = false;
+                    window.gamePaused = false; // Flag for Game Loop
 
                     document.addEventListener('visibilitychange', () => {
                         if (document.hidden) {
                             // APP BACKGROUNDED -> PAUSE ALL
+                            window.gamePaused = true;
+
                             if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
                                 wasAmbientPlaying = true;
                                 ambientAudio.pause();
@@ -2081,7 +2084,11 @@
                             }
 
                         } else {
-                            // APP FOREGROUND -> RESUME IF WAS PLAYING
+                            // APP FOREGROUND -> RESUME
+                            window.gamePaused = false;
+                            // Discard accumulated clock time on resume
+                            if (typeof clock !== 'undefined') clock.getDelta();
+
                             setTimeout(() => {
                                 if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                                     ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
@@ -2110,9 +2117,16 @@
 
                 // Animate
                 function animate() {
-                    try {
+                    // Check Pause
+                    if (window.gamePaused) {
                         requestAnimationFrame(animate);
-                        const delta = clock.getDelta();
+                        return;
+                    }
+
+                    requestAnimationFrame(animate);
+
+                    try {
+                        const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
                         const time = clock.getElapsedTime();
 
                         // Free Look
