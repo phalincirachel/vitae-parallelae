@@ -3957,6 +3957,7 @@
                         // Click to Seek
                         div.title = "Klicken zum Springen";
                         div.style.cursor = "pointer";
+                        div.style.pointerEvents = "auto";
                         div.addEventListener('click', (e) => {
                             if (subtitleContainer.dataset.wasDragging === 'true') {
                                 console.log("Click ignored due to drag");
@@ -4294,15 +4295,20 @@
 
         // 8. Wenn Audio zu Ende ist, Reset
         // 8. Wenn Audio zu Ende ist
+        // 8. Wenn Audio zu Ende ist
+        // HINWEIS: SCAudioAdapter dispatches 'ended' event
         audioPlayer.addEventListener('ended', () => {
             // Auto-Resume Main Audio if in Lore Mode
-            if (isLoreMode) {
+            if (isLoreMode && window.restoreMainAudio) {
                 console.log("Lore ended. Returning to Main Audio...");
                 restoreMainAudio();
                 return;
             }
 
+            console.log("Audio ended");
             iconPlay.style.display = 'block';
+            iconPause.style.display = 'none'; // Ensure Play icon is shown
+            // Jump to end in subtitles
             renderSubtitleLines(subtitleTracks.length - 1);
         });
 

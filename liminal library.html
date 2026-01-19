@@ -163,7 +163,8 @@
             align-items: center;
             /* Buttons auf Höhe der mittleren Zeile */
             gap: 15px;
-            z-index: 1000;
+            z-index: 200000;
+            /* FORCE TOP LAYER */
             transition: bottom 0.4s ease, transform 0.4s ease;
             pointer-events: none;
             /* Allow clicks to pass through container */
@@ -292,23 +293,26 @@
             /* Forces interactions */
         }
 
-        /* Mask applied in Reading Mode */
+        /* Mask applied in Reading Mode - FIXED */
         #audioPlayerUI.reading-mode #subtitleContainer {
+            /* WICHTIG: Damit Padding in die Höhe eingerechnet wird */
+            box-sizing: border-box;
+
             /* Reset Flex Alignment for Reading Mode: Top-Down flow */
             justify-content: flex-start;
 
-            mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
+            /* Maske etwas sanfter einstellen (50px statt 120px), damit Text nicht verschwindet */
+            mask-image: linear-gradient(to bottom, transparent 0px, black 50px, black calc(100% - 50px), transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 50px, black calc(100% - 50px), transparent 100%);
 
-            padding-top: 120px;
-            /* Push first line below the top fade */
-            padding-bottom: 120px;
-            /* Push last line above bottom fade */
+            padding-top: 50px;
+            /* Passend zur Maske reduziert */
+            padding-bottom: 50px;
+            /* Passend zur Maske reduziert */
 
             pointer-events: auto !important;
             touch-action: pan-y;
             user-select: none;
-            /* Improve drag feel */
         }
 
         /* Zeilen die weit vom Zentrum entfernt sind verblassen */
@@ -921,15 +925,18 @@
                     async function _doRestore() {
                         if (!player) return;
                         // Restore Source
-                        player.audio.src = mainAudioState.src;
+                        player.audio.src = 'assets/kapitel1b.mp3';
                         player.audio.volume = 1.0;
 
                         // Restore Text
-                        await player.loadText('assets/kapitel1b.txt');
+                        await loadSubtitles('assets/kapitel1b.txt');
 
                         // Restore Time (minus 5s)
                         const resumeTime = Math.max(0, mainAudioState.time - 5);
                         player.audio.currentTime = resumeTime;
+
+                        // Force sync
+                        syncSubtitles();
 
                         // Resume
                         if (mainAudioState.wasPlaying) {
@@ -969,9 +976,9 @@
                         player.audio.src = content.audio;
                         player.audio.currentTime = 0;
 
-                        // Load Text
-                        await player.loadText(content.text);
-
+                        // Load Text (V2 Subtitle System)
+                        await loadSubtitles(content.text);
+                        updateSubtitleDisplay(-1); // Reset display for new lore
                         // Play
                         try {
                             await player.play();
@@ -1028,8 +1035,10 @@
                 const iconPause = document.getElementById('iconPause');
 
                 const player = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
-                    container: document.getElementById('subtitleContainer')
+                    container: null // SUBTITLE SYSTEM HANDLES RENDERING
                 });
+                window.sharedPlayer = player;
+                window.sharedAudioEl = player.audio;
 
                 // UI Hookups
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
@@ -2633,257 +2642,213 @@
             // =========================================================
             console.log("[AudioSystem] Initializing SCAudioAdapter for Liminal Library...");
 
-            // 1. Initialize Adapter
-            window.liminalAudio = new SCAudioAdapter();
-
             const subtitleContainer = document.getElementById('subtitleContainer');
-            let subtitles = [];           // Array of {time: number, text: string, idx: number}
-            let subtitleTimes = [];       // Parallel array of just times for binary search
-            let subtitleNodes = [];       // DOM node references for each subtitle line
+            let subtitleTracks = [];
             let currentSubtitleIndex = -1;
-            let isReadingMode = false;    // Track reading mode state
+            let isReadingMode = true;
 
-            // 2. Set Source (Liminal Library Track)
-            const trackUrl = SC_URLS.LIMINAL_LIBRARY || 'assets/kapitel1b.mp3';
-            console.log("[AudioSystem] Setting Track URL:", trackUrl);
+            // Map audioPlayer to the shared audio element
+            const audioPlayer = window.sharedAudioEl;
+            if (!audioPlayer) {
+                console.warn("[AudioSystem] sharedAudioEl not found on window, will retry...");
+            }
 
-            setTimeout(() => {
-                window.liminalAudio.src = trackUrl;
-            }, 500);
+            // 1. ROBUST SUBTITLE PARSER
+            function parseSubtitles(data) {
+                const tracks = [];
+                const lines = data.split('\n');
 
-            // =========================================================
-            // A) ROBUST SUBTITLE PARSER
-            // Supports: [m:ss], [mm:ss], [m:ss.s], [mm:ss.sss], 
-            //           [h:mm:ss], [hh:mm:ss], [h:mm:ss.s], [hh:mm:ss.sss]
-            // =========================================================
-            function parseSubtitles(text) {
-                // BOM Removal
-                if (text.charCodeAt(0) === 0xFEFF) {
-                    text = text.slice(1);
-                }
+                // Matches format like [00:15.5] or [01:05]
+                const regex = /^\[([0-9:.]+)\]\s*(.*)$/;
 
-                const lines = text.split(/\r?\n/);
-                const subs = [];
-
-                // Robust Regex: Matches timestamps with optional hours and optional decimal seconds
-                // Groups: [1]=hours or minutes, [2]=minutes or seconds, [3]=seconds (optional), [4]=decimal (optional)
-                // Format A: [mm:ss] or [mm:ss.xxx] -> groups: [1]=mm, [2]=ss(.xxx), [3]=undefined
-                // Format B: [h:mm:ss] or [hh:mm:ss.xxx] -> groups: [1]=h(h), [2]=mm, [3]=ss(.xxx)
-                const timeRegex = /^\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?))?\][ ]*(.*)/;
-
-                lines.forEach((line, lineNum) => {
-                    line = line.trim();
-                    if (!line) return;
-
-                    const match = line.match(timeRegex);
+                lines.forEach(line => {
+                    const match = line.match(regex);
                     if (match) {
-                        let timeInSeconds;
-                        const part1 = parseFloat(match[1]); // Could be hours or minutes
-                        const part2 = parseFloat(match[2]); // Could be minutes or seconds
-                        const part3 = match[3] ? parseFloat(match[3]) : null; // Seconds (if hour format)
+                        const stamp = match[1];
+                        const text = match[2].trim();
 
-                        if (part3 !== null) {
-                            // Format: [h:mm:ss] or [hh:mm:ss.xxx]
-                            const hours = part1;
-                            const minutes = part2;
-                            const seconds = part3;
-                            timeInSeconds = hours * 3600 + minutes * 60 + seconds;
-                        } else {
-                            // Format: [mm:ss] or [mm:ss.xxx]
-                            const minutes = part1;
-                            const seconds = part2;
-                            timeInSeconds = minutes * 60 + seconds;
-                        }
+                        if (text) {
+                            const parts = stamp.split(':');
+                            let totalSeconds = 0;
 
-                        const textContent = match[4].trim();
-                        if (textContent) {
-                            subs.push({
-                                time: timeInSeconds,
-                                text: textContent,
-                                idx: subs.length
-                            });
+                            if (parts.length === 2) { // mm:ss.xx
+                                totalSeconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
+                            } else if (parts.length === 3) { // hh:mm:ss.xx
+                                totalSeconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
+                            }
+
+                            if (!isNaN(totalSeconds)) {
+                                tracks.push({ time: totalSeconds, text: text });
+                            }
                         }
                     }
                 });
-
-                // Sort by time ascending
-                subs.sort((a, b) => a.time - b.time);
-
-                // Re-index after sort
-                subs.forEach((s, i) => s.idx = i);
-
-                return subs;
+                return tracks;
             }
 
-            // =========================================================
-            // B) BINARY SEARCH for finding active subtitle index
-            // =========================================================
-            function findSubtitleIndex(currentTime, times) {
-                if (times.length === 0) return -1;
-                if (currentTime < times[0]) return -1; // Before first subtitle
+            async function loadSubtitles(url) {
+                try {
+                    console.log("[Subtitles] Loading:", url);
+                    const response = await fetch(url);
+                    const text = await response.text();
+                    subtitleTracks = parseSubtitles(text);
+                    console.log("[Subtitles] Loaded tracks:", subtitleTracks.length);
+                    renderSubtitleLines(0);
+                } catch (e) {
+                    console.error("[Subtitles] Failed to load:", e);
+                }
+            }
 
-                let low = 0;
-                let high = times.length - 1;
+            // Highlighting rendering
+            // Highlighting rendering
+            function renderSubtitleLines(centerIndex) {
+                // A) Reading Mode: Rendere ALLE Zeilen
+                if (isReadingMode) {
+                    const container = document.getElementById('subtitleContainer');
 
-                // Find the last subtitle that has started
-                while (low < high) {
-                    const mid = Math.ceil((low + high + 1) / 2);
-                    if (times[mid] <= currentTime) {
-                        low = mid;
-                    } else {
-                        high = mid - 1;
+                    // FIX: Erzwinge Neu-Rendern, wenn Container leer ist, aber Tracks existieren
+                    if (container.children.length === 0 && subtitleTracks.length > 0) {
+                        container.innerHTML = ''; // Sicherheitshalber leeren
+                        subtitleTracks.forEach((track, i) => {
+                            const div = document.createElement('div');
+                            div.className = 'subtitle-line';
+                            div.innerText = track.text;
+                            div.dataset.index = i;
+
+                            // Click to Seek
+                            div.title = "Klicken zum Springen";
+                            div.style.cursor = "pointer";
+                            div.style.pointerEvents = "auto";
+                            div.addEventListener('click', (e) => {
+                                if (container.dataset.wasDragging === 'true') return;
+                                if (audioPlayer) {
+                                    audioPlayer.currentTime = track.time;
+                                    audioPlayer.play().catch(() => { });
+                                    updateSubtitleDisplay(i);
+                                }
+                            });
+
+                            container.appendChild(div);
+                        });
                     }
+
+                    // Highlighting aktualisieren
+                    const oldActive = container.querySelector('.subtitle-current');
+                    if (oldActive) oldActive.classList.remove('subtitle-current');
+
+                    const safeIndex = centerIndex < 0 ? 0 : centerIndex;
+
+                    if (container.children.length > safeIndex) {
+                        const activeEl = container.children[safeIndex];
+                        activeEl.classList.add('subtitle-current');
+
+                        // Nur scrollen, wenn User nicht interagiert
+                        if (!container.classList.contains('is-scrolling') && !container.dataset.isDragging) {
+                            activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        }
+                    }
+                    return;
                 }
 
-                return low;
-            }
-
-            // =========================================================
-            // C) RENDERING: Full list with highlight (Reading Mode style)
-            // =========================================================
-            function renderSubtitleLines() {
-                if (!subtitleContainer) return;
-
-                // Clear container
+                // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
                 subtitleContainer.innerHTML = '';
-                subtitleNodes = [];
 
-                if (subtitles.length === 0) {
+                if (subtitleTracks.length === 0) {
                     const div = document.createElement('div');
-                    div.className = 'subtitle-line';
-                    div.textContent = 'Warte auf Untertitel...';
+                    div.className = 'subtitle-line subtitle-current';
+                    div.innerText = '...';
                     subtitleContainer.appendChild(div);
                     return;
                 }
 
-                // Create all subtitle lines
-                subtitles.forEach((sub, i) => {
+                const startIdx = Math.max(0, centerIndex - 1);
+                const endIdx = Math.min(subtitleTracks.length - 1, centerIndex + 1);
+
+                for (let i = startIdx; i <= endIdx; i++) {
                     const div = document.createElement('div');
                     div.className = 'subtitle-line';
-                    div.textContent = sub.text;  // Use textContent to prevent XSS
-                    div.dataset.index = i;
-                    div.dataset.time = sub.time;
+                    const distance = Math.abs(i - centerIndex);
 
-                    // Click to seek
-                    div.style.cursor = 'pointer';
-                    div.title = `Klicken zum Springen (${formatTime(sub.time)})`;
-                    div.addEventListener('click', () => {
-                        if (window.liminalAudio) {
-                            console.log(`[Subtitle] Seeking to ${sub.time}s`);
-                            window.liminalAudio.currentTime = sub.time;
-                            setActiveSubtitle(i);
-                        }
-                    });
+                    if (i === centerIndex) {
+                        div.classList.add('subtitle-current');
+                    } else {
+                        if (distance >= 5) div.classList.add('fade-far');
+                        else if (distance >= 3) div.classList.add('fade-mid');
+                    }
 
+                    div.innerText = subtitleTracks[i].text;
                     subtitleContainer.appendChild(div);
-                    subtitleNodes[i] = div;
-                });
-
-                console.log(`[Subtitle] Rendered ${subtitles.length} subtitle lines`);
-            }
-
-            // Helper: Format time as mm:ss
-            function formatTime(seconds) {
-                const m = Math.floor(seconds / 60);
-                const s = Math.floor(seconds % 60);
-                return `${m}:${s.toString().padStart(2, '0')}`;
-            }
-
-            // =========================================================
-            // D) SET ACTIVE SUBTITLE (highlight + scroll)
-            // =========================================================
-            let lastActiveIndex = -1;
-
-            function setActiveSubtitle(index) {
-                if (index === lastActiveIndex) return;
-
-                // Remove old highlight
-                if (lastActiveIndex >= 0 && subtitleNodes[lastActiveIndex]) {
-                    subtitleNodes[lastActiveIndex].classList.remove('subtitle-current');
-                    subtitleNodes[lastActiveIndex].classList.remove('active');
                 }
+            }
 
-                // Set new highlight
-                if (index >= 0 && subtitleNodes[index]) {
-                    subtitleNodes[index].classList.add('subtitle-current');
-                    subtitleNodes[index].classList.add('active');
-
-                    // Smooth scroll to active line (only if not user-scrolling)
-                    if (!subtitleContainer.classList.contains('is-scrolling')) {
-                        subtitleNodes[index].scrollIntoView({
-                            block: 'center',
-                            behavior: 'smooth'
-                        });
+            // Sync logic
+            function syncSubtitles() {
+                const t = audioPlayer.currentTime;
+                let foundIndex = -1;
+                for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                    if (t >= subtitleTracks[i].time) {
+                        foundIndex = i;
+                        break;
                     }
                 }
+                if (foundIndex !== -1 && foundIndex !== currentSubtitleIndex) {
+                    currentSubtitleIndex = foundIndex;
+                    renderSubtitleLines(currentSubtitleIndex);
+                }
+            }
 
-                lastActiveIndex = index;
+            function updateSubtitleDisplay(index) {
                 currentSubtitleIndex = index;
+                renderSubtitleLines(index);
             }
 
-            // =========================================================
-            // E) LOAD SUBTITLES (with error handling)
-            // =========================================================
-            async function loadSubtitles(url) {
-                console.log(`[Subtitle] Loading subtitles from: ${url}`);
-                try {
-                    const response = await fetch(url);
-                    if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    const text = await response.text();
+            if (audioPlayer) {
+                audioPlayer.addEventListener('timeupdate', syncSubtitles);
+                audioPlayer.addEventListener('loadedmetadata', syncSubtitles);
+            }
+            setInterval(syncSubtitles, 100);
 
-                    subtitles = parseSubtitles(text);
-                    subtitleTimes = subtitles.map(s => s.time);
+            // Initial Load
+            loadSubtitles('assets/kapitel1b.txt');
 
-                    console.log(`[Subtitle] Parsed ${subtitles.length} subtitles`);
+            // Drag Logic for Container (from index.html)
+            let isDown = false;
+            let startY;
+            let scrollTop;
 
-                    // Render the full list
-                    renderSubtitleLines();
+            subtitleContainer.addEventListener('mousedown', (e) => {
+                isDown = true;
+                subtitleContainer.dataset.isDragging = 'false';
+                subtitleContainer.dataset.wasDragging = 'false';
+                startY = e.pageY - subtitleContainer.offsetTop;
+                scrollTop = subtitleContainer.scrollTop;
+                subtitleContainer.style.cursor = 'grabbing';
+            });
 
-                    // Show first line if exists
-                    if (subtitles.length > 0) {
-                        setActiveSubtitle(0);
-                    }
+            subtitleContainer.addEventListener('mouseleave', () => {
+                isDown = false;
+                subtitleContainer.style.cursor = 'auto'; // or pointer
+            });
 
-                    return true;
-                } catch (error) {
-                    console.error(`[Subtitle] Failed to load subtitles: ${error.message}`);
-                    if (subtitleContainer) {
-                        subtitleContainer.innerHTML = '';
-                        const div = document.createElement('div');
-                        div.className = 'subtitle-line';
-                        div.textContent = 'Untertitel konnten nicht geladen werden.';
-                        div.style.color = '#f66';
-                        subtitleContainer.appendChild(div);
-                    }
-                    return false;
+            subtitleContainer.addEventListener('mouseup', () => {
+                isDown = false;
+                subtitleContainer.style.cursor = 'auto'; // or pointer
+            });
+
+            subtitleContainer.addEventListener('mousemove', (e) => {
+                if (!isDown) return;
+                e.preventDefault();
+                const y = e.pageY - subtitleContainer.offsetTop;
+                const walk = (y - startY) * 1.5; // Scroll speed
+                if (Math.abs(walk) > 5) {
+                    subtitleContainer.dataset.isDragging = 'true';
+                    subtitleContainer.dataset.wasDragging = 'true';
+                    subtitleContainer.scrollTop = scrollTop - walk;
                 }
-            }
+            });
 
-            // =========================================================
-            // F) TIME UPDATE HANDLER (sync subtitles with playback)
-            // =========================================================
-            function updateSubtitleFromTime(currentTime) {
-                if (subtitleTimes.length === 0) return;
 
-                const newIndex = findSubtitleIndex(currentTime, subtitleTimes);
-                setActiveSubtitle(newIndex);
-            }
 
-            // Poll widget position for accurate sync (SoundCloud widget doesn't fire timeupdate)
-            setInterval(() => {
-                if (!window.liminalAudio || subtitles.length === 0) return;
-
-                const adapter = window.liminalAudio;
-                if (adapter.widget && adapter._isReady) {
-                    adapter.widget.getPosition(posMs => {
-                        updateSubtitleFromTime(posMs / 1000);
-                    });
-                } else {
-                    updateSubtitleFromTime(adapter.currentTime);
-                }
-            }, 150); // Slightly faster for smoother sync
 
             // =========================================================
             // G) Scrollbar auto-hide logic
@@ -2906,17 +2871,17 @@
             const gameModeBtn = document.getElementById('gameModeBtn');
             const audioPlayerUI = document.getElementById('audioPlayerUI');
 
+            // Apply default state
+            if (isReadingMode && audioPlayerUI) {
+                audioPlayerUI.classList.add('reading-mode');
+            }
+
             if (readingModeBtn) {
                 readingModeBtn.addEventListener('click', () => {
                     isReadingMode = true;
                     if (audioPlayerUI) audioPlayerUI.classList.add('reading-mode');
-                    // Re-scroll to current position
-                    if (currentSubtitleIndex >= 0 && subtitleNodes[currentSubtitleIndex]) {
-                        subtitleNodes[currentSubtitleIndex].scrollIntoView({
-                            block: 'center',
-                            behavior: 'smooth'
-                        });
-                    }
+                    // Force immediate re-render for UI responsiveness
+                    renderSubtitleLines(Math.max(0, currentSubtitleIndex));
                 });
             }
 
@@ -2924,6 +2889,8 @@
                 gameModeBtn.addEventListener('click', () => {
                     isReadingMode = false;
                     if (audioPlayerUI) audioPlayerUI.classList.remove('reading-mode');
+                    // Force immediate re-render for UI responsiveness
+                    renderSubtitleLines(Math.max(0, currentSubtitleIndex));
                 });
             }
 
@@ -2940,14 +2907,14 @@
 
             if (btnPlay) {
                 btnPlay.addEventListener('click', () => {
-                    window.liminalAudio.play();
+                    if (window.sharedPlayer) window.sharedPlayer.play();
                     btnPlay.style.display = 'none';
                     if (btnPause) btnPause.style.display = 'block';
                 });
             }
             if (btnPause) {
                 btnPause.addEventListener('click', () => {
-                    window.liminalAudio.pause();
+                    if (window.sharedPlayer) window.sharedPlayer.pause();
                     btnPause.style.display = 'none';
                     if (btnPlay) btnPlay.style.display = 'block';
                 });
