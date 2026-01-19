@@ -258,8 +258,9 @@
             text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
             transition: color 0.3s, opacity 0.3s;
             opacity: 1;
-            pointer-events: none;
-            /* FORCE CLICK THROUGH IN GAME MODE */
+            pointer-events: auto;
+            /* ALLOW CLICKS */
+            cursor: pointer;
         }
 
         .subtitle-current,

@@ -1338,8 +1338,14 @@
         // ============================================
         // SETUP & FILTER LOGIK
         // ============================================
+        // ============================================
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
+
+        // AUDIO SYSTEM - SCAudioAdapter Integration
+        const audioPlayer = new SCAudioAdapter();
+        console.log('[Kapitel1c] Audio Adapter Initialized');
+
         const dropZone = document.getElementById('dropZone');
         const controlsHint = document.getElementById('controlsHint');
 
@@ -2509,6 +2515,9 @@
 
             // 2. Load Audio & Text (Chapter 1c) -> Default Main Audio
             const mainAudioSrc = 'assets/kapitel1c.mp3';
+            // Use SCAudioAdapter's src setter which handles SoundCloud URLs automatically via getSCUrl internal logic if implemented, 
+            // OR we ensure getSCUrl is called here.
+            // In index.html: ambientAudio.src = getSCUrl('...');
             audioPlayer.src = getSCUrl(mainAudioSrc);
             window.mainAudioUrl = mainAudioSrc;
 
@@ -3864,8 +3873,8 @@
         // ============================================
 
         // SoundCloud Audio Player via Widget API
-        const audioPlayer = new SCAudioAdapter();
-        console.log('[Audio] Created SCAudioAdapter for main audio');
+        // const audioPlayer = new SCAudioAdapter(); // Moved to top of script
+        // console.log('[Audio] Created SCAudioAdapter for main audio');
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
