@@ -812,7 +812,44 @@
                 </button>
             </div>
         </div>
-        <div id="debugHUD">Invoking System...</div>
+        <!-- DEBUG PANEL: Press D to toggle -->
+        <div id="debugPanel"
+            style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.95); color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; z-index: 99999; display: block; min-width: 320px; max-height: 80vh; overflow-y: auto;">
+            <div style="font-weight: bold; margin-bottom: 10px; color: #ff0;">🔧 LIMINAL DEBUG (D = Toggle)</div>
+
+            <div id="dbgWidgetStatus" style="margin-bottom: 8px; padding: 5px; background: #111;">Widget: Loading...
+            </div>
+            <div id="dbgTimeStatus" style="margin-bottom: 8px; padding: 5px; background: #111;">Time: 0.00s</div>
+            <div id="dbgSubtitleCount" style="margin-bottom: 8px; padding: 5px; background: #111;">Subtitles: 0</div>
+            <div id="dbgCurrentSubtitle"
+                style="margin-bottom: 8px; padding: 5px; background: #222; color: #fff; max-height: 100px; overflow-y: auto;">
+                Current: (none)</div>
+
+            <div style="margin-top: 10px;">
+                <button id="dbgPlayBtn" style="padding: 5px 15px; margin-right: 5px; cursor: pointer;">▶ Play</button>
+                <button id="dbgPauseBtn" style="padding: 5px 15px; margin-right: 5px; cursor: pointer;">⏸ Pause</button>
+                <button id="dbgSeek10" style="padding: 5px 10px; cursor: pointer;">+10s</button>
+            </div>
+
+            <div id="dbgLog"
+                style="margin-top: 10px; padding: 5px; background: #000; color: #888; font-size: 9px; max-height: 150px; overflow-y: auto;">
+                -- Log --
+            </div>
+
+            <!-- RAW TEXT FILE CONTENT -->
+            <div style="margin-top: 10px; font-weight: bold; color: #ff0;">📄 RAW TEXT FILE:</div>
+            <div id="dbgRawText"
+                style="background: #111; padding: 5px; font-size: 9px; max-height: 150px; overflow-y: auto; white-space: pre-wrap; color: #aaa;">
+                Loading...
+            </div>
+
+            <!-- PARSED SUBTITLES -->
+            <div style="margin-top: 10px; font-weight: bold; color: #ff0;">📋 ALL PARSED SUBTITLES:</div>
+            <div id="dbgSubtitleList"
+                style="background: #111; padding: 5px; font-size: 9px; max-height: 200px; overflow-y: auto; color: #ccc;">
+                Waiting for parse...
+            </div>
+        </div>
     </div>
 
     <!-- ARCHIVE MODAL -->
@@ -2633,10 +2670,9 @@
             console.log("[AudioSystem] Initializing SCAudioAdapter for Liminal Library...");
 
             // 1. Initialize Adapter
-            // Note: We don't pass an iframe ID in 'new' for dynamic creation, 
-            // OR we pass 'audioPlayerUI' if that's where we want the iframe appended invisibly.
-            // SCAudioAdapter handles this gracefully.
-            window.liminalAudio = new SCAudioAdapter('audioPlayerUI');
+            // CRITICAL FIX: Don't pass 'audioPlayerUI' - it's a DIV, not an IFRAME.
+            // SCAudioAdapter needs to create its own hidden iframe for the SC widget.
+            window.liminalAudio = new SCAudioAdapter();
 
             const subtitleContainer = document.getElementById('subtitleContainer');
             let subtitles = [];
@@ -2657,12 +2693,39 @@
                     subtitles = parseSubtitles(text);
                     console.log(`[AudioSystem] Loaded ${subtitles.length} lines of text.`);
 
+                    // ========== DEBUG: Show all loaded subtitles ==========
+                    const dbgLog = document.getElementById('dbgLog');
+                    if (dbgLog) {
+                        dbgLog.innerHTML = `<b style="color:#0f0">PARSED ${subtitles.length} SUBTITLES:</b><br>`;
+                        subtitles.forEach((s, i) => {
+                            dbgLog.innerHTML += `[${i}] t=${s.time}s: "${s.text.substring(0, 50)}..."<br>`;
+                        });
+                    }
+
+                    // DEBUG: Show in dedicated area
+                    const dbgSubList = document.getElementById('dbgSubtitleList');
+                    if (dbgSubList) {
+                        dbgSubList.innerHTML = subtitles.map((s, i) =>
+                            `<div style="padding:2px; border-bottom:1px solid #333;">[${s.time}s] ${s.text}</div>`
+                        ).join('');
+                    }
+
                     // Show first line immediately if exists (optional)
                     if (subtitles.length > 0 && subtitleContainer) {
                         subtitleContainer.innerHTML = `<div class="subtitle-line active">${subtitles[0].text}</div>`;
                     }
                 })
                 .catch(e => console.error("Failed to load subtitles:", e));
+
+            // 3b. DEBUG: Also load and show raw text file
+            fetch('assets/kapitel1b.txt')
+                .then(r => r.text())
+                .then(rawText => {
+                    const dbgRaw = document.getElementById('dbgRawText');
+                    if (dbgRaw) {
+                        dbgRaw.textContent = rawText.substring(0, 2000) + (rawText.length > 2000 ? '...[truncated]' : '');
+                    }
+                });
 
             // 4. Helper: Parse Subtitles [hh:mm:ss] or [mm:ss]
             function parseSubtitles(text) {
@@ -2698,18 +2761,31 @@
                 return subs;
             }
 
-            // 5. Update Loop (Sync Text)
+            // 5. Update Loop (Sync Text) - Uses polling for reliable time
             setInterval(() => {
                 if (!window.liminalAudio || !subtitleContainer || subtitles.length === 0) return;
 
-                const currentTime = window.liminalAudio.currentTime; // Adapter returns seconds 
-                // WAIT: SCAudioAdapter._currentTimeMs is in ms. getter currentTime returns seconds?
-                // Let's verify SCAudioAdapter. 
-                // Previous review: _currentTimeMs. 
-                // Let's assume currentTime property returns SECONDS.
-                // If not, we fix it. standard HTML5 audio is seconds.
+                // Get fresh position from widget directly (more reliable than event-based currentTime)
+                const adapter = window.liminalAudio;
 
-                // Logic: Find the LAST subtitle that has started
+                // If widget is ready, poll position directly
+                if (adapter.widget && adapter._isReady) {
+                    adapter.widget.getPosition(posMs => {
+                        const currentTime = posMs / 1000;
+                        updateSubtitleDisplay(currentTime);
+                    });
+                } else {
+                    // Fallback to stored currentTime if widget not ready
+                    const currentTime = adapter.currentTime;
+                    updateSubtitleDisplay(currentTime);
+                }
+            }, 200);
+
+            // Helper: Update subtitle based on time
+            function updateSubtitleDisplay(currentTime) {
+                if (!subtitleContainer || subtitles.length === 0) return;
+
+                // Find the LAST subtitle that has started
                 let activeText = "";
                 for (let i = 0; i < subtitles.length; i++) {
                     if (currentTime >= subtitles[i].time) {
@@ -2718,7 +2794,6 @@
                 }
 
                 // Update DOM only if changed
-                // Check strict equality to avoid loop trashing
                 const currentDisplayed = subtitleContainer.innerText.trim();
                 if (currentDisplayed !== activeText.trim()) {
                     subtitleContainer.innerHTML = `<div class="subtitle-line active" style="opacity: 0; transition: opacity 0.5s;">${activeText}</div>`;
@@ -2728,8 +2803,7 @@
                         if (el) el.style.opacity = 1;
                     });
                 }
-
-            }, 200);
+            }
 
             // 6. Bind UI Controls (Play/Pause)
             // Use IDs from HTML view earlier
@@ -2756,6 +2830,88 @@
                     if (btnPlay) btnPlay.style.display = 'block';
                 });
             }
+
+            // ============================================
+            // DEBUG PANEL FOR LIMINAL LIBRARY
+            // ============================================
+            const debugPanel = document.getElementById('debugPanel');
+            const dbgLog = document.getElementById('dbgLog');
+
+            function dbgWrite(msg) {
+                const now = new Date().toLocaleTimeString();
+                dbgLog.innerHTML = `[${now}] ${msg}<br>` + dbgLog.innerHTML;
+                if (dbgLog.children.length > 50) dbgLog.lastChild.remove();
+            }
+
+            // Toggle visibility with D key
+            window.addEventListener('keydown', e => {
+                if (e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.altKey) {
+                    debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+
+            // Debug buttons
+            document.getElementById('dbgPlayBtn').addEventListener('click', () => {
+                dbgWrite('Play clicked');
+                if (window.liminalAudio) {
+                    window.liminalAudio.play();
+                    dbgWrite('play() called');
+                } else {
+                    dbgWrite('ERROR: liminalAudio undefined!');
+                }
+            });
+
+            document.getElementById('dbgPauseBtn').addEventListener('click', () => {
+                dbgWrite('Pause clicked');
+                if (window.liminalAudio) window.liminalAudio.pause();
+            });
+
+            document.getElementById('dbgSeek10').addEventListener('click', () => {
+                if (window.liminalAudio) {
+                    window.liminalAudio.currentTime += 10;
+                    dbgWrite(`Seeked to ${window.liminalAudio.currentTime.toFixed(1)}s`);
+                }
+            });
+
+            // Update debug display every 200ms
+            setInterval(() => {
+                const audio = window.liminalAudio;
+                const dbgWidget = document.getElementById('dbgWidgetStatus');
+                const dbgTime = document.getElementById('dbgTimeStatus');
+                const dbgSubCount = document.getElementById('dbgSubtitleCount');
+                const dbgCurrSub = document.getElementById('dbgCurrentSubtitle');
+
+                if (!audio) {
+                    dbgWidget.innerHTML = 'Widget: <span style="color:red">NOT CREATED</span>';
+                    return;
+                }
+
+                // Widget status
+                const widgetExists = audio.widget ? '✅' : '❌';
+                const isReady = audio._isReady ? '✅' : '⏳';
+                const iframeSrc = audio.iframe ? 'OK' : 'MISSING';
+                dbgWidget.innerHTML = `Widget: ${widgetExists} | Ready: ${isReady} | Iframe: ${iframeSrc}`;
+
+                // Time - try direct getPosition if available
+                if (audio.widget && audio._isReady) {
+                    audio.widget.getPosition(ms => {
+                        dbgTime.innerHTML = `Time: <span style="color:#0ff">${(ms / 1000).toFixed(2)}s</span> (via getPosition)`;
+                    });
+                } else {
+                    dbgTime.innerHTML = `Time: ${audio.currentTime.toFixed(2)}s (stored)`;
+                }
+
+                // Subtitle count (from outer scope 'subtitles')
+                dbgSubCount.textContent = `Subtitles loaded: ${subtitles ? subtitles.length : 'N/A'}`;
+
+                // Current subtitle (from subtitleContainer)
+                const subText = subtitleContainer ? subtitleContainer.innerText.trim() : '(no container)';
+                dbgCurrSub.innerHTML = `Current: <em>${subText.substring(0, 100)}${subText.length > 100 ? '...' : ''}</em>`;
+
+            }, 200);
+
+            dbgWrite('Debug panel initialized');
+            dbgWrite(`SC_URLS.LIMINAL_LIBRARY = ${SC_URLS.LIMINAL_LIBRARY || 'UNDEFINED'}`);
 
         })();
     </script>

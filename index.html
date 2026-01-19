@@ -1175,6 +1175,32 @@
         </div>
     </div>
 
+    <!-- DEBUG PANEL: Press 'D' to toggle -->
+    <div id="debugPanel"
+        style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 99999; display: none; min-width: 280px;">
+        <div style="font-weight: bold; margin-bottom: 10px; color: #ff0;">🔧 DEBUG PANEL (D = Toggle)</div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Main Audio: <span id="dbgMainVol">100%</span></label><br>
+            <input type="range" id="sliderMainVol" min="0" max="100" value="100" style="width: 100%;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Ambient: <span id="dbgAmbientVol">30%</span></label><br>
+            <input type="range" id="sliderAmbientVol" min="0" max="100" value="30" style="width: 100%;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Footsteps: <span id="dbgFootstepsVol">40%</span></label><br>
+            <input type="range" id="sliderFootstepsVol" min="0" max="100" value="40" style="width: 100%;">
+        </div>
+
+        <div id="dbgStatus"
+            style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888; font-size: 10px;">
+            Status: Loading...
+        </div>
+    </div>
+
     <!-- ARCHIVE MODAL (INHALT) -->
     <div id="archiveModal">
         <div class="archive-card">
@@ -1680,7 +1706,7 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = 0.25;
+        footstepSound.volume = 0.02;
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
@@ -1693,7 +1719,7 @@
         // Ambient-Sound (permanent)
         const ambientSound = new SCAudioAdapter();
         ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.06;
+        ambientSound.volume = 0.02;
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -2447,7 +2473,7 @@
                 const text = await response.text();
                 // debugLog('Text length: ' + text.length);
                 window.mainTextContent = text;
-                subtitleTracks = parseSubtitles(text);
+                parseSubtitles(text);
                 // debugLog('subtitleTracks: ' + subtitleTracks.length);
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
@@ -2640,40 +2666,6 @@
 
             console.log(`Auto-Walk Path (Pure Nearest): ${path.length} nodes.`);
             return path;
-        }
-
-        // 4. Helper: Parse Subtitles [hh:mm:ss] or [mm:ss]
-        function parseSubtitles(text) {
-            // BOM Removal and normalization
-            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-
-            const lines = text.split(/\r?\n/);
-            const subs = [];
-            // Robust Regex: Match [digits:digits...] space Text
-            const timeRegex = /\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\]/;
-
-            lines.forEach(line => {
-                line = line.trim();
-                if (!line) return;
-
-                const match = line.match(timeRegex);
-                if (match) {
-                    let h = 0, m = 0, s = 0;
-                    if (match[3]) {
-                        h = parseInt(match[1]); m = parseInt(match[2]); s = parseInt(match[3]);
-                    } else {
-                        m = parseInt(match[1]); s = parseInt(match[2]);
-                    }
-                    const timeInSeconds = (h * 3600) + (m * 60) + s;
-
-                    // Extract text: Remove the timestamp and trim
-                    // This handles cases where regex capture groups might be wonky
-                    const textContent = line.replace(timeRegex, '').trim();
-
-                    subs.push({ time: timeInSeconds, text: textContent });
-                }
-            });
-            return subs;
         }
 
         function processMap(img) {
@@ -3963,11 +3955,11 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = 0.75;
+        ambientAudio.volume = 0.02;
 
         const footstepsAudio = new SCAudioAdapter();
         footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
-        footstepsAudio.volume = 0.75;
+        footstepsAudio.volume = 0.02;
         console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
@@ -4843,6 +4835,79 @@
             }
             tick();
         }
+
+        // ============================================
+        // DEBUG PANEL
+        // ============================================
+        (function initDebugPanel() {
+            const debugPanel = document.getElementById('debugPanel');
+            const dbgStatus = document.getElementById('dbgStatus');
+
+            // Toggle with 'D' key
+            window.addEventListener('keydown', e => {
+                if (e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.altKey) {
+                    debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
+                }
+            });
+
+            // Volume sliders
+            const sliderMain = document.getElementById('sliderMainVol');
+            const sliderAmbient = document.getElementById('sliderAmbientVol');
+            const sliderFootsteps = document.getElementById('sliderFootstepsVol');
+
+            sliderMain.addEventListener('input', e => {
+                const v = e.target.value / 100;
+                if (typeof audioPlayer !== 'undefined') audioPlayer.volume = v;
+                document.getElementById('dbgMainVol').textContent = e.target.value + '%';
+            });
+
+            sliderAmbient.addEventListener('input', e => {
+                const v = e.target.value / 100;
+                if (typeof ambientAudio !== 'undefined') ambientAudio.volume = v;
+                if (typeof ambientSound !== 'undefined') ambientSound.volume = v;
+                document.getElementById('dbgAmbientVol').textContent = e.target.value + '%';
+            });
+
+            sliderFootsteps.addEventListener('input', e => {
+                const v = e.target.value / 100;
+                if (typeof footstepsAudio !== 'undefined') footstepsAudio.volume = v;
+                if (typeof footstepSound !== 'undefined') footstepSound.volume = v;
+                document.getElementById('dbgFootstepsVol').textContent = e.target.value + '%';
+            });
+
+            // Status update every 500ms
+            setInterval(() => {
+                if (debugPanel.style.display === 'none') return;
+
+                let status = [];
+
+                // Main audio status
+                if (typeof audioPlayer !== 'undefined') {
+                    const ready = audioPlayer._isReady ? '✅' : '⏳';
+                    const src = audioPlayer._src ? audioPlayer._src.substring(0, 40) + '...' : 'none';
+                    status.push(`Main: ${ready} src=${src}`);
+                    status.push(`Time: ${audioPlayer.currentTime.toFixed(1)}s`);
+                } else {
+                    status.push('Main: NOT DEFINED');
+                }
+
+                // Ambient status
+                if (typeof ambientAudio !== 'undefined') {
+                    status.push(`Ambient: ${ambientAudio._isReady ? '✅' : '⏳'} vol=${ambientAudio.volume.toFixed(2)}`);
+                } else if (typeof ambientSound !== 'undefined') {
+                    status.push(`AmbientSnd: ${ambientSound._isReady ? '✅' : '⏳'}`);
+                }
+
+                // Footsteps status
+                if (typeof footstepsAudio !== 'undefined') {
+                    status.push(`Footsteps: ${footstepsAudio._isReady ? '✅' : '⏳'} vol=${footstepsAudio.volume.toFixed(2)}`);
+                }
+
+                dbgStatus.innerHTML = status.join('<br>');
+            }, 500);
+
+            console.log('[Debug] Debug panel initialized. Press D to toggle.');
+        })();
     </script>
 </body>
 

@@ -249,14 +249,9 @@ class SCAudioAdapter {
             });
         }
     }
-    // Volume Control (0.0 - 1.0)
-    get volume() { return this._volume; }
-    set volume(val) {
-        this._volume = Math.max(0, Math.min(1, val));
-        if (this.widget && this._isReady) {
-            this.widget.setVolume(this._volume * 100);
-        }
-    }
+    // DOM Compatibility Stubs
+    blur() { /* No-op: SCAudioAdapter is not a DOM element */ }
+    focus() { /* No-op: SCAudioAdapter is not a DOM element */ }
 }
 
 if (typeof window !== 'undefined') {

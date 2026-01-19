@@ -1782,7 +1782,7 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = 0.25;
+        footstepSound.volume = 0.02;
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
@@ -1795,7 +1795,7 @@
         // Ambient-Sound (permanent)
         const ambientSound = new SCAudioAdapter();
         ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.06;
+        ambientSound.volume = 0.02;
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -2561,8 +2561,8 @@
         window.addEventListener('keydown', e => {
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
                 e.preventDefault();
-                // CRITICAL FIX: Ensure Audio Player NEVER has focus, preventing "fast forward"
-                if (audioPlayer) audioPlayer.blur();
+                // CRITICAL FIX: Ensure focus is on body, preventing "fast forward" on audio
+                // Note: audioPlayer.blur() removed - SCAudioAdapter is not a DOM element
                 document.body.focus();
             }
             keys[e.key.toLowerCase()] = true;
@@ -3907,11 +3907,21 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = 0.3;
+        ambientAudio.volume = 0.02;
+        // Ensure volume is applied after widget is ready
+        ambientAudio.addEventListener('canplay', () => {
+            ambientAudio.volume = 0.02;
+            console.log('[Audio] Ambient volume applied: 0.3');
+        });
 
         const footstepsAudio = new SCAudioAdapter();
         footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
-        footstepsAudio.volume = 0.4;
+        footstepsAudio.volume = 0.02;
+        // Ensure volume is applied after widget is ready
+        footstepsAudio.addEventListener('canplay', () => {
+            footstepsAudio.volume = 0.02;
+            console.log('[Audio] Footsteps volume applied: 0.4');
+        });
         console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
