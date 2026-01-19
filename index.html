@@ -1770,6 +1770,9 @@
             resetTo(x, y) {
                 this.x = x;
                 this.y = y;
+                // Store spawn point for rubber band effect
+                this.spawnX = x;
+                this.spawnY = y;
                 this.resetVelocity();
             }
 
@@ -1800,11 +1803,15 @@
                 } else {
                     this.x = Math.random() * mapW;
                     this.y = Math.random() * mapH;
+                    // Store spawn point for rubber band effect
+                    this.spawnX = this.x;
+                    this.spawnY = this.y;
                     this.resetVelocity();
                 }
             }
 
-            update() {
+            update(dt) {
+                if (!dt) dt = 0.016; // Fallback to ~60 FPS
                 // SOFORTIGER WALL-CHECK: Bin ich in/nahe einer Wand? -> Reset!
                 const myX = Math.floor(this.x), myY = Math.floor(this.y);
                 const wallCheckR = 2;
@@ -1873,6 +1880,24 @@
 
                     this.vx += (dx / distToPlayer) * pullStrength;
                     this.vy += (dy / distToPlayer) * pullStrength;
+                }
+                // ==========================================
+
+                // ==========================================
+                // RUBBER BAND: Pull particle back to spawn point
+                // ==========================================
+                if (this.spawnX !== undefined && this.spawnY !== undefined) {
+                    const RUBBER_BAND_RANGE = 150; // Start pulling back after 150px
+                    const spawnDx = this.x - this.spawnX;
+                    const spawnDy = this.y - this.spawnY;
+                    const distToSpawn = Math.sqrt(spawnDx * spawnDx + spawnDy * spawnDy);
+
+                    if (distToSpawn > RUBBER_BAND_RANGE) {
+                        // Strong pull back to spawn, increasing with distance
+                        const returnStrength = 0.5 * ((distToSpawn - RUBBER_BAND_RANGE) / 100);
+                        this.vx -= (spawnDx / distToSpawn) * returnStrength;
+                        this.vy -= (spawnDy / distToSpawn) * returnStrength;
+                    }
                 }
                 // ==========================================
 
@@ -1962,8 +1987,8 @@
                     }
                 }
 
-                // Lifecycle
-                this.life += this.pulseSpeed;
+                // Lifecycle (dt-based for FPS independence)
+                this.life += this.pulseSpeed * dt * 60;  // Normalize to ~60 FPS base
                 if (this.life > this.maxLife || this.life < 0.1) this.pulseSpeed *= -1;
 
                 // Out of Bounds Reset

@@ -1872,6 +1872,9 @@
             resetTo(x, y) {
                 this.x = x;
                 this.y = y;
+                // Store spawn point for rubber band effect
+                this.spawnX = x;
+                this.spawnY = y;
                 this.resetVelocity();
             }
 
@@ -1902,11 +1905,15 @@
                 } else {
                     this.x = Math.random() * mapW;
                     this.y = Math.random() * mapH;
+                    // Store spawn point for rubber band effect
+                    this.spawnX = this.x;
+                    this.spawnY = this.y;
                     this.resetVelocity();
                 }
             }
 
-            update() {
+            update(dt) {
+                if (!dt) dt = 0.016; // Fallback to ~60 FPS
                 // SOFORTIGER WALL-CHECK: Bin ich in/nahe einer Wand? -> Reset!
                 const myX = Math.floor(this.x), myY = Math.floor(this.y);
                 const wallCheckR = 2;
@@ -1975,6 +1982,24 @@
 
                     this.vx += (dx / distToPlayer) * pullStrength;
                     this.vy += (dy / distToPlayer) * pullStrength;
+                }
+                // ==========================================
+
+                // ==========================================
+                // RUBBER BAND: Pull particle back to spawn point
+                // ==========================================
+                if (this.spawnX !== undefined && this.spawnY !== undefined) {
+                    const RUBBER_BAND_RANGE = 150; // Start pulling back after 150px
+                    const spawnDx = this.x - this.spawnX;
+                    const spawnDy = this.y - this.spawnY;
+                    const distToSpawn = Math.sqrt(spawnDx * spawnDx + spawnDy * spawnDy);
+
+                    if (distToSpawn > RUBBER_BAND_RANGE) {
+                        // Strong pull back to spawn, increasing with distance
+                        const returnStrength = 0.5 * ((distToSpawn - RUBBER_BAND_RANGE) / 100);
+                        this.vx -= (spawnDx / distToSpawn) * returnStrength;
+                        this.vy -= (spawnDy / distToSpawn) * returnStrength;
+                    }
                 }
                 // ==========================================
 
@@ -2064,8 +2089,8 @@
                     }
                 }
 
-                // Lifecycle
-                this.life += this.pulseSpeed;
+                // Lifecycle (dt-based for FPS independence)
+                this.life += this.pulseSpeed * dt * 60;  // Normalize to ~60 FPS base
                 if (this.life > this.maxLife || this.life < 0.1) this.pulseSpeed *= -1;
 
                 // Out of Bounds Reset
@@ -2775,26 +2800,24 @@
                 }
 
                 // 5. Magenta Cleanup & Wall Dilatation (Robust Collision)
-                // First, collect all collision pixels to avoid cascading growth during iteration
+                // DISABLED FOR KAPITEL1C: Narrow passages require pixel-accurate collision.
+                // The wall dilatation was causing the player to get stuck in tight corridors.
+                /*
                 const extraWalls = [];
                 for (let y = 0; y < mapH; y++) {
                     for (let x = 0; x < mapW; x++) {
                         if (collisionData[y][x]) {
-                            // Add neighbors to be solidified
                             if (x > 0) extraWalls.push({ x: x - 1, y: y });
                             if (x < mapW - 1) extraWalls.push({ x: x + 1, y: y });
                             if (y > 0) extraWalls.push({ x: x, y: y - 1 });
                             if (y < mapH - 1) extraWalls.push({ x: x, y: y + 1 });
-                            // Diagonals for extra robustness?
-                            // extraWalls.push({x: x-1, y: y-1}, {x: x+1, y: y-1}, ...); 
                         }
                     }
                 }
-
-                // Apply Dilatation
                 for (const w of extraWalls) {
                     collisionData[w.y][w.x] = true;
                 }
+                */
 
                 // Restore Magenta Pixels visually
                 for (const mp of magentaPixels) {
@@ -3121,11 +3144,13 @@
             if (!gameReady) return;
 
             // --- DYNAMIC SCALING (Depth Effect) ---
-            if (mapH > 0) {
-                const yNorm = Math.max(0, Math.min(1, player.y / mapH));
-                const depthFactor = 0.5 + (0.8 * yNorm);
-                SPRITE.scale = SPRITE.baseScale * depthFactor;
-            }
+            // DISABLED FOR KAPITEL1C: This level uses flat perspective.
+            // if (mapH > 0) {
+            //     const yNorm = Math.max(0, Math.min(1, player.y / mapH));
+            //     const depthFactor = 0.5 + (0.8 * yNorm);
+            //     SPRITE.scale = SPRITE.baseScale * depthFactor;
+            // }
+            SPRITE.scale = SPRITE.baseScale; // Fixed scale for this level
 
             // --- MOVEMENT ---
             let didAutoWalk = false;

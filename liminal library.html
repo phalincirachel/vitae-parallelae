@@ -1053,10 +1053,10 @@
                     uiContainer.classList.add('reading-mode');
                     localStorage.setItem('gameboy_reading_mode', 'true'); // STATE PERSISTENCE
 
-                    // MOBILE ONLY: Recenter Camera
-                    if (window.innerWidth <= 768) {
-                        isCenteringCamera = true;
-                    }
+                    // FIX: Recenter Camera on BOTH Mobile and Desktop
+                    // This ensures the camera rotates back to center (0,0,0) and resets mouse coordinates
+                    // preventing the "frozen angle" bug on Desktop.
+                    isCenteringCamera = true;
                 });
                 document.getElementById('gameModeBtn').addEventListener('click', () => {
                     player.setReadingMode(false);
