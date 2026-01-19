@@ -1,4 +1,3 @@
-"
 [00:00:00] Meine Augen brauchen einen Moment, um
 [00:00:02] sich der Verdunkelung zu erwehren.
 [00:00:05] Dann erscheinen vor mir meterhohe Bücherregale in einem nach hinten gelängten Geschäft;
@@ -275,4 +274,3 @@
 [00:27:32] Ich habe es ja bezahlt. Behalten Sie es, ich habe es mir anders überlegt!
 [00:27:38] Dem Alten entfährt ein empörtes Quietschen. Ich gehe ohne mich umzublicken und hebe im Gehen die Tasche auf,
 [00:27:45] während der Hustenanfall wieder von vorne beginnt.
-"

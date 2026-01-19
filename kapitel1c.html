@@ -1780,24 +1780,22 @@
         // ============================================
         // AUDIO SYSTEM
         // ============================================
-        const footstepSound = new SCAudioAdapter('sc-widget-footsteps');
+        const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
         footstepSound.volume = 0.25;
 
-        const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
+        const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
-        shimmerSound.volume = 0.4; // Angenehme Lautstärke
-        let lastShimmerLightId = null; // Speichert ID des zuletzt vertonten Lichts
+        shimmerSound.volume = 0.4;
+        let lastShimmerLightId = null;
         let footstepPlaying = false;
 
         let audioUnlocked = false;
 
         // Ambient-Sound (permanent)
-        const ambientSound = new SCAudioAdapter('sc-widget-ambient');
+        const ambientSound = new SCAudioAdapter();
         ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.06; // +45% louder
-
-        ambientSound.volume = 0.06; // +45% louder
+        ambientSound.volume = 0.06;
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -3862,11 +3860,12 @@
             ctx.restore();
         }
 
-        // ============================================
         // AUDIO & SUBTITLE SYSTEM
         // ============================================
 
-        const audioPlayer = new SCAudioAdapter('sc-widget-main');
+        // SoundCloud Audio Player via Widget API
+        const audioPlayer = new SCAudioAdapter();
+        console.log('[Audio] Created SCAudioAdapter for main audio');
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
@@ -3906,13 +3905,14 @@
         });
 
         // Ambient und Schritte Audio via SC Adapter
-        const ambientAudio = new SCAudioAdapter('sc-widget-ambient');
-        ambientAudio.src = getSCUrl('medieval_town.mp3');
+        const ambientAudio = new SCAudioAdapter();
+        ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
         ambientAudio.volume = 0.75;
 
-        const footstepsAudio = new SCAudioAdapter('sc-widget-footsteps');
-        footstepsAudio.src = getSCUrl('footsteps.mp3');
+        const footstepsAudio = new SCAudioAdapter();
+        footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
         footstepsAudio.volume = 0.75;
+        console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
         function getMaxVisibleLines() {
@@ -4007,20 +4007,36 @@
 
 
 
-        // 2. Parser für Timestamps: [mm:ss.xx] Text
+        // 2. Parser für Timestamps: [mm:ss.xx] oder [hh:mm:ss] Text
         function parseSubtitles(rawText) {
             subtitleTracks = [];
             currentSubtitleIndex = -1;
             const lines = rawText.split('\n');
-            const timeReg = /\[(\d{2}):(\d{2}(?:\.\d+)?)\](.*)/;
+
+            // Unterstützt beide Formate:
+            // [mm:ss.xx] Text  (altes Format)
+            // [hh:mm:ss] Text  (neues Format aus File)
+            const timeReg = /\[(\d{2}):(\d{2}):?(\d{2}(?:\.\d+)?)?][ ]?(.*)/;
 
             lines.forEach(line => {
                 const match = line.match(timeReg);
                 if (match) {
-                    const minutes = parseFloat(match[1]);
-                    const seconds = parseFloat(match[2]);
-                    const text = match[3].trim();
-                    const totalSeconds = minutes * 60 + seconds;
+                    let totalSeconds;
+
+                    if (match[3] !== undefined) {
+                        // Format: [hh:mm:ss] -> match[1]=hh, match[2]=mm, match[3]=ss
+                        const hours = parseFloat(match[1]);
+                        const minutes = parseFloat(match[2]);
+                        const seconds = parseFloat(match[3]);
+                        totalSeconds = hours * 3600 + minutes * 60 + seconds;
+                    } else {
+                        // Format: [mm:ss] -> match[1]=mm, match[2]=ss
+                        const minutes = parseFloat(match[1]);
+                        const seconds = parseFloat(match[2]);
+                        totalSeconds = minutes * 60 + seconds;
+                    }
+
+                    const text = match[4].trim();
 
                     subtitleTracks.push({
                         time: totalSeconds,
