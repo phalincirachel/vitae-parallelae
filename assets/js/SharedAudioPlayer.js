@@ -43,18 +43,30 @@ export class SharedAudioPlayer {
 
     parseSubtitles(rawText) {
         this.subtitleTracks = [];
-        const lines = rawText.split('\n');
-        // Match [mm:ss] or [mm:ss.xx]
-        const timeReg = /\[(\d{2}):(\d{2}(?:\.\d+)?)\](.*)/;
+        // Robust regex from Liminal Library (supports hh:mm:ss and decimals)
+        const lines = rawText.split(/\r?\n/);
+        const timeReg = /^\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?)?)?\][ ]*(.*)/;
 
         lines.forEach(line => {
             const match = line.match(timeReg);
             if (match) {
-                const minutes = parseFloat(match[1]);
-                const seconds = parseFloat(match[2]);
-                const text = match[3].trim();
-                const totalSeconds = minutes * 60 + seconds;
-                this.subtitleTracks.push({ time: totalSeconds, text });
+                const part1 = parseFloat(match[1]);
+                const part2 = parseFloat(match[2]);
+                const part3 = match[3] ? parseFloat(match[3]) : null;
+
+                let totalSeconds = 0;
+                if (part3 !== null) {
+                    // hh:mm:ss
+                    totalSeconds = part1 * 3600 + part2 * 60 + part3;
+                } else {
+                    // mm:ss
+                    totalSeconds = part1 * 60 + part2;
+                }
+
+                const text = match[4] ? match[4].trim() : '';
+                if (text) {
+                    this.subtitleTracks.push({ time: totalSeconds, text });
+                }
             }
         });
         this.subtitleTracks.sort((a, b) => a.time - b.time);
@@ -89,14 +101,19 @@ export class SharedAudioPlayer {
             return;
         }
 
-        const maxLines = this.isReadingMode ? 15 : 3;
-        const half = Math.floor(maxLines / 2);
+        const maxLines = this.isReadingMode ? this.subtitleTracks.length : 3;
 
-        let start = Math.max(0, centerIndex - half);
-        let end = Math.min(this.subtitleTracks.length - 1, start + maxLines - 1);
-
-        // Adjust start if near end
-        start = Math.max(0, end - maxLines + 1);
+        let start, end;
+        if (this.isReadingMode) {
+            start = 0;
+            end = this.subtitleTracks.length - 1;
+        } else {
+            const half = Math.floor(maxLines / 2);
+            start = Math.max(0, centerIndex - half);
+            end = Math.min(this.subtitleTracks.length - 1, start + maxLines - 1);
+            // Adjust start if near end
+            start = Math.max(0, end - maxLines + 1);
+        }
 
         for (let i = start; i <= end; i++) {
             const div = document.createElement('div');
@@ -115,6 +132,9 @@ export class SharedAudioPlayer {
                 div.style.cursor = 'pointer';
                 div.title = 'Springe zu dieser Stelle';
                 div.addEventListener('click', () => {
+                    // Check drag state from container
+                    if (this.container.dataset.wasDragging === 'true') return;
+
                     console.log(`Seek to ${this.subtitleTracks[i].time}`);
                     this.audio.currentTime = this.subtitleTracks[i].time;
                     this.onTimeUpdate(); // Update now

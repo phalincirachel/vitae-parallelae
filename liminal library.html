@@ -898,6 +898,7 @@
                 // --- GLOBALS ---
                 let isLoreMode = false;
                 let activeLoreId = null;
+                let isReadingMode = true; // Default state for this chapter
                 // State to resume main chapter
                 let mainAudioState = { time: 0, wasPlaying: false, src: 'assets/kapitel1b.mp3' };
 
@@ -928,15 +929,14 @@
                         player.audio.src = 'assets/kapitel1b.mp3';
                         player.audio.volume = 1.0;
 
-                        // Restore Text
-                        await loadSubtitles('assets/kapitel1b.txt');
+                        // Restore Text via Shared Player
+                        if (player.loadText) {
+                            await player.loadText('assets/kapitel1b.txt');
+                        }
 
                         // Restore Time (minus 5s)
                         const resumeTime = Math.max(0, mainAudioState.time - 5);
                         player.audio.currentTime = resumeTime;
-
-                        // Force sync
-                        syncSubtitles();
 
                         // Resume
                         if (mainAudioState.wasPlaying) {
@@ -961,7 +961,6 @@
                     if (!isLoreMode && player && player.audio) {
                         mainAudioState.wasPlaying = !player.audio.paused;
                         mainAudioState.time = player.audio.currentTime;
-                        // mainAudioState.src is fixed to kapitel1b for this page usually
                     }
 
                     console.log(`Starting Lore Mode: ${content.title} (ID: ${id})`);
@@ -976,9 +975,11 @@
                         player.audio.src = content.audio;
                         player.audio.currentTime = 0;
 
-                        // Load Text (V2 Subtitle System)
-                        await loadSubtitles(content.text);
-                        updateSubtitleDisplay(-1); // Reset display for new lore
+                        // Load Text via Shared Player
+                        if (player.loadText) {
+                            await player.loadText(content.text);
+                        }
+
                         // Play
                         try {
                             await player.play();
@@ -1035,7 +1036,7 @@
                 const iconPause = document.getElementById('iconPause');
 
                 const player = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
-                    container: null // SUBTITLE SYSTEM HANDLES RENDERING
+                    container: document.getElementById('subtitleContainer')
                 });
                 window.sharedPlayer = player;
                 window.sharedAudioEl = player.audio;
@@ -2637,179 +2638,23 @@
                 console.error("FATAL ERROR IN MODULE:", err);
             }
             // =========================================================
-            // AUDIO & SUBTITLE SYSTEM (Robust Implementation)
-            // Ported from index.html with enhancements for decimal timestamps
+            // AUDIO & SUBTITLE SYSTEM (Unified via SharedAudioPlayer)
             // =========================================================
-            console.log("[AudioSystem] Initializing SCAudioAdapter for Liminal Library...");
+            console.log("[AudioSystem] Initializing Unified Player...");
 
+            // Logic previously handled by manual parser is now in SharedAudioPlayer.js
+            // We just ensure Drag Logic remains hooked up to the container.
+
+            // isReadingMode is still used for the UI and needs to be synced with the shared player.
+            let isReadingMode = true; // Default state
+
+            // Ensure reading mode is synced
+            if (isReadingMode) {
+                if (window.sharedPlayer) window.sharedPlayer.setReadingMode(true);
+            }
+
+            // Drag Logic for Container (Legacy Support)
             const subtitleContainer = document.getElementById('subtitleContainer');
-            let subtitleTracks = [];
-            let currentSubtitleIndex = -1;
-            let isReadingMode = true;
-
-            // Map audioPlayer to the shared audio element
-            const audioPlayer = window.sharedAudioEl;
-            if (!audioPlayer) {
-                console.warn("[AudioSystem] sharedAudioEl not found on window, will retry...");
-            }
-
-            // 1. ROBUST SUBTITLE PARSER
-            function parseSubtitles(data) {
-                const tracks = [];
-                const lines = data.split('\n');
-
-                // Matches format like [00:15.5] or [01:05]
-                const regex = /^\[([0-9:.]+)\]\s*(.*)$/;
-
-                lines.forEach(line => {
-                    const match = line.match(regex);
-                    if (match) {
-                        const stamp = match[1];
-                        const text = match[2].trim();
-
-                        if (text) {
-                            const parts = stamp.split(':');
-                            let totalSeconds = 0;
-
-                            if (parts.length === 2) { // mm:ss.xx
-                                totalSeconds = parseInt(parts[0], 10) * 60 + parseFloat(parts[1]);
-                            } else if (parts.length === 3) { // hh:mm:ss.xx
-                                totalSeconds = parseInt(parts[0], 10) * 3600 + parseInt(parts[1], 10) * 60 + parseFloat(parts[2]);
-                            }
-
-                            if (!isNaN(totalSeconds)) {
-                                tracks.push({ time: totalSeconds, text: text });
-                            }
-                        }
-                    }
-                });
-                return tracks;
-            }
-
-            async function loadSubtitles(url) {
-                try {
-                    console.log("[Subtitles] Loading:", url);
-                    const response = await fetch(url);
-                    const text = await response.text();
-                    subtitleTracks = parseSubtitles(text);
-                    console.log("[Subtitles] Loaded tracks:", subtitleTracks.length);
-                    renderSubtitleLines(0);
-                } catch (e) {
-                    console.error("[Subtitles] Failed to load:", e);
-                }
-            }
-
-            // Highlighting rendering
-            // Highlighting rendering
-            function renderSubtitleLines(centerIndex) {
-                // A) Reading Mode: Rendere ALLE Zeilen
-                if (isReadingMode) {
-                    const container = document.getElementById('subtitleContainer');
-
-                    // FIX: Erzwinge Neu-Rendern, wenn Container leer ist, aber Tracks existieren
-                    if (container.children.length === 0 && subtitleTracks.length > 0) {
-                        container.innerHTML = ''; // Sicherheitshalber leeren
-                        subtitleTracks.forEach((track, i) => {
-                            const div = document.createElement('div');
-                            div.className = 'subtitle-line';
-                            div.innerText = track.text;
-                            div.dataset.index = i;
-
-                            // Click to Seek
-                            div.title = "Klicken zum Springen";
-                            div.style.cursor = "pointer";
-                            div.style.pointerEvents = "auto";
-                            div.addEventListener('click', (e) => {
-                                if (container.dataset.wasDragging === 'true') return;
-                                if (audioPlayer) {
-                                    audioPlayer.currentTime = track.time;
-                                    audioPlayer.play().catch(() => { });
-                                    updateSubtitleDisplay(i);
-                                }
-                            });
-
-                            container.appendChild(div);
-                        });
-                    }
-
-                    // Highlighting aktualisieren
-                    const oldActive = container.querySelector('.subtitle-current');
-                    if (oldActive) oldActive.classList.remove('subtitle-current');
-
-                    const safeIndex = centerIndex < 0 ? 0 : centerIndex;
-
-                    if (container.children.length > safeIndex) {
-                        const activeEl = container.children[safeIndex];
-                        activeEl.classList.add('subtitle-current');
-
-                        // Nur scrollen, wenn User nicht interagiert
-                        if (!container.classList.contains('is-scrolling') && !container.dataset.isDragging) {
-                            activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-                        }
-                    }
-                    return;
-                }
-
-                // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
-                subtitleContainer.innerHTML = '';
-
-                if (subtitleTracks.length === 0) {
-                    const div = document.createElement('div');
-                    div.className = 'subtitle-line subtitle-current';
-                    div.innerText = '...';
-                    subtitleContainer.appendChild(div);
-                    return;
-                }
-
-                const startIdx = Math.max(0, centerIndex - 1);
-                const endIdx = Math.min(subtitleTracks.length - 1, centerIndex + 1);
-
-                for (let i = startIdx; i <= endIdx; i++) {
-                    const div = document.createElement('div');
-                    div.className = 'subtitle-line';
-                    const distance = Math.abs(i - centerIndex);
-
-                    if (i === centerIndex) {
-                        div.classList.add('subtitle-current');
-                    } else {
-                        if (distance >= 5) div.classList.add('fade-far');
-                        else if (distance >= 3) div.classList.add('fade-mid');
-                    }
-
-                    div.innerText = subtitleTracks[i].text;
-                    subtitleContainer.appendChild(div);
-                }
-            }
-
-            // Sync logic
-            function syncSubtitles() {
-                const t = audioPlayer.currentTime;
-                let foundIndex = -1;
-                for (let i = subtitleTracks.length - 1; i >= 0; i--) {
-                    if (t >= subtitleTracks[i].time) {
-                        foundIndex = i;
-                        break;
-                    }
-                }
-                if (foundIndex !== -1 && foundIndex !== currentSubtitleIndex) {
-                    currentSubtitleIndex = foundIndex;
-                    renderSubtitleLines(currentSubtitleIndex);
-                }
-            }
-
-            function updateSubtitleDisplay(index) {
-                currentSubtitleIndex = index;
-                renderSubtitleLines(index);
-            }
-
-            if (audioPlayer) {
-                audioPlayer.addEventListener('timeupdate', syncSubtitles);
-                audioPlayer.addEventListener('loadedmetadata', syncSubtitles);
-            }
-            setInterval(syncSubtitles, 100);
-
-            // Initial Load
-            loadSubtitles('assets/kapitel1b.txt');
 
             // Drag Logic for Container (from index.html)
             let isDown = false;
@@ -2865,94 +2710,12 @@
             }
 
             // =========================================================
-            // H) Reading Mode state tracking
+            // FINAL CLEANUP: Ensure UI reflects state
             // =========================================================
-            const readingModeBtn = document.getElementById('readingModeBtn');
-            const gameModeBtn = document.getElementById('gameModeBtn');
-            const audioPlayerUI = document.getElementById('audioPlayerUI');
-
-            // Apply default state
-            if (isReadingMode && audioPlayerUI) {
-                audioPlayerUI.classList.add('reading-mode');
+            if (window.sharedPlayer && window.sharedPlayer.isReadingMode) {
+                const ui = document.getElementById('audioPlayerUI');
+                if (ui) ui.classList.add('reading-mode');
             }
-
-            if (readingModeBtn) {
-                readingModeBtn.addEventListener('click', () => {
-                    isReadingMode = true;
-                    if (audioPlayerUI) audioPlayerUI.classList.add('reading-mode');
-                    // Force immediate re-render for UI responsiveness
-                    renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-                });
-            }
-
-            if (gameModeBtn) {
-                gameModeBtn.addEventListener('click', () => {
-                    isReadingMode = false;
-                    if (audioPlayerUI) audioPlayerUI.classList.remove('reading-mode');
-                    // Force immediate re-render for UI responsiveness
-                    renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-                });
-            }
-
-            // =========================================================
-            // I) INITIALIZE: Load subtitles
-            // =========================================================
-            loadSubtitles('assets/kapitel1b.txt');
-
-            // =========================================================
-            // J) UI CONTROLS (Play/Pause)
-            // =========================================================
-            const btnPlay = document.querySelector('#playBtn') || document.getElementById('play-btn');
-            const btnPause = document.querySelector('#pauseBtn') || document.getElementById('pause-btn');
-
-            if (btnPlay) {
-                btnPlay.addEventListener('click', () => {
-                    if (window.sharedPlayer) window.sharedPlayer.play();
-                    btnPlay.style.display = 'none';
-                    if (btnPause) btnPause.style.display = 'block';
-                });
-            }
-            if (btnPause) {
-                btnPause.addEventListener('click', () => {
-                    if (window.sharedPlayer) window.sharedPlayer.pause();
-                    btnPause.style.display = 'none';
-                    if (btnPlay) btnPlay.style.display = 'block';
-                });
-            }
-
-            // =========================================================
-            // K) TESTS (can be run in console: runSubtitleTests())
-            // =========================================================
-            window.runSubtitleTests = function () {
-                console.log("=== SUBTITLE PARSER TESTS ===");
-
-                const testCases = [
-                    { input: "[00:01] Hallo\n[00:02] Welt", expected: 2, desc: "Basic mm:ss" },
-                    { input: "[01:02.34] A\n[01:03.5] B\n[01:04.567] C", expected: 3, desc: "Decimal seconds" },
-                    { input: "[1:02] Kurz\n[10:02] ZweiStellig", expected: 2, desc: "Variable digits" },
-                    { input: "[01:02:03.45] Lang\n[01:02:05] Weiter", expected: 2, desc: "hh:mm:ss format" },
-                    { input: "\uFEFF[00:01] X", expected: 1, desc: "BOM removal" },
-                    { input: "[0:05] Test\n[0:10.5] Decimal\n[1:00:00] Hour", expected: 3, desc: "Mixed formats" }
-                ];
-
-                let passed = 0;
-                testCases.forEach((tc, i) => {
-                    const result = parseSubtitles(tc.input);
-                    const ok = result.length === tc.expected;
-                    console.log(`Test ${i + 1} (${tc.desc}): ${ok ? '✅' : '❌'} Got ${result.length}, expected ${tc.expected}`);
-                    if (ok) passed++;
-
-                    // Verify times are ascending
-                    let ascending = true;
-                    for (let j = 1; j < result.length; j++) {
-                        if (result[j].time < result[j - 1].time) ascending = false;
-                    }
-                    if (!ascending) console.log(`  ⚠️ Times not ascending!`);
-                });
-
-                console.log(`=== ${passed}/${testCases.length} tests passed ===`);
-                return passed === testCases.length;
-            };
 
 
         })();
