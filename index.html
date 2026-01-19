@@ -5,6 +5,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Heidelberg RPG</title>
+    <!-- SoundCloud Widget API & System -->
+    <script src="https://w.soundcloud.com/player/api.js"></script>
+    <script src="assets/js/SoundCloudURLs.js"></script>
+    <script src="assets/js/SCAudioAdapter.js"></script>
     <style>
         * {
             margin: 0;
@@ -1674,35 +1678,24 @@
         // ============================================
         // AUDIO SYSTEM
         // ============================================
-        const footstepSound = new Audio('assets/footsteps.mp3');
+        const footstepSound = new SCAudioAdapter('sc-widget-footsteps');
+        footstepSound.src = getSCUrl('assets/footsteps.mp3');
         footstepSound.volume = 0.25;
-        footstepSound.loop = true;
 
-        const shimmerSound = new Audio('assets/shimmer.mp3');
+        const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
+        shimmerSound.src = getSCUrl('assets/shimmer.mp3');
         shimmerSound.volume = 0.4; // Angenehme Lautstärke
         let lastShimmerLightId = null; // Speichert ID des zuletzt vertonten Lichts
         let footstepPlaying = false;
 
-        // Fallback: Manueller Loop falls Browser-Loop nicht funktioniert
-        footstepSound.addEventListener('ended', () => {
-            if (footstepPlaying) {
-                footstepSound.currentTime = 0;
-                footstepSound.play().catch(() => { });
-            }
-        });
-
         let audioUnlocked = false;
 
         // Ambient-Sound (permanent)
-        const ambientSound = new Audio('assets/medieval_town.mp3');
-        ambientSound.loop = true;
+        const ambientSound = new SCAudioAdapter('sc-widget-ambient');
+        ambientSound.src = getSCUrl('assets/medieval_town.mp3');
         ambientSound.volume = 0.06; // +45% louder
 
-        // Fallback: Manueller Loop für Ambient
-        ambientSound.addEventListener('ended', () => {
-            ambientSound.currentTime = 0;
-            ambientSound.play().catch(() => { });
-        });
+        ambientSound.volume = 0.06; // +45% louder
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -2440,7 +2433,7 @@
 
             // 2. Load Audio & Text (Chapter 1) -> Default Main Audio
             const mainAudioSrc = 'assets/kapitel1.mp3';
-            audioPlayer.src = mainAudioSrc;
+            audioPlayer.src = getSCUrl(mainAudioSrc);
             window.mainAudioUrl = mainAudioSrc;
 
             try {
@@ -3885,7 +3878,7 @@
         // AUDIO & SUBTITLE SYSTEM
         // ============================================
 
-        const audioPlayer = new Audio();
+        const audioPlayer = new SCAudioAdapter('sc-widget-main');
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
@@ -3924,13 +3917,16 @@
             });
         });
 
-        // Ambient und Schritte Audio mit 75% Lautstärke (25% leiser als Standard)
-        const ambientAudio = new Audio('medieval_town.mp3');
-        ambientAudio.loop = true;
+        // Ambient und Schritte Audio via SC Adapter
+        const ambientAudio = new SCAudioAdapter('sc-widget-ambient');
+        ambientAudio.src = getSCUrl('medieval_town.mp3');
+        // Loop Handling: SoundCloud Widgets loop normally based on settings, 
+        // but we can try to emulate it if needed.
+        // For now, setting volume directly
         ambientAudio.volume = 0.75;
 
-        const footstepsAudio = new Audio('footsteps.mp3');
-        footstepsAudio.loop = true;
+        const footstepsAudio = new SCAudioAdapter('sc-widget-footsteps');
+        footstepsAudio.src = getSCUrl('footsteps.mp3');
         footstepsAudio.volume = 0.75;
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
@@ -4543,7 +4539,7 @@
                 audioPlayer.pause();
 
                 // Restore Main Track
-                audioPlayer.src = window.mainAudioUrl;
+                audioPlayer.src = getSCUrl(window.mainAudioUrl);
 
                 // Restore Tracks
                 // Fix: Explicitly reload Chapter 1 text to ensure correctness (like in Liminal Library)
@@ -4673,7 +4669,7 @@
 
                 setTimeout(() => {
                     // Lore laden
-                    audioPlayer.src = loreData.audio[id];
+                    audioPlayer.src = getSCUrl(loreData.audio[id]);
 
                     // Rewind 5s beim Wiederaufnehmen (User-Wunsch)
                     const lastPos = loreData.resumeTimes[id] || 0;
@@ -4734,7 +4730,7 @@
                 // 1 Sekunde Pause vor Resume (wie vom User gewünscht)
                 loreResumeTimeout = setTimeout(() => {
                     if (window.mainAudioUrl) {
-                        audioPlayer.src = window.mainAudioUrl;
+                        audioPlayer.src = getSCUrl(window.mainAudioUrl);
 
                         if (window.mainTextContent) {
                             parseSubtitles(window.mainTextContent);

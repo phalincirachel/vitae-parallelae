@@ -1,6 +1,15 @@
 export class SharedAudioPlayer {
     constructor(audioUrl, textUrl, options = {}) {
-        this.audio = new Audio(audioUrl);
+        // SC Integration: Nutze Adapter und konvertiere URL
+        const scUrl = typeof getSCUrl === 'function' ? getSCUrl(audioUrl) : audioUrl;
+
+        if (typeof SCAudioAdapter !== 'undefined') {
+            this.audio = new SCAudioAdapter({ iframeId: options.iframeId || 'sc-widget-shared' });
+            this.audio.src = scUrl;
+        } else {
+            this.audio = new Audio(audioUrl);
+        }
+
         this.subtitleTracks = [];
         this.currentSubtitleIndex = -1;
         this.container = options.container || document.getElementById('subtitleContainer');

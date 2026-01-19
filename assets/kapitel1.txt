@@ -1,15 +1,110 @@
-[00:00.00] Liebe Edna,
-[00:02.50] die Zeit hat uns ver-west.
-[00:07.00] Unter der Verschüttung der Jahrzehnte lag ich und schrieb dir nicht.
-[00:13.30] Vergessen habe ich Dich nie.
-[00:15.50] Scham war gewiss eine Ausqual und Gründung –
-[00:19.50] doch wie müßig, für so lange Verblichenes nach Ursachen zu wühlen!
-[00:24.00] Ich weiß nur, dass ich endlich in der Lage bin, dir zu schreiben.
-[00:27.50] Ich bin aus dem Schutt herausgestiegen.
-[00:30.20] Etwas hat sich ereignet.
-[00:33.00] Ich muss dir den Vorfall, der dir sicher nicht verborgen geblieben ist, erklären.
-[00:40.00] Du hast vielleicht Ärger empfunden oder – schlimmer: Mitleid.
-[00:44.50] Aber was wie eine Peinlichkeit aussieht, war etwas Großes, eine Rettung, eine Be-Rückung.
-[00:50.00] Ich schreibe, um die augenscheinliche Ver-rücktheit geradezurücken.
-[00:55.00] Gewähre mir diesen Aufschub deiner Ungläubigkeit.
-[00:57.80] Am Ende wird sich alles erklären.
+[00:00:00] 1. Februar 2069 | Von: andre.heitmigger@heitmigger.com | An: ednah@heydelberg.com
+[00:00:10] BCC: Verborgene Adressliste „Rundbrief“
+[00:00:14] Betreff: (leer)
+[00:00:15] Liebe Edna, die Zeit hat uns ver-west.
+[00:00:21] Unter der Verschüttung der Jahrzehnte lag ich und schrieb nicht.
+[00:00:26] Vergessen habe ich Dich nie.
+[00:00:28] Scham war gewiss eine Ausqual und Gründung.
+[00:00:32] Doch wie müßig, für so lange Verblichenes nach Ursachen zu wühlen!
+[00:00:37] Ich weiß nur, dass ich endlich in der Lage bin, dir zu schreiben.
+[00:00:42] Ich bin aus dem Schutt herausgestiegen.
+[00:00:45] Etwas hat sich ereignet.
+[00:00:49] Ich muss dir den Vorfall, der dir sicher nicht verborgen geblieben ist, erklären.
+[00:00:54] Du hast vielleicht Ärger empfunden oder – schlimmer: Mitleid.
+[00:00:59] Aber was wie eine Peinlichkeit aussieht, war etwas Großes, eine Rettung, eine Be-Rückung.
+[00:01:06] Ich schreibe, um die augenscheinliche Ver-rücktheit geradezurücken.
+[00:01:13] Gewähre mir diesen Aufschub deiner Ungläubigkeit.
+[00:01:17] Am Ende wird sich alles erklären.
+[00:01:21] Wirst Du, nach allem, was vorgefallen ist, diese E-Mail beantworten?
+[00:01:26] Ich wähle diese altertümliche Form des Ver-kehrens nicht etwa,
+[00:01:31] weil mir als bald Achtzigjährigem das neumodische ZIGZAG nicht zusagte.
+[00:01:37] Du weißt, ich bin immer ein Technikfreund gewesen.
+[00:01:40] Vielmehr erlaubt mir nur das Medium der E-Mail die Ausführlichkeit,
+[00:01:45] die für mein Anliegen notdürftig ist.
+[00:01:49] Damit ersichtlich wird, was mir widerfahren ist,
+[00:01:52] muss ich Dich an meine Leidenschaft erinnern.
+[00:01:55] Ich bin süchtig nach den Büchern.
+[00:01:58] Sie sind mein Lebensquell.
+[00:02:01] Natürlich lese ich sie kaum, wer tut das noch?
+[00:02:03] Aber ich durchstöbere sie, fasse sie an, prüfe die Serifen.
+[00:02:09] Ich vermag nicht ohne sie zu leben.
+[00:02:12] Und in Zeiten, in denen Papier sündhaft teuer ist,
+[00:02:16] während mir die Stadt meine wohlverdiente Rente vorenthält,
+[00:02:19] (das ist eine andere Geschichte),
+[00:02:21] muss mir dies zur Not gereichen.
+[00:02:24] Aber jede Aporie hat ihre Aufhebung.
+[00:02:28] Und wie Du nur zu gut weißt, liegt sie in den Antiquariaten.
+[00:02:34] Wie liebe ich es, diese heiligen Hallen der Bewahrung,
+[00:02:38] diese modernen Klöster zu durchschreiten.
+[00:02:42] Doch hier muss ich dir gleich ein erstes Geständnis machen.
+[00:02:47] Antiquarische Bücher sind ja meist auch nicht viel billiger als neue
+[00:02:50] und daher bleibt mir nur eine Wahl: sie zu stehlen.
+[00:02:56] Ich schreibe das so hin und bin über mich selbst erstaunt.
+[00:03:00] Ich gestehe Dir, ein Bücherdieb zu sein, gerade dir.
+[00:03:05] Aber was soll ich tun? Du hast es sicher ohnehin schon geahnt.
+[00:03:11] So fleische in mich, um meiner Anschauung einzuwohnen,
+[00:03:15] sei Ich in der Hauptstraße im Andrang der Pilger.
+[00:03:20] Wie Kriegsversehrte sind sie zugerichtet,
+[00:03:23] an manchen Stellen sind die Verbände rot durchnässt.
+[00:03:28] Schulter an Schulter schiebt mich der träge Pulk durch die barocken Gassen.
+[00:03:35] Unter meinen Armen ist mir eine Kostbarkeit zuhanden,
+[00:03:40] ein Sammelband mit Aufsätzen von Günter Dux,
+[00:03:44] Joscha Bach und Harry Lehmann.
+[00:03:46] Entborgen hat er sich mir
+[00:03:48] im von mir häufig frequentierten Antiquariat Incanto.
+[00:03:53] Die Besitzerin ist wohlmeinend, naiv
+[00:03:56] und dennoch hat mich der Diebstahl nervlich etwas überreizt.
+[00:04:00] Während mich die Kraft des Stromes durch die Gassen schiebt, spüre ich,
+[00:04:05] wie die Aufregung langsam nachlässt.
+[00:04:08] Die Luft steht still über der Hauptstraße,
+[00:04:11] eingedickt durch eine zähe Umkehrwetterlage
+[00:04:16] und den süßlichen Verwesungsgeruch des Niedrigwasser führenden Neckars.
+[00:04:22] Der Himmel ist bedeckt, eine drückende Glocke aus grauem Filz.
+[00:04:29] Es ist ein trüber, dennoch heller Februartag,
+[00:04:33] und ich weiß nicht, was mich veranlasst,
+[00:04:36] direkt in die blassgelbe, tief stehende Sonne hineinzuschauen.
+[00:04:43] Etwas Feuchtes klatscht mir in die Augen.
+[00:04:46] Erschrocken zucke ich zusammen, meine Sicht verschwimmt.
+[00:04:50] Regen? Nein, solche riesigen Tropfen gibt es nicht.
+[00:04:54] Ich reibe mir die Augen, doch es hilft wenig.
+[00:04:57] Etwas ist mir in den Mund gelangt.
+[00:05:00] Es schmeckt kalkig.
+[00:05:01] Ich spucke aus.
+[00:05:03] Nahe Pilger kichern belustigt.
+[00:05:05] Ich schaue auf
+[00:05:07] und durch den milchigen Film hindurch erblicke ich ein lachsfarben gekalktes Barockhaus
+[00:05:13] zwischen grauen Eckrustizierungen.
+[00:05:16] Auf einer Fensterbekrönung sitzt die Übeltäterin, eine Lachmöwe, und jauchzt scheinheilig.
+[00:05:24] Ich verspüre den spießbürgerlichen Drang, meine Faust zu schütteln und sie lautstark
+[00:05:31] zu verfluchen.
+[00:05:33] Wie peinlich und unnötig.
+[00:05:36] Die Möwe breitet die Flügel aus und hebt ab, schüttelt meinen Blick ab,
+[00:05:41] der träge nach unten sinkt, wo über dem Eingang in einer Trajansäulen-Antiqua
+[00:05:47] der erhabene Name des Ladens steht:
+[00:05:51] ANTIQUARIAT HANNRATH AN- UND VERKAUF.
+[00:05:57] Ich hätte nicht hineingehen sollen, ich weiß.
+[00:06:00] Stattdessen einen Passanten nach einem Taschentuch bitten
+[00:06:03] oder den Fischverkäufer am Eck.
+[00:06:07] Vermutlich hat das Ladenschild in mir etwas wachgerufen.
+[00:06:11] Oft schon bin ich hier vorbeigegangen, aber niemals bin ich eingetreten.
+[00:06:15] Ich habe nie darüber nachgedacht, warum.
+[00:06:19] Irgendwas in mir wollte nicht.
+[00:06:22] Waren es nur die höheren Sicherheitsvorkehrungen der Läden auf der Hauptstraße?
+[00:06:29] Jedenfalls stört mich mein kalkweißes Mal so sehr, dass ich nicht länger warten kann.
+[00:06:34] Ich will hier ja auch gar nichts mitgehen lassen, sondern nur ganz kurz die Notdurftanstalt benutzen, um mich von dem Möwenschleim zu befreien.
+[00:06:45] Als ich eintreten will, geht mir ein kalter Schauer über den Rücken.
+[00:06:49] Nein, sagt etwas in mir, hinaus, geh zum Fischverkäufer, frag den nach einem Taschentuch.
+[00:06:57] Ich drehe mich um, doch da ist bereits eine Häufung von bandagierten Chinesen mitsamt Fremdenführer hinter mir.
+[00:07:04] Wie eine Mumien-Kompagnie drängen sie ins Antiquariat Hannrath.
+[00:07:08] Meine weiße Gesichtsfarbe irritiert und belustigt sie.
+[00:07:12] Sie grinsen.
+[00:07:13] Ich komme nicht durch.
+[00:07:15] Also drifte ich in das Gebäude.
+[00:07:17] Instinktiv gewahre ich die Warensicherungsantenne.
+[00:07:20] Aber sie ist defekt.
+[00:07:22] Sowas sehe ich als erfahrener Bücherdieb sofort.
+[00:07:25] Dieses Schein-Blinken.
+[00:07:27] Sie ist ja nicht einmal richtig verdrahtet.
+[00:07:30] Aber das ist ohnehin egal.
+[00:07:32] Hier will ich ja gar nichts stehlen.
+[00:07:34] Noch!

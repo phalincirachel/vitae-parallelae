@@ -1,10 +1,278 @@
-[00:00.00] Meine Augen brauchen einen Moment, um sich der Verdunkelung zu erwehren.
-[00:05.10] Dann erscheinen vor mir meterhohe Bücherregale in einem nach hinten gelängten Geschäft;
-[00:13.20] die Regale bilden Nischen, in denen kleine Leitern stehen.
-[00:18.40] Alles ist vollgestellt mit Büchern, nichts folgt einer erkennbaren Logik.
-[00:26.10] Wie immer, wenn ich ein Antiquariat betrete, atme ich tief ein.
-[00:31.90] Es ist eine törichte Gewohnheit, mit meiner Schimmelpilzallergie.
-[00:37.40] Doch diesmal muss ich kein bisschen Husten, es überrascht mich selber.
-[00:44.00] Es riecht nicht wie üblich nach Staub und Moder;
-[00:49.80] vielmehr nach Salz, Algen, nach Meer.
-[00:54.60] Das muss der Klecks auf meinem Gesicht sein.
+"
+[00:00:00] Meine Augen brauchen einen Moment, um
+[00:00:02] sich der Verdunkelung zu erwehren.
+[00:00:05] Dann erscheinen vor mir meterhohe Bücherregale in einem nach hinten gelängten Geschäft;
+[00:00:13] die Regale bilden Nischen, in denen kleine Leitern stehen.
+[00:00:16] Alles ist vollgestellt mit Büchern, nichts folgt einer erkennbaren Logik.
+[00:00:21] Wie immer, wenn ich ein Antiquariat betrete, atme ich tief ein.
+[00:00:26] Es ist eine törichte Gewohnheit, mit meiner Schimmelpilzallergie.
+[00:00:30] Doch diesmal muss ich kein bisschen Husten, es überrascht mich selber.
+[00:00:35] Es riecht nicht wie üblich nach Staub und Moder; vielmehr nach Salz, Algen, nach Meer.
+[00:00:42] Das muss der Klecks auf meinem Gesicht sein.
+[00:00:45] An der Theke rechts steht die Antiquarin mit dem Rücken zu mir, vertieft in ein Gespräch mit einem schlaksigen Alten.
+[00:00:54] Die Bücherwand, die sich hinter ihr zur Decke über die ganze Länge des Raumes spannt, ist ein Bollwerk ihrer Gewarsamkeit.
+[00:01:02] Der Rücken des Alten ist gekrümmt wie eine Bogenlampe.
+[00:01:08] Er wirkt besiegt, wie einer, dem man eine Hiobsbotschaft überbringt.
+[00:01:13] Er versucht – das schließe ich aus den Gesprächsfetzen –
+[00:01:16] ihr seine Bücherbestände zu überantworten, um damit seinen Lebensabend zu finanzieren.
+[00:01:22] Aber diese Entscheidung wird den Guten zugrunde richten.
+[00:01:28] Diese Antiquarin ist eine harte Verhandlerin, nicht wahr?
+[00:01:31] Am Ende wird er ihr den Schlüssel zu seinen Schätzen überlassen und viel zu wenig dafür bekommen;
+[00:01:35] und sie wird die Hälfte davon gleich vernichten lassen,
+[00:01:41] und aus der anderen Hälfte die paar Dutzend Schätze heraussuchen, denen sie dann Preise, die ihresgleichen suchen,
+[00:01:48] in souverän geschwungener Hand einzeichnen wird.
+[00:01:53] Aber die Kunden werden sie bezahlen. Niemand weiß, warum.
+[00:01:56] Diese Be-Rückung!
+[00:01:58] Es ist ein langer, schlanker, geschwungener Rücken. Alles ist ihm bereits eingraviert.
+[00:02:06] Die Haare, streng zusammengebunden, liegen auf einem Professorinnensacko,
+[00:02:12] das allein durch seinen Schnitt Autorität und Verständigkeit verrät.
+[00:02:16] Nein, ich schaffe es nicht, jetzt nach dem Abtritt zu fragen, nicht diesen Rücken.
+[00:02:21] Wer weiß, was sich mir offenbart, wenn ich ihn wende?
+[00:02:27] Hannrath. Ich kenne den Namen.
+[00:02:31] Es ist sicher nur ein Zufall. Natürlich ist es das. Viele heißen hier so.
+[00:02:36] Also gehe ich ohne sie zu fragen, an ihr vorbei und stecke mein Ladekabel in den Schrein von Einstein-deGrasse-Google.
+[00:02:45] Ich vermute den Abtritt dort, wo er in jedem Laden ist, nämlich in einem unbestimmten „Hinten“.
+[00:02:53] Im Vorbeigehen schiele ich auf die Buchtitel und Etiketten und kann keine Struktur ausmachen.
+[00:03:00] Stattdessen fällt mir auf, dass man die wirrlich angeordneten Titel fast wie Sätze lesen kann:
+[00:03:06] „Der Fund eines merkwürdigen Dings“,
+[00:03:10] „Auf der schrecklichen Party“,
+[00:03:13] „Bringt uns zurück ins Spiel!“
+[00:03:17] Hinten finde ich keine Tür, also auch kein Notdurft-Kabinett,
+[00:03:22] nur eine gusseiserne Wendeltreppe, die die Decke durchsticht.
+[00:03:27] Eine Tafel verbietet die Mitnahme von Taschen, aber mein Diebesgut lasse ich nicht unbeaufsichtigt liegen.
+[00:03:34] Ich versichere mich mit einem kurzen Seitenblick, dass man mich nicht beobachtet.
+[00:03:38] Das Erdgeschoss ist voller Pilger, die nach Büchern stöbern.
+[00:03:42] Als ich die Treppe hinaufsteige, will es mir scheinen, als seien die Wände gar nicht lotrecht,
+[00:03:47] sondern vielmehr als bögen sie sich mittig leicht nach außen, als wölbten sie sich, als sei der ganze Raum nicht rechteckig, sondern gebaucht.
+[00:03:59] Der erste Stock ist versperrt; ich muss weiter hinauf, keuche schon, bin zu alt fürs Treppensteigen.
+[00:04:05] Der zweite Stock dagegen offenbart sich wieder als Dickung gebogener Regale, die rankend die Wände auskleiden.
+[00:04:14] Ich suche nach dem Abort.
+[00:04:17] Wieder ziehen die seltsam geordneten Buchtitel meine Aufmerksamkeit auf sich:
+[00:04:19] „Geh über dich hinaus“, „Weil zur Nachtstunde der Räuber kommt“, „...denn Sieg kommt im Gewand der Niederlage!“.
+[00:04:31] Wer soll sich hier zurechtfinden?
+[00:04:33] Die Antiquarin wird dafür doch nicht etwa einen Rechner haben?
+[00:04:36] Manche bringen ja alles wieder zum Laufen, wie mein Mitbewohner Reid.
+[00:04:43] Aber wenn der teure Strom ausfällt?
+[00:04:46] Wird man hier dann nicht mehr bedient?
+[00:04:49] In diesem Stockwerk sind schon weniger Menschen; nur die Chinesen, die mich hineingeschwemmt haben,
+[00:04:54] werden vom Fremdenführer an den Regalen vorbeigeführt.
+[00:04:58] Ich verstehe die Sprache nicht, die er mit ihnen spricht.
+[00:05:02] Der Mann ist mir unangenehm. Er trägt lockiges, fast buschiges Haar mit natürlicher Krause, voluminös und unfrisiert.
+[00:05:09] Während er spricht, bemerkt er mich und grinst mich an, ohne seine Rede zu unterbrechen,
+[00:05:15] aber in seinem Mund fällt mir ein einzelner verfärbter Zahn auf.
+[00:05:20] Die Masse in meinem Gesicht beginnt auf eine unangenehme Weise zu trocknen.
+[00:05:26] Kein Abtritt hier. Also gehe ich weiter hinauf.
+[00:05:32] Schnaufend komme ich im dritten und letzten Stock an. Hier ist niemand.
+[00:05:37] Am Treppengeländer lehnen gestapelte Kunstbücher. Alles wirkt hier noch verwahrloster.
+[00:05:42] Der Geruch nach Meer ist nun nicht mehr zu leugnen.
+[00:05:47] Eine zerschlissene Ledercouch steht in der Mitte des Raumes.
+[00:05:50] Die Regale wirken äußerst instabil.
+[00:05:52] Das Knarzen bilde ich mir vermutlich nur ein,
+[00:05:55] aber tatsächlich sind sie durch wahllose Querbalken so miteinander verklemmt, als stützten sie sich gegenseitig.
+[00:06:06] Ich schaue mich um. Keine Tür, kein Abtritt.
+[00:06:11] Also war er wohl doch ganz unten.
+[00:06:14] Ich muss mich ausruhen, bevor ich hinabsteige, meine Knie schonen.
+[00:06:19] Vorsichtig durchsteige ich die Wirrnis der Bretter. Ich genieße die Stille hier oben.
+[00:06:24] Nein, ich täusche mich nicht, die Stille wird gestützt durch ein ereignisverheißendes Knarren.
+[00:06:34] Im Augenwinkel lese ich:
+[00:06:36] „Auf dem Neckar trieb ein Floß“,
+[00:06:39] „Dem Star-Himmel entgegen“
+[00:06:42] „Ins Ende der Zeit“.
+[00:06:46] Als ich mich auf dem viel zu niedrigen, durchgesessenen Sofa niederlasse,
+[00:06:51] entweicht mir ein tiefer Seufzer. Ein wohliges Leiden durchfährt mich.
+[00:06:57] Der Schmerz im Rückgrat pocht sanft.
+[00:07:01] Direkt vor mir verläuft ein Brett, dessen Wankung-in-Unständigkeit ich fast fühlen kann.
+[00:07:08] Ich folge den Spannungen der Bretterkonstruktion mit gebannten Blicken,
+[00:07:12] wähne die zerbrechlichen Stützungen, die hier komplex aufeinander ruhen.
+[00:07:19] Ich weiß, dass ich nicht tun darf, wovon ich weiß, dass ich es tun werde.
+[00:07:24] Verlockendes Knarzen in der äußersten Stille.
+[00:07:27] Du! Du einzelnes Brettchen stützt dieses Gebilde vor dem Fall.
+[00:07:33] Du hast das Vermögen, es hinabzureißen.
+[00:07:36] Es knistert, ich bin nur einen Augenblick, eine Bewegung vor der großen Kehre entfernt.
+[00:07:46] Als mein Finger das Brett berührt, fällt es sofort. Ich schrecke zurück.
+[00:07:50] Ängstlich fährt mein Blick zum Regal, das es stützte – dort bricht ein weiteres Brett, Bücher stürzen hinab.
+[00:07:59] Ich springe auf, will sie halten, doch dabei stoße ich an andere Bretter,
+[00:08:04] die ebenfalls entweder fallen oder durch den zusätzlichen Zug ein anderes Brett aus der Halterung ziehen.
+[00:08:12] Weitere Bücher gehen hinab. Ich strecke meine Arme und Füße aus, um die Bücher abzufangen.
+[00:08:17] Staubwolken schießen auf. Immer mehr Bücher purzeln hinab, eines trifft mich am Hinterkopf,
+[00:08:26] und schließlich bin ich unter ihnen begraben. Es juckt mich in der Nase, in den Augen, im Rachen.
+[00:08:33] Der Staub der Bücher muss mit Schimmelpilzsporen durchsetzt sein.
+[00:08:37] Dementsprechend bricht sich nun ein Hustenanfall Bahn, wie ich noch keinen erlebt habe.
+[00:08:44] Doch mein erster Gedanke ist nicht die Atemerschütterung, sondern:
+[00:08:47] Was, wenn mich jemand hört? Wie peinlich, wenn mich jemand so fände!
+[00:08:53] Unter Büchern! Keuchend! Wenn man von mir verlangte, die Regale zu ersetzen?
+[00:08:58] Wie soll ich mir das leisten! Also presse ich mir den Ärmel gegen den Mund,
+[00:09:02] unterdrücke jedes Geräusch, beiße mich fest im eigenen Arm.
+[00:09:07] Wie der Schlägel einer Basstrommel prügelt dieser Husten dumpf auf mich ein.
+[00:09:14] Langsam beruhigt sich der Anfall. Ich liege im Dunkeln, nur spärliche Kavernen gewähren eine kleine Lichtung, von Asseln durchhuscht.
+[00:09:26] Die Ecken Dutzender Bücher stechen mir von Kopf bis Fuß ins Fleisch.
+[00:09:31] Jetzt nur nicht ruckartig bewegen und etwa erneut den Staub aufschütteln!
+[00:09:36] Sachte schiebe ich die mich bedeckenden Bücher zur Seite.
+[00:09:41] Es gelangt wieder Licht zu mir, und ich gewahre eine seltsame Schrift.
+[00:09:47] Unmöglich.
+[00:09:50] Steht dort mein Name? Ich schaue genauer hin.
+[00:09:53] Dort steht: „ANDREAE HEIT...“.
+[00:09:59] Ich schiebe ein Buch zur Seite. Tatsächlich: ANDREAE HEITMIGGERI,
+[00:10:05] das ist die latinisierte Variante meines Namens, Andre Heitmigger.
+[00:10:10] Es schüttelt mich am ganzen Leib. Das sind sicher nur die Nachwehen des allergischen Schocks.
+[00:10:15] Oder etwa nicht?
+[00:10:19] Du erinnerst Dich vielleicht, dass ich das Lateinische spreche wie eine Muttersprache.
+[00:10:24] Ich schaue noch einmal hin. Tatsächlich. Da steht auf einem walnussgefärbten Schafsledereinband:
+[00:10:32] VITAE PARALLELAE
+[00:10:35] ANDREAE HEITMIGGERI
+[00:10:38] (SEPT. 1989 – XXXX)
+[00:10:45] ET IOANNIS CETACEI
+[00:10:48] (IUL. 1989 – XXXX)
+[00:10:52] A IOANNE CETACEO.
+[00:10:56] Die Sterbedaten sind grob ausgekratzt.
+[00:11:00] Edna, ich könnte jetzt behaupten, ich hätte sofort die Weitreichung all dessen erkannt, was hier entborgen hat.
+[00:11:08] Ich würde von den vielen Fragen, die mir durch den Kopf gegangen sind, berichten.
+[00:11:13] Über das Latein, über die Güte des Buches, über den Namen IOANNES CETACEUS,
+[00:11:19] den ich noch nie gehört habe, und über die Nennung meines Namens, die kein Zufall sein kann.
+[00:11:26] Aber die Wahrheit ist: Ich sehe nur den Geburtsmonat September 1989 –
+[00:11:33] meinen Geburtsmonat – und dann sehe ich die ausgekratzten Sterbedaten...
+[00:11:40] Keine Überlegungen sind es, die mich nun so aufwühlen, es ist eine Macht tief in meinem Innern,
+[00:11:45] die mich packt, eine Hand aus einer anderen Realität, die mich ergreift und aufrichtet.
+[00:11:50] Dieses Buch – hat es mich gesucht?
+[00:11:57] Ich will es öffnen, lege Hand an die Buchdeckel, doch es ist verschlossen.
+[00:12:02] Es hat eine antike Schließe, die sich nicht ohne Weiteres öffnen lässt.
+[00:12:04] Nicht von meinen alten Händen, nicht ohne das Buch zu beschädigen.
+[00:12:09] Vielleicht kann Reid es öffnen? Ach, wenn er jetzt hier auftauchen könnte wie der Gott aus der Maschine.
+[00:12:17] Jeder Versuch wirbelt nur umso mehr Staub auf, der mich zwingt, weiteres Husten zu unterdrücken,
+[00:12:25] und erinnert mich auf diese Weise schmerzlich daran, dass mich so auf keinen Fall jemand sehen darf.
+[00:12:34] Sollte ich das Buch kaufen – aber wovon?
+[00:12:38] Ein Plan muss her. Ich rappele mich auf, sondiere die Lage, versuche, Halt zu gewinnen auf dem wackeligen Bücherhügel.
+[00:12:46] Zuerst muss ganz schnell hier aufgeräumt werden.
+[00:12:49] Ich halte mir einen Ärmel vor die Nase. Dann richte ich die Regalbretter und stelle die heruntergefallenen Bücher hinein, eins nach dem andern.
+[00:13:01] Ich schwitze, unterdrücke das Husten. Doch eine ungekannte Kraft beseelt mich.
+[00:13:06] Sie entspringt dem Drang, dieses Buch zu besitzen, sein Geheimnis zu lüften.
+[00:13:12] Was, wenn dieser Cetaceus ein wichtiger Mann ist? Was, wenn er das Gewicht meines Lebenswerkes erkannt hat?
+[00:13:20] Vielleicht gar die Relevanz von Pein und Leid! Oh, Edna, so viele Jahre der Schmach, der Bedeutungslosigkeit.
+[00:13:28] Nun blitzt eine winzige, oder doch nicht ganz so winzige Möglichkeit auf, dass sich alles verändert!
+[00:13:36] In wenigen Minuten habe ich alles so weit verstaut, dass es halbwegs ansehnlich ist,
+[00:13:42] die Bücher in die Regale gestopft, die Regale mit den Brettern behelfsmäßig abgestützt,
+[00:13:48] alles immer mit sorgenvollem Blick auf die Treppe.
+[00:13:54] Ich schaue auf mein Buch, dann auf mein Werk.
+[00:13:58] Ein Loch klafft dort im Regal, wo einst die Parallelbiografien standen.
+[00:14:05] Noch kann ich einfach gehen. Noch ist es nicht zu spät.
+[00:14:07] Stell es zurück, sage ich mir, und du bist immerhin kein Dieb.
+[00:14:10] Kehre in deine Stube zurück und leb dein Leben in Ruhe zu Ende.
+[00:14:16] Lächerlich. Es ist zu spät. Es ist alles entschieden. Ich weiß sogar schon, was ich tun werde:
+[00:14:24] Ich werde ein anderes Buch als Alibi erwerben und dieses hier in der Tasche entwenden.
+[00:14:30] Schnell öffne ich meine Tasche, um es hineinzustecken, doch es passt nicht.
+[00:14:35] Natürlich, dort drin ist ja noch der Sammelband von Incanto. Herbe Begreifung geht mich an:
+[00:14:43] Ich muss mich entscheiden zwischen diesem kostbaren Stück, das ich so lange gesucht habe – und dem Buch, das meinen Tod zu beschreiben vorgibt.
+[00:14:52] Es reißt mich hin und her zwischen den beiden so unterschiedlichen Anbuchungen.
+[00:14:57] Doch Du weißt schon, wofür ich mich entscheiden werde.
+[00:14:59] Die Aussicht, einen Blick auf den eigenen Tod zu erhaschen, aufs eigene Leben, auf Ent-Schmähung des Lebenswerks:
+[00:15:09] Das überwiegt jeden anderen Wert, selbst wenn diese Aussicht nur Lüge ist.
+[00:15:18] Ich nehme also meinen geliebten Sammelband aus der Tasche, verabschiede mich von ihm.
+[00:15:25] Ein geschenktes Buch erkennt ein Antiquariat nicht an, es nimmt es auf wie ein Waisenkind, aber ohne Nummer.
+[00:15:34] Ohne Eintrag im Register bleibt es unsichtbar und unauffindbar, und kann also den Raub nicht kompensieren.
+[00:15:42] Es ist gut möglich, dass man mir Hausverbot erteilen wird und ich dieses Buch nie wieder werde öffnen können.
+[00:15:50] Ich stelle es in die Lücke. Das Regal hält jetzt.
+[00:15:55] Nun ist genügend Raum in der Tasche. Ich nehme das neue Buch und schiebe es hinein.
+[00:16:02] Da höre ich eine Stimme von der Treppe her. Es ist eine tonlose, eintönige Stimme.
+[00:16:07] Ihr Besitzer, der Fremdenführer mit den lockigen Haaren von vorhin, taucht Schritt für Schritt auf.
+[00:16:14] Auf halber Strecke bleibt er stehen. Um den Hals leuchtet ein neon-pinkes Schlüsselband.
+[00:16:20] Er mustert den Raum. Mustert mich erstaunt. Mich, der ich gerade die das Buch zur Hälfte in die Tasche gesteckt habe.
+[00:16:28] Mein Atem stockt. Ich öffne meine Lippen, um zu flüstern. Er dreht sich um. Habe ich da ein Zwinkern gesehen?
+[00:16:38] Kennt er mich etwa? Ist das Schadenfreude? Ich höre, wie er seinen Chinesen auf vermutlich chinesisch sagt,
+[00:16:47] dass das Stockwerk geschlossen ist, zumindest muss es etwas in der Art gewesen sein, ich kann ja kein chinesisch,
+[00:16:54] und schiebt sie wieder nach unten. Ich atme aus. Will sagen, ich seufze abermals.
+[00:17:03] Ich warte, bis die Stimmen verklungen sind – und dann hinab!
+[00:17:08] Ich höre den trockenen Duktus der Antiquarin und meine ihn wiederzuerkennen, ja, diese Stimme wohnt in mir.
+[00:17:18] Bei diesem Abstieg dreht sich nicht nur mein Körper im Gegenuhrzeigersinn – auch die Gedanken drehen sich.
+[00:17:25] Nie war mir vor der Überwindung einer Verkaufstheke so bang.
+[00:17:30] Der Philologe in mir wendet den Namen des Autors „IOANNES CETACEUS“ hin und her:
+[00:17:38] Ist er ein Iannis Cetassis?
+[00:17:42] Ein Jan Četač? Ein Giovanni Cetacio? Gar ein Johannes Wal?
+[00:17:51] Als ich am Fuß der Wendeltreppe anlange, ist das Antiquariat beinahe leer.
+[00:17:58] Die Antiquarin spricht noch immer mit dem älteren Herrn, der sichtlich mit Ruin und Altersarmut konfrontiert ist
+[00:18:06] und eine verzweifelte, niedergeschlagene Haltung angenommen hat.
+[00:18:09] Er hört gequält zu, als die Frau, ohne jegliche Schadenfreude zur Schau zu stellen, die Vorgehensweise bezüglich der Bücher weniger erklärt als diktiert.
+[00:18:23] Als ich die unterste Stufe der Treppe erreicht habe,
+[00:18:27] schießt ihr Kopf herum, sie hat etwas bemerkt, ich erstarre.
+[00:18:29] – Keine Taschen mit nach oben nehmen, eigentlich.
+[00:18:32] Sie sagt es ohne Ausrufungszeichen, aber ihr Punctus wirkt wie ein Peitschenknall.
+[00:18:38] – Ich... ich, das hatte ich nicht gewusst...
+[00:18:42] – Da hängt ein Schild, sagt sie, und wendet sich, ohne mich weiter zu beachten, wieder dem älteren Herrn zu.
+[00:18:51] Mein dümmliches, schamhaft-unwillkürliches Grinsen scheint sie gar nicht zu bemerken.
+[00:18:58] Jetzt gilt's. Während ich mein Ladekabel aus dem Schrein ziehe, sende ich ein innerliches Stoßgebet zum Gott der Diebe, Yandex-Napster-PirateBay.
+[00:19:11] Langsam setze ich mich in Bewegung, wie fremdgesteuert gehe ich den Weg zum Ausgang.
+[00:19:17] Ich bin weitsichtig und kurzsichtig auch, und manchmal scheint es mir, als fehle es in der Mitte auch,
+[00:19:25] und während ich mich der Theke nähere, wird das Gesicht, das zu dem stattlichen, seltsam vertrauten Rücken gehört, auch immer schärfer und vertrauter.
+[00:19:37] Mit jedem Schritt offenbart sich mir ihr distinguiertes und hoheitsvolles Wesen ein bisschen mehr,
+[00:19:42] ihr glatte Gesichtshaut, die blitzenden Tansanitaugen,
+[00:19:49] in die ich nicht mehr schauen konnte, als ich sie vor vierzig Jahren verließ.
+[00:19:55] Ihre scharfkantigen Züge nehmen einem armen Bücherentwender wie mir jeglichen Mut.
+[00:20:02] Mir wird es immer klarer: Ich kannte diese Frau. Ich kannte sie. Ich kenne... Dich.
+[00:20:12] Ich erkenne Dich, Edna, erkenne Dein Haar wieder, deine offene, hohe Stirn,
+[00:20:19] die deinen sublimen Intellekt jedem offenbart, der noch nicht weiß, dass er es nicht wagen wird, an ihm zu zweifeln.
+[00:20:29] Die tiefliegenden, großen Augen, denen kein Fehltritt entgeht.
+[00:20:34] Ich erkenne Dich, Edna, nach all den Jahren. Oh mein Gott, wie lange ist das her? Über vierzig Jahre müssen es sein.
+[00:20:44] Ich stehe einfach nur da und warte darauf, dass Du mich erkennst und mir sagst, Hallo Andre,
+[00:20:50] aber Du sagst nichts dergleichen, sondern: – Wollen Sie was kaufen?, und deutest mit dem Blick auf meine Tasche.
+[00:20:56] Es ist klar: Du gehst davon aus, dass ich ein Buch kaufen möchte, warum sollte ich sonst stehen bleiben,
+[00:21:03] und dass das Buch, dass ich kaufen möchte in meiner Tasche ist.
+[00:21:08] Und deswegen suggeriert mir Dein Blick ohne Zorn, in einem erhabenen Anstand, aber mit unwiderstehlichen Nachdruck,
+[00:21:14] dass ich besser schnell das Buch da raushole und es auf die Theke lege, bevor Du mich an die ungeschriebenen Regel einer jeden Buchhandlung aller Zeiten erinnerst,
+[00:21:25] die da lautet: Bücher, die man kaufen möchte, verstaut man nicht in seiner Tasche.
+[00:21:33] – Oh, ich? Ich wollte nur das … Häuslein benutzen.
+[00:21:37] – Das Häuslein?
+[00:21:40] – Die Heimlichkeit.
+[00:21:42] – Die … Was? – Die... äh, das Abort.
+[00:21:46] – Achso. Das Klo. Das ist aber nicht im Obergeschoss, sondern da hinten, hinter der Wendeltreppe links.
+[00:21:53] Willst Du mich vielleicht gar nicht erkennen? Da fällt mir ein, dass mein Gesicht ja noch voller Möwenkot ist.
+[00:22:00] Du hast mich also gar nicht erkennen können. Und ich habe ganz sicher nicht zwanzig Minuten lang im dritten Stock nach der Toilette gesucht haben können.
+[00:22:07] – Ich... Ich habe es mir anders überlegt, ich... möchte gerne ein Buch kaufen.
+[00:22:14] Ich Trottel, ich habe doch noch gar keins ausgewählt!
+[00:22:19] – Ja, sagst Du, Deswegen die Tasche... – Oh! Die... da ist nichts drin!
+[00:22:24] Ich suche mit panischen Blicken die mit kleinen Büchern verstellte Theke ab.
+[00:22:30] – Hier, das hier, sage ich, ohne noch etwas erblickt zu haben und greife einfach das erste Buch, das mir unterkommt, und strecke es Dir hin.
+[00:22:41] Es eine 1998er Ausgabe von Jannick Bader-Bremstraus "Maxi-Single", dem emeritierten Heydelberger Literaturprofessor und Vertreter der sogenannten "Popliteratur",
+[00:22:53] einer obsolete Stilrichtung der 90er Jahre. Für echte Bibliophile wie Dich, Dr. Edna Hannrath,
+[00:22:59] muss es einer ästhetischen Bankrotterklärung gleichkommen, ein solches Buch zu kaufen.
+[00:23:05] Das wird mir just in dem Moment klar, da ich das leichte Zögern wahrnehme, das in deinem Griff nach dem Buch liegt, um den Preis in Erfahrung zu bringen.
+[00:23:16] Während ich mich in Grund und Boden schäme, drücke ich meine Tasche fest an meine Brust,
+[00:23:21] wodurch die Luft im Innern nach außen gepresst und Staubpartikel hinausgeschleudert werden,
+[00:23:27] die die Sporen des Schimmelpilzes Alternaria enthalten.
+[00:23:32] Das bewirkt eine Reizung meiner Schleimhäute, ich muss heftig husten, meine Augen tränen.
+[00:23:39] Hast Du mich etwa ganz aus deinem Gedächtnis gelöscht? Du schaust mich an, sagst:
+[00:23:45] – Ach, Sie waren das, und mir wird klar, dass Dir der Krach nicht ganz entgangen ist, durch drei Stockwerke hindurch.
+[00:23:53] Korrekterweise wünschst du mir nicht Gesundheit, weil sich das seit den Seuchen der 50er nicht mehr gehört,
+[00:23:59] sondern fragst: – Das ist alles?, und wirfst einen fragenden Blick auf meine Tasche.
+[00:24:05] Ich kann kaum sprechen, sage: – Ja, danke, das war alles, und du:
+[00:24:10] – Sie brauchen ja keine Tüte, oder?, und schaust wieder fragend auf die Tasche;
+[00:24:15] Ich bejahe und Du nennst mir deine erschütternd hohe Preisvorstellung.
+[00:24:20] – Stimmt so, sage ich zu früh und mit gespielter Lässigkeit und krame fieberhaft und hustend nach Münzen.
+[00:24:28] Es reicht gerade so, und Du reichst mir die "Maxi-Single", nicht ohne sie noch kurz festzuhalten, bevor Du sie in meinen Besitz übergehen lässt.
+[00:24:35] Nun wartest Du gespannt darauf, was ich mit dem Buch mache, aber ich stecke es in meinen Manteltasche,
+[00:24:44] was Du umgehend kommentierst mit: – Tun Sie's besser in die Umhängetasche, das Ding ist antik.
+[00:24:51] – Ach, – Sie wollen doch ein solches literarisches Meisterwerk in der Erstausgabe nicht so achtlos behandeln
+[00:24:59] Stille. War da Ironie in Deiner Stimme? Erst jetzt bemerke ich, dass der schlaksige Alte das Buch eindringlich fixiert.
+[00:25:10] – Ach, sage ich, es ist nur ein Geschenk, ich lese so was eigentlich gar nicht. Ich will gehen, doch Du sagst:
+[00:25:18] – Buch ist Buch, egal, wer es geschrieben hat.
+[00:25:20] Ich stocke. Der Mann schlägt die Augen nieder, als tadelte man ihn.
+[00:25:26] – Man soll Bücher nicht respektlos behandeln, sagst Du und blickst erstmals fast einfühlsam auf das Büchlein.
+[00:25:32] Natürlich hast Du recht. Ich nehme die "Maxi-Single" und will gerade die Verschlusskappe der Tasche öffnen,
+[00:25:39] da strömt von dort wieder ein Schwall Pilzsporen heraus, ich halte die Luft an, um nicht husten zu müssen;
+[00:25:45] da kommt mir der rettende Einfall: Es gibt noch einen Reißverschluss vorne.
+[00:25:51] Und unter lungenaufbäumenden Qualen versuche ich, das Büchlein hineinzustecken, doch es passt nicht, weil von innen das antike Buch drückt,
+[00:26:00] also stopfe ich es mit einer derartigen Gewalt hinein, dass die Umschlagseite unter den staunenden Blicken der bibliophilen Antiquarin Dr. Hannrath zerreißt.
+[00:26:11] Mir stockt der Atem. Der Alte wirkt, als hätte man nicht das Buch, sondern ihn zerrissen. Du stehst verblüfft und sprachlos.
+[00:26:20] Für einen Augenblick lang öffnet sich ein Fluchtfenster. Ich gehe los, passiere die defekte Warensicherungsantenne.
+[00:26:28] Die erweist sich jetzt als ganz und gar nicht defekt. Ein markerschütterndes Fiepen ertönt. Ich erstarre.
+[00:26:37] Fliehen? Loslaufen? Meine Beine tun nichts.
+[00:26:40] – Gehen Sie bitte aus dem Warensicherungsantennenbereich heraus, sagst Du bestimmt, geben Sie mir bitte das Buch.
+[00:26:49] Mein Herz setzt aus. Sie hat mich durchschaut! Was nun? Als der Herzschlag Sekunden später wieder einsetzt,
+[00:26:53] verstehe ich, dass Du die "Maxi-Single" und nicht die Parallelbiografien meinst.
+[00:26:57] – Es tut mir leid, ich habe wohl die Sicherung nicht ausgeschaltet, sagst du.
+[00:27:03] Geistesgegenwärtig kann ich noch, während es fiept, die Tasche hinter der Antenne vor dem Laden abstellen und dann die "Maxi-Single" herausentbergen.
+[00:27:13] Ich lasse die Tasche hinter der Antenne stehen und gebe Dir das Buch. Das Fiepen hört nicht auf.
+[00:27:17] Du möchtest die Diebstahlsicherung des Buches entfernen, sagst aber: – Seltsam, ich dachte ich hätte...
+[00:27:25] Anstatt es wieder an mich zu nehmen, trete ich zurück und sage: – Wissen Sie was, dieser Baader-Bremstrau ist wirklich eine Pest.
+[00:27:32] Ich habe es ja bezahlt. Behalten Sie es, ich habe es mir anders überlegt!
+[00:27:38] Dem Alten entfährt ein empörtes Quietschen. Ich gehe ohne mich umzublicken und hebe im Gehen die Tasche auf,
+[00:27:45] während der Hustenanfall wieder von vorne beginnt.
+"
