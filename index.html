@@ -4836,78 +4836,7 @@
             tick();
         }
 
-        // ============================================
-        // DEBUG PANEL
-        // ============================================
-        (function initDebugPanel() {
-            const debugPanel = document.getElementById('debugPanel');
-            const dbgStatus = document.getElementById('dbgStatus');
 
-            // Toggle with 'D' key
-            window.addEventListener('keydown', e => {
-                if (e.key.toLowerCase() === 'd' && !e.ctrlKey && !e.altKey) {
-                    debugPanel.style.display = debugPanel.style.display === 'none' ? 'block' : 'none';
-                }
-            });
-
-            // Volume sliders
-            const sliderMain = document.getElementById('sliderMainVol');
-            const sliderAmbient = document.getElementById('sliderAmbientVol');
-            const sliderFootsteps = document.getElementById('sliderFootstepsVol');
-
-            sliderMain.addEventListener('input', e => {
-                const v = e.target.value / 100;
-                if (typeof audioPlayer !== 'undefined') audioPlayer.volume = v;
-                document.getElementById('dbgMainVol').textContent = e.target.value + '%';
-            });
-
-            sliderAmbient.addEventListener('input', e => {
-                const v = e.target.value / 100;
-                if (typeof ambientAudio !== 'undefined') ambientAudio.volume = v;
-                if (typeof ambientSound !== 'undefined') ambientSound.volume = v;
-                document.getElementById('dbgAmbientVol').textContent = e.target.value + '%';
-            });
-
-            sliderFootsteps.addEventListener('input', e => {
-                const v = e.target.value / 100;
-                if (typeof footstepsAudio !== 'undefined') footstepsAudio.volume = v;
-                if (typeof footstepSound !== 'undefined') footstepSound.volume = v;
-                document.getElementById('dbgFootstepsVol').textContent = e.target.value + '%';
-            });
-
-            // Status update every 500ms
-            setInterval(() => {
-                if (debugPanel.style.display === 'none') return;
-
-                let status = [];
-
-                // Main audio status
-                if (typeof audioPlayer !== 'undefined') {
-                    const ready = audioPlayer._isReady ? '✅' : '⏳';
-                    const src = audioPlayer._src ? audioPlayer._src.substring(0, 40) + '...' : 'none';
-                    status.push(`Main: ${ready} src=${src}`);
-                    status.push(`Time: ${audioPlayer.currentTime.toFixed(1)}s`);
-                } else {
-                    status.push('Main: NOT DEFINED');
-                }
-
-                // Ambient status
-                if (typeof ambientAudio !== 'undefined') {
-                    status.push(`Ambient: ${ambientAudio._isReady ? '✅' : '⏳'} vol=${ambientAudio.volume.toFixed(2)}`);
-                } else if (typeof ambientSound !== 'undefined') {
-                    status.push(`AmbientSnd: ${ambientSound._isReady ? '✅' : '⏳'}`);
-                }
-
-                // Footsteps status
-                if (typeof footstepsAudio !== 'undefined') {
-                    status.push(`Footsteps: ${footstepsAudio._isReady ? '✅' : '⏳'} vol=${footstepsAudio.volume.toFixed(2)}`);
-                }
-
-                dbgStatus.innerHTML = status.join('<br>');
-            }, 500);
-
-            console.log('[Debug] Debug panel initialized. Press D to toggle.');
-        })();
     </script>
 </body>
 
