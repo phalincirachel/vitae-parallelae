@@ -2401,6 +2401,9 @@
                                         if (window.GameState && window.GameState.collectLight) {
                                             window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
                                                 if (newLoreId) {
+                                                    console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
+                                                    // Refresh archive menu so new lore appears immediately
+                                                    if (typeof renderArchive === 'function') renderArchive();
                                                     // Start lore audio with the GLOBAL lore ID (not local counter!)
                                                     startLoreMode(newLoreId);
                                                 } else {

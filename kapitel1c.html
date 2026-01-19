@@ -4442,25 +4442,34 @@
                 }
 
                 // Check if this specific light was already collected
-                // Check if this specific light was already collected
                 const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
-                if (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId)) {
+                const alreadyCollected = window.GameState ? window.GameState.isLightCollected(sc, nearestId) : (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId));
+                if (alreadyCollected) {
                     return;
                 }
 
                 activeLightSourceId = nearestId;
 
-                // Track Light
-                if (!LoreSystem.state.collectedLights[sc]) LoreSystem.state.collectedLights[sc] = [];
-                LoreSystem.state.collectedLights[sc].push(nearestId);
-                LoreSystem.save(); // Save light state
-
-                // Unlock Lore directly (Light ID -> Lore ID)
-                const newLoreId = nearestId;
-                if (LoreSystem.unlock(newLoreId)) {
-                    console.log("New Lore Unlocked via System:", newLoreId);
+                // Use GameState for unified persistence (syncs with YellowLight.draw check)
+                if (window.GameState) {
+                    window.GameState.collectLight(sc, nearestId).then(unlockedLoreId => {
+                        if (unlockedLoreId) {
+                            console.log("[GameState] Collected Light -> Unlocked Lore:", unlockedLoreId);
+                            // Refresh archive menu so new lore appears immediately
+                            if (typeof renderArchive === 'function') renderArchive();
+                        }
+                        startLoreMode(nearestId);
+                    });
+                } else {
+                    // Fallback to local LoreSystem if GameState not available
+                    if (!LoreSystem.state.collectedLights[sc]) LoreSystem.state.collectedLights[sc] = [];
+                    LoreSystem.state.collectedLights[sc].push(nearestId);
+                    LoreSystem.save();
+                    if (LoreSystem.unlock(nearestId)) {
+                        console.log("[LoreSystem] Unlocked Lore:", nearestId);
+                    }
+                    startLoreMode(nearestId);
                 }
-                startLoreMode(newLoreId);
             }
             // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
             else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {
@@ -4513,10 +4522,10 @@
                 // Update UI
                 renderSubtitleLines(Math.max(0, currentSubtitleIndex)); // Will re-find index based on time
 
-                // Resume Playback if it was playing or if we want auto-resume
-                if (mainAudioState.wasPlaying || true) { // Always resume for smooth flow?
+                // Resume Playback only if it was playing before
+                if (mainAudioState.wasPlaying) {
                     audioPlayer.volume = 0;
-                    audioPlayer.play();
+                    audioPlayer.play().catch(e => console.warn("Resume blocked:", e));
                     fadeAudio(audioPlayer, 1, 800);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
