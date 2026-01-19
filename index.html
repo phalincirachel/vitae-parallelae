@@ -2429,40 +2429,28 @@
                 // Try alternate path for debugging
             };
 
-            // DEBUG LOG HELPER
-            const debugEl = document.getElementById('debugLog');
-            const debugMessages = [];
-            function debugLog(msg) {
-                console.log('[DEBUG]', msg);
-                debugMessages.push(msg);
-                if (debugMessages.length > 10) debugMessages.shift();
-                if (debugEl) debugEl.innerText = debugMessages.join('\n');
-            }
-
-            // Check if scripts loaded
-            debugLog('SC API: ' + (typeof SC !== 'undefined' ? 'OK' : 'MISSING'));
-            debugLog('getSCUrl: ' + (typeof getSCUrl !== 'undefined' ? 'OK' : 'MISSING'));
-            debugLog('SCAudioAdapter: ' + (typeof SCAudioAdapter !== 'undefined' ? 'OK' : 'MISSING'));
+            // 2. Load Audio & Text (Chapter 1) -> Default Main Audio
+            // Debug logging removed per user request
 
             // 2. Load Audio & Text (Chapter 1) -> Default Main Audio
             const mainAudioSrc = 'assets/kapitel1.mp3';
             const scUrl = getSCUrl(mainAudioSrc);
-            debugLog('SC URL: ' + scUrl.substring(0, 80));
+            // console.log('SC URL: ' + scUrl.substring(0, 80));
             audioPlayer.src = scUrl;
-            debugLog('audioPlayer.src SET');
+
             window.mainAudioUrl = mainAudioSrc;
 
             try {
-                debugLog('Fetching kapitel1.txt...');
+                // debugLog('Fetching kapitel1.txt...');
                 const response = await fetch('assets/kapitel1.txt');
-                debugLog('Fetch response: ' + response.status);
+                // debugLog('Fetch response: ' + response.status);
                 const text = await response.text();
-                debugLog('Text length: ' + text.length);
+                // debugLog('Text length: ' + text.length);
                 window.mainTextContent = text;
-                parseSubtitles(text);
-                debugLog('subtitleTracks: ' + subtitleTracks.length);
+                subtitleTracks = parseSubtitles(text);
+                // debugLog('subtitleTracks: ' + subtitleTracks.length);
                 renderSubtitleLines(0);
-                debugLog('Chapter 1 Loaded OK');
+                // debugLog('Chapter 1 Loaded OK');
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -2533,7 +2521,7 @@
             if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
                 e.preventDefault();
                 // CRITICAL FIX: Ensure Audio Player NEVER has focus, preventing "fast forward"
-                if (audioPlayer) audioPlayer.blur();
+                // if (audioPlayer) audioPlayer.blur();
                 document.body.focus();
             }
             // TOGGLES
@@ -2652,6 +2640,40 @@
 
             console.log(`Auto-Walk Path (Pure Nearest): ${path.length} nodes.`);
             return path;
+        }
+
+        // 4. Helper: Parse Subtitles [hh:mm:ss] or [mm:ss]
+        function parseSubtitles(text) {
+            // BOM Removal and normalization
+            if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+            const lines = text.split(/\r?\n/);
+            const subs = [];
+            // Robust Regex: Match [digits:digits...] space Text
+            const timeRegex = /\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\]/;
+
+            lines.forEach(line => {
+                line = line.trim();
+                if (!line) return;
+
+                const match = line.match(timeRegex);
+                if (match) {
+                    let h = 0, m = 0, s = 0;
+                    if (match[3]) {
+                        h = parseInt(match[1]); m = parseInt(match[2]); s = parseInt(match[3]);
+                    } else {
+                        m = parseInt(match[1]); s = parseInt(match[2]);
+                    }
+                    const timeInSeconds = (h * 3600) + (m * 60) + s;
+
+                    // Extract text: Remove the timestamp and trim
+                    // This handles cases where regex capture groups might be wonky
+                    const textContent = line.replace(timeRegex, '').trim();
+
+                    subs.push({ time: timeInSeconds, text: textContent });
+                }
+            });
+            return subs;
         }
 
         function processMap(img) {

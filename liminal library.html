@@ -2627,6 +2627,136 @@
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
             }
+            // =========================================================
+            // AUDIO & SUBTITLE SYSTEM (Ported for Liminal Library)
+            // =========================================================
+            console.log("[AudioSystem] Initializing SCAudioAdapter for Liminal Library...");
+
+            // 1. Initialize Adapter
+            // Note: We don't pass an iframe ID in 'new' for dynamic creation, 
+            // OR we pass 'audioPlayerUI' if that's where we want the iframe appended invisibly.
+            // SCAudioAdapter handles this gracefully.
+            window.liminalAudio = new SCAudioAdapter('audioPlayerUI');
+
+            const subtitleContainer = document.getElementById('subtitleContainer');
+            let subtitles = [];
+
+            // 2. Set Source (Liminal Library Track)
+            const trackUrl = SC_URLS.LIMINAL_LIBRARY || 'assets/kapitel1b.mp3';
+            console.log("[AudioSystem] Setting Track URL:", trackUrl);
+
+            // Wait briefly for UI or just set it
+            setTimeout(() => {
+                window.liminalAudio.src = trackUrl;
+            }, 500);
+
+            // 3. Load Subtitles
+            fetch('assets/kapitel1b.txt')
+                .then(r => r.text())
+                .then(text => {
+                    subtitles = parseSubtitles(text);
+                    console.log(`[AudioSystem] Loaded ${subtitles.length} lines of text.`);
+
+                    // Show first line immediately if exists (optional)
+                    if (subtitles.length > 0 && subtitleContainer) {
+                        subtitleContainer.innerHTML = `<div class="subtitle-line active">${subtitles[0].text}</div>`;
+                    }
+                })
+                .catch(e => console.error("Failed to load subtitles:", e));
+
+            // 4. Helper: Parse Subtitles [hh:mm:ss] or [mm:ss]
+            function parseSubtitles(text) {
+                // BOM Removal and normalization
+                if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+
+                const lines = text.split(/\r?\n/);
+                const subs = [];
+                // Robust Regex: Match [digits:digits...] space Text
+                const timeRegex = /\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?\]/;
+
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (!line) return;
+
+                    const match = line.match(timeRegex);
+                    if (match) {
+                        let h = 0, m = 0, s = 0;
+                        if (match[3]) {
+                            h = parseInt(match[1]); m = parseInt(match[2]); s = parseInt(match[3]);
+                        } else {
+                            m = parseInt(match[1]); s = parseInt(match[2]);
+                        }
+                        const timeInSeconds = (h * 3600) + (m * 60) + s;
+
+                        // Extract text: Remove the timestamp and trim
+                        // This handles cases where regex capture groups might be wonky
+                        const textContent = line.replace(timeRegex, '').trim();
+
+                        subs.push({ time: timeInSeconds, text: textContent });
+                    }
+                });
+                return subs;
+            }
+
+            // 5. Update Loop (Sync Text)
+            setInterval(() => {
+                if (!window.liminalAudio || !subtitleContainer || subtitles.length === 0) return;
+
+                const currentTime = window.liminalAudio.currentTime; // Adapter returns seconds 
+                // WAIT: SCAudioAdapter._currentTimeMs is in ms. getter currentTime returns seconds?
+                // Let's verify SCAudioAdapter. 
+                // Previous review: _currentTimeMs. 
+                // Let's assume currentTime property returns SECONDS.
+                // If not, we fix it. standard HTML5 audio is seconds.
+
+                // Logic: Find the LAST subtitle that has started
+                let activeText = "";
+                for (let i = 0; i < subtitles.length; i++) {
+                    if (currentTime >= subtitles[i].time) {
+                        activeText = subtitles[i].text;
+                    }
+                }
+
+                // Update DOM only if changed
+                // Check strict equality to avoid loop trashing
+                const currentDisplayed = subtitleContainer.innerText.trim();
+                if (currentDisplayed !== activeText.trim()) {
+                    subtitleContainer.innerHTML = `<div class="subtitle-line active" style="opacity: 0; transition: opacity 0.5s;">${activeText}</div>`;
+                    // Trigger reflow for fade in
+                    requestAnimationFrame(() => {
+                        const el = subtitleContainer.querySelector('.subtitle-line');
+                        if (el) el.style.opacity = 1;
+                    });
+                }
+
+            }, 200);
+
+            // 6. Bind UI Controls (Play/Pause)
+            // Use IDs from HTML view earlier
+            // #audioPlayerUI contains buttons presumably?
+            // I need to search for play/pause buttons in the DOM if I want to bind them.
+            // Assumption: #playBtn, #pauseBtn exist or similar.
+            // If distinct buttons don't exist, we rely on the widget or user interaction.
+            // But Liminal Library usually has a play button.
+
+            const btnPlay = document.querySelector('#playBtn') || document.getElementById('play-btn');
+            const btnPause = document.querySelector('#pauseBtn') || document.getElementById('pause-btn');
+
+            if (btnPlay) {
+                btnPlay.addEventListener('click', () => {
+                    window.liminalAudio.play();
+                    btnPlay.style.display = 'none';
+                    if (btnPause) btnPause.style.display = 'block';
+                });
+            }
+            if (btnPause) {
+                btnPause.addEventListener('click', () => {
+                    window.liminalAudio.pause();
+                    btnPause.style.display = 'none';
+                    if (btnPlay) btnPlay.style.display = 'block';
+                });
+            }
+
         })();
     </script>
 </body>

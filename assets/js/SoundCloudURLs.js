@@ -3,15 +3,27 @@
  * Maps game audio assets to SoundCloud Widget API URLs
  */
 const SC_URLS = {
-    // Hauptkapitel (mit si= Parameter für Authentifizierung)
-    KAPITEL_1: 'https://soundcloud.com/stephan-pfalzgraf/11x-3/s-yW40KmlWr2b?si=6cea02cbd20e455ca01d05fa0b6ed748',
-    KAPITEL_1C: 'https://soundcloud.com/stephan-pfalzgraf/13x-2/s-Aj6rsLMlFG1?si=6cea02cbd20e455ca01d05fa0b6ed748',
-    LIMINAL_LIBRARY: 'https://soundcloud.com/stephan-pfalzgraf/12x-1/s-2olKSU8eJOH?si=6cea02cbd20e455ca01d05fa0b6ed748',
+    // Hauptkapitel (API Format für Private Tracks: api.soundcloud.com/tracks/[ID]?secret_token=[TOKEN])
+
+    // Kapitel 1 (Marktplatz): ID 2250158609, Token s-yW40KmlWr2b
+    KAPITEL_1: 'https://api.soundcloud.com/tracks/2250158609?secret_token=s-yW40KmlWr2b',
+
+    // Kapitel 1c (Steingasse): ID 2250158603, Token s-Aj6rsLMlFG1
+    KAPITEL_1C: 'https://api.soundcloud.com/tracks/2250158603?secret_token=s-Aj6rsLMlFG1',
+
+    // Kapitel 1b (Liminal Library): ID 2250158606, Token s-2olKSU8eJOH
+    LIMINAL_LIBRARY: 'https://api.soundcloud.com/tracks/2250158606?secret_token=s-2olKSU8eJOH',
 
     // SFX & Ambient
-    FOOTSTEPS: 'https://soundcloud.com/stephan-pfalzgraf/footsteps/s-smAaGD2jllB?si=c69973f289364d24b979a8b0ef19a5e3',
-    AMBIENT_MEDIEVAL: 'https://soundcloud.com/stephan-pfalzgraf/medieval_town/s-Fl8XM07fVzj?si=46227f8ef1ed418cbcd8fd4830bc0fd7',
-    SHIMMER: 'https://soundcloud.com/stephan-pfalzgraf/shimmer/s-3bZeXboRF2l?si=1046b2dd473449fcb31daea579c232cc',
+
+    // Footsteps: ID 2250168038, Token s-smAaGD2jllB
+    FOOTSTEPS: 'https://api.soundcloud.com/tracks/2250168038?secret_token=s-smAaGD2jllB',
+
+    // Medieval Town: ID 2250168437, Token s-Fl8XM07fVzj
+    AMBIENT_MEDIEVAL: 'https://api.soundcloud.com/tracks/2250168437?secret_token=s-Fl8XM07fVzj',
+
+    // Shimmer: ID 2250168776, Token s-3bZeXboRF2l
+    SHIMMER: 'https://api.soundcloud.com/tracks/2250168776?secret_token=s-3bZeXboRF2l',
 
     // Lore-Tracks (Beispiele - erweitern nach Bedarf)
     LORE_BUCH_1: 'PLACEHOLDER_SC_LINK_LORE_BUCH_1',

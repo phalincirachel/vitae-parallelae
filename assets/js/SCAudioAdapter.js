@@ -79,7 +79,7 @@ class SCAudioAdapter {
 
         // 1. Setze Iframe Src
         // Standard Params für Widget API compliance
-        const widgetOptions = '&auto_play=false&hide_related=true&show_comments=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false';
+        const widgetOptions = '&auto_play=false&hide_related=true&show_comments=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&single_active=false';
         this.iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}${widgetOptions}`;
 
         // 2. Warte auf Load, dann binde API
@@ -247,6 +247,14 @@ class SCAudioAdapter {
             this._listeners[ev].forEach(cb => {
                 try { cb(); } catch (e) { console.error(e); }
             });
+        }
+    }
+    // Volume Control (0.0 - 1.0)
+    get volume() { return this._volume; }
+    set volume(val) {
+        this._volume = Math.max(0, Math.min(1, val));
+        if (this.widget && this._isReady) {
+            this.widget.setVolume(this._volume * 100);
         }
     }
 }

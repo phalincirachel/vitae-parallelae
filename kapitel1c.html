@@ -3907,11 +3907,11 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = 0.75;
+        ambientAudio.volume = 0.3;
 
         const footstepsAudio = new SCAudioAdapter();
         footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
-        footstepsAudio.volume = 0.75;
+        footstepsAudio.volume = 0.4;
         console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
