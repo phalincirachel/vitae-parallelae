@@ -25,9 +25,13 @@ const SC_URLS = {
     // Shimmer: ID 2250168776, Token s-3bZeXboRF2l
     SHIMMER: 'https://api.soundcloud.com/tracks/2250168776?secret_token=s-3bZeXboRF2l',
 
-    // Lore-Tracks (Beispiele - erweitern nach Bedarf)
-    LORE_BUCH_1: 'PLACEHOLDER_SC_LINK_LORE_BUCH_1',
-    LORE_BUCH_2: 'PLACEHOLDER_SC_LINK_LORE_BUCH_2'
+    // Lore-Tracks
+    // Lore1: ID 2250892529, Token s-XrlxZtj8935
+    LORE_1: 'https://api.soundcloud.com/tracks/2250892529?secret_token=s-XrlxZtj8935',
+
+    // Placeholders for future lore tracks
+    LORE_2: 'PLACEHOLDER_SC_LINK_LORE_2',
+    LORE_3: 'PLACEHOLDER_SC_LINK_LORE_3'
 };
 
 /**
@@ -56,7 +60,11 @@ const MP3_TO_SC_MAP = {
     'footsteps.mp3': SC_URLS.FOOTSTEPS,
     'assets/footsteps.mp3': SC_URLS.FOOTSTEPS,
     'shimmer.mp3': SC_URLS.SHIMMER,
-    'assets/shimmer.mp3': SC_URLS.SHIMMER
+    'assets/shimmer.mp3': SC_URLS.SHIMMER,
+
+    // Lore Tracks
+    'assets/lore1.mp3': SC_URLS.LORE_1,
+    'lore1.mp3': SC_URLS.LORE_1
 };
 
 /**

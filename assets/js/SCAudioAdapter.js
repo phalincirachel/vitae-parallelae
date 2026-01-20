@@ -55,6 +55,11 @@ class SCAudioAdapter {
             loadedmetadata: [],
             canplay: []
         };
+
+        // Register with Visibility Manager if available
+        if (typeof window !== 'undefined' && window.AudioVisibilityManager) {
+            window.AudioVisibilityManager.register(this);
+        }
     }
 
     _createIframe(id) {
@@ -185,6 +190,7 @@ class SCAudioAdapter {
         // Helper to retry load if widget not ready/bound yet
         const safeLoad = () => {
             if (this.widget && typeof this.widget.load === 'function') {
+                console.log('[SCAudioAdapter] Loading track via safeLoad:', url);
                 this.widget.load(url, {
                     auto_play: false, // Wir steuern Play manuell
                     buying: false,
@@ -199,10 +205,31 @@ class SCAudioAdapter {
                     visual: false,
                     callback: () => {
                         console.log('[SCAudioAdapter] Track loaded via .load():', url);
+                        // CRITICAL FIX: After load completes, mark as ready and process pending play
+                        this._isReady = true;
+
+                        // Set volume
+                        this.widget.setVolume(this._volume * 100);
+
+                        // Get duration
+                        this.widget.getDuration(ms => {
+                            this._durationMs = ms;
+                            console.log('[SCAudioAdapter] Duration:', ms, 'ms');
+                            this._dispatch('loadedmetadata');
+                            this._dispatch('canplay');
+                        });
+
+                        // Process pending play
+                        if (this._pendingPlay) {
+                            console.log('[SCAudioAdapter] Processing pending play after load');
+                            this._pendingPlay = false;
+                            this.widget.play();
+                        }
                     }
                 });
             } else {
                 // If initializing, verify again shortly
+                console.log('[SCAudioAdapter] Widget not ready, retrying safeLoad in 500ms...');
                 setTimeout(safeLoad, 500);
             }
         };
@@ -215,6 +242,7 @@ class SCAudioAdapter {
             // If this is a SECOND set during init... tricky. 
             // Simplified: The FIRST set wins the init. Subsequent sets must wait.
             // For now, assume sequential flow.
+            console.log('[SCAudioAdapter] No widget yet, waiting for init to complete...');
         }
     }
 

@@ -35,6 +35,10 @@ export const GameState = {
                 const saved = localStorage.getItem('liminal_save');
                 if (saved) {
                     this.state = JSON.parse(saved);
+                    // Audio Persistence
+                    if (window.PlayerStateManager && this.state.audioPositions) {
+                        window.PlayerStateManager.importStates(this.state.audioPositions);
+                    }
                     console.log("[GameState] Loaded from LocalStorage (Web):", this.state);
                 } else {
                     console.log("[GameState] No Web Save found. Starting new.");
@@ -69,6 +73,12 @@ export const GameState = {
                 // Compatibility: Ensure proper structure
                 if (!this.state.collectedLights) this.state.collectedLights = {};
                 if (!this.state.collectedLore) this.state.collectedLore = [];
+
+                // Audio Persistence
+                if (window.PlayerStateManager && this.state.audioPositions) {
+                    window.PlayerStateManager.importStates(this.state.audioPositions);
+                    console.log("[GameState] Audio positions synced from save.");
+                }
 
                 console.log("[GameState] Loaded State:", this.state);
             } catch (e) {
@@ -157,6 +167,11 @@ export const GameState = {
     },
 
     async save() {
+        // Sync Audio Positions
+        if (window.PlayerStateManager) {
+            this.state.audioPositions = window.PlayerStateManager.exportStates();
+        }
+
         if (window.electronAPI) {
             await window.electronAPI.saveGame(this.state);
             console.log("[GameState] Saved via Electron.");
@@ -183,6 +198,11 @@ export const GameState = {
                 this.state = data;
                 // Ensure defaults
                 if (!this.state.collectedLights) this.state.collectedLights = {};
+
+                // Audio Persistence
+                if (window.PlayerStateManager && this.state.audioPositions) {
+                    window.PlayerStateManager.importStates(this.state.audioPositions);
+                }
 
                 await this.save();
                 console.log("[GameState] Imported State:", this.state);
