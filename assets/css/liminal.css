@@ -71,34 +71,3 @@ body {
         height: 100vh !important;
     }
 }
-
-/* ==========================================
-   MOBILE UI INTERACTION FIXES
-   ========================================== */
-/* FORCE BUTTONS ON TOP / FIX GHOST CLICKS */
-.audio-btn,
-#readingModeBtn,
-#gameModeBtn,
-#nextChapterBtn,
-.menu-item {
-    pointer-events: auto !important;
-    z-index: 2000 !important;
-    touch-action: manipulation;
-    /* Disables double-tap zoom, speeds up clicks */
-}
-
-#audioPlayerUI {
-    z-index: 1000 !important;
-    pointer-events: none;
-    /* Let clicks pass through empty space */
-}
-
-/* Children needs auto */
-#audioPlayerUI>* {
-    pointer-events: auto;
-}
-
-#subtitleContainer {
-    z-index: 1500 !important;
-    -webkit-overflow-scrolling: touch;
-}
