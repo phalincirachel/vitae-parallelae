@@ -485,1522 +485,1542 @@
                 if (nextBtn) nextBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    nextBtn.classList.remove('visible');
-                    transitionToNextChapter();
-                });
+                    // --- MOBILE TOUCH FIX: Block Touchstart Bubbling ---
+                    // Prevents the Game (which listens to touchstart) from reacting when a button is touched.
+                    // We do NOT preventDefault() because we want the browser to generate the 'click' event later.
+                    const uiButtons = [
+                        document.getElementById('audioToggleBtn'),
+                        document.getElementById('skipBackBtn'),
+                        document.getElementById('skipForwardBtn'),
+                        document.getElementById('readingModeBtn'),
+                        document.getElementById('gameModeBtn'),
+                        document.getElementById('nextChapterBtn')
+                    ];
 
-                // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
-                // ALWAYS update UI to sync player state
-                updateReadingModeUI();
-
-                // --- DRAG TO SCROLL LOGIC ---
-                const subtitleContainer = document.getElementById('subtitleContainer');
-
-                // SMART MASK LOGIC (Opacity on scroll)
-                subtitleContainer.addEventListener('scroll', () => {
-                    if (subtitleContainer.scrollTop > 10) {
-                        subtitleContainer.classList.add('scrolled-state');
-                    } else {
-                        subtitleContainer.classList.remove('scrolled-state');
-                    }
-                });
-
-                let isDown = false;
-                let startY;
-                let scrollTop;
-
-                const handleDown = (e) => {
-                    isDown = true;
-                    subtitleContainer.dataset.isDragging = 'false';
-                    const pageY = e.pageY || e.touches[0].pageY;
-                    startY = pageY - subtitleContainer.offsetTop;
-                    scrollTop = subtitleContainer.scrollTop;
-                    subtitleContainer.style.cursor = 'grabbing';
-                };
-
-                const handleMove = (e) => {
-                    if (!isDown) return;
-                    e.preventDefault();
-                    const pageY = e.pageY || e.touches[0].pageY;
-                    const y = pageY - subtitleContainer.offsetTop;
-                    const walk = (y - startY) * 1.0;
-                    if (Math.abs(walk) > 5) {
-                        subtitleContainer.dataset.isDragging = 'true';
-                        subtitleContainer.scrollTop = scrollTop - walk;
-                    }
-                };
-
-                const handleUp = () => {
-                    isDown = false;
-                    subtitleContainer.style.cursor = 'auto';
-                };
-
-                subtitleContainer.addEventListener('mousedown', handleDown);
-                subtitleContainer.addEventListener('touchstart', handleDown);
-                subtitleContainer.addEventListener('mouseleave', handleUp);
-                subtitleContainer.addEventListener('mouseup', handleUp);
-                subtitleContainer.addEventListener('touchend', handleUp);
-                subtitleContainer.addEventListener('mousemove', handleMove);
-                subtitleContainer.addEventListener('touchmove', handleMove);
-
-
-
-                function updateIcons() {
-                    if (player.paused) {
-                        iconPlay.style.display = 'block'; iconPause.style.display = 'none';
-                    } else {
-                        iconPlay.style.display = 'none'; iconPause.style.display = 'block';
-                    }
-                }
-                setInterval(updateIcons, 500);
-
-                // --- FULLSCREEN LOGIC ---
-                const fullscreenBtn = document.getElementById('fullscreenBtn');
-                const iconFsEnter = document.getElementById('iconFsEnter');
-                const iconFsExit = document.getElementById('iconFsExit');
-
-                fullscreenBtn.addEventListener('click', () => {
-                    if (!document.fullscreenElement) {
-                        document.documentElement.requestFullscreen().catch(err => {
-                            console.warn(`Error attempting to enable fullscreen: ${err.message}`);
-                        });
-                    } else {
-                        if (document.exitFullscreen) {
-                            document.exitFullscreen();
+                    uiButtons.forEach(btn => {
+                        if (btn) {
+                            btn.addEventListener('touchstart', (e) => {
+                                e.stopPropagation(); // STOP it reaching the game
+                                // e.preventDefault(); // DON'T do this, or 'click' won't fire!
+                            }, { passive: false });
                         }
-                    }
-                });
+                    });
 
-                document.addEventListener('fullscreenchange', () => {
-                    if (document.fullscreenElement) {
-                        iconFsEnter.style.display = 'none';
-                        iconFsExit.style.display = 'block';
-                    } else {
-                        iconFsEnter.style.display = 'block';
-                        iconFsExit.style.display = 'none';
-                    }
-                });
+                    // Force Z-Index Hierarchy via JS (SafetyNet)
+                    if (uiContainer) uiContainer.style.zIndex = "1000";
 
-                // --- FREE LOOK CONTROLS ---
-                const mouse = { x: 0, y: 0 };
-                let targetMouseX = 0; // Target look direction (screen X normalized)
-                let targetMouseY = 0; // Target look direction (screen Y normalized)
-                let isLookingAtClickTarget = false; // True when camera should rotate toward click
-                // let isCenteringCamera = false; // Moved to global scope
+                    // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
+                    // ALWAYS update UI to sync player state
+                    updateReadingModeUI();
 
-                // Desktop: Mouse move controls camera look
-                document.addEventListener('mousemove', (event) => {
-                    // Disabled in reading mode
-                    if (player && player.isReadingMode) return;
+                    // --- DRAG TO SCROLL LOGIC ---
+                    const subtitleContainer = document.getElementById('subtitleContainer');
 
-                    // DISABLED when camera is panning to a click target
-                    if (cameraLookTarget) return;
-
-                    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                    mouse.y = (event.clientY / window.innerHeight) * 2 - 1;
-                    targetMouseX = mouse.x;
-                    targetMouseY = mouse.y;
-                });
-
-                // --- MOBILE TOUCH CONTROLS ---
-                let touchStartX = 0;
-                let touchStartY = 0;
-                let touchStartMouseX = 0;
-                let touchStartMouseY = 0;
-                let isTouchDragging = false;
-                let isTouchValid = true; // FIX: Default true so clicks work from start
-
-                // Helper: Check if touch is on UI elements
-                function isTouchOnUI(touch) {
-                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                    if (!el) return false;
-                    return el.closest('#audioPlayerUI') ||
-                        el.closest('#audioControls') ||
-                        el.closest('.audio-btn') ||
-                        el.closest('#archiveModal') ||
-                        el.closest('.menu-item') ||
-                        el.closest('#subtitleContainer') ||
-                        el.closest('#nextChapterBtn') ||
-                        el.closest('#loading');
-                }
-
-                document.addEventListener('touchstart', (event) => {
-                    // Disabled in reading mode
-                    if (player && player.isReadingMode) return;
-
-                    if (event.touches.length === 1) {
-                        const touch = event.touches[0];
-
-                        // PERFORMANCE FIX: Check UI collision ONCE at start
-                        if (isTouchOnUI(touch)) {
-                            isTouchValid = false;
-                            return;
-                        }
-                        isTouchValid = true;
-
-                        touchStartX = touch.clientX;
-                        touchStartY = touch.clientY;
-                        touchStartMouseX = mouse.x;
-                        touchStartMouseY = mouse.y;
-                        isTouchDragging = false;
-                    }
-                }, { passive: true });
-
-                document.addEventListener('touchmove', (event) => {
-                    // Disabled in reading mode
-                    if (player && player.isReadingMode) return;
-
-                    // Optimization: Early exit if touch started on UI
-                    if (!isTouchValid) return;
-
-                    if (event.touches.length === 1) {
-                        const touch = event.touches[0];
-
-                        const deltaX = touch.clientX - touchStartX;
-                        const deltaY = touch.clientY - touchStartY;
-
-                        // Only treat as drag if moved more than 10 pixels
-                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
-                            isTouchDragging = true;
-
-                            // CANCEL any auto-pan when user swipes
-                            cameraLookTarget = null;
-
-                            // Swipe-to-look: Map drag delta to mouse position (INVERTED)
-                            const sensitivity = 0.004;
-                            mouse.x = Math.max(-1, Math.min(1, touchStartMouseX - deltaX * sensitivity));
-                            mouse.y = Math.max(-1, Math.min(1, touchStartMouseY - deltaY * sensitivity));
-                            targetMouseX = mouse.x;
-                            targetMouseY = mouse.y;
-                        }
-                    }
-                }, { passive: true });
-
-                // --- TEXTURES & MATERIALS ---
-                function createWoodTexture() {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = 512; canvas.height = 512;
-                    const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = '#2a1a10';
-                    ctx.fillRect(0, 0, 512, 512);
-                    for (let i = 0; i < 100; i++) {
-                        ctx.strokeStyle = `rgba(0,0,0, ${Math.random() * 0.2})`; ctx.lineWidth = Math.random() * 3;
-                        ctx.beginPath(); ctx.moveTo(Math.random() * 512, 0); ctx.lineTo(Math.random() * 512, 512); ctx.stroke();
-                    }
-                    return new THREE.CanvasTexture(canvas);
-                }
-                function createCarpetTexture() {
-                    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
-                    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 512, 512);
-                    const imgData = ctx.getImageData(0, 0, 512, 512);
-                    for (let i = 0; i < imgData.data.length; i += 4) {
-                        const noise = (Math.random() - 0.5) * 15; imgData.data[i] += noise + 10;
-                        imgData.data[i + 1] += noise + 10; imgData.data[i + 2] += noise + 10;
-                    }
-                    ctx.putImageData(imgData, 0, 0);
-                    const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
-                }
-
-                const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
-                const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
-                const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-                const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
-                const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-                const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
-
-                // --- SHARED GEOMETRIES (Performance Fix) ---
-                const sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
-                const sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
-                const sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
-                const sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
-                const sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
-                const sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
-
-                // --- CLASSES ---
-                class YellowLight {
-                    constructor(zPos) {
-                        this.position = new THREE.Vector3(0, 3.5, zPos);
-                        this.group = new THREE.Group();
-                        this.group.position.copy(this.position);
-                        const bulb = new THREE.Mesh(sharedBulbGeo, bulbMat);
-                        this.group.add(bulb);
-                        this.light = new THREE.PointLight(0xffaa00, 40, 15);
-                        this.light.castShadow = true;
-                        this.group.add(this.light);
-                        const cord = new THREE.Mesh(sharedCordGeo, cordMat);
-                        cord.position.y = 1.5;
-                        this.group.add(cord);
-                        this.baseIntensity = 40;
-                        this.seed = Math.random() * 100;
-                    }
-                    update(time, playerZ) {
-                        const flicker = Math.sin(time * 20) * 0.05 + Math.random() * 0.1;
-
-                        // Distance Fade Logic
-                        // FIX: Use World Position for distance check
-                        const worldPos = new THREE.Vector3();
-                        this.group.getWorldPosition(worldPos);
-                        const dist = Math.abs(worldPos.z - playerZ);
-
-                        const fadeStart = 40; // Starts fading in at 40m
-                        const fadeEnd = 20;   // Full brightness at 20m
-
-                        // Normalized Fade: 0 at fadeStart, 1 at fadeEnd
-                        // Clamp between 0 and 1
-                        let fade = (fadeStart - dist) / (fadeStart - fadeEnd);
-                        fade = Math.max(0, Math.min(1, fade));
-
-                        // Apply Fade to Intensity
-                        // If fade is 0 (far away), light is OFF.
-                        // If fade is 1 (close), light is FULL.
-                        const currentBase = this.baseIntensity * fade;
-
-                        this.light.intensity = currentBase + flicker * 10 * fade; // Flicker scales with intensity
-                        this.light.distance = 15 * fade; // Also scale range to avoid pop-in
-
-                        this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
-                        this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
-                    }
-                    reset() {
-                        // FIX: Do NOT update position. Parent Group move handles it.
-                        // Just reset intensity logic states if needed.
-                        this.light.intensity = 0; // Start off
-                    }
-                    dispose() {
-                        // Traverse to dispose geometries inside the group (bulb, cord)
-                        // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
-                        this.light.intensity = this.baseIntensity + flicker * 10 + boost;
-                        this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
-                        this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
-                    }
-                }
-
-                // --- GLOWING LORE BOOK STATE ---
-                // Note: We use GameState.state.collectedLore.length for global tracking, not a local counter
-                let glowingBookCounter = 0;       // ID generator
-                const activeGlowingBooks = [];    // Currently spawned books
-                const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
-                shimmerSound.src = getSCUrl('assets/shimmer.mp3');
-                shimmerSound.volume = 0.4;
-
-                // Helper function to get global collected lore count
-                function getGlobalCollectedLoreCount() {
-                    if (window.GameState && window.GameState.state && window.GameState.state.collectedLore) {
-                        return window.GameState.state.collectedLore.length;
-                    }
-                    return 0;
-                }
-
-                // Material for glowing books
-                const glowBookMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xf5c542,
-                    emissive: 0xf5c542,
-                    emissiveIntensity: 0.5,
-                    roughness: 0.8,
-                    metalness: 0.1
-                });
-
-                class GlowingBook {
-                    constructor(zPos, side) {
-                        this.id = glowingBookCounter++;
-                        this.collected = false;
-                        this.missed = false; // NEW: Track if player walked past without collecting
-                        this.side = side; // 'left' or 'right'
-
-                        // Book geometry (thin box for spine)
-                        const geo = new THREE.BoxGeometry(0.6, 0.5, 0.08);
-                        this.mesh = new THREE.Mesh(geo, glowBookMaterial.clone());
-
-                        // Position: eye level (camera at 1.6m), slightly higher for visibility
-                        // X offset: just 5cm (0.05m) towards center so book pops out slightly
-                        // Y = 1.68 (1.4 shelf + 0.025 halfPlank + 0.25 halfBook + 0.005 margin)
-                        const xPos = side === 'left' ? -2.45 : 2.45;
-                        this.mesh.position.set(xPos, 1.68, zPos);
-                        this.mesh.frustumCulled = false;
-
-                        this.baseEmissive = 0.5;
-                    }
-
-                    update(time, playerZ, playerX) {
-                        if (this.collected) return;
-
-                        // FIX: Use world position (meshGroup may have moved)
-                        const worldPos = new THREE.Vector3();
-                        this.mesh.getWorldPosition(worldPos);
-                        const distZ = Math.abs(worldPos.z - playerZ);
-                        const distX = Math.abs(worldPos.x - playerX);
-
-                        // Debug: log position every 60 frames
-                        if (Math.random() < 0.016) { // ~1 per second at 60fps
-                            console.log(`Book ${this.id}: worldZ=${worldPos.z.toFixed(1)}, playerZ=${playerZ.toFixed(1)}, dist=${distZ.toFixed(1)}`);
-                        }
-
-                        // Proximity glow intensification
-                        if (distZ < 8 && distX < 3) {
-                            const pulse = Math.sin(time * 3) * 0.15;
-                            this.mesh.material.emissiveIntensity = 0.8 + pulse;
+                    // SMART MASK LOGIC (Opacity on scroll)
+                    subtitleContainer.addEventListener('scroll', () => {
+                        if (subtitleContainer.scrollTop > 10) {
+                            subtitleContainer.classList.add('scrolled-state');
                         } else {
+                            subtitleContainer.classList.remove('scrolled-state');
+                        }
+                    });
+
+                    let isDown = false;
+                    let startY;
+                    let scrollTop;
+
+                    const handleDown = (e) => {
+                        isDown = true;
+                        subtitleContainer.dataset.isDragging = 'false';
+                        const pageY = e.pageY || e.touches[0].pageY;
+                        startY = pageY - subtitleContainer.offsetTop;
+                        scrollTop = subtitleContainer.scrollTop;
+                        subtitleContainer.style.cursor = 'grabbing';
+                    };
+
+                    const handleMove = (e) => {
+                        if (!isDown) return;
+                        e.preventDefault();
+                        const pageY = e.pageY || e.touches[0].pageY;
+                        const y = pageY - subtitleContainer.offsetTop;
+                        const walk = (y - startY) * 1.0;
+                        if (Math.abs(walk) > 5) {
+                            subtitleContainer.dataset.isDragging = 'true';
+                            subtitleContainer.scrollTop = scrollTop - walk;
+                        }
+                    };
+
+                    const handleUp = () => {
+                        isDown = false;
+                        subtitleContainer.style.cursor = 'auto';
+                    };
+
+                    subtitleContainer.addEventListener('mousedown', handleDown);
+                    subtitleContainer.addEventListener('touchstart', handleDown);
+                    subtitleContainer.addEventListener('mouseleave', handleUp);
+                    subtitleContainer.addEventListener('mouseup', handleUp);
+                    subtitleContainer.addEventListener('touchend', handleUp);
+                    subtitleContainer.addEventListener('mousemove', handleMove);
+                    subtitleContainer.addEventListener('touchmove', handleMove);
+
+
+
+                    function updateIcons() {
+                        if (player.paused) {
+                            iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+                        } else {
+                            iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+                        }
+                    }
+                    setInterval(updateIcons, 500);
+
+                    // --- FULLSCREEN LOGIC ---
+                    const fullscreenBtn = document.getElementById('fullscreenBtn');
+                    const iconFsEnter = document.getElementById('iconFsEnter');
+                    const iconFsExit = document.getElementById('iconFsExit');
+
+                    fullscreenBtn.addEventListener('click', () => {
+                        if (!document.fullscreenElement) {
+                            document.documentElement.requestFullscreen().catch(err => {
+                                console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+                            });
+                        } else {
+                            if (document.exitFullscreen) {
+                                document.exitFullscreen();
+                            }
+                        }
+                    });
+
+                    document.addEventListener('fullscreenchange', () => {
+                        if (document.fullscreenElement) {
+                            iconFsEnter.style.display = 'none';
+                            iconFsExit.style.display = 'block';
+                        } else {
+                            iconFsEnter.style.display = 'block';
+                            iconFsExit.style.display = 'none';
+                        }
+                    });
+
+                    // --- FREE LOOK CONTROLS ---
+                    const mouse = { x: 0, y: 0 };
+                    let targetMouseX = 0; // Target look direction (screen X normalized)
+                    let targetMouseY = 0; // Target look direction (screen Y normalized)
+                    let isLookingAtClickTarget = false; // True when camera should rotate toward click
+                    // let isCenteringCamera = false; // Moved to global scope
+
+                    // Desktop: Mouse move controls camera look
+                    document.addEventListener('mousemove', (event) => {
+                        // Disabled in reading mode
+                        if (player && player.isReadingMode) return;
+
+                        // DISABLED when camera is panning to a click target
+                        if (cameraLookTarget) return;
+
+                        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                        mouse.y = (event.clientY / window.innerHeight) * 2 - 1;
+                        targetMouseX = mouse.x;
+                        targetMouseY = mouse.y;
+                    });
+
+                    // --- MOBILE TOUCH CONTROLS ---
+                    let touchStartX = 0;
+                    let touchStartY = 0;
+                    let touchStartMouseX = 0;
+                    let touchStartMouseY = 0;
+                    let isTouchDragging = false;
+                    let isTouchValid = true; // FIX: Default true so clicks work from start
+
+                    // Helper: Check if touch is on UI elements
+                    function isTouchOnUI(touch) {
+                        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+                        if (!el) return false;
+                        return el.closest('#audioPlayerUI') ||
+                            el.closest('#audioControls') ||
+                            el.closest('.audio-btn') ||
+                            el.closest('#archiveModal') ||
+                            el.closest('.menu-item') ||
+                            el.closest('#subtitleContainer') ||
+                            el.closest('#nextChapterBtn') ||
+                            el.closest('#loading');
+                    }
+
+                    document.addEventListener('touchstart', (event) => {
+                        // Disabled in reading mode
+                        if (player && player.isReadingMode) return;
+
+                        if (event.touches.length === 1) {
+                            const touch = event.touches[0];
+
+                            // PERFORMANCE FIX: Check UI collision ONCE at start
+                            if (isTouchOnUI(touch)) {
+                                isTouchValid = false;
+                                return;
+                            }
+                            isTouchValid = true;
+
+                            touchStartX = touch.clientX;
+                            touchStartY = touch.clientY;
+                            touchStartMouseX = mouse.x;
+                            touchStartMouseY = mouse.y;
+                            isTouchDragging = false;
+                        }
+                    }, { passive: true });
+
+                    document.addEventListener('touchmove', (event) => {
+                        // Disabled in reading mode
+                        if (player && player.isReadingMode) return;
+
+                        // Optimization: Early exit if touch started on UI
+                        if (!isTouchValid) return;
+
+                        if (event.touches.length === 1) {
+                            const touch = event.touches[0];
+
+                            const deltaX = touch.clientX - touchStartX;
+                            const deltaY = touch.clientY - touchStartY;
+
+                            // Only treat as drag if moved more than 10 pixels
+                            if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                                isTouchDragging = true;
+
+                                // CANCEL any auto-pan when user swipes
+                                cameraLookTarget = null;
+
+                                // Swipe-to-look: Map drag delta to mouse position (INVERTED)
+                                const sensitivity = 0.004;
+                                mouse.x = Math.max(-1, Math.min(1, touchStartMouseX - deltaX * sensitivity));
+                                mouse.y = Math.max(-1, Math.min(1, touchStartMouseY - deltaY * sensitivity));
+                                targetMouseX = mouse.x;
+                                targetMouseY = mouse.y;
+                            }
+                        }
+                    }, { passive: true });
+
+                    // --- TEXTURES & MATERIALS ---
+                    function createWoodTexture() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 512; canvas.height = 512;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#2a1a10';
+                        ctx.fillRect(0, 0, 512, 512);
+                        for (let i = 0; i < 100; i++) {
+                            ctx.strokeStyle = `rgba(0,0,0, ${Math.random() * 0.2})`; ctx.lineWidth = Math.random() * 3;
+                            ctx.beginPath(); ctx.moveTo(Math.random() * 512, 0); ctx.lineTo(Math.random() * 512, 512); ctx.stroke();
+                        }
+                        return new THREE.CanvasTexture(canvas);
+                    }
+                    function createCarpetTexture() {
+                        const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 512, 512);
+                        const imgData = ctx.getImageData(0, 0, 512, 512);
+                        for (let i = 0; i < imgData.data.length; i += 4) {
+                            const noise = (Math.random() - 0.5) * 15; imgData.data[i] += noise + 10;
+                            imgData.data[i + 1] += noise + 10; imgData.data[i + 2] += noise + 10;
+                        }
+                        ctx.putImageData(imgData, 0, 0);
+                        const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
+                    }
+
+                    const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
+                    const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
+                    const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+                    const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+                    const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                    const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
+
+                    // --- SHARED GEOMETRIES (Performance Fix) ---
+                    const sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
+                    const sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+                    const sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+                    const sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
+                    const sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                    const sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+
+                    // --- CLASSES ---
+                    class YellowLight {
+                        constructor(zPos) {
+                            this.position = new THREE.Vector3(0, 3.5, zPos);
+                            this.group = new THREE.Group();
+                            this.group.position.copy(this.position);
+                            const bulb = new THREE.Mesh(sharedBulbGeo, bulbMat);
+                            this.group.add(bulb);
+                            this.light = new THREE.PointLight(0xffaa00, 40, 15);
+                            this.light.castShadow = true;
+                            this.group.add(this.light);
+                            const cord = new THREE.Mesh(sharedCordGeo, cordMat);
+                            cord.position.y = 1.5;
+                            this.group.add(cord);
+                            this.baseIntensity = 40;
+                            this.seed = Math.random() * 100;
+                        }
+                        update(time, playerZ) {
+                            const flicker = Math.sin(time * 20) * 0.05 + Math.random() * 0.1;
+
+                            // Distance Fade Logic
+                            // FIX: Use World Position for distance check
+                            const worldPos = new THREE.Vector3();
+                            this.group.getWorldPosition(worldPos);
+                            const dist = Math.abs(worldPos.z - playerZ);
+
+                            const fadeStart = 40; // Starts fading in at 40m
+                            const fadeEnd = 20;   // Full brightness at 20m
+
+                            // Normalized Fade: 0 at fadeStart, 1 at fadeEnd
+                            // Clamp between 0 and 1
+                            let fade = (fadeStart - dist) / (fadeStart - fadeEnd);
+                            fade = Math.max(0, Math.min(1, fade));
+
+                            // Apply Fade to Intensity
+                            // If fade is 0 (far away), light is OFF.
+                            // If fade is 1 (close), light is FULL.
+                            const currentBase = this.baseIntensity * fade;
+
+                            this.light.intensity = currentBase + flicker * 10 * fade; // Flicker scales with intensity
+                            this.light.distance = 15 * fade; // Also scale range to avoid pop-in
+
+                            this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
+                            this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+                        }
+                        reset() {
+                            // FIX: Do NOT update position. Parent Group move handles it.
+                            // Just reset intensity logic states if needed.
+                            this.light.intensity = 0; // Start off
+                        }
+                        dispose() {
+                            // Traverse to dispose geometries inside the group (bulb, cord)
+                            // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
+                            this.light.intensity = this.baseIntensity + flicker * 10 + boost;
+                            this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
+                            this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+                        }
+                    }
+
+                    // --- GLOWING LORE BOOK STATE ---
+                    // Note: We use GameState.state.collectedLore.length for global tracking, not a local counter
+                    let glowingBookCounter = 0;       // ID generator
+                    const activeGlowingBooks = [];    // Currently spawned books
+                    const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
+                    shimmerSound.src = getSCUrl('assets/shimmer.mp3');
+                    shimmerSound.volume = 0.4;
+
+                    // Helper function to get global collected lore count
+                    function getGlobalCollectedLoreCount() {
+                        if (window.GameState && window.GameState.state && window.GameState.state.collectedLore) {
+                            return window.GameState.state.collectedLore.length;
+                        }
+                        return 0;
+                    }
+
+                    // Material for glowing books
+                    const glowBookMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xf5c542,
+                        emissive: 0xf5c542,
+                        emissiveIntensity: 0.5,
+                        roughness: 0.8,
+                        metalness: 0.1
+                    });
+
+                    class GlowingBook {
+                        constructor(zPos, side) {
+                            this.id = glowingBookCounter++;
+                            this.collected = false;
+                            this.missed = false; // NEW: Track if player walked past without collecting
+                            this.side = side; // 'left' or 'right'
+
+                            // Book geometry (thin box for spine)
+                            const geo = new THREE.BoxGeometry(0.6, 0.5, 0.08);
+                            this.mesh = new THREE.Mesh(geo, glowBookMaterial.clone());
+
+                            // Position: eye level (camera at 1.6m), slightly higher for visibility
+                            // X offset: just 5cm (0.05m) towards center so book pops out slightly
+                            // Y = 1.68 (1.4 shelf + 0.025 halfPlank + 0.25 halfBook + 0.005 margin)
+                            const xPos = side === 'left' ? -2.45 : 2.45;
+                            this.mesh.position.set(xPos, 1.68, zPos);
+                            this.mesh.frustumCulled = false;
+
+                            this.baseEmissive = 0.5;
+                        }
+
+                        update(time, playerZ, playerX) {
+                            if (this.collected) return;
+
+                            // FIX: Use world position (meshGroup may have moved)
+                            const worldPos = new THREE.Vector3();
+                            this.mesh.getWorldPosition(worldPos);
+                            const distZ = Math.abs(worldPos.z - playerZ);
+                            const distX = Math.abs(worldPos.x - playerX);
+
+                            // Debug: log position every 60 frames
+                            if (Math.random() < 0.016) { // ~1 per second at 60fps
+                                console.log(`Book ${this.id}: worldZ=${worldPos.z.toFixed(1)}, playerZ=${playerZ.toFixed(1)}, dist=${distZ.toFixed(1)}`);
+                            }
+
+                            // Proximity glow intensification
+                            if (distZ < 8 && distX < 3) {
+                                const pulse = Math.sin(time * 3) * 0.15;
+                                this.mesh.material.emissiveIntensity = 0.8 + pulse;
+                            } else {
+                                this.mesh.material.emissiveIntensity = this.baseEmissive;
+                            }
+                        }
+
+                        collect() {
+                            if (this.collected) return;
+                            this.collected = true;
+                            this.mesh.visible = false;
+                        }
+
+                        reset(newZ, newSide) {
+                            // For pooling: reposition and reset state
+                            this.collected = false;
+                            this.mesh.visible = true;
+                            this.side = newSide;
+                            const xPos = newSide === 'left' ? -2.5 : 2.5;
+                            this.mesh.position.set(xPos, 1.5, newZ);
                             this.mesh.material.emissiveIntensity = this.baseEmissive;
                         }
                     }
 
-                    collect() {
-                        if (this.collected) return;
-                        this.collected = true;
-                        this.mesh.visible = false;
-                    }
+                    class HallwaySegment {
+                        constructor(zStart, length, isPreload = false, onReady = null) {
+                            this.zStart = zStart;
+                            this.originalZStart = zStart; // Store for consistent local positioning
+                            this.length = length;
+                            this.meshGroup = new THREE.Group();
+                            this.lights = [];
 
-                    reset(newZ, newSide) {
-                        // For pooling: reposition and reset state
-                        this.collected = false;
-                        this.mesh.visible = true;
-                        this.side = newSide;
-                        const xPos = newSide === 'left' ? -2.5 : 2.5;
-                        this.mesh.position.set(xPos, 1.5, newZ);
-                        this.mesh.material.emissiveIntensity = this.baseEmissive;
-                    }
-                }
+                            // 1. Floor & Ceiling
+                            // Use Shared Geometries!
+                            const floor = new THREE.Mesh(sharedPlaneGeo, floorMaterial);
+                            floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = true;
+                            floor.frustumCulled = false; // FIX: Prevent Abyss
+                            this.meshGroup.add(floor);
 
-                class HallwaySegment {
-                    constructor(zStart, length, isPreload = false, onReady = null) {
-                        this.zStart = zStart;
-                        this.originalZStart = zStart; // Store for consistent local positioning
-                        this.length = length;
-                        this.meshGroup = new THREE.Group();
-                        this.lights = [];
+                            const ceiling = new THREE.Mesh(sharedPlaneGeo, wallMaterial);
+                            ceiling.rotation.x = Math.PI / 2; ceiling.position.y = config.roomHeight; ceiling.position.z = zStart - length / 2;
+                            ceiling.frustumCulled = false; // FIX: Prevent Abyss
+                            this.meshGroup.add(ceiling);
 
-                        // 1. Floor & Ceiling
-                        // Use Shared Geometries!
-                        const floor = new THREE.Mesh(sharedPlaneGeo, floorMaterial);
-                        floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = true;
-                        floor.frustumCulled = false; // FIX: Prevent Abyss
-                        this.meshGroup.add(floor);
+                            // 2. Shelves
+                            const leftShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                            leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = true; leftShelf.receiveShadow = true;
+                            leftShelf.frustumCulled = false; // FIX: Prevent Abyss
+                            this.meshGroup.add(leftShelf);
 
-                        const ceiling = new THREE.Mesh(sharedPlaneGeo, wallMaterial);
-                        ceiling.rotation.x = Math.PI / 2; ceiling.position.y = config.roomHeight; ceiling.position.z = zStart - length / 2;
-                        ceiling.frustumCulled = false; // FIX: Prevent Abyss
-                        this.meshGroup.add(ceiling);
+                            const rightShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                            rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = true; rightShelf.receiveShadow = true;
+                            rightShelf.frustumCulled = false; // FIX: Prevent Abyss
+                            this.meshGroup.add(rightShelf);
 
-                        // 2. Shelves
-                        const leftShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
-                        leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = true; leftShelf.receiveShadow = true;
-                        leftShelf.frustumCulled = false; // FIX: Prevent Abyss
-                        this.meshGroup.add(leftShelf);
+                            // 3. Plank Levels
+                            const levels = 9;
+                            for (let i = 0; i < levels; i++) {
+                                const y = (config.roomHeight / levels) * i + 0.4;
 
-                        const rightShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
-                        rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = true; rightShelf.receiveShadow = true;
-                        rightShelf.frustumCulled = false; // FIX: Prevent Abyss
-                        this.meshGroup.add(rightShelf);
+                                const pLeft = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                                pLeft.position.set(-2.6, y, zStart - length / 2);
+                                pLeft.castShadow = true; pLeft.receiveShadow = true; // FIX: BLOCK LIGHT
+                                this.meshGroup.add(pLeft);
 
-                        // 3. Plank Levels
-                        const levels = 9;
-                        for (let i = 0; i < levels; i++) {
-                            const y = (config.roomHeight / levels) * i + 0.4;
-
-                            const pLeft = new THREE.Mesh(sharedPlankGeo, woodMaterial);
-                            pLeft.position.set(-2.6, y, zStart - length / 2);
-                            pLeft.castShadow = true; pLeft.receiveShadow = true; // FIX: BLOCK LIGHT
-                            this.meshGroup.add(pLeft);
-
-                            const pRight = new THREE.Mesh(sharedPlankGeo, woodMaterial);
-                            pRight.position.set(2.6, y, zStart - length / 2);
-                            pRight.castShadow = true; pRight.receiveShadow = true; // FIX: BLOCK LIGHT
-                            this.meshGroup.add(pRight);
-                        }
-
-                        // 4. Books (InstancedMesh)
-                        this.createBooks(zStart, length, levels, isPreload, onReady);
-
-                        // 5. Light (One per segment)
-                        const light = new YellowLight(zStart - length / 2);
-                        this.lights.push(light);
-                        this.meshGroup.add(light.group);
-
-                        // 6. Dust (Segment-Local)
-                        this.createDust(length);
-
-                        scene.add(this.meshGroup);
-                    }
-
-                    createDust(length) {
-                        // ~80 particles per segment (approx half global density distributed)
-                        const count = 80;
-                        const geo = new THREE.BufferGeometry();
-                        const positions = new Float32Array(count * 3);
-                        this.dustSpeeds = new Float32Array(count);
-
-                        for (let i = 0; i < count; i++) {
-                            // Local positions relative to segment center (0,0,0 is at floor, zStart-length/2)
-                            // But WAIT: meshGroup origin is (0,0,0). 
-                            // Floor is at zStart - length/2. 
-                            // Let's check meshGroup structure again.
-                            // Elements are added at Absolute World Coords? No.
-                            // floor.position.z = zStart - length / 2;
-                            // Yes, children have 'absolute' coords relative to a (0,0,0) group.
-
-                            // So Dust must be placed within [zStart - length, zStart]
-                            const z = this.zStart - Math.random() * length;
-                            const x = (Math.random() - 0.5) * (config.roomWidth - 1); // Stay inside walls
-                            const y = Math.random() * config.roomHeight;
-
-                            positions[i * 3] = x;
-                            positions[i * 3 + 1] = y;
-                            positions[i * 3 + 2] = z;
-                            this.dustSpeeds[i] = 0.05 + Math.random() * 0.1;
-                        }
-                        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-                        // Re-create texture here or reuse? Reuse is better but for safety defining inline or global helper.
-                        // Defining simple canvas texture helper:
-                        if (!window.dustTex) {
-                            const c = document.createElement('canvas'); c.width = 32; c.height = 32;
-                            const ctx = c.getContext('2d');
-                            const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-                            g.addColorStop(0, 'rgba(255,255,255,1)');
-                            g.addColorStop(1, 'rgba(255,255,255,0)');
-                            ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32);
-                            window.dustTex = new THREE.CanvasTexture(c);
-                        }
-
-                        const mat = new THREE.PointsMaterial({
-                            color: 0xaaaaaa, size: 0.05, map: window.dustTex,
-                            transparent: true, opacity: 0.3,
-                            depthWrite: false, blending: THREE.AdditiveBlending
-                        });
-
-                        this.dustMesh = new THREE.Points(geo, mat);
-                        this.dustMesh.frustumCulled = false;
-                        this.meshGroup.add(this.dustMesh);
-                    }
-
-                    update(delta, time, playerPos) {
-                        // Update Lights
-                        this.lights.forEach(l => l.update(time, playerPos.z)); // Pass playerZ for light fade
-
-                        // Update Dust
-                        if (this.dustMesh) {
-                            const pos = this.dustMesh.geometry.attributes.position.array;
-                            for (let i = 0; i < pos.length / 3; i++) {
-                                pos[i * 3 + 1] -= this.dustSpeeds[i] * delta * 2.0; // Fall speed
-                                if (pos[i * 3 + 1] < 0) {
-                                    pos[i * 3 + 1] = config.roomHeight;
-                                }
-                            }
-                            this.dustMesh.geometry.attributes.position.needsUpdate = true;
-                        }
-                    }
-
-                    createBooks(zStart, length, levels) {
-                        this.glowingBook = null;
-                        const segmentIndex = Math.abs(Math.round(zStart / length));
-                        // Count uncollected active books
-                        const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
-                        const globalLoreCount = getGlobalCollectedLoreCount();
-                        if (segmentIndex % 5 === 0 && segmentIndex > 0 && globalLoreCount < 5 && uncollectedBooks < 1) {
-                            const side = Math.random() > 0.5 ? 'left' : 'right';
-                            this.glowingBook = new GlowingBook(zStart - length / 2, side);
-                            this.meshGroup.add(this.glowingBook.mesh);
-                            activeGlowingBooks.push(this.glowingBook);
-                        }
-                    }
-
-                    reset(newZStart) {
-                        // FIX: Calculate offset BEFORE updating this.zStart
-                        const currentZStart = this.zStart; // This tracks where it currently is logically
-                        const offset = newZStart - currentZStart;
-
-                        this.zStart = newZStart;
-
-                        // Move everything by offset
-                        this.meshGroup.position.z += offset;
-
-                        // Reset Lights
-                        // FIX: Do NOT pass newZ. Light position is relative and static.
-                        this.lights.forEach(l => l.reset());
-
-                        // Reset Books
-                        this.resetBooks();
-
-                        // Handle Glowing Book for recycled segment
-                        // Remove old book if it was collected or missed
-                        if (this.glowingBook && (this.glowingBook.collected || this.glowingBook.missed)) {
-                            // Remove from active list
-                            const idx = activeGlowingBooks.indexOf(this.glowingBook);
-                            if (idx > -1) activeGlowingBooks.splice(idx, 1);
-                            // Remove mesh
-                            this.meshGroup.remove(this.glowingBook.mesh);
-                            this.glowingBook = null;
-                        }
-
-                        // Try to spawn a new glowing book (same logic as constructor)
-                        const globalLoreCount = getGlobalCollectedLoreCount();
-                        if (!this.glowingBook && globalLoreCount < 5) {
-                            const segmentIndex = Math.abs(Math.round(newZStart / this.length));
-                            const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
-                            if (segmentIndex % 5 === 0 && segmentIndex > 0 && uncollectedBooks < 1) {
-                                const side = Math.random() > 0.5 ? 'left' : 'right';
-                                // FIX: Use ORIGINAL constructor zStart for local coordinates
-                                // This matches how floor, shelves, and other segment objects are positioned
-                                const localZ = this.originalZStart - this.length / 2;
-                                this.glowingBook = new GlowingBook(localZ, side);
-                                this.meshGroup.add(this.glowingBook.mesh);
-                                // Force matrix update so getWorldPosition works immediately
-                                this.glowingBook.mesh.updateMatrixWorld(true);
-                                activeGlowingBooks.push(this.glowingBook);
-
-                                // Debug: log actual world position
-                                const debugPos = new THREE.Vector3();
-                                this.glowingBook.mesh.getWorldPosition(debugPos);
-                                console.log(`Spawned book: local=(${localZ}), world=(${debugPos.z.toFixed(1)}), target=(${(newZStart - this.length / 2).toFixed(1)})`);
-                            }
-                        }
-
-                        // force update
-                        this.meshGroup.updateMatrixWorld(true);
-                    }
-
-                    createBooks(zStart, length, levels, isPreload, onReady) {
-                        const bookCount = 6000;
-                        // SAVE REFERENCES for Reset
-                        this.bookCount = bookCount;
-                        if (!this.meshBooks) {
-                            this.meshBooks = new THREE.InstancedMesh(sharedBookGeo, bookMat, bookCount);
-                            this.meshBooks.castShadow = true; this.meshBooks.receiveShadow = true;
-                            this.meshBooks.frustumCulled = false; // FIX: Prevent invisible books
-                            this.meshGroup.add(this.meshBooks);
-                        }
-                        this.meshBooks.count = 0; // Hide all initially
-
-                        this.resetBooks = () => {
-                            // Correct Z of InstancedMesh?
-                            // It is child of meshGroup. If Group moves, it moves.
-                            // But book positions are calculated in LOCAL space or WORLD space?
-                            // in `processBatch`: dummy.position.set(..., currentZ)
-                            // currentZ starts at zStart. 
-                            // If meshGroup moved, currentZ (local) should validly be relative?
-                            // Wait. In constructor: `floor.position.z = zStart - length/2`.
-                            // If `meshGroup` is at (0,0,0) initially.
-                            // Objects are at world Z.
-                            // If we now move meshGroup.position.z by -50.
-                            // Objects move -50. 
-                            // So Reset Logic:
-                            // 1. Move MeshGroup.
-                            // 2. Generate books using RELATIVE coords?
-                            // Currently logic uses `zStart` (Absolute).
-                            // We must pass `0` to generator if Group is handling offset?
-                            // Or generator logic must use new Z?
-                            // If Group is moved, generator using Absolute Z will Double Move.
-                            // ERROR RISK.
-
-                            // FIX: Generator should spawn books local to Group (around 0..-Length).
-                            // Constructor currently uses Absolute Z.
-                            // This is improper for grouping.
-                            // BUT converting to relative is risky big refactor.
-
-                            // Alternative:
-                            // Just update `zStart` in this closure?
-                            // New generator run.
-                            this.meshBooks.count = 0;
-                            this.startBookGeneration();
-                        };
-
-                        // We need to allow restarting generation.
-                        this.startBookGeneration = () => {
-                            const dummy = new THREE.Object3D();
-                            const color = new THREE.Color();
-                            const bookColors = [0x4a3c31, 0x2f1e15, 0x6e2c2c, 0x1a2e1f, 0x0d0d0d, 0x5c5040];
-
-                            // Calculate Z range relative to GROUP position?
-                            // The group has moved to `newZStart`.
-                            // Objects inside are defined at `oldZStart`.
-                            // Moving group shifts them to `newZStart`.
-                            // So we should generate books at `oldZStart` coordinates? 
-                            // Yes. If we use `zStart` (original) it works.
-
-                            let globalIndex = 0;
-                            const workQueue = [];
-                            // Use 'local' start (original zStart) 
-                            // because Group translation handles current World Pos.
-                            const localZStart = zStart;
-
-                            // 1. Prepare Queue
-                            for (let side of [-1, 1]) {
-                                const shelfX = side * 2.6;
-                                for (let i = 0; i < levels; i++) {
-                                    workQueue.push({ side, shelfX, levelIndex: i });
-                                }
+                                const pRight = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                                pRight.position.set(2.6, y, zStart - length / 2);
+                                pRight.castShadow = true; pRight.receiveShadow = true; // FIX: BLOCK LIGHT
+                                this.meshGroup.add(pRight);
                             }
 
-                            const processBatch = () => {
-                                // Stop if we are reset again? (version check?)
-                                if (workQueue.length === 0 || globalIndex >= this.bookCount) {
-                                    if (onReady) {
-                                        onReady();
-                                        onReady = null; // Prevent re-triggering during Recycle/Reset!
+                            // 4. Books (InstancedMesh)
+                            this.createBooks(zStart, length, levels, isPreload, onReady);
+
+                            // 5. Light (One per segment)
+                            const light = new YellowLight(zStart - length / 2);
+                            this.lights.push(light);
+                            this.meshGroup.add(light.group);
+
+                            // 6. Dust (Segment-Local)
+                            this.createDust(length);
+
+                            scene.add(this.meshGroup);
+                        }
+
+                        createDust(length) {
+                            // ~80 particles per segment (approx half global density distributed)
+                            const count = 80;
+                            const geo = new THREE.BufferGeometry();
+                            const positions = new Float32Array(count * 3);
+                            this.dustSpeeds = new Float32Array(count);
+
+                            for (let i = 0; i < count; i++) {
+                                // Local positions relative to segment center (0,0,0 is at floor, zStart-length/2)
+                                // But WAIT: meshGroup origin is (0,0,0). 
+                                // Floor is at zStart - length/2. 
+                                // Let's check meshGroup structure again.
+                                // Elements are added at Absolute World Coords? No.
+                                // floor.position.z = zStart - length / 2;
+                                // Yes, children have 'absolute' coords relative to a (0,0,0) group.
+
+                                // So Dust must be placed within [zStart - length, zStart]
+                                const z = this.zStart - Math.random() * length;
+                                const x = (Math.random() - 0.5) * (config.roomWidth - 1); // Stay inside walls
+                                const y = Math.random() * config.roomHeight;
+
+                                positions[i * 3] = x;
+                                positions[i * 3 + 1] = y;
+                                positions[i * 3 + 2] = z;
+                                this.dustSpeeds[i] = 0.05 + Math.random() * 0.1;
+                            }
+                            geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                            // Re-create texture here or reuse? Reuse is better but for safety defining inline or global helper.
+                            // Defining simple canvas texture helper:
+                            if (!window.dustTex) {
+                                const c = document.createElement('canvas'); c.width = 32; c.height = 32;
+                                const ctx = c.getContext('2d');
+                                const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+                                g.addColorStop(0, 'rgba(255,255,255,1)');
+                                g.addColorStop(1, 'rgba(255,255,255,0)');
+                                ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32);
+                                window.dustTex = new THREE.CanvasTexture(c);
+                            }
+
+                            const mat = new THREE.PointsMaterial({
+                                color: 0xaaaaaa, size: 0.05, map: window.dustTex,
+                                transparent: true, opacity: 0.3,
+                                depthWrite: false, blending: THREE.AdditiveBlending
+                            });
+
+                            this.dustMesh = new THREE.Points(geo, mat);
+                            this.dustMesh.frustumCulled = false;
+                            this.meshGroup.add(this.dustMesh);
+                        }
+
+                        update(delta, time, playerPos) {
+                            // Update Lights
+                            this.lights.forEach(l => l.update(time, playerPos.z)); // Pass playerZ for light fade
+
+                            // Update Dust
+                            if (this.dustMesh) {
+                                const pos = this.dustMesh.geometry.attributes.position.array;
+                                for (let i = 0; i < pos.length / 3; i++) {
+                                    pos[i * 3 + 1] -= this.dustSpeeds[i] * delta * 2.0; // Fall speed
+                                    if (pos[i * 3 + 1] < 0) {
+                                        pos[i * 3 + 1] = config.roomHeight;
                                     }
-                                    return;
                                 }
-                                // ... (Same logic)
-                                const batchSize = isPreload ? 60 : 5;
-                                for (let b = 0; b < batchSize; b++) {
-                                    if (workQueue.length === 0) break;
-                                    const task = workQueue.shift();
-                                    if (task.levelIndex >= 6) continue;
-                                    const y = (config.roomHeight / levels) * task.levelIndex + 0.7;
-                                    if (y > config.roomHeight - 0.5) continue;
+                                this.dustMesh.geometry.attributes.position.needsUpdate = true;
+                            }
+                        }
 
-                                    let currentZ = localZStart;
-                                    const endZ = localZStart - length;
+                        createBooks(zStart, length, levels) {
+                            this.glowingBook = null;
+                            const segmentIndex = Math.abs(Math.round(zStart / length));
+                            // Count uncollected active books
+                            const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
+                            const globalLoreCount = getGlobalCollectedLoreCount();
+                            if (segmentIndex % 5 === 0 && segmentIndex > 0 && globalLoreCount < 5 && uncollectedBooks < 1) {
+                                const side = Math.random() > 0.5 ? 'left' : 'right';
+                                this.glowingBook = new GlowingBook(zStart - length / 2, side);
+                                this.meshGroup.add(this.glowingBook.mesh);
+                                activeGlowingBooks.push(this.glowingBook);
+                            }
+                        }
 
-                                    while (currentZ > endZ) {
-                                        if (globalIndex >= this.bookCount) break;
-                                        // ... Generation ...
-                                        const height = 0.5 + Math.random() * 0.3;
-                                        const thick = 0.05 + Math.random() * 0.08;
-                                        const depth = 0.7 + Math.random() * 0.15;
-                                        const gap = 0.03;
+                        reset(newZStart) {
+                            // FIX: Calculate offset BEFORE updating this.zStart
+                            const currentZStart = this.zStart; // This tracks where it currently is logically
+                            const offset = newZStart - currentZStart;
 
-                                        if (Math.random() > 0.02) {
-                                            const xOffset = (Math.random() - 0.5) * 0.1;
-                                            // Coordinates are "Local" (relative to original zStart)
-                                            dummy.position.set(task.shelfX + xOffset, y - 0.3 + height / 2, currentZ - thick / 2);
-                                            dummy.scale.set(depth, height, thick);
-                                            dummy.rotation.set(0, 0, 0);
-                                            if (task.side === 1) dummy.rotation.y = Math.PI;
-                                            dummy.rotation.z = (Math.random() - 0.5) * 0.08;
-                                            dummy.rotation.y += (Math.random() - 0.5) * 0.08;
-                                            dummy.updateMatrix();
-                                            this.meshBooks.setMatrixAt(globalIndex, dummy.matrix);
+                            this.zStart = newZStart;
 
-                                            // Color
-                                            color.setHex(bookColors[Math.floor(Math.random() * bookColors.length)]);
-                                            color.r += (Math.random() - 0.5) * 0.1;
-                                            // ...
-                                            this.meshBooks.setColorAt(globalIndex, color);
-                                            globalIndex++;
-                                            currentZ -= (thick + gap);
-                                        } else {
-                                            currentZ -= (0.05 + Math.random() * 0.15);
+                            // Move everything by offset
+                            this.meshGroup.position.z += offset;
+
+                            // Reset Lights
+                            // FIX: Do NOT pass newZ. Light position is relative and static.
+                            this.lights.forEach(l => l.reset());
+
+                            // Reset Books
+                            this.resetBooks();
+
+                            // Handle Glowing Book for recycled segment
+                            // Remove old book if it was collected or missed
+                            if (this.glowingBook && (this.glowingBook.collected || this.glowingBook.missed)) {
+                                // Remove from active list
+                                const idx = activeGlowingBooks.indexOf(this.glowingBook);
+                                if (idx > -1) activeGlowingBooks.splice(idx, 1);
+                                // Remove mesh
+                                this.meshGroup.remove(this.glowingBook.mesh);
+                                this.glowingBook = null;
+                            }
+
+                            // Try to spawn a new glowing book (same logic as constructor)
+                            const globalLoreCount = getGlobalCollectedLoreCount();
+                            if (!this.glowingBook && globalLoreCount < 5) {
+                                const segmentIndex = Math.abs(Math.round(newZStart / this.length));
+                                const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
+                                if (segmentIndex % 5 === 0 && segmentIndex > 0 && uncollectedBooks < 1) {
+                                    const side = Math.random() > 0.5 ? 'left' : 'right';
+                                    // FIX: Use ORIGINAL constructor zStart for local coordinates
+                                    // This matches how floor, shelves, and other segment objects are positioned
+                                    const localZ = this.originalZStart - this.length / 2;
+                                    this.glowingBook = new GlowingBook(localZ, side);
+                                    this.meshGroup.add(this.glowingBook.mesh);
+                                    // Force matrix update so getWorldPosition works immediately
+                                    this.glowingBook.mesh.updateMatrixWorld(true);
+                                    activeGlowingBooks.push(this.glowingBook);
+
+                                    // Debug: log actual world position
+                                    const debugPos = new THREE.Vector3();
+                                    this.glowingBook.mesh.getWorldPosition(debugPos);
+                                    console.log(`Spawned book: local=(${localZ}), world=(${debugPos.z.toFixed(1)}), target=(${(newZStart - this.length / 2).toFixed(1)})`);
+                                }
+                            }
+
+                            // force update
+                            this.meshGroup.updateMatrixWorld(true);
+                        }
+
+                        createBooks(zStart, length, levels, isPreload, onReady) {
+                            const bookCount = 6000;
+                            // SAVE REFERENCES for Reset
+                            this.bookCount = bookCount;
+                            if (!this.meshBooks) {
+                                this.meshBooks = new THREE.InstancedMesh(sharedBookGeo, bookMat, bookCount);
+                                this.meshBooks.castShadow = true; this.meshBooks.receiveShadow = true;
+                                this.meshBooks.frustumCulled = false; // FIX: Prevent invisible books
+                                this.meshGroup.add(this.meshBooks);
+                            }
+                            this.meshBooks.count = 0; // Hide all initially
+
+                            this.resetBooks = () => {
+                                // Correct Z of InstancedMesh?
+                                // It is child of meshGroup. If Group moves, it moves.
+                                // But book positions are calculated in LOCAL space or WORLD space?
+                                // in `processBatch`: dummy.position.set(..., currentZ)
+                                // currentZ starts at zStart. 
+                                // If meshGroup moved, currentZ (local) should validly be relative?
+                                // Wait. In constructor: `floor.position.z = zStart - length/2`.
+                                // If `meshGroup` is at (0,0,0) initially.
+                                // Objects are at world Z.
+                                // If we now move meshGroup.position.z by -50.
+                                // Objects move -50. 
+                                // So Reset Logic:
+                                // 1. Move MeshGroup.
+                                // 2. Generate books using RELATIVE coords?
+                                // Currently logic uses `zStart` (Absolute).
+                                // We must pass `0` to generator if Group is handling offset?
+                                // Or generator logic must use new Z?
+                                // If Group is moved, generator using Absolute Z will Double Move.
+                                // ERROR RISK.
+
+                                // FIX: Generator should spawn books local to Group (around 0..-Length).
+                                // Constructor currently uses Absolute Z.
+                                // This is improper for grouping.
+                                // BUT converting to relative is risky big refactor.
+
+                                // Alternative:
+                                // Just update `zStart` in this closure?
+                                // New generator run.
+                                this.meshBooks.count = 0;
+                                this.startBookGeneration();
+                            };
+
+                            // We need to allow restarting generation.
+                            this.startBookGeneration = () => {
+                                const dummy = new THREE.Object3D();
+                                const color = new THREE.Color();
+                                const bookColors = [0x4a3c31, 0x2f1e15, 0x6e2c2c, 0x1a2e1f, 0x0d0d0d, 0x5c5040];
+
+                                // Calculate Z range relative to GROUP position?
+                                // The group has moved to `newZStart`.
+                                // Objects inside are defined at `oldZStart`.
+                                // Moving group shifts them to `newZStart`.
+                                // So we should generate books at `oldZStart` coordinates? 
+                                // Yes. If we use `zStart` (original) it works.
+
+                                let globalIndex = 0;
+                                const workQueue = [];
+                                // Use 'local' start (original zStart) 
+                                // because Group translation handles current World Pos.
+                                const localZStart = zStart;
+
+                                // 1. Prepare Queue
+                                for (let side of [-1, 1]) {
+                                    const shelfX = side * 2.6;
+                                    for (let i = 0; i < levels; i++) {
+                                        workQueue.push({ side, shelfX, levelIndex: i });
+                                    }
+                                }
+
+                                const processBatch = () => {
+                                    // Stop if we are reset again? (version check?)
+                                    if (workQueue.length === 0 || globalIndex >= this.bookCount) {
+                                        if (onReady) {
+                                            onReady();
+                                            onReady = null; // Prevent re-triggering during Recycle/Reset!
+                                        }
+                                        return;
+                                    }
+                                    // ... (Same logic)
+                                    const batchSize = isPreload ? 60 : 5;
+                                    for (let b = 0; b < batchSize; b++) {
+                                        if (workQueue.length === 0) break;
+                                        const task = workQueue.shift();
+                                        if (task.levelIndex >= 6) continue;
+                                        const y = (config.roomHeight / levels) * task.levelIndex + 0.7;
+                                        if (y > config.roomHeight - 0.5) continue;
+
+                                        let currentZ = localZStart;
+                                        const endZ = localZStart - length;
+
+                                        while (currentZ > endZ) {
+                                            if (globalIndex >= this.bookCount) break;
+                                            // ... Generation ...
+                                            const height = 0.5 + Math.random() * 0.3;
+                                            const thick = 0.05 + Math.random() * 0.08;
+                                            const depth = 0.7 + Math.random() * 0.15;
+                                            const gap = 0.03;
+
+                                            if (Math.random() > 0.02) {
+                                                const xOffset = (Math.random() - 0.5) * 0.1;
+                                                // Coordinates are "Local" (relative to original zStart)
+                                                dummy.position.set(task.shelfX + xOffset, y - 0.3 + height / 2, currentZ - thick / 2);
+                                                dummy.scale.set(depth, height, thick);
+                                                dummy.rotation.set(0, 0, 0);
+                                                if (task.side === 1) dummy.rotation.y = Math.PI;
+                                                dummy.rotation.z = (Math.random() - 0.5) * 0.08;
+                                                dummy.rotation.y += (Math.random() - 0.5) * 0.08;
+                                                dummy.updateMatrix();
+                                                this.meshBooks.setMatrixAt(globalIndex, dummy.matrix);
+
+                                                // Color
+                                                color.setHex(bookColors[Math.floor(Math.random() * bookColors.length)]);
+                                                color.r += (Math.random() - 0.5) * 0.1;
+                                                // ...
+                                                this.meshBooks.setColorAt(globalIndex, color);
+                                                globalIndex++;
+                                                currentZ -= (thick + gap);
+                                            } else {
+                                                currentZ -= (0.05 + Math.random() * 0.15);
+                                            }
                                         }
                                     }
-                                }
-                                this.meshBooks.count = globalIndex;
-                                this.meshBooks.instanceMatrix.needsUpdate = true;
-                                if (this.meshBooks.instanceColor) this.meshBooks.instanceColor.needsUpdate = true;
-                                requestAnimationFrame(processBatch);
+                                    this.meshBooks.count = globalIndex;
+                                    this.meshBooks.instanceMatrix.needsUpdate = true;
+                                    if (this.meshBooks.instanceColor) this.meshBooks.instanceColor.needsUpdate = true;
+                                    requestAnimationFrame(processBatch);
+                                };
+                                processBatch();
                             };
-                            processBatch();
-                        };
 
-                        this.startBookGeneration();
-                    }
+                            this.startBookGeneration();
+                        }
 
-                    dispose() {
-                        // 1. Dispose Lights
-                        this.lights.forEach(l => l.dispose());
+                        dispose() {
+                            // 1. Dispose Lights
+                            this.lights.forEach(l => l.dispose());
 
-                        // 2. Dispose Geometries
-                        // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
+                            // 2. Dispose Geometries
+                            // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
 
-                        // 3. Remove from Scene
-                        scene.remove(this.meshGroup);
-                    }
-                }
-
-                // --- GAME LOOP ---
-                const segments = [];
-                // const segmentPool = []; // REMOVED: Proper recycling uses the active list directly
-                const segmentLength = config.segmentLength;
-
-                function updateSegments(playerZ) {
-                    // Ensure we have 4 segments initially (handled by preload) but check just in case
-                    if (segments.length < 4) {
-                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 10;
-                        addSegment(lastZ - segmentLength);
-                        return;
-                    }
-
-                    const lastSeg = segments[segments.length - 1];
-                    const firstSeg = segments[0];
-
-                    // Recycle trigger: Player passed the first segment's end (plus buffer)
-                    // firstSeg covers [zStart - 20, zStart]. Center is zStart - 10.
-                    // If playerZ < firstSeg.zStart - segmentLength - 5 (approx)
-                    // e.g. zStart=0. Range [-20, 0]. Player at -25.
-                    if (playerZ < firstSeg.zStart - segmentLength - 5) {
-                        // RECYCLE: Take first segment, reset it to new position at end
-                        const newZ = lastSeg.zStart - segmentLength;
-
-                        // console.log(`Recycling Segment: Moving from ${firstSeg.zStart} to ${newZ}`);
-
-                        firstSeg.reset(newZ);
-
-                        // Move from front to back of array
-                        segments.shift();
-                        segments.push(firstSeg);
-                    }
-                }
-
-                function addSegment(zStart) {
-                    const seg = new HallwaySegment(zStart, segmentLength);
-                    segments.push(seg);
-                }
-
-                const clock = new THREE.Clock();
-                const velocity = new THREE.Vector3();
-                const move = { f: false, b: false, l: false, r: false };
-
-                // Click-to-Move State
-                let moveTarget = null;
-                let cameraLookTarget = null; // 3D point camera should smoothly look at
-                const raycaster = new THREE.Raycaster();
-                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
-
-                document.addEventListener('click', (event) => {
-                    // 1. TRUST EVENT TARGET FIRST (Standard Bubbling Check)
-                    if (event.target.closest('#audioPlayerUI') ||
-                        event.target.closest('.audio-btn') ||
-                        event.target.closest('#loading')) {
-                        console.log("Click ignored: UI Target");
-                        return;
-                    }
-
-                    // 2. CHECK DEADZONE (Bottom Screen - Mobile Buttons)
-                    // Expanded to 120px to cover larger mobile bars/UI
-                    if (event.clientY > window.innerHeight - 120) {
-                        console.log("Ignored Click in UI Deadzone (120px)");
-                        return;
-                    }
-
-                    // 3. FALLBACK: Use elementFromPoint for visual overlap
-                    const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
-
-                    if (clickedEl && (
-                        clickedEl.closest('#audioPlayerUI') ||
-                        clickedEl.closest('#audioControls') ||
-                        clickedEl.closest('.audio-btn') ||
-                        clickedEl.closest('#archiveModal') || // This covers the entire modal
-                        clickedEl.closest('.menu-item') ||    // Explicitly safety check menu items
-                        clickedEl.closest('#subtitleContainer') ||
-                        clickedEl.closest('#nextChapterBtn') ||
-                        clickedEl.closest('#loading'))) {
-                        console.log("Click ignored: UI element (Visual)");
-                        return;
-                    }
-
-                    // DISABLED in reading mode
-                    if (player.isReadingMode) {
-                        console.log("Click-to-move disabled in reading mode");
-                        return;
-                    }
-
-                    // If this was a touch drag (swipe), don't trigger click-to-move
-                    if (isTouchDragging) {
-                        console.log("Click ignored: was a drag gesture");
-                        isTouchDragging = false;
-                        return;
-                    }
-
-                    // DEADZONE CHECK MOVED UP
-                    // (Clean up old deadzone check)
-
-                    // Calculate click position in normalized coordinates
-                    const clickScreenX = (event.clientX / window.innerWidth) * 2 - 1;
-                    const clickScreenY = (event.clientY / window.innerHeight) * 2 - 1;
-
-                    // Use local coordinates for raycast
-                    const clickMouse = new THREE.Vector2();
-                    clickMouse.x = clickScreenX;
-                    clickMouse.y = -clickScreenY; // Flip Y for Three.js
-
-                    raycaster.setFromCamera(clickMouse, camera);
-
-                    // Check intersection with Scene Objects
-                    const intersects = raycaster.intersectObjects(scene.children, true);
-                    let target = null;
-
-                    for (let i = 0; i < intersects.length; i++) {
-                        if (intersects[i].object.type === 'Points') continue;
-                        target = intersects[i].point;
-                        break;
-                    }
-
-                    // Fallback to Ground Plane
-                    if (!target) {
-                        const groundTarget = new THREE.Vector3();
-                        if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
-                            target = groundTarget;
+                            // 3. Remove from Scene
+                            scene.remove(this.meshGroup);
                         }
                     }
 
-                    if (target) {
-                        // SET 3D CAMERA LOOK TARGET (MOBILE ONLY)
-                        // Desktop: Camera is controlled by mouse only
-                        if (window.innerWidth <= 768) {
-                            cameraLookTarget = target.clone();
-                        }
+                    // --- GAME LOOP ---
+                    const segments = [];
+                    // const segmentPool = []; // REMOVED: Proper recycling uses the active list directly
+                    const segmentLength = config.segmentLength;
 
-                        // Clamp X to hallway bounds for movement
-                        if (target.x < -2.5) target.x = -2.5;
-                        if (target.x > 2.5) target.x = 2.5;
-
-                        // NO BACKWARDS MOVEMENT
-                        if (target.z > camera.position.z + 2.0) {
-                            console.log("Ignored Backwards Click");
-                            cameraLookTarget = null; // Don't look at backwards target
+                    function updateSegments(playerZ) {
+                        // Ensure we have 4 segments initially (handled by preload) but check just in case
+                        if (segments.length < 4) {
+                            const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 10;
+                            addSegment(lastZ - segmentLength);
                             return;
                         }
 
-                        // Set movement Target
-                        moveTarget = new THREE.Vector3(target.x, camera.position.y, target.z);
-                        console.log("Moving to:", moveTarget, "Looking at:", cameraLookTarget);
-                    }
-                });
-                document.addEventListener('keydown', (e) => {
-                    // Debug: Log key code and Mode
-                    // console.log("Keydown:", e.code, "ReadingMode:", isReadingMode);
-                    const code = e.code;
-                    if (code === 'KeyW' || code === 'ArrowUp') move.f = true;
-                    if (code === 'KeyS' || code === 'ArrowDown') move.b = true;
-                    if (code === 'KeyA' || code === 'ArrowLeft') { move.l = true; console.log("Move Left START"); }
-                    if (code === 'KeyD' || code === 'ArrowRight') { move.r = true; console.log("Move Right START"); }
-                });
-                document.addEventListener('keyup', (e) => {
-                    const code = e.code;
-                    if (code === 'KeyW' || code === 'ArrowUp') move.f = false;
-                    if (code === 'KeyS' || code === 'ArrowDown') move.b = false;
-                    if (code === 'KeyA' || code === 'ArrowLeft') move.l = false;
-                    if (code === 'KeyD' || code === 'ArrowRight') move.r = false;
-                });
+                        const lastSeg = segments[segments.length - 1];
+                        const firstSeg = segments[0];
 
-                // --- LORE MODE FUNCTIONS (Glowing Books) ---
-                // Uses existing isLoreMode and mainAudioState from line ~725
+                        // Recycle trigger: Player passed the first segment's end (plus buffer)
+                        // firstSeg covers [zStart - 20, zStart]. Center is zStart - 10.
+                        // If playerZ < firstSeg.zStart - segmentLength - 5 (approx)
+                        // e.g. zStart=0. Range [-20, 0]. Player at -25.
+                        if (playerZ < firstSeg.zStart - segmentLength - 5) {
+                            // RECYCLE: Take first segment, reset it to new position at end
+                            const newZ = lastSeg.zStart - segmentLength;
 
-                // --- LORE MODE ---
-                // (Global window.startLoreMode defined above is used)
+                            // console.log(`Recycling Segment: Moving from ${firstSeg.zStart} to ${newZ}`);
 
-                // --- INIT & PRELOAD ---
-                console.log("DEBUG: Initialization Complete. Starting Preload...");
+                            firstSeg.reset(newZ);
 
-                // 1. Initial Segments Preload
-                let loadedSegments = 0;
-                // User Request: Start at Meter 3.00 -> Need segment at +10 to cover start (Range 0 to 10)
-                const initialZ = [10, 0, -10, -20];
-                const totalToLoad = initialZ.length;
-
-                function checkPreloadComplete() {
-                    loadedSegments++;
-                    // console.log(`DEBUG: Loaded Segments: ${loadedSegments} / ${totalToLoad}`);
-                    // Update Loading Bar or Logic here if needed
-                    if (loadedSegments >= totalToLoad) {
-                        console.log("DEBUG: Preload Complete. Starting Game.");
-                        startGame();
-                    }
-                }
-
-                // Create initial segments with High Priority (Preload Mode)
-                initialZ.forEach(z => {
-                    segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
-                });
-
-                function startGame() {
-                    // Hide 'Click to Start' and Loading Screens
-                    const loadingText = document.getElementById('loading');
-                    if (loadingText) loadingText.style.display = 'none';
-
-                    const loadingScreen = document.getElementById('loading-screen');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-
-                    // Show Game UI immediately
-                    if (uiContainer) uiContainer.style.display = 'flex';
-
-                    // Auto-Play Audio
-                    console.log("DEBUG: Attempting Auto-Play");
-
-                    // SAFETY SYNC: Force Reading Mode State
-                    if (window.audioPlayer && isReadingMode) {
-                        window.audioPlayer.setReadingMode(true);
+                            // Move from front to back of array
+                            segments.shift();
+                            segments.push(firstSeg);
+                        }
                     }
 
-                    player.play().catch(e => {
-                        console.warn("Auto-play blocked, waiting for interaction:", e);
-                    });
-                    updateIcons();
-
-                    // Init Dust - REMOVED Global System (now in segments)
-                    // if (!dustSystem) ...
-
-                    // FIX: Force Shader Compilation to prevent initial stutter
-                    try {
-                        renderer.compile(scene, camera);
-                    } catch (e) {
-                        console.warn("Shader compilation failed:", e);
+                    function addSegment(zStart) {
+                        const seg = new HallwaySegment(zStart, segmentLength);
+                        segments.push(seg);
                     }
 
-                    // ============================================
-                    // AUDIO BACKGROUND HANDLING (FIX FOR FIREFOX MOBILE)
-                    // ============================================
-                    let wasAmbientPlaying = false;
-                    let wasPlayerPlaying = false;
-                    window.gamePaused = false; // Flag for Game Loop
+                    const clock = new THREE.Clock();
+                    const velocity = new THREE.Vector3();
+                    const move = { f: false, b: false, l: false, r: false };
 
-                    document.addEventListener('visibilitychange', () => {
-                        if (document.hidden) {
-                            // APP BACKGROUNDED -> PAUSE ALL
-                            window.gamePaused = true;
+                    // Click-to-Move State
+                    let moveTarget = null;
+                    let cameraLookTarget = null; // 3D point camera should smoothly look at
+                    const raycaster = new THREE.Raycaster();
+                    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
 
-                            if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
-                                wasAmbientPlaying = true;
-                                ambientAudio.pause();
-                            } else {
-                                wasAmbientPlaying = false;
+                    document.addEventListener('click', (event) => {
+                        // 1. TRUST EVENT TARGET FIRST (Standard Bubbling Check)
+                        if (event.target.closest('#audioPlayerUI') ||
+                            event.target.closest('.audio-btn') ||
+                            event.target.closest('#loading')) {
+                            console.log("Click ignored: UI Target");
+                            return;
+                        }
+
+                        // 2. CHECK DEADZONE (Bottom Screen - Mobile Buttons)
+                        // Expanded to 120px to cover larger mobile bars/UI
+                        if (event.clientY > window.innerHeight - 120) {
+                            console.log("Ignored Click in UI Deadzone (120px)");
+                            return;
+                        }
+
+                        // 3. FALLBACK: Use elementFromPoint for visual overlap
+                        const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
+
+                        if (clickedEl && (
+                            clickedEl.closest('#audioPlayerUI') ||
+                            clickedEl.closest('#audioControls') ||
+                            clickedEl.closest('.audio-btn') ||
+                            clickedEl.closest('#archiveModal') || // This covers the entire modal
+                            clickedEl.closest('.menu-item') ||    // Explicitly safety check menu items
+                            clickedEl.closest('#subtitleContainer') ||
+                            clickedEl.closest('#nextChapterBtn') ||
+                            clickedEl.closest('#loading'))) {
+                            console.log("Click ignored: UI element (Visual)");
+                            return;
+                        }
+
+                        // DISABLED in reading mode
+                        if (player.isReadingMode) {
+                            console.log("Click-to-move disabled in reading mode");
+                            return;
+                        }
+
+                        // If this was a touch drag (swipe), don't trigger click-to-move
+                        if (isTouchDragging) {
+                            console.log("Click ignored: was a drag gesture");
+                            isTouchDragging = false;
+                            return;
+                        }
+
+                        // DEADZONE CHECK MOVED UP
+                        // (Clean up old deadzone check)
+
+                        // Calculate click position in normalized coordinates
+                        const clickScreenX = (event.clientX / window.innerWidth) * 2 - 1;
+                        const clickScreenY = (event.clientY / window.innerHeight) * 2 - 1;
+
+                        // Use local coordinates for raycast
+                        const clickMouse = new THREE.Vector2();
+                        clickMouse.x = clickScreenX;
+                        clickMouse.y = -clickScreenY; // Flip Y for Three.js
+
+                        raycaster.setFromCamera(clickMouse, camera);
+
+                        // Check intersection with Scene Objects
+                        const intersects = raycaster.intersectObjects(scene.children, true);
+                        let target = null;
+
+                        for (let i = 0; i < intersects.length; i++) {
+                            if (intersects[i].object.type === 'Points') continue;
+                            target = intersects[i].point;
+                            break;
+                        }
+
+                        // Fallback to Ground Plane
+                        if (!target) {
+                            const groundTarget = new THREE.Vector3();
+                            if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
+                                target = groundTarget;
+                            }
+                        }
+
+                        if (target) {
+                            // SET 3D CAMERA LOOK TARGET (MOBILE ONLY)
+                            // Desktop: Camera is controlled by mouse only
+                            if (window.innerWidth <= 768) {
+                                cameraLookTarget = target.clone();
                             }
 
-                            if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
-                                wasPlayerPlaying = true;
-                                audioPlayer.pause();
-                            } else {
-                                wasPlayerPlaying = false;
+                            // Clamp X to hallway bounds for movement
+                            if (target.x < -2.5) target.x = -2.5;
+                            if (target.x > 2.5) target.x = 2.5;
+
+                            // NO BACKWARDS MOVEMENT
+                            if (target.z > camera.position.z + 2.0) {
+                                console.log("Ignored Backwards Click");
+                                cameraLookTarget = null; // Don't look at backwards target
+                                return;
                             }
 
-                        } else {
-                            // APP FOREGROUND -> RESUME
-                            window.gamePaused = false;
-                            // Discard accumulated clock time on resume
-                            if (typeof clock !== 'undefined') clock.getDelta();
-
-                            setTimeout(() => {
-                                if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
-                                    ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
-                                }
-                                if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
-                                    audioPlayer.play().catch(e => console.warn("Resume player failed", e));
-                                }
-                            }, 100);
+                            // Set movement Target
+                            moveTarget = new THREE.Vector3(target.x, camera.position.y, target.z);
+                            console.log("Moving to:", moveTarget, "Looking at:", cameraLookTarget);
                         }
                     });
+                    document.addEventListener('keydown', (e) => {
+                        // Debug: Log key code and Mode
+                        // console.log("Keydown:", e.code, "ReadingMode:", isReadingMode);
+                        const code = e.code;
+                        if (code === 'KeyW' || code === 'ArrowUp') move.f = true;
+                        if (code === 'KeyS' || code === 'ArrowDown') move.b = true;
+                        if (code === 'KeyA' || code === 'ArrowLeft') { move.l = true; console.log("Move Left START"); }
+                        if (code === 'KeyD' || code === 'ArrowRight') { move.r = true; console.log("Move Right START"); }
+                    });
+                    document.addEventListener('keyup', (e) => {
+                        const code = e.code;
+                        if (code === 'KeyW' || code === 'ArrowUp') move.f = false;
+                        if (code === 'KeyS' || code === 'ArrowDown') move.b = false;
+                        if (code === 'KeyA' || code === 'ArrowLeft') move.l = false;
+                        if (code === 'KeyD' || code === 'ArrowRight') move.r = false;
+                    });
 
-                    // Start Animation Loop only after preload
-                    animate();
-                }
+                    // --- LORE MODE FUNCTIONS (Glowing Books) ---
+                    // Uses existing isLoreMode and mainAudioState from line ~725
 
-                // Global Animation State
-                let headBob = 0;
-                // let dustSystem = null; // Removed
+                    // --- LORE MODE ---
+                    // (Global window.startLoreMode defined above is used)
 
-                // Handle Window Resize
-                window.addEventListener('resize', () => {
-                    camera.aspect = window.innerWidth / window.innerHeight;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(window.innerWidth, window.innerHeight);
-                });
+                    // --- INIT & PRELOAD ---
+                    console.log("DEBUG: Initialization Complete. Starting Preload...");
 
-                // Animate
-                let lastFrameTime = performance.now();
-                let frameCount = 0;
-                let fpsLogTimer = 0;
+                    // 1. Initial Segments Preload
+                    let loadedSegments = 0;
+                    // User Request: Start at Meter 3.00 -> Need segment at +10 to cover start (Range 0 to 10)
+                    const initialZ = [10, 0, -10, -20];
+                    const totalToLoad = initialZ.length;
 
-                function animate() {
-                    // FPS Diagnostic
-                    const now = performance.now();
-                    const frameDelta = now - lastFrameTime;
-                    lastFrameTime = now;
-                    frameCount++;
-                    fpsLogTimer += frameDelta;
-                    if (fpsLogTimer > 3000) {
-                        console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
-                        frameCount = 0;
-                        fpsLogTimer = 0;
+                    function checkPreloadComplete() {
+                        loadedSegments++;
+                        // console.log(`DEBUG: Loaded Segments: ${loadedSegments} / ${totalToLoad}`);
+                        // Update Loading Bar or Logic here if needed
+                        if (loadedSegments >= totalToLoad) {
+                            console.log("DEBUG: Preload Complete. Starting Game.");
+                            startGame();
+                        }
                     }
 
-                    // Check Pause
-                    if (window.gamePaused) {
+                    // Create initial segments with High Priority (Preload Mode)
+                    initialZ.forEach(z => {
+                        segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
+                    });
+
+                    function startGame() {
+                        // Hide 'Click to Start' and Loading Screens
+                        const loadingText = document.getElementById('loading');
+                        if (loadingText) loadingText.style.display = 'none';
+
+                        const loadingScreen = document.getElementById('loading-screen');
+                        if (loadingScreen) loadingScreen.style.display = 'none';
+
+                        // Show Game UI immediately
+                        if (uiContainer) uiContainer.style.display = 'flex';
+
+                        // Auto-Play Audio
+                        console.log("DEBUG: Attempting Auto-Play");
+
+                        // SAFETY SYNC: Force Reading Mode State
+                        if (window.audioPlayer && isReadingMode) {
+                            window.audioPlayer.setReadingMode(true);
+                        }
+
+                        player.play().catch(e => {
+                            console.warn("Auto-play blocked, waiting for interaction:", e);
+                        });
+                        updateIcons();
+
+                        // Init Dust - REMOVED Global System (now in segments)
+                        // if (!dustSystem) ...
+
+                        // FIX: Force Shader Compilation to prevent initial stutter
+                        try {
+                            renderer.compile(scene, camera);
+                        } catch (e) {
+                            console.warn("Shader compilation failed:", e);
+                        }
+
+                        // ============================================
+                        // AUDIO BACKGROUND HANDLING (FIX FOR FIREFOX MOBILE)
+                        // ============================================
+                        let wasAmbientPlaying = false;
+                        let wasPlayerPlaying = false;
+                        window.gamePaused = false; // Flag for Game Loop
+
+                        document.addEventListener('visibilitychange', () => {
+                            if (document.hidden) {
+                                // APP BACKGROUNDED -> PAUSE ALL
+                                window.gamePaused = true;
+
+                                if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
+                                    wasAmbientPlaying = true;
+                                    ambientAudio.pause();
+                                } else {
+                                    wasAmbientPlaying = false;
+                                }
+
+                                if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
+                                    wasPlayerPlaying = true;
+                                    audioPlayer.pause();
+                                } else {
+                                    wasPlayerPlaying = false;
+                                }
+
+                            } else {
+                                // APP FOREGROUND -> RESUME
+                                window.gamePaused = false;
+                                // Discard accumulated clock time on resume
+                                if (typeof clock !== 'undefined') clock.getDelta();
+
+                                setTimeout(() => {
+                                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
+                                        ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
+                                    }
+                                    if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
+                                        audioPlayer.play().catch(e => console.warn("Resume player failed", e));
+                                    }
+                                }, 100);
+                            }
+                        });
+
+                        // Start Animation Loop only after preload
+                        animate();
+                    }
+
+                    // Global Animation State
+                    let headBob = 0;
+                    // let dustSystem = null; // Removed
+
+                    // Handle Window Resize
+                    window.addEventListener('resize', () => {
+                        camera.aspect = window.innerWidth / window.innerHeight;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(window.innerWidth, window.innerHeight);
+                    });
+
+                    // Animate
+                    let lastFrameTime = performance.now();
+                    let frameCount = 0;
+                    let fpsLogTimer = 0;
+
+                    function animate() {
+                        // FPS Diagnostic
+                        const now = performance.now();
+                        const frameDelta = now - lastFrameTime;
+                        lastFrameTime = now;
+                        frameCount++;
+                        fpsLogTimer += frameDelta;
+                        if (fpsLogTimer > 3000) {
+                            console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
+                            frameCount = 0;
+                            fpsLogTimer = 0;
+                        }
+
+                        // Check Pause
+                        if (window.gamePaused) {
+                            requestAnimationFrame(animate);
+                            return;
+                        }
+
                         requestAnimationFrame(animate);
-                        return;
-                    }
 
-                    requestAnimationFrame(animate);
+                        try {
+                            const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
+                            const time = clock.getElapsedTime();
 
-                    try {
-                        const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
-                        const time = clock.getElapsedTime();
+                            // Free Look
+                            // If we have a 3D look target, smoothly rotate camera toward it
+                            if (cameraLookTarget) {
+                                // Calculate direction from camera to 3D target point
+                                const lookDir = new THREE.Vector3();
+                                lookDir.subVectors(cameraLookTarget, camera.position).normalize();
 
-                        // Free Look
-                        // If we have a 3D look target, smoothly rotate camera toward it
-                        if (cameraLookTarget) {
-                            // Calculate direction from camera to 3D target point
-                            const lookDir = new THREE.Vector3();
-                            lookDir.subVectors(cameraLookTarget, camera.position).normalize();
+                                // Calculate target yaw and pitch from direction
+                                // Forward is -Z, so yaw = atan2(x, -z)
+                                const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
+                                const targetPitch = Math.asin(-lookDir.y);
 
-                            // Calculate target yaw and pitch from direction
-                            // Forward is -Z, so yaw = atan2(x, -z)
-                            const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
-                            const targetPitch = Math.asin(-lookDir.y);
+                                // Get current camera angles
+                                euler.setFromQuaternion(camera.quaternion);
 
-                            // Get current camera angles
-                            euler.setFromQuaternion(camera.quaternion);
+                                // EXTREMELY SLOW interpolation for gentle pan
+                                const lookEase = 0.1 * delta;
+                                euler.y += (targetYaw - euler.y) * lookEase;
+                                euler.x += (targetPitch - euler.x) * lookEase;
+                                euler.z = 0;
 
-                            // EXTREMELY SLOW interpolation for gentle pan
-                            const lookEase = 0.1 * delta;
-                            euler.y += (targetYaw - euler.y) * lookEase;
-                            euler.x += (targetPitch - euler.x) * lookEase;
-                            euler.z = 0;
+                                // Apply rotation
+                                camera.quaternion.setFromEuler(euler);
 
-                            // Apply rotation
-                            camera.quaternion.setFromEuler(euler);
+                                // Update mouse.x/y to match current camera direction
+                                // So swipe continues from current orientation
+                                mouse.x = -euler.y / 1.5;
+                                mouse.y = -euler.x / 0.5;
+                                targetMouseX = mouse.x;
+                                targetMouseY = mouse.y;
 
-                            // Update mouse.x/y to match current camera direction
-                            // So swipe continues from current orientation
-                            mouse.x = -euler.y / 1.5;
-                            mouse.y = -euler.x / 0.5;
-                            targetMouseX = mouse.x;
-                            targetMouseY = mouse.y;
-
-                            // Stop when close enough to target
-                            if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
-                                cameraLookTarget = null;
-                            }
-                        } else if (isCenteringCamera) {
-                            // Mobile Reading Mode Recenter
-                            // Smoothly interpolate X to 0 and Yaw to 0
-
-                            // 1. Position X -> 0
-                            camera.position.x += (0 - camera.position.x) * 2.0 * delta;
-
-                            // 2. Rotation Y -> 0 (Look Straight)
-                            euler.setFromQuaternion(camera.quaternion);
-                            // Shortest path angle
-                            let diff = 0 - euler.y;
-                            if (diff > Math.PI) diff -= Math.PI * 2;
-                            if (diff < -Math.PI) diff += Math.PI * 2;
-
-                            euler.y += diff * 2.0 * delta;
-                            euler.x += (0 - euler.x) * 2.0 * delta; // Also level pitch
-                            euler.z = 0;
-                            camera.quaternion.setFromEuler(euler);
-
-                            // Update mouse state to match
-                            mouse.x = 0;
-                            mouse.y = 0;
-                            targetMouseX = 0;
-                            targetMouseY = 0;
-
-                            // Stop if close
-                            if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
-                                isCenteringCamera = false;
-                            }
-                        } else {
-                            // Normal mouse/swipe-based camera control
-                            const targetPitch = -mouse.y * 0.5;
-                            const targetYaw = -mouse.x * 1.5;
-                            const ease = 5.0 * delta;
-                            euler.setFromQuaternion(camera.quaternion);
-                            euler.x += (targetPitch - euler.x) * ease;
-                            euler.y += (targetYaw - euler.y) * ease;
-                            euler.z = 0;
-                            camera.quaternion.setFromEuler(euler);
-                        }
-
-                        // movement constants
-                        // movement constants
-                        // movement constants
-                        // USER: REQUESTED 25% SLOWER than 200 => 150
-                        const baseAccel = 150.0;
-                        const gameSpeed = baseAccel * 0.15;
-                        // Click Speed removed (Unified)
-
-                        // SYNCED: Reading Speed = Game Speed
-                        const readingSpeed = gameSpeed;
-
-                        const isReading = isReadingMode; // Use global state
-
-                        const input = new THREE.Vector3();
-
-                        // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
-                        velocity.x -= velocity.x * 10.0 * delta;
-                        velocity.z -= velocity.z * 10.0 * delta;
-                        velocity.y -= 9.8 * 100.0 * delta;
-
-                        if (isReading) {
-                            // READING MODE: Auto-Walk Forward (Global Z)
-                            // Ignore User Input
-                            input.set(0, 0, -1); // Purely forward along hallway
-
-                            // Auto-Center X (Smooth drift to 0)
-                            // "Trägheit der Richtungsjustierung"
-                            const centerX = 0;
-                            const distToCenter = centerX - camera.position.x;
-                            const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
-                            camera.position.x += centerForce;
-
-                            // Apply Velocity for Z
-                            velocity.add(input.multiplyScalar(readingSpeed * delta));
-
-                        } else {
-                            // GAME MODE
-
-                            // 2. Input Vectors
-
-                            // 2. Input Vectors
-                            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                            forward.y = 0; forward.normalize();
-                            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                            right.y = 0; right.normalize();
-
-                            input.set(0, 0, 0);
-                            if (move.f) input.add(forward);
-                            // if (move.b) input.sub(forward); // Backwards disabled in general config
-                            if (move.r) input.add(right);
-                            if (move.l) input.sub(right);
-
-                            // 3. Apply Velocity (Manual vs Auto)
-                            if (input.length() > 0) {
-                                input.normalize();
-                                velocity.add(input.multiplyScalar(gameSpeed * delta));
-                                // Cancel Auto-Move on manual input
-                                moveTarget = null;
-                                cameraLookTarget = null;
-                            } else if (moveTarget) {
-                                // CLICK-TO-MOVE LOGIC
-                                const dx = moveTarget.x - camera.position.x;
-                                const dz = moveTarget.z - camera.position.z;
-                                const dist = Math.sqrt(dx * dx + dz * dz);
-
-                                // FIX: Stop Looking earlier to prevent swing/spin at singularity
-                                if (dist < 2.0) {
+                                // Stop when close enough to target
+                                if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
                                     cameraLookTarget = null;
                                 }
+                            } else if (isCenteringCamera) {
+                                // Mobile Reading Mode Recenter
+                                // Smoothly interpolate X to 0 and Yaw to 0
 
-                                if (dist < 0.2) {
+                                // 1. Position X -> 0
+                                camera.position.x += (0 - camera.position.x) * 2.0 * delta;
+
+                                // 2. Rotation Y -> 0 (Look Straight)
+                                euler.setFromQuaternion(camera.quaternion);
+                                // Shortest path angle
+                                let diff = 0 - euler.y;
+                                if (diff > Math.PI) diff -= Math.PI * 2;
+                                if (diff < -Math.PI) diff += Math.PI * 2;
+
+                                euler.y += diff * 2.0 * delta;
+                                euler.x += (0 - euler.x) * 2.0 * delta; // Also level pitch
+                                euler.z = 0;
+                                camera.quaternion.setFromEuler(euler);
+
+                                // Update mouse state to match
+                                mouse.x = 0;
+                                mouse.y = 0;
+                                targetMouseX = 0;
+                                targetMouseY = 0;
+
+                                // Stop if close
+                                if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
+                                    isCenteringCamera = false;
+                                }
+                            } else {
+                                // Normal mouse/swipe-based camera control
+                                const targetPitch = -mouse.y * 0.5;
+                                const targetYaw = -mouse.x * 1.5;
+                                const ease = 5.0 * delta;
+                                euler.setFromQuaternion(camera.quaternion);
+                                euler.x += (targetPitch - euler.x) * ease;
+                                euler.y += (targetYaw - euler.y) * ease;
+                                euler.z = 0;
+                                camera.quaternion.setFromEuler(euler);
+                            }
+
+                            // movement constants
+                            // movement constants
+                            // movement constants
+                            // USER: REQUESTED 25% SLOWER than 200 => 150
+                            const baseAccel = 150.0;
+                            const gameSpeed = baseAccel * 0.15;
+                            // Click Speed removed (Unified)
+
+                            // SYNCED: Reading Speed = Game Speed
+                            const readingSpeed = gameSpeed;
+
+                            const isReading = isReadingMode; // Use global state
+
+                            const input = new THREE.Vector3();
+
+                            // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
+                            velocity.x -= velocity.x * 10.0 * delta;
+                            velocity.z -= velocity.z * 10.0 * delta;
+                            velocity.y -= 9.8 * 100.0 * delta;
+
+                            if (isReading) {
+                                // READING MODE: Auto-Walk Forward (Global Z)
+                                // Ignore User Input
+                                input.set(0, 0, -1); // Purely forward along hallway
+
+                                // Auto-Center X (Smooth drift to 0)
+                                // "Trägheit der Richtungsjustierung"
+                                const centerX = 0;
+                                const distToCenter = centerX - camera.position.x;
+                                const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
+                                camera.position.x += centerForce;
+
+                                // Apply Velocity for Z
+                                velocity.add(input.multiplyScalar(readingSpeed * delta));
+
+                            } else {
+                                // GAME MODE
+
+                                // 2. Input Vectors
+
+                                // 2. Input Vectors
+                                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                                forward.y = 0; forward.normalize();
+                                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                                right.y = 0; right.normalize();
+
+                                input.set(0, 0, 0);
+                                if (move.f) input.add(forward);
+                                // if (move.b) input.sub(forward); // Backwards disabled in general config
+                                if (move.r) input.add(right);
+                                if (move.l) input.sub(right);
+
+                                // 3. Apply Velocity (Manual vs Auto)
+                                if (input.length() > 0) {
+                                    input.normalize();
+                                    velocity.add(input.multiplyScalar(gameSpeed * delta));
+                                    // Cancel Auto-Move on manual input
                                     moveTarget = null;
                                     cameraLookTarget = null;
-                                    velocity.set(0, 0, 0); // Full stop
-                                    // Skip remaining movement logic this frame
-                                } else {
-                                    const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+                                } else if (moveTarget) {
+                                    // CLICK-TO-MOVE LOGIC
+                                    const dx = moveTarget.x - camera.position.x;
+                                    const dz = moveTarget.z - camera.position.z;
+                                    const dist = Math.sqrt(dx * dx + dz * dz);
 
-                                    // UNIFIED SPEED: Use gameSpeed for click movement too.
-                                    // Direct World Space addition (since velocity is World Space)
-                                    velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                                    // FIX: Stop Looking earlier to prevent swing/spin at singularity
+                                    if (dist < 2.0) {
+                                        cameraLookTarget = null;
+                                    }
+
+                                    if (dist < 0.2) {
+                                        moveTarget = null;
+                                        cameraLookTarget = null;
+                                        velocity.set(0, 0, 0); // Full stop
+                                        // Skip remaining movement logic this frame
+                                    } else {
+                                        const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+
+                                        // UNIFIED SPEED: Use gameSpeed for click movement too.
+                                        // Direct World Space addition (since velocity is World Space)
+                                        velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                                    }
                                 }
+
+                                // 4. Move Controls (Direct Physics Integration)
+                                camera.position.x += velocity.x * delta;
+                                camera.position.z += velocity.z * delta; // Allow forward/back calc first
+
+                                // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
+                                // User: "negative meter forbidden" / "backwards movement forbidden"
+                                if (velocity.z > 0) velocity.z = 0;
+
+                                // Prevent drifting back if position tries to increase
+                                // (Double safety: clamp delta position change?)
+                                // No, velocity clamp is smoother. But let's check position delta too just in case.
+                                // Accessing last frame? No need, velocity controls it.
+
+                                camera.position.y += (velocity.y * delta);
+
+                                // 5. Floor Collision
+                                if (camera.position.y < 1.6) {
+                                    velocity.y = 0;
+                                    camera.position.y = 1.6;
+                                }
+
+                                // 6. Wall Collision (Clamp X)
+                                // Strictly clamp X to hallway bounds to prevent wall clipping
+                                camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
                             }
 
-                            // 4. Move Controls (Direct Physics Integration)
-                            camera.position.x += velocity.x * delta;
-                            camera.position.z += velocity.z * delta; // Allow forward/back calc first
+                            // Friction
+                            velocity.multiplyScalar(1.0 - 5.0 * delta);
+                            camera.position.add(velocity.clone().multiplyScalar(delta));
 
-                            // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
-                            // User: "negative meter forbidden" / "backwards movement forbidden"
-                            if (velocity.z > 0) velocity.z = 0;
-
-                            // Prevent drifting back if position tries to increase
-                            // (Double safety: clamp delta position change?)
-                            // No, velocity clamp is smoother. But let's check position delta too just in case.
-                            // Accessing last frame? No need, velocity controls it.
-
-                            camera.position.y += (velocity.y * delta);
-
-                            // 5. Floor Collision
-                            if (camera.position.y < 1.6) {
-                                velocity.y = 0;
-                                camera.position.y = 1.6;
+                            // HEAD BOBBING (Half speed, Half amplitude of previous)
+                            // Previous: delta * 12, Amp 0.025
+                            // New: delta * 6, Amp 0.0125
+                            if (velocity.length() > 0.5) {
+                                headBob += delta * 6;
+                                camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;
+                            } else {
+                                // Return to neutral
+                                camera.position.y += (1.6 - camera.position.y) * 5.0 * delta;
                             }
 
-                            // 6. Wall Collision (Clamp X)
-                            // Strictly clamp X to hallway bounds to prevent wall clipping
-                            camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
-                        }
+                            // Dust Update (Global) - REMOVED
+                            // if (dustSystem) ...
 
-                        // Friction
-                        velocity.multiplyScalar(1.0 - 5.0 * delta);
-                        camera.position.add(velocity.clone().multiplyScalar(delta));
+                            // Bounds
+                            // Global Safety Clamp (Runs for both modes)
+                            // Slightly wider than 1.8 to allow movement but prevent wall clipping
+                            // Fixed at 1.95 (just before shelves at ~2.4)
+                            if (camera.position.x < -1.95) camera.position.x = -1.95;
+                            if (camera.position.x > 1.95) camera.position.x = 1.95;
 
-                        // HEAD BOBBING (Half speed, Half amplitude of previous)
-                        // Previous: delta * 12, Amp 0.025
-                        // New: delta * 6, Amp 0.0125
-                        if (velocity.length() > 0.5) {
-                            headBob += delta * 6;
-                            camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;
-                        } else {
-                            // Return to neutral
-                            camera.position.y += (1.6 - camera.position.y) * 5.0 * delta;
-                        }
+                            updateSegments(camera.position.z);
+                            segments.forEach(seg => {
+                                // Unified update call
+                                seg.update(delta, time, camera.position);
+                            });
 
-                        // Dust Update (Global) - REMOVED
-                        // if (dustSystem) ...
+                            // Update Glowing Books and check proximity
+                            activeGlowingBooks.forEach(book => {
+                                if (!book.collected && !book.missed) {
+                                    book.update(time, camera.position.z, camera.position.x);
 
-                        // Bounds
-                        // Global Safety Clamp (Runs for both modes)
-                        // Slightly wider than 1.8 to allow movement but prevent wall clipping
-                        // Fixed at 1.95 (just before shelves at ~2.4)
-                        if (camera.position.x < -1.95) camera.position.x = -1.95;
-                        if (camera.position.x > 1.95) camera.position.x = 1.95;
+                                    // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
+                                    if (true) {
+                                        // FIX: Use WORLD position, not local position (meshGroup may have moved)
+                                        const worldPos = new THREE.Vector3();
+                                        book.mesh.getWorldPosition(worldPos);
+                                        const distZ = Math.abs(worldPos.z - camera.position.z);
+                                        const distX = Math.abs(worldPos.x - camera.position.x);
 
-                        updateSegments(camera.position.z);
-                        segments.forEach(seg => {
-                            // Unified update call
-                            seg.update(delta, time, camera.position);
-                        });
+                                        // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
+                                        if (distZ < 1.5 && distX < 1.0) {
+                                            // Collect!
+                                            book.collect();
+                                            // Collect - use GameState for global lore tracking!
+                                            // DON'T increment local counter - GameState handles which lore is next globally
 
-                        // Update Glowing Books and check proximity
-                        activeGlowingBooks.forEach(book => {
-                            if (!book.collected && !book.missed) {
-                                book.update(time, camera.position.z, camera.position.x);
+                                            // Play shimmer
+                                            shimmerSound.currentTime = 0;
+                                            shimmerSound.play().catch(() => { });
 
-                                // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
-                                if (true) {
-                                    // FIX: Use WORLD position, not local position (meshGroup may have moved)
-                                    const worldPos = new THREE.Vector3();
-                                    book.mesh.getWorldPosition(worldPos);
-                                    const distZ = Math.abs(worldPos.z - camera.position.z);
-                                    const distX = Math.abs(worldPos.x - camera.position.x);
-
-                                    // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
-                                    if (distZ < 1.5 && distX < 1.0) {
-                                        // Collect!
-                                        book.collect();
-                                        // Collect - use GameState for global lore tracking!
-                                        // DON'T increment local counter - GameState handles which lore is next globally
-
-                                        // Play shimmer
-                                        shimmerSound.currentTime = 0;
-                                        shimmerSound.play().catch(() => { });
-
-                                        // Register in GameState (GLOBAL - same logic as marketplace)
-                                        const SCENE_NAME = 'liminal_library';
-                                        if (window.GameState && window.GameState.collectLight) {
-                                            window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
-                                                if (newLoreId) {
-                                                    console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
-                                                    // Refresh archive menu so new lore appears immediately
-                                                    if (typeof renderArchive === 'function') renderArchive();
-                                                    // Start lore audio with the GLOBAL lore ID (not local counter!)
-                                                    startLoreMode(newLoreId);
-                                                } else {
-                                                    // All lore already unlocked
-                                                    console.log("All lore already unlocked");
-                                                }
-                                            });
+                                            // Register in GameState (GLOBAL - same logic as marketplace)
+                                            const SCENE_NAME = 'liminal_library';
+                                            if (window.GameState && window.GameState.collectLight) {
+                                                window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
+                                                    if (newLoreId) {
+                                                        console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
+                                                        // Refresh archive menu so new lore appears immediately
+                                                        if (typeof renderArchive === 'function') renderArchive();
+                                                        // Start lore audio with the GLOBAL lore ID (not local counter!)
+                                                        startLoreMode(newLoreId);
+                                                    } else {
+                                                        // All lore already unlocked
+                                                        console.log("All lore already unlocked");
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        // Check if player walked past without collecting (book is now behind player)
+                                        // Use world position for this check too
+                                        else if (worldPos.z > camera.position.z + 5) {
+                                            // Missed! Mark as missed but don't count towards collection
+                                            book.missed = true;
+                                            book.mesh.visible = false;
+                                            console.log(`Book ${book.id} missed (player walked past)`);
                                         }
                                     }
-                                    // Check if player walked past without collecting (book is now behind player)
-                                    // Use world position for this check too
-                                    else if (worldPos.z > camera.position.z + 5) {
-                                        // Missed! Mark as missed but don't count towards collection
-                                        book.missed = true;
-                                        book.mesh.visible = false;
-                                        console.log(`Book ${book.id} missed (player walked past)`);
+                                }
+                            });
+
+
+                            // Update Subtitles
+                            // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
+                            // No manual render call needed if SharedAudioPlayer updates innerHTML
+                            if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
+                                // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
+                            }
+
+                            renderer.render(scene, camera);
+
+                            // Update Debug HUD
+                            const debugEl = document.getElementById('debugHUD');
+                            if (debugEl) {
+                                const globalLore = getGlobalCollectedLoreCount();
+                                debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
+                            }
+                        } catch (err) {
+                            console.error("Animation Loop Crash:", err);
+                        }
+                    }
+
+                    function workQueueSize() {
+                        let count = 0;
+                        // Not easily accessible, but we can verify performance
+                        return "Active";
+                    }
+                    // animate(); // Moved to startGame()
+
+                    // --- MENU LOGIC ---
+                    const archiveModal = document.getElementById('archiveModal');
+                    const bookBtn = document.getElementById('bookBtn');
+                    const closeArchiveBtn = document.getElementById('closeArchiveBtn');
+                    const chapter1Btn = document.getElementById('chapter1Btn');
+                    const loreList = document.getElementById('loreList');
+
+                    // SAVE / LOAD LOGIC
+                    const btnSave = document.getElementById('btnSaveData');
+                    const btnLoad = document.getElementById('btnLoadData');
+                    const fileInput = document.getElementById('fileInputSave');
+
+                    if (btnSave) {
+                        btnSave.addEventListener('click', () => {
+                            if (!window.GameState) return;
+                            const json = window.GameState.exportState();
+                            const blob = new Blob([json], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = 'liminal_save_' + Date.now() + '.json';
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                        });
+                    }
+
+                    if (btnLoad) {
+                        btnLoad.addEventListener('click', () => {
+                            if (fileInput) fileInput.click();
+                        });
+                    }
+
+                    if (fileInput) {
+                        fileInput.addEventListener('change', (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = async (ev) => {
+                                if (window.GameState) {
+                                    // Explicitly import via GameState
+                                    const success = await window.GameState.importState(ev.target.result);
+                                    if (success) {
+                                        alert("Save Data Imported Successfully! Reloading...");
+                                        window.location.reload();
+                                    } else {
+                                        alert("Invalid Save File.");
                                     }
                                 }
-                            }
+                            };
+                            reader.readAsText(file);
                         });
-
-
-                        // Update Subtitles
-                        // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
-                        // No manual render call needed if SharedAudioPlayer updates innerHTML
-                        if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
-                            // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
-                        }
-
-                        renderer.render(scene, camera);
-
-                        // Update Debug HUD
-                        const debugEl = document.getElementById('debugHUD');
-                        if (debugEl) {
-                            const globalLore = getGlobalCollectedLoreCount();
-                            debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
-                        }
-                    } catch (err) {
-                        console.error("Animation Loop Crash:", err);
                     }
-                }
 
-                function workQueueSize() {
-                    let count = 0;
-                    // Not easily accessible, but we can verify performance
-                    return "Active";
-                }
-                // animate(); // Moved to startGame()
+                    if (bookBtn) {
+                        bookBtn.addEventListener('click', () => {
+                            renderLoreList();
+                            archiveModal.classList.add('visible');
+                        });
+                    }
+                    if (closeArchiveBtn) {
+                        closeArchiveBtn.addEventListener('click', () => {
+                            archiveModal.classList.remove('visible');
+                        });
+                    }
+                    if (chapter1Btn) {
+                        chapter1Btn.addEventListener('click', () => {
+                            console.log("Returning to Chapter 1...");
+                            window.location.href = 'index.html';
+                        });
+                    }
 
-                // --- MENU LOGIC ---
-                const archiveModal = document.getElementById('archiveModal');
-                const bookBtn = document.getElementById('bookBtn');
-                const closeArchiveBtn = document.getElementById('closeArchiveBtn');
-                const chapter1Btn = document.getElementById('chapter1Btn');
-                const loreList = document.getElementById('loreList');
+                    // Chapter 1b (Resume)
+                    const chapter1bBtn = document.getElementById('chapter1bBtn');
+                    if (chapter1bBtn) {
+                        // Initialize visually
+                        chapter1bBtn.classList.remove('locked');
 
-                // SAVE / LOAD LOGIC
-                const btnSave = document.getElementById('btnSaveData');
-                const btnLoad = document.getElementById('btnLoadData');
-                const fileInput = document.getElementById('fileInputSave');
-
-                if (btnSave) {
-                    btnSave.addEventListener('click', () => {
-                        if (!window.GameState) return;
-                        const json = window.GameState.exportState();
-                        const blob = new Blob([json], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = 'liminal_save_' + Date.now() + '.json';
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                    });
-                }
-
-                if (btnLoad) {
-                    btnLoad.addEventListener('click', () => {
-                        if (fileInput) fileInput.click();
-                    });
-                }
-
-                if (fileInput) {
-                    fileInput.addEventListener('change', (e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        const reader = new FileReader();
-                        reader.onload = async (ev) => {
-                            if (window.GameState) {
-                                // Explicitly import via GameState
-                                const success = await window.GameState.importState(ev.target.result);
-                                if (success) {
-                                    alert("Save Data Imported Successfully! Reloading...");
-                                    window.location.reload();
-                                } else {
-                                    alert("Invalid Save File.");
+                        chapter1bBtn.addEventListener('click', () => {
+                            document.getElementById('archiveModal').classList.remove('visible');
+                            if (isLoreMode) {
+                                window.restoreMainAudio();
+                            } else {
+                                // Unpause if needed
+                                if (player && player.audio && player.audio.paused) {
+                                    player.play();
                                 }
                             }
-                        };
-                        reader.readAsText(file);
-                    });
-                }
-
-                if (bookBtn) {
-                    bookBtn.addEventListener('click', () => {
-                        renderLoreList();
-                        archiveModal.classList.add('visible');
-                    });
-                }
-                if (closeArchiveBtn) {
-                    closeArchiveBtn.addEventListener('click', () => {
-                        archiveModal.classList.remove('visible');
-                    });
-                }
-                if (chapter1Btn) {
-                    chapter1Btn.addEventListener('click', () => {
-                        console.log("Returning to Chapter 1...");
-                        window.location.href = 'index.html';
-                    });
-                }
-
-                // Chapter 1b (Resume)
-                const chapter1bBtn = document.getElementById('chapter1bBtn');
-                if (chapter1bBtn) {
-                    // Initialize visually
-                    chapter1bBtn.classList.remove('locked');
-
-                    chapter1bBtn.addEventListener('click', () => {
-                        document.getElementById('archiveModal').classList.remove('visible');
-                        if (isLoreMode) {
-                            window.restoreMainAudio();
-                        } else {
-                            // Unpause if needed
-                            if (player && player.audio && player.audio.paused) {
-                                player.play();
-                            }
-                        }
-                    });
-                }
-
-                // Chapter 1c
-                const chapter1cBtn = document.getElementById('chapter1cBtn');
-                if (chapter1cBtn) {
-                    chapter1cBtn.addEventListener('click', () => {
-                        console.log("Going to Chapter 1c...");
-                        window.location.href = 'kapitel1c.html';
-                    });
-                }
-                function renderLoreList() {
-                    const list = document.getElementById('loreList');
-                    // Keep Header
-                    const header = list.querySelector('.col-header') || document.createElement('div');
-                    if (!list.querySelector('.col-header')) {
-                        header.className = 'col-header';
-                        header.innerText = 'Lore';
-                    }
-                    list.innerHTML = '';
-                    list.appendChild(header);
-
-                    if (!window.GameState) return;
-
-                    const db = window.GameState.getAllLore();
-                    const collectedIds = window.GameState.state.collectedLore;
-
-                    if (collectedIds.length === 0) {
-                        const empty = document.createElement('div');
-                        empty.className = 'menu-item locked';
-                        empty.innerText = 'Keine Lore gefunden';
-                        list.appendChild(empty);
-                    } else {
-                        collectedIds.sort((a, b) => a - b).forEach(id => {
-                            const content = db[id];
-                            if (!content) return;
-
-                            const item = document.createElement('div');
-                            item.className = 'menu-item';
-
-                            // Active State
-                            if (isLoreMode && activeLoreId === id) {
-                                item.classList.add('active');
-                            }
-
-                            const mainText = document.createElement('div');
-                            mainText.className = 'item-main-text';
-                            mainText.innerText = content.title;
-
-                            const subText = document.createElement('div');
-                            subText.className = 'item-sub-text';
-                            subText.innerText = content.duration;
-
-                            item.appendChild(mainText);
-                            item.appendChild(subText);
-
-                            item.addEventListener('click', () => {
-                                document.getElementById('archiveModal').classList.remove('visible');
-                                startLoreMode(id);
-                            });
-                            list.appendChild(item);
                         });
                     }
+
+                    // Chapter 1c
+                    const chapter1cBtn = document.getElementById('chapter1cBtn');
+                    if (chapter1cBtn) {
+                        chapter1cBtn.addEventListener('click', () => {
+                            console.log("Going to Chapter 1c...");
+                            window.location.href = 'kapitel1c.html';
+                        });
+                    }
+                    function renderLoreList() {
+                        const list = document.getElementById('loreList');
+                        // Keep Header
+                        const header = list.querySelector('.col-header') || document.createElement('div');
+                        if (!list.querySelector('.col-header')) {
+                            header.className = 'col-header';
+                            header.innerText = 'Lore';
+                        }
+                        list.innerHTML = '';
+                        list.appendChild(header);
+
+                        if (!window.GameState) return;
+
+                        const db = window.GameState.getAllLore();
+                        const collectedIds = window.GameState.state.collectedLore;
+
+                        if (collectedIds.length === 0) {
+                            const empty = document.createElement('div');
+                            empty.className = 'menu-item locked';
+                            empty.innerText = 'Keine Lore gefunden';
+                            list.appendChild(empty);
+                        } else {
+                            collectedIds.sort((a, b) => a - b).forEach(id => {
+                                const content = db[id];
+                                if (!content) return;
+
+                                const item = document.createElement('div');
+                                item.className = 'menu-item';
+
+                                // Active State
+                                if (isLoreMode && activeLoreId === id) {
+                                    item.classList.add('active');
+                                }
+
+                                const mainText = document.createElement('div');
+                                mainText.className = 'item-main-text';
+                                mainText.innerText = content.title;
+
+                                const subText = document.createElement('div');
+                                subText.className = 'item-sub-text';
+                                subText.innerText = content.duration;
+
+                                item.appendChild(mainText);
+                                item.appendChild(subText);
+
+                                item.addEventListener('click', () => {
+                                    document.getElementById('archiveModal').classList.remove('visible');
+                                    startLoreMode(id);
+                                });
+                                list.appendChild(item);
+                            });
+                        }
+                    }
+
+                    // Hookup Archive Button
+                    document.getElementById('bookBtn').addEventListener('click', () => {
+                        renderArchiveContent();
+                        document.getElementById('archiveModal').classList.add('visible');
+                    });
+                    // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
+                    window.addEventListener('resize', () => {
+                        // Update Camera Aspect Ratio
+                        camera.aspect = window.innerWidth / window.innerHeight;
+                        camera.updateProjectionMatrix();
+
+                        // Update Renderer Size
+                        renderer.setSize(window.innerWidth, window.innerHeight);
+
+                        // Re-calculate UI or other dimensional dependencies if needed
+                        // (e.g. if we had custom HUD scaler)
+                        console.log(`Resized to ${window.innerWidth}x${window.innerHeight}`);
+                    });
+
+
+                } catch (err) {
+                    console.error("FATAL ERROR IN MODULE:", err);
                 }
-
-                // Hookup Archive Button
-                document.getElementById('bookBtn').addEventListener('click', () => {
-                    renderArchiveContent();
-                    document.getElementById('archiveModal').classList.add('visible');
-                });
-                // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
-                window.addEventListener('resize', () => {
-                    // Update Camera Aspect Ratio
-                    camera.aspect = window.innerWidth / window.innerHeight;
-                    camera.updateProjectionMatrix();
-
-                    // Update Renderer Size
-                    renderer.setSize(window.innerWidth, window.innerHeight);
-
-                    // Re-calculate UI or other dimensional dependencies if needed
-                    // (e.g. if we had custom HUD scaler)
-                    console.log(`Resized to ${window.innerWidth}x${window.innerHeight}`);
-                });
-
-
-            } catch (err) {
-                console.error("FATAL ERROR IN MODULE:", err);
-            }
-        })();
+            }) ();
     </script>
 </body>
 
