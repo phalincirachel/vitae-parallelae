@@ -418,20 +418,26 @@
                 }
 
                 // --- EVENT LISTENERS ---
-                document.getElementById('audioToggleBtn').addEventListener('click', () => {
+                document.getElementById('audioToggleBtn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     player.toggle();
                     updateIcons();
                 });
 
-                document.getElementById('skipBackBtn').addEventListener('click', () => player.skip(-15));
-                document.getElementById('skipForwardBtn').addEventListener('click', () => player.skip(15));
+                document.getElementById('skipBackBtn').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); player.skip(-15); });
+                document.getElementById('skipForwardBtn').addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); player.skip(15); });
 
-                document.getElementById('readingModeBtn').addEventListener('click', () => {
+                document.getElementById('readingModeBtn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     isReadingMode = true;
                     updateReadingModeUI();
                 });
 
-                document.getElementById('gameModeBtn').addEventListener('click', () => {
+                document.getElementById('gameModeBtn').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     isReadingMode = false;
                     updateReadingModeUI();
                 });
@@ -476,7 +482,9 @@
                 };
 
                 const nextBtn = document.getElementById('nextChapterBtn');
-                if (nextBtn) nextBtn.addEventListener('click', () => {
+                if (nextBtn) nextBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
                     nextBtn.classList.remove('visible');
                     transitionToNextChapter();
                 });
@@ -1249,10 +1257,24 @@
                 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
 
                 document.addEventListener('click', (event) => {
-                    // Use elementFromPoint for reliable detection (works with pointer events)
+                    // 1. TRUST EVENT TARGET FIRST (Standard Bubbling Check)
+                    if (event.target.closest('#audioPlayerUI') ||
+                        event.target.closest('.audio-btn') ||
+                        event.target.closest('#loading')) {
+                        console.log("Click ignored: UI Target");
+                        return;
+                    }
+
+                    // 2. CHECK DEADZONE (Bottom Screen - Mobile Buttons)
+                    // Expanded to 120px to cover larger mobile bars/UI
+                    if (event.clientY > window.innerHeight - 120) {
+                        console.log("Ignored Click in UI Deadzone (120px)");
+                        return;
+                    }
+
+                    // 3. FALLBACK: Use elementFromPoint for visual overlap
                     const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
 
-                    // Ignore clicks on UI elements
                     if (clickedEl && (
                         clickedEl.closest('#audioPlayerUI') ||
                         clickedEl.closest('#audioControls') ||
@@ -1262,7 +1284,7 @@
                         clickedEl.closest('#subtitleContainer') ||
                         clickedEl.closest('#nextChapterBtn') ||
                         clickedEl.closest('#loading'))) {
-                        console.log("Click ignored: UI element");
+                        console.log("Click ignored: UI element (Visual)");
                         return;
                     }
 
@@ -1279,12 +1301,8 @@
                         return;
                     }
 
-                    // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
-                    // If click is in the bottom 80px (approx UI height), IGNORÉ
-                    if (event.clientY > window.innerHeight - 80) {
-                        console.log("Ignored Click in UI Deadzone");
-                        return;
-                    }
+                    // DEADZONE CHECK MOVED UP
+                    // (Clean up old deadzone check)
 
                     // Calculate click position in normalized coordinates
                     const clickScreenX = (event.clientX / window.innerWidth) * 2 - 1;
