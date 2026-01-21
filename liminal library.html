@@ -4,724 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Liminal Archive - FIXED</title>
+    <title>Liminal Archive</title>
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
     <script src="assets/js/SoundCloudURLs.js"></script>
+
+    <!-- Shared Game Systems -->
+    <script src="assets/js/PlayerStateManager.js"></script>
+    <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #050505;
-            font-family: monospace;
-            user-select: none;
-        }
 
-        canvas {
-            display: block;
-            width: 100vw;
-            height: 100vh;
-        }
-
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10;
-            background: radial-gradient(circle, transparent 50%, rgba(0, 0, 0, 0.8) 100%);
-            box-shadow: inset 0 0 100px rgba(0, 0, 0, 0.9);
-        }
-
-        #noise {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            opacity: 0.08;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
-            pointer-events: none;
-        }
-
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #666;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 20px;
-            border: 1px solid #333;
-            cursor: pointer;
-            z-index: 20;
-        }
-
-        #loading-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #000;
-            z-index: 100;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: #444;
-            transition: opacity 1s ease;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid #333;
-            border-top-color: #666;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-
-        @keyframes spin {
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        /* AUDIO PLAYER UI */
-        button:focus,
-        .audio-btn:focus {
-            outline: none;
-        }
-
-        /* NEXT CHAPTER BUTTON */
-        #nextChapterBtn {
-            position: absolute;
-            bottom: 150px;
-            /* Above controls */
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 12px 30px;
-            background: rgba(255, 255, 255, 0.1);
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            color: white;
-            font-family: 'Georgia', serif;
-            font-size: 18px;
-            letter-spacing: 2px;
-            cursor: pointer;
-            border-radius: 4px;
-            backdrop-filter: blur(5px);
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.5s ease, transform 0.2s ease;
-            z-index: 2000;
-            text-transform: uppercase;
-        }
-
-        #nextChapterBtn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: translateX(-50%) scale(1.05);
-        }
-
-        #nextChapterBtn.visible {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        /* BLACK OVERLAY FOR TRANSITION */
-        #transitionOverlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: black;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 2s ease-in-out;
-            z-index: 9999;
-        }
-
-        #transitionOverlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        #audioPlayerUI {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 95%;
-            max-width: 800px;
-            display: flex;
-            align-items: center;
-            /* Buttons auf Höhe der mittleren Zeile */
-            gap: 15px;
-            z-index: 200000;
-            /* FORCE TOP LAYER */
-            transition: bottom 0.4s ease, transform 0.4s ease;
-            pointer-events: none;
-            /* Allow clicks to pass through container */
-        }
-
-        #audioPlayerUI.reading-mode {
-            bottom: 50%;
-            transform: translateX(-50%) translateY(50%);
-        }
-
-        /* Während Modus-Wechsel: Buttons ausblenden */
-        #audioPlayerUI.mode-switching #audioControls {
-            opacity: 0 !important;
-            pointer-events: none;
-        }
-
-        #subtitleContainer {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            /* Anchor to bottom like in Index.html */
-            align-items: flex-start;
-            gap: 4px;
-            padding: 16px 21px;
-            border-radius: 8px;
-            background: transparent !important;
-            transition: background 0.5s ease, max-height 0.4s ease;
-            max-height: none;
-            /* AUTO HEIGHT FOR GAME MODE */
-            min-height: 80px;
-            /* overflow: hidden; REMOVED to allow full text visibility */
-            pointer-events: none;
-            /* Game Mode: Click through text */
-        }
-
-        #audioPlayerUI.reading-mode #subtitleContainer {
-            max-height: 70vh;
-            background: transparent !important;
-            /* WAR: rgba(0, 0, 0, 0.85); */
-            overflow-y: auto;
-            pointer-events: auto;
-            /* Ensure interactions work */
-            /* Scrollen ermöglichen */
-
-            /* Custom Scrollbar Styles */
-            scrollbar-width: thin;
-            /* Firefox */
-            scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
-            /* Firefox */
-        }
-
-        /* Webkit Scrollbar Styling (Chrome, Edge, Safari) */
-        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar {
-            width: 6px !important;
-            /* Thinner */
-        }
-
-        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-track {
-            background: transparent !important;
-            /* Totally transparent */
-            margin: 4px 0;
-        }
-
-        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb {
-            background-color: rgba(255, 255, 255, 0.2);
-            /* Subtle semi-transparent white */
-            border-radius: 10px;
-            /* Fully rounded */
-            border: 1px solid transparent;
-            /* Padding trick */
-            background-clip: content-box;
-            transition: background-color 0.2s;
-        }
-
-        /* Sichtbar bei Hover oder beim Scrollen per JS-Klasse */
-        #audioPlayerUI.reading-mode #subtitleContainer:hover::-webkit-scrollbar-thumb,
-        #audioPlayerUI.reading-mode #subtitleContainer.is-scrolling::-webkit-scrollbar-thumb {
-            background-color: rgba(255, 255, 255, 0.4);
-        }
-
-        #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(255, 255, 255, 0.6);
-        }
-
-        .subtitle-line {
-            text-align: left;
-            font-size: 18px;
-            font-weight: 400;
-            /* War 500 */
-            color: rgba(255, 255, 255, 0.8);
-            text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
-            transition: color 0.3s, opacity 0.3s;
-            opacity: 1;
-            pointer-events: auto;
-            /* ALLOW CLICKS */
-            cursor: pointer;
-        }
-
-        .subtitle-current,
-        .subtitle-line.active {
-            color: rgba(255, 255, 255, 1);
-            font-weight: 500;
-            text-shadow:
-                0 0 8px rgba(255, 255, 255, 0.3),
-                2px 2px 10px rgba(0, 0, 0, 1),
-                0 0 20px rgba(0, 0, 0, 0.8);
-        }
-
-        /* Inactive lines in reading mode should be dimmer */
-        #audioPlayerUI.reading-mode .subtitle-line:not(.subtitle-current):not(.active) {
-            color: rgba(255, 255, 255, 0.5);
-            font-weight: 400;
-        }
-
-        /* Lesemodus: NOCH deutlicherer diffuse Umwölkung hinter den Buchstaben */
-        #audioPlayerUI.reading-mode .subtitle-line {
-            text-shadow:
-                0 0 5px rgba(0, 0, 0, 1),
-                0 0 10px rgba(0, 0, 0, 1),
-                0 0 20px rgba(0, 0, 0, 1),
-                0 0 30px rgba(0, 0, 0, 1),
-                0 0 45px rgba(0, 0, 0, 1);
-            opacity: 1 !important;
-            pointer-events: auto !important;
-            /* Forces interactions */
-        }
-
-        /* Mask applied in Reading Mode - FIXED */
-        #audioPlayerUI.reading-mode #subtitleContainer {
-            /* WICHTIG: Damit Padding in die Höhe eingerechnet wird */
-            box-sizing: border-box;
-
-            /* Reset Flex Alignment for Reading Mode: Top-Down flow */
-            justify-content: flex-start;
-
-            /* Maske etwas sanfter einstellen (50px statt 120px), damit Text nicht verschwindet */
-            mask-image: linear-gradient(to bottom, transparent 0px, black 50px, black calc(100% - 50px), transparent 100%);
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 50px, black calc(100% - 50px), transparent 100%);
-
-            padding-top: 50px;
-            /* Passend zur Maske reduziert */
-            padding-bottom: 50px;
-            /* Passend zur Maske reduziert */
-
-            pointer-events: auto !important;
-            touch-action: pan-y;
-            user-select: none;
-        }
-
-        /* Zeilen die weit vom Zentrum entfernt sind verblassen */
-        .subtitle-line.fade-far {
-            opacity: 0.4;
-        }
-
-        .subtitle-line.fade-mid {
-            opacity: 0.6;
-        }
-
-        /* Controls Container - Kreuz-Layout */
-        #audioControls {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 2px;
-            flex-shrink: 0;
-            padding: 8px;
-            border-radius: 8px;
-            background: transparent !important;
-            transition: background 0.5s ease, opacity 0.3s ease;
-            pointer-events: auto;
-            /* Re-enable clicks for buttons */
-        }
-
-        /* Horizontale Reihe: Zurück - Play - Vor (im Spielmodus) */
-        .controls-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            justify-items: center;
-            align-items: center;
-            width: 140px;
-            /* Fixed width for alignment */
-            /* gap removed, grid handles it */
-            transition: opacity 0.3s ease;
-        }
-
-        /* Im Lesemodus: Alles vertikal */
-        #audioPlayerUI.reading-mode .controls-row {
-            display: flex;
-            /* Revert to flex for column layout */
-            flex-direction: column;
-            width: auto;
-            /* Reset width */
-            gap: 8px;
-        }
-
-        .audio-btn {
-            background: transparent;
-            border: none;
-            cursor: pointer;
-            padding: 6px;
-            transition: transform 0.2s, opacity 0.3s ease;
-            opacity: 0.7;
-        }
-
-        .audio-btn:hover {
-            transform: scale(1.15);
-            opacity: 1;
-        }
-
-        .audio-btn svg {
-            filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
-            width: 24px;
-            height: 24px;
-        }
-
-        #audioToggleBtn svg {
-            width: 32px;
-            height: 32px;
-        }
-
-        /* Modus-Button-Styling - Fade statt display toggle */
-        #readingModeBtn svg,
-        #gameModeBtn svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        #gameModeBtn {
-            display: none;
-            /* Hide default */
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
-            transition: opacity 0.3s ease;
-        }
-
-        #readingModeBtn {
-            display: block;
-            /* Show default */
-            opacity: 0.7;
-            transition: opacity 0.3s ease;
-        }
-
-        /* READING MODE ACTIVE */
-        #audioPlayerUI.reading-mode #readingModeBtn {
-            opacity: 0;
-            pointer-events: none;
-            position: absolute;
-            display: none !important;
-            /* Fully remove from layout */
-        }
-
-        #audioPlayerUI.reading-mode #gameModeBtn {
-            opacity: 1 !important;
-            pointer-events: auto;
-            position: relative;
-            display: block !important;
-            /* Force show */
-        }
-
-        .mode-btn-wrapper {
-            position: relative;
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            justify-items: center;
-            align-items: center;
-            width: 140px;
-            /* Match controls-row width */
-            min-height: 32px;
-            /* gap removed */
-        }
-
-        /* Im Lesemodus: Vertikale Anordnung der Mode-Buttons (Mode + Fullscreen) */
-        #audioPlayerUI.reading-mode .mode-btn-wrapper {
-            display: flex;
-            /* Revert to flex */
-            flex-direction: column;
-            width: auto;
-            margin-top: 4px;
-            /* Etwas Abstand zur Steuer-Reihe darüber */
-        }
-
-        /* --- ARCHIVE MENU STYLES --- */
-        #archiveModal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 2000;
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            background: transparent;
-        }
-
-        #archiveModal.visible {
-            display: flex;
-            animation: fadeIn 0.3s ease-out;
-        }
-
-        .archive-card {
-            width: 80%;
-            max-width: 600px;
-            height: 70%;
-            display: flex;
-            flex-direction: column;
-            color: #FFFFFF;
-            font-family: "Georgia", serif;
-        }
-
-        .archive-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 10px;
-        }
-
-        .archive-title {
-            font-size: 24px;
-            letter-spacing: 2px;
-        }
-
-        .close-btn {
-            background: none;
-            border: none;
-            color: #FFFFFF;
-            font-size: 24px;
-            cursor: pointer;
-            opacity: 0.8;
-        }
-
-        .close-btn:hover {
-            opacity: 1.0;
-        }
-
-        .archive-content {
-            display: flex;
-            gap: 40px;
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .col-left,
-        .col-right {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        .col-header {
-            font-size: 14px;
-            color: #FFFFFF;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .menu-item {
-            cursor: pointer;
-            padding: 5px 0;
-            transition: transform 0.2s;
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .menu-item:hover {
-            transform: translateX(5px);
-        }
-
-        .menu-item.locked {
-            opacity: 0.3;
-            cursor: default;
-        }
-
-        .menu-item.locked:hover {
-            transform: none;
-        }
-
-        .item-main-text {
-            font-size: 18px;
-            color: rgba(255, 255, 255, 0.95);
-        }
-
-        .item-sub-text {
-            font-size: 11px;
-            color: rgba(255, 255, 255, 0.5);
-            font-style: italic;
-        }
-
-        .col-left::-webkit-scrollbar,
-        .col-right::-webkit-scrollbar {
-            display: none;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: scale(0.98);
-            }
-
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-
-        /* Permanent Visual Adjustments */
-        canvas {
-            filter: contrast(100%) brightness(120%) saturate(55%);
-        }
-
-
-
-        /* =========================================
-           MOBILE OPTIMIZATIONS (Max-width: 768px)
-           ========================================= */
-        @media (max-width: 768px) {
-
-            /* AUDIO PLAYER UI - Stack vertically, full width at bottom */
-            #audioPlayerUI {
-                position: fixed !important;
-                bottom: 0 !important;
-                left: 0 !important;
-                right: 0 !important;
-                top: auto !important;
-                width: 100% !important;
-                max-width: 100% !important;
-                padding: 10px !important;
-                flex-direction: column !important;
-                align-items: flex-start !important;
-                transform: none !important;
-                gap: 8px !important;
-            }
-
-            /* SUBTITLE CONTAINER - Left aligned, above controls */
-            #subtitleContainer {
-                padding-bottom: 70px !important;
-                max-height: 40vh !important;
-                align-items: flex-start !important;
-                text-align: left !important;
-                width: 100% !important;
-                box-sizing: border-box !important;
-                padding-left: 15px !important;
-                padding-right: 15px !important;
-            }
-
-            .subtitle-line {
-                text-align: left !important;
-                word-wrap: break-word !important;
-                overflow-wrap: break-word !important;
-                white-space: normal !important;
-                max-width: 100% !important;
-            }
-
-            /* UI LAYER (Vignette) - Full screen on mobile */
-            #ui-layer {
-                position: fixed !important;
-                width: 100vw !important;
-                height: 100vh !important;
-            }
-
-            /* ALL 6 BUTTONS IN ONE ROW */
-            #audioControls {
-                flex-direction: row !important;
-                flex-wrap: nowrap !important;
-                justify-content: space-evenly !important;
-                align-items: center !important;
-                width: 100% !important;
-                gap: 0 !important;
-                padding: 8px 10px !important;
-                position: fixed !important;
-                bottom: 10px !important;
-                left: 0 !important;
-                right: 0 !important;
-                z-index: 2000 !important;
-                background: transparent !important;
-            }
-
-            /* Flatten control rows into the main flex container */
-            .controls-row,
-            .mode-btn-wrapper {
-                display: contents !important;
-            }
-
-            /* Buttons */
-            .audio-btn {
-                padding: 8px !important;
-            }
-
-            .audio-btn svg {
-                width: 26px !important;
-                height: 26px !important;
-            }
-
-            #audioToggleBtn svg {
-                width: 32px !important;
-                height: 32px !important;
-            }
-
-            /* FIX: Ensure play/pause icons overlap, not stack */
-            #audioToggleBtn {
-                position: relative !important;
-                width: 48px !important;
-                height: 48px !important;
-            }
-
-            #audioToggleBtn svg {
-                position: absolute !important;
-                top: 50% !important;
-                left: 50% !important;
-                transform: translate(-50%, -50%) !important;
-            }
-
-            /* READING MODE - Text uses upper screen */
-            #audioPlayerUI.reading-mode {
-                top: 0 !important;
-                bottom: 0 !important;
-                height: 100% !important;
-                transform: none !important;
-                align-items: flex-start !important;
-            }
-
-
-
-            #audioPlayerUI.reading-mode #subtitleContainer {
-                flex-grow: 1 !important;
-                max-height: calc(100% - 80px) !important;
-                padding-top: 50px !important;
-                padding-bottom: 80px !important;
-                /* FIX: Text Margin */
-                padding-right: 20px !important;
-                padding-left: 20px !important;
-                overflow-y: auto !important;
-                align-items: flex-start !important;
-                text-align: left !important;
-
-                /* FIX: Initial Start Mask (Fully Opaque Top) */
-                -webkit-mask-image: linear-gradient(to bottom, black 0%, black 100%) !important;
-                mask-image: linear-gradient(to bottom, black 0%, black 100%) !important;
-                transition: -webkit-mask-image 0.5s ease, mask-image 0.5s ease;
-            }
-
-            /* Smart Mask State (Applied via JS on scroll) */
-            #audioPlayerUI.reading-mode #subtitleContainer.scrolled-state {
-                -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%) !important;
-                mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%) !important;
-            }
-        }
-    </style>
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/liminal.css">
     <script type="importmap">
         {
             "imports": {
@@ -898,22 +193,39 @@
                 // --- GLOBALS ---
                 let isLoreMode = false;
                 let activeLoreId = null;
-                let isReadingMode = true; // Default state for this chapter
+                let isReadingMode = false;
+
+                // FIX: LOAD STATE BEFORE PLAYER INIT
+                const savedMode = localStorage.getItem('gameboy_reading_mode');
+                if (savedMode === 'true') {
+                    isReadingMode = true;
+                } else {
+                    isReadingMode = false;
+                }
+
+                let isCenteringCamera = false;
+                let activeLightId = null;
+                // window.subtitleTracks removed
+
                 // State to resume main chapter
                 let mainAudioState = { time: 0, wasPlaying: false, src: 'assets/kapitel1b.mp3' };
+
+                // Helper: Load Subtitles
+                // Helper: Load Subtitles - REMOVED (Handled by SharedAudioPlayer)
 
                 // Helper: Restore Main Audio
                 window.restoreMainAudio = async function () {
                     if (!isLoreMode) return;
                     console.log("Restoring Main Audio (Chapter 1b)...");
+                    const p = window.audioPlayer;
 
                     isLoreMode = false;
                     activeLoreId = null;
 
                     // Fade out Lore (Simple volume drop)
-                    if (player && player.audio) {
+                    if (p && !p.paused) {
                         const fadeOut = setInterval(() => {
-                            if (player.audio.volume > 0.1) player.audio.volume -= 0.1;
+                            if (p.volume > 0.1) p.volume -= 0.1;
                             else {
                                 clearInterval(fadeOut);
                                 _doRestore();
@@ -924,25 +236,23 @@
                     }
 
                     async function _doRestore() {
-                        if (!player) return;
+                        if (!p) return;
                         // Restore Source
-                        player.audio.src = 'assets/kapitel1b.mp3';
-                        player.audio.volume = 1.0;
+                        p.audio.src = getSCUrl('assets/kapitel1b.mp3');
+                        p.audio.volume = 1.0;
 
-                        // Restore Text via Shared Player
-                        if (player.loadText) {
-                            await player.loadText('assets/kapitel1b.txt');
-                        }
+                        // Restore Text
+                        p.loadText('assets/kapitel1b.txt');
 
                         // Restore Time (minus 5s)
                         const resumeTime = Math.max(0, mainAudioState.time - 5);
-                        player.audio.currentTime = resumeTime;
+                        p.audio.currentTime = resumeTime;
 
                         // Resume
                         if (mainAudioState.wasPlaying) {
                             try {
-                                await player.play();
-                                updateIcons();
+                                await p.play();
+                                updateIcons(); // Ensure icons are available in scope? Yes, defined later.
                             } catch (e) { console.warn("Resume failed", e); }
                         }
                     }
@@ -957,35 +267,37 @@
                         return;
                     }
 
+                    const p = window.audioPlayer;
+                    if (!p) return;
+
                     // Save Main Audio State
-                    if (!isLoreMode && player && player.audio) {
-                        mainAudioState.wasPlaying = !player.audio.paused;
-                        mainAudioState.time = player.audio.currentTime;
+                    if (!isLoreMode) {
+                        mainAudioState.wasPlaying = !p.audio.paused; // p is SharedAudioPlayer
+                        mainAudioState.time = p.audio.currentTime;
                     }
 
                     console.log(`Starting Lore Mode: ${content.title} (ID: ${id})`);
                     isLoreMode = true;
                     activeLoreId = id;
 
-                    // Update Player
-                    if (player) {
-                        // Stop current
-                        player.pause();
-                        // Load new source
-                        player.audio.src = content.audio;
-                        player.audio.currentTime = 0;
+                    // Stop current
+                    p.pause();
 
-                        // Load Text via Shared Player
-                        if (player.loadText) {
-                            await player.loadText(content.text);
-                        }
+                    // Load new source
+                    // Use SharedAudioPlayer API
+                    p.audio.src = getSCUrl(content.audio);
+                    p.audio.currentTime = 0;
+                    p.loadText(content.text || `assets/lore${id}.txt`);
 
-                        // Play
-                        try {
-                            await player.play();
-                        } catch (e) {
-                            console.warn("Autoplay blocked or failed:", e);
-                        }
+                    // DEPRECATED: manual loadSubtitleTrack calls
+                    // const textPath = content.text || `assets/lore${id}.txt`;
+                    // await loadSubtitleTrack(textPath);
+
+                    // Play
+                    try {
+                        await p.play();
+                    } catch (e) {
+                        console.warn("Lore autoplay failed:", e);
                     }
                 };
 
@@ -1005,6 +317,16 @@
                 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
                 camera.position.set(0, 1.6, 3.0);
                 const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+                // --- SUBTITLE HELPERS ---
+                // --- SUBTITLE HELPERS REMOVED (Use SharedAudioPlayer) ---
+
+                // Helper to render Archive Content (Fixes ReferenceError)
+                window.renderArchiveContent = function () {
+                    // Reload logic if needed, or just log
+                    console.log("Archive content updated");
+                    if (typeof renderArchive === 'function') renderArchive();
+                };
 
                 // FIX: Define controls object to prevent ReferenceError
                 // Replicates PointerLockControls movement logic (planar forward)
@@ -1030,62 +352,102 @@
                 renderer.toneMappingExposure = 1.0;
                 document.body.appendChild(renderer.domElement);
 
-                // --- AUDIO PLAYER SETUP ---
+                // --- AUDIO PLAYER SETUP (SCAudioAdapter) ---
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
 
-                const player = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
-                    container: document.getElementById('subtitleContainer')
+                // --- GLOBAL GAME STATE ---
+                // Locals aliasing globals
+                // SharedAudioPlayer imported at top
+                window.audioPlayer = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
+                    container: document.getElementById('subtitleContainer'),
+                    volume: 1.0,
+                    isReadingMode: isReadingMode // Pass initial state
                 });
-                window.sharedPlayer = player;
-                window.sharedAudioEl = player.audio;
+                const player = window.audioPlayer;
 
-                // UI Hookups
+                // Initialize Game
+                (async () => {
+                    try {
+                        // 1. Subtitles loaded by Player internals
+                        // const res = await fetch('assets/kapitel1b.txt');
+                        // const text = await res.text();
+                        // window.subtitleTracks = parseSubtitles(text);
+                        // console.log("Subtitles loaded:", window.subtitleTracks.length);
+
+                        // 2. Load Audio State (Player handles init, just restore time)
+                        // player.src is handled by constructor
+                        const savedState = PlayerStateManager.getState('liminal_library');
+                        if (savedState && savedState.sentenceTime > 0) {
+                            player.audio.currentTime = savedState.sentenceTime;
+                        }
+
+                        // 3. Init Visibility Manage - DISABLED (Bug suspected)
+                        // AudioVisibilityManager.init(player.audio);
+
+                        // 4. Initial Render
+                        // player handles rendering
+
+                        // 5. Auto-Play
+                        // 5. Auto-Play moved to startGame() to prevent Pre-Load Audio
+                        // setTimeout(() => {
+                        //    player.play().then(() => updateIcons()).catch(e => console.warn("Auto-play", e));
+                        // }, 500);
+
+                    } catch (e) {
+                        console.error("Game Init Error:", e);
+                    }
+                })();
+
+                // --- UI HELPERS ---
+                function updateReadingModeUI() {
+                    // Sync with Shared Player
+                    if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
+                        window.audioPlayer.setReadingMode(isReadingMode);
+                    }
+
+                    if (isReadingMode) {
+                        uiContainer.classList.add('reading-mode');
+                        localStorage.setItem('gameboy_reading_mode', 'true');
+                        isCenteringCamera = true;
+                    } else {
+                        uiContainer.classList.remove('reading-mode');
+                        localStorage.setItem('gameboy_reading_mode', 'false');
+                    }
+                }
+
+                // --- EVENT LISTENERS ---
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
                     player.toggle();
                     updateIcons();
                 });
 
-                // ATTEMPT AUTO-PLAY (Critical for continuity)
-                // Browsers may block this if no interaction, but click-navigation usually allows it
-                setTimeout(() => {
-                    player.play().then(() => {
-                        console.log("Auto-play success");
-                        updateIcons();
-                    }).catch(e => {
-                        console.warn("Auto-play blocked:", e);
-                        // Optional: Show "Tap to Start" if strictly needed, but icon update handles state
-                        updateIcons();
-                    });
-                }, 500);
-
                 document.getElementById('skipBackBtn').addEventListener('click', () => player.skip(-15));
                 document.getElementById('skipForwardBtn').addEventListener('click', () => player.skip(15));
-                document.getElementById('readingModeBtn').addEventListener('click', () => {
-                    player.setReadingMode(true);
-                    uiContainer.classList.add('reading-mode');
-                    localStorage.setItem('gameboy_reading_mode', 'true'); // STATE PERSISTENCE
 
-                    // FIX: Recenter Camera on BOTH Mobile and Desktop
-                    // This ensures the camera rotates back to center (0,0,0) and resets mouse coordinates
-                    // preventing the "frozen angle" bug on Desktop.
-                    isCenteringCamera = true;
+                document.getElementById('readingModeBtn').addEventListener('click', () => {
+                    isReadingMode = true;
+                    updateReadingModeUI();
                 });
+
                 document.getElementById('gameModeBtn').addEventListener('click', () => {
-                    player.setReadingMode(false);
-                    uiContainer.classList.remove('reading-mode');
-                    localStorage.setItem('gameboy_reading_mode', 'false'); // STATE PERSISTENCE
+                    isReadingMode = false;
+                    updateReadingModeUI();
                 });
 
                 // Auto-Resume when Lore ends or Transition
+                // Auto-Resume when Lore ends or Transition
+                // SharedAudioPlayer wraps the audio, so we add listener to audio property
+                // Or if we added addEventListener method to SharedAudioPlayer we could use that.
+                // For now, access the audio element directly.
                 player.audio.addEventListener('ended', () => {
                     if (isLoreMode) {
                         window.restoreMainAudio();
                     } else {
                         // MAIN CHAPTER ENDED
                         console.log("Chapter Finished.");
-                        const isReadingMode = player.isReadingMode;
+                        // Use global variable
                         if (isReadingMode) {
                             transitionToNextChapter();
                         } else {
@@ -1103,8 +465,8 @@
 
                     // Fade Audio
                     const fade = setInterval(() => {
-                        if (player.audio.volume > 0.05) player.audio.volume -= 0.05;
-                        else { clearInterval(fade); player.audio.pause(); }
+                        if (player.volume > 0.05) player.volume -= 0.05;
+                        else { clearInterval(fade); player.pause(); }
                     }, 100);
 
                     setTimeout(() => {
@@ -1119,13 +481,9 @@
                     transitionToNextChapter();
                 });
 
-                // RESTORE READING MODE STATE (Persistent across chapters)
-                const savedMode = localStorage.getItem('gameboy_reading_mode');
-                if (savedMode === 'true') {
-                    // Force immediate reading mode
-                    player.setReadingMode(true);
-                    uiContainer.classList.add('reading-mode');
-                }
+                // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
+                // ALWAYS update UI to sync player state
+                updateReadingModeUI();
 
                 // --- DRAG TO SCROLL LOGIC ---
                 const subtitleContainer = document.getElementById('subtitleContainer');
@@ -1180,7 +538,7 @@
 
 
                 function updateIcons() {
-                    if (player.audio.paused) {
+                    if (player.paused) {
                         iconPlay.style.display = 'block'; iconPause.style.display = 'none';
                     } else {
                         iconPlay.style.display = 'none'; iconPause.style.display = 'block';
@@ -1220,7 +578,7 @@
                 let targetMouseX = 0; // Target look direction (screen X normalized)
                 let targetMouseY = 0; // Target look direction (screen Y normalized)
                 let isLookingAtClickTarget = false; // True when camera should rotate toward click
-                let isCenteringCamera = false; // True when recentering for reading mode (Mobile)
+                // let isCenteringCamera = false; // Moved to global scope
 
                 // Desktop: Mouse move controls camera look
                 document.addEventListener('mousemove', (event) => {
@@ -1981,11 +1339,13 @@
                     }
                 });
                 document.addEventListener('keydown', (e) => {
+                    // Debug: Log key code and Mode
+                    // console.log("Keydown:", e.code, "ReadingMode:", isReadingMode);
                     const code = e.code;
                     if (code === 'KeyW' || code === 'ArrowUp') move.f = true;
                     if (code === 'KeyS' || code === 'ArrowDown') move.b = true;
-                    if (code === 'KeyA' || code === 'ArrowLeft') move.l = true;
-                    if (code === 'KeyD' || code === 'ArrowRight') move.r = true;
+                    if (code === 'KeyA' || code === 'ArrowLeft') { move.l = true; console.log("Move Left START"); }
+                    if (code === 'KeyD' || code === 'ArrowRight') { move.r = true; console.log("Move Right START"); }
                 });
                 document.addEventListener('keyup', (e) => {
                     const code = e.code;
@@ -1998,40 +1358,8 @@
                 // --- LORE MODE FUNCTIONS (Glowing Books) ---
                 // Uses existing isLoreMode and mainAudioState from line ~725
 
-                async function startLoreMode(loreId) {
-                    // Allow chaining! If already in lore mode, we just switch tracks.
-                    const isSwitching = isLoreMode;
-                    isLoreMode = true;
-
-                    if (!isSwitching) {
-                        // First time entering lore mode: Save Main Audio State
-                        mainAudioState.time = player.audio.currentTime;
-                        mainAudioState.wasPlaying = !player.audio.paused;
-                    }
-
-                    // Stop current playback (main or previous lore)
-                    player.pause();
-
-                    // Load lore text using player's loadText method
-                    await player.loadText(`assets/lore${loreId}.txt`);
-
-                    // Play lore audio
-                    player.audio.src = `assets/lore${loreId}.mp3`;
-                    player.audio.currentTime = 0;
-
-                    try {
-                        await player.play();
-                    } catch (e) {
-                        console.warn("Lore autoplay failed:", e);
-                    }
-
-                    // REMOVED: player.audio.onended assignment. 
-                    // The central event listener in lines 865+ handles the 'ended' event 
-                    // and checks isLoreMode correctly. This prevents the race condition 
-                    // where isLoreMode was set to false before the listener ran.
-
-                    console.log(`Starting Lore ${loreId} (Switching: ${isSwitching})`);
-                }
+                // --- LORE MODE ---
+                // (Global window.startLoreMode defined above is used)
 
                 // --- INIT & PRELOAD ---
                 console.log("DEBUG: Initialization Complete. Starting Preload...");
@@ -2070,6 +1398,12 @@
 
                     // Auto-Play Audio
                     console.log("DEBUG: Attempting Auto-Play");
+
+                    // SAFETY SYNC: Force Reading Mode State
+                    if (window.audioPlayer && isReadingMode) {
+                        window.audioPlayer.setReadingMode(true);
+                    }
+
                     player.play().catch(e => {
                         console.warn("Auto-play blocked, waiting for interaction:", e);
                     });
@@ -2250,17 +1584,24 @@
                         }
 
                         // movement constants
-                        const baseAccel = 40.0;
-                        const gameSpeed = baseAccel * 0.15; // 40% SLOWER
-                        // CLICK SPEED UPDATE: Reduced by another 40% from 0.12 -> 0.072
-                        const clickSpeed = gameSpeed * 0.072;
+                        // movement constants
+                        // movement constants
+                        // USER: REQUESTED 25% SLOWER than 200 => 150
+                        const baseAccel = 150.0;
+                        const gameSpeed = baseAccel * 0.15;
+                        // Click Speed removed (Unified)
 
                         // SYNCED: Reading Speed = Game Speed
                         const readingSpeed = gameSpeed;
 
-                        const isReading = player.isReadingMode; // or check player.isReadingMode getter
+                        const isReading = isReadingMode; // Use global state
 
                         const input = new THREE.Vector3();
+
+                        // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
+                        velocity.x -= velocity.x * 10.0 * delta;
+                        velocity.z -= velocity.z * 10.0 * delta;
+                        velocity.y -= 9.8 * 100.0 * delta;
 
                         if (isReading) {
                             // READING MODE: Auto-Walk Forward (Global Z)
@@ -2279,10 +1620,8 @@
 
                         } else {
                             // GAME MODE
-                            // 1. Friction / Gravity
-                            velocity.x -= velocity.x * 10.0 * delta;
-                            velocity.z -= velocity.z * 10.0 * delta;
-                            velocity.y -= 9.8 * 100.0 * delta; // 100.0 = mass approximation
+
+                            // 2. Input Vectors
 
                             // 2. Input Vectors
                             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
@@ -2322,27 +1661,25 @@
                                 } else {
                                     const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
 
-                                    // 1. Hole die lokalen Richtungsvektoren der Kamera im Weltraum
-                                    const camRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                                    camRight.y = 0; camRight.normalize();
-
-                                    const camForward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                                    camForward.y = 0; camForward.normalize();
-
-                                    // 2. Projiziere die Zielrichtung (Welt) auf die Kamera-Achsen (Lokal)
-                                    const localX = moveDir.dot(camRight);   // Wie stark liegt das Ziel rechts von uns?
-                                    const localZ = moveDir.dot(camForward); // Wie stark liegt das Ziel vor uns?
-
-                                    // 3. Wende Geschwindigkeit relativ zur Kamera an
-                                    // (Minus, da die controls-Logik negative Werte für Vorwärts/Rechts erwartet)
-                                    velocity.x -= localX * clickSpeed * delta * 50;
-                                    velocity.z -= localZ * clickSpeed * delta * 50;
+                                    // UNIFIED SPEED: Use gameSpeed for click movement too.
+                                    // Direct World Space addition (since velocity is World Space)
+                                    velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
                                 }
                             }
 
-                            // 4. Move Controls (using Velocity)
-                            controls.moveRight(-velocity.x * delta);
-                            controls.moveForward(-velocity.z * delta);
+                            // 4. Move Controls (Direct Physics Integration)
+                            camera.position.x += velocity.x * delta;
+                            camera.position.z += velocity.z * delta; // Allow forward/back calc first
+
+                            // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
+                            // User: "negative meter forbidden" / "backwards movement forbidden"
+                            if (velocity.z > 0) velocity.z = 0;
+
+                            // Prevent drifting back if position tries to increase
+                            // (Double safety: clamp delta position change?)
+                            // No, velocity clamp is smoother. But let's check position delta too just in case.
+                            // Accessing last frame? No need, velocity controls it.
+
                             camera.position.y += (velocity.y * delta);
 
                             // 5. Floor Collision
@@ -2439,6 +1776,14 @@
                                 }
                             }
                         });
+
+
+                        // Update Subtitles
+                        // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
+                        // No manual render call needed if SharedAudioPlayer updates innerHTML
+                        if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
+                            // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
+                        }
 
                         renderer.render(scene, camera);
 
@@ -2637,87 +1982,6 @@
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
             }
-            // =========================================================
-            // AUDIO & SUBTITLE SYSTEM (Unified via SharedAudioPlayer)
-            // =========================================================
-            console.log("[AudioSystem] Initializing Unified Player...");
-
-            // Logic previously handled by manual parser is now in SharedAudioPlayer.js
-            // We just ensure Drag Logic remains hooked up to the container.
-
-            // isReadingMode is still used for the UI and needs to be synced with the shared player.
-            let isReadingMode = true; // Default state
-
-            // Ensure reading mode is synced
-            if (isReadingMode) {
-                if (window.sharedPlayer) window.sharedPlayer.setReadingMode(true);
-            }
-
-            // Drag Logic for Container (Legacy Support)
-            const subtitleContainer = document.getElementById('subtitleContainer');
-
-            // Drag Logic for Container (from index.html)
-            let isDown = false;
-            let startY;
-            let scrollTop;
-
-            subtitleContainer.addEventListener('mousedown', (e) => {
-                isDown = true;
-                subtitleContainer.dataset.isDragging = 'false';
-                subtitleContainer.dataset.wasDragging = 'false';
-                startY = e.pageY - subtitleContainer.offsetTop;
-                scrollTop = subtitleContainer.scrollTop;
-                subtitleContainer.style.cursor = 'grabbing';
-            });
-
-            subtitleContainer.addEventListener('mouseleave', () => {
-                isDown = false;
-                subtitleContainer.style.cursor = 'auto'; // or pointer
-            });
-
-            subtitleContainer.addEventListener('mouseup', () => {
-                isDown = false;
-                subtitleContainer.style.cursor = 'auto'; // or pointer
-            });
-
-            subtitleContainer.addEventListener('mousemove', (e) => {
-                if (!isDown) return;
-                e.preventDefault();
-                const y = e.pageY - subtitleContainer.offsetTop;
-                const walk = (y - startY) * 1.5; // Scroll speed
-                if (Math.abs(walk) > 5) {
-                    subtitleContainer.dataset.isDragging = 'true';
-                    subtitleContainer.dataset.wasDragging = 'true';
-                    subtitleContainer.scrollTop = scrollTop - walk;
-                }
-            });
-
-
-
-
-            // =========================================================
-            // G) Scrollbar auto-hide logic
-            // =========================================================
-            let scrollTimeout;
-            if (subtitleContainer) {
-                subtitleContainer.addEventListener('scroll', () => {
-                    subtitleContainer.classList.add('is-scrolling');
-                    clearTimeout(scrollTimeout);
-                    scrollTimeout = setTimeout(() => {
-                        subtitleContainer.classList.remove('is-scrolling');
-                    }, 1500);
-                });
-            }
-
-            // =========================================================
-            // FINAL CLEANUP: Ensure UI reflects state
-            // =========================================================
-            if (window.sharedPlayer && window.sharedPlayer.isReadingMode) {
-                const ui = document.getElementById('audioPlayerUI');
-                if (ui) ui.classList.add('reading-mode');
-            }
-
-
         })();
     </script>
 </body>

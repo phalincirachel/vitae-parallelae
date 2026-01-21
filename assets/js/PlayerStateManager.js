@@ -42,7 +42,7 @@ const PlayerStateManager = {
      */
     findSentenceStart(currentTime, subtitleTracks) {
         if (!subtitleTracks || subtitleTracks.length === 0) {
-            return { index: 0, time: 0 };
+            return { index: 0, time: currentTime }; // Fallback to exact time if no subtitles
         }
 
         // Find the last subtitle whose time is <= currentTime

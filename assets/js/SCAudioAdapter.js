@@ -1,52 +1,33 @@
 /**
- * SCAudioAdapter - HTML5 Audio-kompatible Wrapper-Klasse für SoundCloud Widget API
+ * SCAudioAdapter - Hybrid Audio Wrapper for SoundCloud Widget API & HTML5 Audio
  * 
- * Unterstützt dynamische Iframe-Erstellung für Multi-Instanz-Nutzung.
+ * Supports dynamic Iframe creation for SoundCloud and fallback to HTML5 Audio for local files.
+ * Provides a unified API: play(), pause(), currentTime, volume, src, and event listeners.
  */
 class SCAudioAdapter {
     constructor(iframeIdOrOptions = {}) {
         let iframeId = (typeof iframeIdOrOptions === 'string') ? iframeIdOrOptions : null;
-        let options = (typeof iframeIdOrOptions === 'object') ? iframeIdOrOptions : {};
 
-        // 1. Iframe finden oder erstellen (aber noch nicht laden!)
+        // --- 1. SoundCloud Widget Setup ---
         this.iframe = iframeId ? document.getElementById(iframeId) : null;
-        this.iframeId = iframeId; // Store ID for potential reuse checks
+        this.iframeId = iframeId;
+        this.widget = null; // Will be initialized if Mode is SC
 
-        if (!this.iframe) {
-            // Check if body exists
-            if (document.body) {
-                this._createIframe(iframeId);
-                this._checkInitWidget();
-            } else {
-                console.log('[SCAudioAdapter] document.body not ready. Deferring iframe creation...');
-                window.addEventListener('DOMContentLoaded', () => {
-                    if (!this.iframe) {
-                        this._createIframe(iframeId);
-                        // If we have a pending src, init widget now
-                        if (this._src) this._initWidget(this._src);
-                        else this._checkInitWidget();
-                    }
-                });
-            }
-        } else {
-            // Iframe provided externally
-            this._checkInitWidget();
-        }
+        // --- 2. HTML5 Audio Setup ---
+        this.audioNode = new Audio();
+        this.audioNode.autoplay = false;
+        this.audioNode.preload = 'auto';
 
-        // Widget wird erst initialisiert, wenn wir einen validen SRC haben
-        this.widget = null;
-
-        // Internal State
-        this._currentTimeMs = 0;
-        this._durationMs = 0;
-        this._paused = true;
-        this._volume = 1.0;
+        // --- 3. Internal State ---
+        this.mode = 'none'; // 'sc' or 'html5'
+        this._src = '';
         this._isReady = false;
         this._pendingPlay = false;
-        this._pendingInit = false; // Lock to prevent double init
-        this._src = '';
+        this._volume = 1.0;
+        this._scPaused = true;
+        this._scCurrentTime = 0;
 
-        // Event Listeners
+        // Event Listeners Storage
         this._listeners = {
             timeupdate: [],
             ended: [],
@@ -56,91 +37,153 @@ class SCAudioAdapter {
             canplay: []
         };
 
+        // --- 4. Init Listeners for HTML5 Audio ---
+        this._bindHtml5Events();
+
         // Register with Visibility Manager if available
         if (typeof window !== 'undefined' && window.AudioVisibilityManager) {
             window.AudioVisibilityManager.register(this);
         }
     }
 
-    _createIframe(id) {
-        console.log('[SCAudioAdapter] Creating dynamic iframe...');
+    _bindHtml5Events() {
+        const events = ['timeupdate', 'ended', 'play', 'pause', 'loadedmetadata', 'canplay'];
+        events.forEach(ev => {
+            this.audioNode.addEventListener(ev, () => {
+                if (this.mode === 'html5') {
+                    this._dispatch(ev);
+                }
+            });
+        });
+
+        // Handle Error
+        this.audioNode.addEventListener('error', (e) => {
+            if (this.mode === 'html5') console.error('[SCAudioAdapter] HTML5 Audio Error:', e);
+        });
+    }
+
+    // --- Iframe Creation (Lazy) ---
+    _ensureIframe() {
+        if (this.iframe) return;
+        if (typeof document === 'undefined') return;
+
+        console.log('[SCAudioAdapter] Creating dynamic iframe for SoundCloud...');
         this.iframe = document.createElement('iframe');
         this.iframe.style.display = 'none';
         this.iframe.setAttribute('allow', 'autoplay');
         this.iframe.setAttribute('frameborder', '0');
-        if (id) this.iframe.id = id;
+        if (this.iframeId) this.iframe.id = this.iframeId;
         document.body.appendChild(this.iframe);
     }
 
-    _checkInitWidget() {
-        // Placeholder for future use. Widget init is deferred to src setter.
+    // --- Core API ---
+
+    get src() { return this._src; }
+    set src(url) {
+        if (!url) return;
+        this._src = url;
+        this._isReady = false;
+
+        // Detect Type
+        const isSoundCloud = url.includes('soundcloud.com');
+
+        if (isSoundCloud) {
+            this._switchToSC(url);
+        } else {
+            this._switchToHtml5(url);
+        }
     }
 
-    _initWidget(initialUrl) {
-        if (this._pendingInit) return;
-        this._pendingInit = true;
+    _switchToHtml5(url) {
+        console.log('[SCAudioAdapter] Switching to HTML5 Audio for:', url);
+        this.mode = 'html5';
 
-        console.log('[SCAudioAdapter] Initializing Widget with URL:', initialUrl);
+        // Pause Widget if active
+        if (this.widget) this.widget.pause();
 
-        // 1. Setze Iframe Src
-        // Standard Params für Widget API compliance
-        const widgetOptions = '&auto_play=false&hide_related=true&show_comments=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&single_active=false';
-        this.iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(initialUrl)}${widgetOptions}`;
+        this.audioNode.src = url;
+        this.audioNode.volume = this._volume;
+        this.audioNode.load(); // Force load
+        this._isReady = true; // HTML5 is effectively "ready" to receive commands immediately
 
-        // 2. Warte auf Load, dann binde API
-        this.iframe.onload = () => {
-            console.log('[SCAudioAdapter] Iframe loaded. Binding SC.Widget...');
+        if (this._pendingPlay) {
+            this._pendingPlay = false;
+            this.audioNode.play().catch(e => console.warn('[SCAudioAdapter] Auto-play blocked:', e));
+        }
+    }
 
-            // Safety Check: Falls SC nicht da ist
-            if (typeof SC === 'undefined') {
-                console.error('[SCAudioAdapter] SC Global Object not found! Is api.js loaded?');
-                return;
-            }
+    _switchToSC(url) {
+        console.log('[SCAudioAdapter] Switching to SoundCloud for:', url);
+        this.mode = 'sc';
 
-            this.widget = SC.Widget(this.iframe);
-            this._bindWidgetEvents();
-        };
+        // Pause HTML5 if active
+        this.audioNode.pause();
+
+        this._ensureIframe();
+
+        // Check if Widget already exists
+        if (!this.widget) {
+            // First Init
+            const widgetOptions = '&auto_play=false&hide_related=true&show_comments=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&single_active=false';
+            this.iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}${widgetOptions}`;
+
+            this.iframe.onload = () => {
+                if (typeof SC === 'undefined') {
+                    console.error('[SCAudioAdapter] SC API not found!');
+                    return;
+                }
+                this.widget = SC.Widget(this.iframe);
+                this._bindWidgetEvents();
+            };
+        } else {
+            // Reload Widget
+            this.widget.load(url, {
+                auto_play: false,
+                callback: () => {
+                    this._isReady = true;
+                    this.widget.setVolume(this._volume * 100);
+                    if (this._pendingPlay) {
+                        this._pendingPlay = false;
+                        this.widget.play();
+                    }
+                    this._dispatch('loadedmetadata');
+                }
+            });
+        }
     }
 
     _bindWidgetEvents() {
         this.widget.bind(SC.Widget.Events.READY, () => {
             this._isReady = true;
-            this._pendingInit = false; // Init complete
-            console.log('[SCAudioAdapter] READY');
-
-            // Wenn wir in der Zwischenzeit Volume gesetzt haben
+            console.log('[SCAudioAdapter] SC Widget READY');
             this.widget.setVolume(this._volume * 100);
-
             if (this._pendingPlay) {
                 this._pendingPlay = false;
                 this.widget.play();
             }
-
-            this.widget.getDuration(ms => {
-                this._durationMs = ms;
-                this._dispatch('loadedmetadata');
-                this._dispatch('canplay');
-            });
-        });
-
-        this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
-            this._currentTimeMs = data.currentPosition;
-            this._dispatch('timeupdate');
         });
 
         this.widget.bind(SC.Widget.Events.PLAY, () => {
-            this._paused = false;
+            if (this.mode !== 'sc') return;
+            this._scPaused = false;
             this._dispatch('play');
         });
 
         this.widget.bind(SC.Widget.Events.PAUSE, () => {
-            this._paused = true;
+            if (this.mode !== 'sc') return;
+            this._scPaused = true;
             this._dispatch('pause');
         });
 
         this.widget.bind(SC.Widget.Events.FINISH, () => {
-            this._paused = true;
+            if (this.mode !== 'sc') return;
+            this._scPaused = true;
             this._dispatch('ended');
+        });
+
+        this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
+            if (this.mode !== 'sc') return;
+            this._dispatch('timeupdate');
         });
 
         // Error Handling
@@ -149,117 +192,73 @@ class SCAudioAdapter {
         });
     }
 
-    // HTML5 compatible properties
-    get currentTime() { return this._currentTimeMs / 1000; }
-    set currentTime(s) {
-        this._currentTimeMs = s * 1000;
-        if (this._isReady && this.widget) this.widget.seekTo(this._currentTimeMs);
-    }
-
-    get duration() { return this._durationMs / 1000; }
-    get paused() { return this._paused; }
-    get volume() { return this._volume; }
-    set volume(v) {
-        this._volume = Math.max(0, Math.min(1, v));
-        if (this._isReady && this.widget) this.widget.setVolume(this._volume * 100);
-    }
-
-    get src() { return this._src; }
-    set src(url) {
-        if (!url) return;
-        this._src = url;
-
-        // Fall 1: Noch kein Widget -> Init
-        // Aber nur, wenn das Iframe schon existiert. Sonst wird es im DOMContentLoaded-Handler initialisiert.
-        if (!this.widget && !this._pendingInit) {
-            if (this.iframe) { // Check if iframe element is available
-                this._initWidget(url);
-            }
-            return;
-        }
-
-        // Fall 2: Widget existiert (oder init läuft) -> Load
-        // Achtung: Wenn init läuft (_pendingInit), müssen wir warten? 
-        // Nein, .load() kann erst gerufen werden wenn ready.
-        // Wir setzen _isReady = false, damit play() queued.
-
-        this._isReady = false;
-        this._currentTimeMs = 0;
-
-        // Wait until existing widget is actually usable? 
-        // Helper to retry load if widget not ready/bound yet
-        const safeLoad = () => {
-            if (this.widget && typeof this.widget.load === 'function') {
-                console.log('[SCAudioAdapter] Loading track via safeLoad:', url);
-                this.widget.load(url, {
-                    auto_play: false, // Wir steuern Play manuell
-                    buying: false,
-                    liking: false,
-                    download: false,
-                    sharing: false,
-                    show_artwork: false,
-                    show_comments: false,
-                    show_playcount: false,
-                    show_user: false,
-                    hide_related: true,
-                    visual: false,
-                    callback: () => {
-                        console.log('[SCAudioAdapter] Track loaded via .load():', url);
-                        // CRITICAL FIX: After load completes, mark as ready and process pending play
-                        this._isReady = true;
-
-                        // Set volume
-                        this.widget.setVolume(this._volume * 100);
-
-                        // Get duration
-                        this.widget.getDuration(ms => {
-                            this._durationMs = ms;
-                            console.log('[SCAudioAdapter] Duration:', ms, 'ms');
-                            this._dispatch('loadedmetadata');
-                            this._dispatch('canplay');
-                        });
-
-                        // Process pending play
-                        if (this._pendingPlay) {
-                            console.log('[SCAudioAdapter] Processing pending play after load');
-                            this._pendingPlay = false;
-                            this.widget.play();
-                        }
-                    }
-                });
-            } else {
-                // If initializing, verify again shortly
-                console.log('[SCAudioAdapter] Widget not ready, retrying safeLoad in 500ms...');
-                setTimeout(safeLoad, 500);
-            }
-        };
-
-        if (this.widget) {
-            safeLoad();
-        } else {
-            // Should be covered by Init logic, but if double-set happens during init:
-            // Just let the initial init finish, the iframe src will load THIS url if it was the first.
-            // If this is a SECOND set during init... tricky. 
-            // Simplified: The FIRST set wins the init. Subsequent sets must wait.
-            // For now, assume sequential flow.
-            console.log('[SCAudioAdapter] No widget yet, waiting for init to complete...');
-        }
-    }
+    // --- Controls ---
 
     play() {
-        if (this._isReady && this.widget) {
+        if (this.mode === 'html5') {
+            return this.audioNode.play();
+        } else if (this.mode === 'sc' && this.widget && this._isReady) {
             this.widget.play();
+            return Promise.resolve();
         } else {
             this._pendingPlay = true;
+            return Promise.resolve();
         }
-        return Promise.resolve();
     }
 
     pause() {
+        // DEBUG: Trace who causes pause
+        console.log('[SCAudioAdapter] pause() called. Trace:', new Error().stack);
+
         this._pendingPlay = false;
-        if (this._isReady && this.widget) this.widget.pause();
+        if (this.mode === 'html5') {
+            this.audioNode.pause();
+        } else if (this.mode === 'sc' && this.widget) {
+            this.widget.pause();
+        }
     }
 
+    toggle() {
+        if (this.paused) this.play();
+        else this.pause();
+    }
+
+    // --- Properties ---
+
+    get paused() {
+        if (this.mode === 'html5') return this.audioNode.paused;
+        // RELIABLE PAUSE STATE FOR SC
+        return this._scPaused !== false; // Default to true (paused)
+    }
+
+    get currentTime() {
+        if (this.mode === 'html5') return this.audioNode.currentTime;
+        return this._scCurrentTime || 0;
+    }
+
+    set currentTime(val) {
+        if (this.mode === 'html5') {
+            this.audioNode.currentTime = val;
+        } else if (this.mode === 'sc' && this.widget) {
+            this.widget.seekTo(val * 1000);
+        }
+    }
+
+    get volume() { return this._volume; }
+    set volume(v) {
+        this._volume = Math.max(0, Math.min(1, v));
+        if (this.mode === 'html5') {
+            this.audioNode.volume = this._volume;
+        } else if (this.mode === 'sc' && this.widget) {
+            this.widget.setVolume(this._volume * 100);
+        }
+    }
+
+    skip(amount) {
+        this.currentTime = this.currentTime + amount;
+    }
+
+    // --- Event System ---
     addEventListener(ev, cb) {
         if (this._listeners[ev]) this._listeners[ev].push(cb);
     }
@@ -271,15 +270,15 @@ class SCAudioAdapter {
     }
 
     _dispatch(ev) {
+        // Special: Update SC time cache
+        if (ev === 'timeupdate' && this.mode === 'sc' && this.widget) {
+            this.widget.getPosition(ms => this._scCurrentTime = ms / 1000);
+        }
+
         if (this._listeners[ev]) {
-            this._listeners[ev].forEach(cb => {
-                try { cb(); } catch (e) { console.error(e); }
-            });
+            this._listeners[ev].forEach(cb => cb());
         }
     }
-    // DOM Compatibility Stubs
-    blur() { /* No-op: SCAudioAdapter is not a DOM element */ }
-    focus() { /* No-op: SCAudioAdapter is not a DOM element */ }
 }
 
 if (typeof window !== 'undefined') {

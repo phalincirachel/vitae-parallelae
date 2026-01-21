@@ -13,7 +13,7 @@ export class SharedAudioPlayer {
         this.subtitleTracks = [];
         this.currentSubtitleIndex = -1;
         this.container = options.container || document.getElementById('subtitleContainer');
-        this.isReadingMode = false;
+        this.isReadingMode = options.isReadingMode || false;
 
         // Default volumes
         this.audio.volume = options.volume || 1.0;
@@ -159,4 +159,14 @@ export class SharedAudioPlayer {
     pause() { this.audio.pause(); }
     toggle() { if (this.audio.paused) this.play(); else this.pause(); }
     skip(sec) { this.audio.currentTime = Math.max(0, Math.min(this.audio.duration || 0, this.audio.currentTime + sec)); }
+
+    // Getters/Setters for compatibility
+    get paused() { return this.audio.paused; }
+    get currentTime() { return this.audio.currentTime; }
+    set currentTime(val) { this.audio.currentTime = val; this.onTimeUpdate(); }
+    get duration() { return this.audio.duration; }
+    get volume() { return this.audio.volume; }
+    set volume(val) { this.audio.volume = val; }
+    get src() { return this.audio.src; }
+    set src(val) { this.audio.src = val; }
 }
