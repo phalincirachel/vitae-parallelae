@@ -591,7 +591,7 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = 0.02;
+        footstepSound.volume = 0.024; // +20% from 0.02
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
@@ -604,7 +604,7 @@
         // Ambient-Sound (permanent)
         const ambientSound = new SCAudioAdapter();
         ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.02;
+        ambientSound.volume = 0.024; // +20% from 0.02
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -1767,7 +1767,7 @@
                 // Apply Movement
                 let moveSpeed = player.speed;
                 if (isReadingMode) {
-                    moveSpeed = player.speed * 0.35; // 65% Slower (User Request)
+                    moveSpeed = player.speed * 0.175; // 50% of 35% = 17.5% (User Request: even slower)
                 }
 
                 // LOG SPEED for Debug (Throttle)
@@ -2528,14 +2528,10 @@
                     const activeEl = subtitleContainer.children[safeIndex];
                     activeEl.classList.add('subtitle-current');
 
-                    // Auto-Scroll nur, wenn User nicht gerade selbst scrollt
-                    // AND Only if Audio is Playing (Task 5b)
+                    // Auto-Scroll only if user is NOT actively dragging AND audio is playing
+                    // Removed 'is-scrolling' check - it was blocking scroll updates for 1s after any scroll
                     const isPlaying = !audioPlayer.paused;
-
-                    if (!subtitleContainer.classList.contains('is-scrolling') &&
-                        !subtitleContainer.dataset.isDragging &&
-                        isPlaying) {
-
+                    if (subtitleContainer.dataset.isDragging !== 'true' && isPlaying) {
                         activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
                     }
                 }
@@ -2724,63 +2720,7 @@
             }
         });
 
-        // ============================================
-        // PINCH TO ZOOM SUPPORT (Task 7)
-        // ============================================
-        let initialPinchDistance = null;
-        let initialScale = 1.0;
-        // We use SPRITE.baseScale as the "Zoom Level" effectively, 
-        // OR we use a global ctx scale. Let's use ctx scale or cam distance?
-        // Changing SPRITE.scale affects collisions logic which is derived from sprite size... DANGEROUS.
-        // Better: Change CSS transform scale of the Canvas? No, blurry.
-        // Best: Apply a global Zoom Factor in draw() logic.
-        // But draw() uses camX/camY which are pixel based.
-        // Easiest "Visual Zoom" without breaking physics: CSS transform on #gameWrapper?
-        // OR: Modify draw() to scale everything.
-        // User asked "Zoomen können".
-
-        // Let's implement CSS Zoom for safety on "Physics"
-        const gameWrapperEl = document.getElementById('gameWrapper');
-        let currentZoom = 1.0;
-
-        canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 2 && !isReadingMode) {
-                e.preventDefault();
-                initialPinchDistance = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                initialScale = currentZoom;
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length === 2 && !isReadingMode && initialPinchDistance) {
-                e.preventDefault();
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-
-                const delta = dist / initialPinchDistance;
-                // Limit Zoom
-                let newZoom = initialScale * delta;
-                newZoom = Math.min(2.5, Math.max(1.0, newZoom)); // 1.0 to 2.5x
-
-                currentZoom = newZoom;
-                // Apply to Canvas Style
-                canvas.style.transform = `scale(${currentZoom})`;
-                canvas.style.transformOrigin = 'center center'; // Simple center zoom
-
-                // Better: Transform towards center of pinch? Too complex for now.
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', (e) => {
-            if (e.touches.length < 2) {
-                initialPinchDistance = null;
-            }
-        });
+        // PINCH-TO-ZOOM REMOVED per user request (caused jitter issues)
 
 
         window.transitionToNextChapter = function () {
@@ -3251,8 +3191,20 @@
                         parseSubtitles(text);
                         console.log("[DEBUG] After parseSubtitles, tracks:", subtitleTracks.length);
 
-                        // After parsing, set proper time
-                        const resumeTime = Math.max(0, mainAudioState.time - 5);
+                        // Use PlayerStateManager for proper sentence-based position restoration
+                        let resumeTime = 0;
+                        if (window.PlayerStateManager) {
+                            const savedState = window.PlayerStateManager.getState('kapitel1');
+                            if (savedState && savedState.sentenceTime !== undefined) {
+                                resumeTime = savedState.sentenceTime;
+                                console.log("[DEBUG] Restored from PlayerStateManager:", savedState);
+                            } else {
+                                resumeTime = Math.max(0, mainAudioState.time - 5);
+                                console.log("[DEBUG] No saved state, using legacy:", mainAudioState.time);
+                            }
+                        } else {
+                            resumeTime = Math.max(0, mainAudioState.time - 5);
+                        }
                         console.log("[DEBUG] Setting currentTime to:", resumeTime);
                         audioPlayer.currentTime = resumeTime;
                         renderSubtitleLines(Math.max(0, currentSubtitleIndex));

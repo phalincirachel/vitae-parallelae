@@ -403,7 +403,7 @@ class Particle {
         if (typeof player !== 'undefined' && player.speed) {
             // Assume 60fps for conversation factor roughly
             const playerPerFrame = player.speed / 60;
-            maxSpeed = playerPerFrame * 0.8;
+            maxSpeed = playerPerFrame * 0.8; // 20% slower than player
 
             // LOGGING (Throttled via Math.random)
             if (Math.random() < 0.001) {

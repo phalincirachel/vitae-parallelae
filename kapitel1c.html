@@ -1788,7 +1788,7 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = 0.02;
+        footstepSound.volume = 0.024; // +20% from 0.02
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
@@ -1801,7 +1801,7 @@
         // Ambient-Sound (permanent)
         const ambientSound = new SCAudioAdapter();
         ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.02;
+        ambientSound.volume = 0.024; // +20% from 0.02
 
         // Audio entsperren bei erstem User-Input
         function unlockAudio() {
@@ -2615,50 +2615,13 @@
             handleClickMove(e.clientX, e.clientY);
         });
 
-        // [TASK 7] Pinch-to-Zoom & Touch Logic
+        // Simple Touch for Click-to-Move (Pinch-Zoom REMOVED per user request - caused jitter)
         canvas.addEventListener('touchstart', e => {
             e.preventDefault();
-            // 1. Pinch Zoom Detection
-            if (e.touches.length === 2 && !isReadingMode) {
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                canvas.dataset.initialPinchDist = dist;
-                canvas.dataset.initialZoom = currentZoom;
-                return;
-            }
-            // 2. Movement (Click-to-Move)
             if (e.touches.length === 1) {
                 handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
             }
         }, { passive: false });
-
-        canvas.addEventListener('touchmove', e => {
-            e.preventDefault();
-            if (e.touches.length === 2 && !isReadingMode) {
-                const dist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const initialDist = parseFloat(canvas.dataset.initialPinchDist || 0);
-                const initialZoom = parseFloat(canvas.dataset.initialZoom || 1.0);
-                if (initialDist > 0) {
-                    let newZoom = initialZoom * (dist / initialDist);
-                    newZoom = Math.max(1.0, Math.min(2.5, newZoom)); // Clamp 1x to 2.5x
-                    currentZoom = newZoom;
-                    canvas.style.transform = `scale(${currentZoom})`;
-                }
-            }
-        }, { passive: false });
-
-        canvas.addEventListener('touchend', e => {
-            if (e.touches.length < 2) {
-                canvas.dataset.initialPinchDist = 0;
-            }
-        });
-
-        let currentZoom = 1.0; // Init Zoom State
 
         // ============================================
         // MAP PROCESSING
@@ -3200,7 +3163,7 @@
             // [TASK 1] Speed Reduction in Reading Mode
             // Base speed is 35. 65% reduction -> ~12
             const baseSpeed = 35;
-            player.speed = isReadingMode ? (baseSpeed * 0.35) : baseSpeed;
+            player.speed = isReadingMode ? (baseSpeed * 0.175) : baseSpeed; // 50% of 35% = 17.5%
             if (Math.random() < 0.005) { // Occasional Debug Log
                 console.log(`[DEBUG_SYS] Player Move Speed: Base=${baseSpeed}, Actual=${player.speed.toFixed(2)} (Mode=${isReadingMode ? 'READING' : 'GAME'})`);
             }
@@ -4045,8 +4008,10 @@
                     const activeEl = subtitleContainer.children[safeIndex];
                     activeEl.classList.add('subtitle-current');
 
-                    // Auto-Scroll nur, wenn User nicht gerade selbst scrollt
-                    if (!subtitleContainer.classList.contains('is-scrolling') && !subtitleContainer.dataset.isDragging) {
+                    // Auto-Scroll only if user is NOT actively dragging AND audio is playing
+                    // Removed 'is-scrolling' check - was blocking scroll updates for too long
+                    const isPlaying = !audioPlayer.paused;
+                    if (subtitleContainer.dataset.isDragging !== 'true' && isPlaying) {
                         activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
                     }
                 }
