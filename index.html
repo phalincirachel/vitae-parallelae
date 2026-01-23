@@ -1617,6 +1617,51 @@
             // Cap delta time (prevent spirals of death)
             if (dt > 0.1) dt = 0.1;
 
+            // === ADAPTIVE QUALITY SYSTEM ===
+            if (typeof window.adaptiveQuality === 'undefined') {
+                window.adaptiveQuality = {
+                    fpsHistory: [],
+                    sampleSize: 60,
+                    lowThreshold: 20,
+                    isLowPerf: false,
+                    checkInterval: 120, // Check every 2 seconds (at 60fps)
+                    frameCount: 0
+                };
+            }
+
+            const aq = window.adaptiveQuality;
+            aq.frameCount++;
+
+            if (dt > 0) {
+                aq.fpsHistory.push(1 / dt);
+                if (aq.fpsHistory.length > aq.sampleSize) aq.fpsHistory.shift();
+            }
+
+            // Check performance periodically
+            if (aq.frameCount % aq.checkInterval === 0 && aq.fpsHistory.length >= 30) {
+                const avgFPS = aq.fpsHistory.reduce((a, b) => a + b, 0) / aq.fpsHistory.length;
+                const shouldBeLowPerf = avgFPS < aq.lowThreshold;
+
+                if (shouldBeLowPerf !== aq.isLowPerf) {
+                    aq.isLowPerf = shouldBeLowPerf;
+                    const gw = document.getElementById('gameWrapper');
+
+                    if (aq.isLowPerf) {
+                        console.log(`[PERF] Low FPS detected (${avgFPS.toFixed(1)}), disabling effects`);
+                        if (gw) gw.classList.remove('effect-pal', 'effect-crt');
+                        window.drawClouds = false;
+                    } else {
+                        console.log(`[PERF] FPS recovered (${avgFPS.toFixed(1)}), enabling effects`);
+                        if (gw) {
+                            gw.classList.add('effect-pal');
+                            gw.classList.add('effect-crt');
+                        }
+                        window.drawClouds = true;
+                    }
+                }
+            }
+            // === END ADAPTIVE QUALITY ===
+
             // Update Game Logic
             update(dt);
             updateLoreSystem(); // Lore-Proximity prüfen
@@ -1668,15 +1713,49 @@
                 if (tdist < 3) {
                     moveTarget = null;
                 } else {
-                    // Richtung zum Ziel
-                    dx = tdx / tdist;
-                    dy = tdy / tdist;
+                    // iOS-specific smoothing to prevent 'waddling'
+                    const useSmoothing = (typeof window.isIOS === 'function' && window.isIOS());
 
-                    // Blickrichtung setzen
-                    if (Math.abs(tdx) > Math.abs(tdy)) {
-                        player.dir = tdx > 0 ? 3 : 2; // Rechts oder Links
+                    if (useSmoothing) {
+                        // --- iOS SMOOTHING FIX ---
+                        // 1. Direction smoothing (Exponential Moving Average)
+                        if (typeof player.smoothDx === 'undefined') {
+                            player.smoothDx = 0;
+                            player.smoothDy = 0;
+                        }
+
+                        const alpha = 0.2; // Smooth factor: 0.2 = very smooth
+                        const rawDx = tdx / tdist;
+                        const rawDy = tdy / tdist;
+
+                        player.smoothDx = player.smoothDx * (1 - alpha) + rawDx * alpha;
+                        player.smoothDy = player.smoothDy * (1 - alpha) + rawDy * alpha;
+
+                        dx = player.smoothDx;
+                        dy = player.smoothDy;
+
+                        // 2. Strict hysteresis for sprite direction changes
+                        const absX = Math.abs(dx);
+                        const absY = Math.abs(dy);
+                        const HYS = 1.3; // 30% hysteresis
+
+                        if (absX > absY * HYS) {
+                            player.dir = dx > 0 ? 3 : 2; // Right/Left
+                        } else if (absY > absX * HYS) {
+                            player.dir = dy > 0 ? 0 : 1; // Down/Up
+                        }
+                        // Otherwise: keep current direction (no flicker)
+
                     } else {
-                        player.dir = tdy > 0 ? 0 : 1; // Unten oder Oben
+                        // --- ORIGINAL LOGIC (Desktop/Android) ---
+                        dx = tdx / tdist;
+                        dy = tdy / tdist;
+
+                        if (Math.abs(tdx) > Math.abs(tdy)) {
+                            player.dir = tdx > 0 ? 3 : 2;
+                        } else {
+                            player.dir = tdy > 0 ? 0 : 1;
+                        }
                     }
                 }
             }
@@ -2189,8 +2268,10 @@
                 ctx.restore();
             }
 
-            // Wolken-Layer (Parallax, über allem)
-            for (const c of clouds) c.draw(ctx, camX, camY);
+            // Wolken-Layer (Parallax, über allem) - Skip if disabled by adaptive quality
+            if (window.drawClouds !== false) {
+                for (const c of clouds) c.draw(ctx, camX, camY);
+            }
 
             ctx.restore();
         }

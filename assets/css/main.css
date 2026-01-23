@@ -408,6 +408,8 @@ body {
     transition: background 0.5s ease;
     max-height: none;
     min-height: 80px;
+    /* GAME MODE: Allow clicks to pass through to canvas */
+    pointer-events: none;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer {
@@ -457,6 +459,8 @@ body {
     text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
     transition: color 0.3s, opacity 0.3s;
     opacity: 1;
+    /* GAME MODE: Allow clicks to pass through */
+    pointer-events: none;
 }
 
 .subtitle-current {

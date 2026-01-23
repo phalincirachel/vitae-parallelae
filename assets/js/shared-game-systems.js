@@ -38,6 +38,16 @@ class YellowLight {
     draw(ctx) {
         if (this.vanished) return;
 
+        // FRUSTUM CULLING: Skip if light is outside camera viewport
+        // Requires camX, camY, SCREEN_W, SCREEN_H to be global
+        if (typeof camX !== 'undefined') {
+            const margin = 50; // Radius + buffer for glow
+            if (this.x + margin < camX || this.x - margin > camX + SCREEN_W ||
+                this.y + margin < camY || this.y - margin > camY + SCREEN_H) {
+                return; // Off-screen, skip drawing
+            }
+        }
+
         // Check for collection event (Start Animation)
         if (this.animPhase === 0 && window.GameState && window.GameState.isLightCollected(SCENE_NAME, this.id)) {
             this.animPhase = 1;
@@ -159,6 +169,13 @@ class Cloud {
         }
     }
     draw(ctx, camX, camY) {
+        // FRUSTUM CULLING: Skip if cloud is outside camera viewport
+        const margin = this.size * 2;
+        if (this.x + margin < camX || this.x - margin > camX + SCREEN_W ||
+            this.y + margin < camY || this.y - margin > camY + SCREEN_H) {
+            return; // Off-screen, skip drawing
+        }
+
         // WELT-Koordinaten - ctx ist bereits mit Kamera translated
         // KEIN setTransform Reset! Dadurch bewegen sich Wolken mit Karte
         ctx.save();
@@ -631,5 +648,6 @@ window.Particle = Particle;
 window.createGlowSprite = createGlowSprite;
 window.initClouds = initClouds;
 window.initParticles = initParticles;
+window.isIOS = isIOS; // Export for iOS-specific fixes
 
-console.log("[shared-game-systems.js] Classes loaded: YellowLight, Cloud, Particle");
+console.log("[shared-game-systems.js] Classes loaded: YellowLight, Cloud, Particle, isIOS");
