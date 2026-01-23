@@ -480,8 +480,8 @@ body {
     justify-content: flex-start;
     mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
-    padding-top: 120px;
-    padding-bottom: 120px;
+    padding-top: 50vh;
+    padding-bottom: 50vh;
     pointer-events: auto !important;
     touch-action: pan-y;
     user-select: none;
@@ -809,6 +809,7 @@ body {
         opacity: 0;
         transform: scale(0.98);
     }
+
     to {
         opacity: 1;
         transform: scale(1);

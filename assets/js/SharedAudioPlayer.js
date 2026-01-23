@@ -138,15 +138,69 @@ export class SharedAudioPlayer {
                     console.log(`Seek to ${this.subtitleTracks[i].time}`);
                     this.audio.currentTime = this.subtitleTracks[i].time;
                     this.onTimeUpdate(); // Update now
+
+                    // SMOOTH SCROLL (Task 5c)
+                    this.smoothScrollTo(div);
                 });
             }
 
             this.container.appendChild(div);
 
-            if (i === centerIndex && this.isReadingMode) {
-                div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (i === centerIndex && this.isReadingMode && !this.audio.paused) {
+                // ONLY Auto-Scroll if Playing (Task 5b)
+                // And if not manually interacting
+                if (this.container.dataset.isDragging !== 'true') {
+                    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         }
+    }
+
+    // Custom Smooth Scroll (Task 5c)
+    smoothScrollTo(targetEl) {
+        if (!this.container || !targetEl) return;
+
+        const container = this.container;
+        const startY = container.scrollTop;
+
+        // Calculate Target Y to center the element
+        const targetRect = targetEl.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+
+        // Offset relative to container top
+        const relativeTop = targetEl.offsetTop;
+        // We want: relativeTop - (containerHeight/2) + (elementHeight/2)
+        const targetY = relativeTop - (container.clientHeight / 2) + (targetEl.clientHeight / 2);
+
+        const distance = Math.abs(targetY - startY);
+
+        // Dynamic Duration: 1s (near) to 3s (far)
+        // Let's say "Far" is > 1000px
+        let duration = 1000 + (distance / 500) * 1000;
+        duration = Math.min(3000, duration); // Cap at 3s
+
+        console.log(`[DEBUG_SYS] SmoothScroll: Dist=${distance.toFixed(0)}px -> Duration=${duration.toFixed(0)}ms`);
+
+        const startTime = performance.now();
+
+        const easeInOutQuad = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+        const animate = (currentTime) => {
+            const elapsed = currentTime - startTime;
+            if (elapsed > duration) {
+                container.scrollTop = targetY; // Snap to final
+                return;
+            }
+
+            const progress = elapsed / duration;
+            const eased = easeInOutQuad(progress);
+
+            container.scrollTop = startY + (targetY - startY) * eased;
+
+            requestAnimationFrame(animate);
+        };
+
+        requestAnimationFrame(animate);
     }
 
     setReadingMode(active) {

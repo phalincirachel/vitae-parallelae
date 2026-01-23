@@ -489,9 +489,9 @@
             mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
             -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
 
-            padding-top: 120px;
+            padding-top: 50vh;
             /* Push first line below the top fade */
-            padding-bottom: 120px;
+            padding-bottom: 50vh;
             /* Push last line above bottom fade */
 
             pointer-events: auto !important;
@@ -2615,12 +2615,50 @@
             handleClickMove(e.clientX, e.clientY);
         });
 
+        // [TASK 7] Pinch-to-Zoom & Touch Logic
         canvas.addEventListener('touchstart', e => {
             e.preventDefault();
-            if (e.touches.length > 0) {
+            // 1. Pinch Zoom Detection
+            if (e.touches.length === 2 && !isReadingMode) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                canvas.dataset.initialPinchDist = dist;
+                canvas.dataset.initialZoom = currentZoom;
+                return;
+            }
+            // 2. Movement (Click-to-Move)
+            if (e.touches.length === 1) {
                 handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
             }
         }, { passive: false });
+
+        canvas.addEventListener('touchmove', e => {
+            e.preventDefault();
+            if (e.touches.length === 2 && !isReadingMode) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                const initialDist = parseFloat(canvas.dataset.initialPinchDist || 0);
+                const initialZoom = parseFloat(canvas.dataset.initialZoom || 1.0);
+                if (initialDist > 0) {
+                    let newZoom = initialZoom * (dist / initialDist);
+                    newZoom = Math.max(1.0, Math.min(2.5, newZoom)); // Clamp 1x to 2.5x
+                    currentZoom = newZoom;
+                    canvas.style.transform = `scale(${currentZoom})`;
+                }
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', e => {
+            if (e.touches.length < 2) {
+                canvas.dataset.initialPinchDist = 0;
+            }
+        });
+
+        let currentZoom = 1.0; // Init Zoom State
 
         // ============================================
         // MAP PROCESSING
@@ -3110,6 +3148,22 @@
         // ============================================
         // GAME LOOP
         // ============================================
+        // [TASK 4] Auto-Play Logic
+        function attemptAutoPlay() {
+            console.log("[DEBUG_SYS] Attempting Auto-Play...");
+            if (audioPlayer.paused && audioPlayer.src) {
+                audioPlayer.play().then(() => {
+                    console.log("[DEBUG_SYS] Auto-Play SUCCESS");
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+                }).catch(e => {
+                    console.warn("[DEBUG_SYS] Auto-Play BLOCKED (User Interaction Required)", e);
+                });
+            }
+        }
+        // Call it shortly after script parse logic (or relying on window load which we missed, calling here safe)
+        setTimeout(attemptAutoPlay, 1000);
+
         function startGameLoop() {
             if (window.gameLoopRunning) return;
             window.gameLoopRunning = true;
@@ -3142,6 +3196,14 @@
         function update(dt) {
             if (!dt) dt = 0.016;
             if (!gameReady) return;
+
+            // [TASK 1] Speed Reduction in Reading Mode
+            // Base speed is 35. 65% reduction -> ~12
+            const baseSpeed = 35;
+            player.speed = isReadingMode ? (baseSpeed * 0.35) : baseSpeed;
+            if (Math.random() < 0.005) { // Occasional Debug Log
+                console.log(`[DEBUG_SYS] Player Move Speed: Base=${baseSpeed}, Actual=${player.speed.toFixed(2)} (Mode=${isReadingMode ? 'READING' : 'GAME'})`);
+            }
 
             // --- DYNAMIC SCALING (Depth Effect) ---
             // DISABLED FOR KAPITEL1C: This level uses flat perspective.
@@ -4298,6 +4360,19 @@
         // 8. Wenn Audio zu Ende ist
         // HINWEIS: SCAudioAdapter dispatches 'ended' event
         audioPlayer.addEventListener('ended', () => {
+            // [TASK 2] Audio Cutoff Fix
+            // Prevent transition if text is not finished
+            if (currentSubtitleIndex < subtitleTracks.length - 1) {
+                console.log(`[DEBUG_SYS] Audio Ended. SubtitleIndex=${currentSubtitleIndex}/${subtitleTracks.length - 1}. TextFinished=FALSE. Freezing.`);
+                if (isReadingMode) {
+                    audioPlayer.pause();
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                    return; // STOP HERE
+                }
+            }
+            console.log(`[DEBUG_SYS] Audio Ended. TextFinished=TRUE. Proceeding.`);
+
             // Auto-Resume Main Audio if in Lore Mode
             if (isLoreMode && window.restoreMainAudio) {
                 console.log("Lore ended. Returning to Main Audio...");

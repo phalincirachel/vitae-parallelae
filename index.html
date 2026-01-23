@@ -946,6 +946,24 @@
 
             window.mainAudioUrl = mainAudioSrc;
 
+            // IMMEDIATE PLAYBACK ATTEMPT (Task 4)
+            // Try to play immediately once loaded
+            const attemptAutoPlay = () => {
+                console.log("[DEBUG_SYS] Attempting Auto-Play...");
+                audioPlayer.play().then(() => {
+                    console.log("[DEBUG_SYS] Auto-Play SUCCESS");
+                    unlockAudio(); // Unlock other sounds too
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
+                }).catch(e => {
+                    console.warn("[DEBUG_SYS] Auto-Play BLOCKED by Browser:", e);
+                    // Fallback remains (click listener)
+                });
+            };
+
+            // Wait for audio to be ready?
+            setTimeout(attemptAutoPlay, 1000);
+
             try {
                 // debugLog('Fetching kapitel1.txt...');
                 const response = await fetch('assets/kapitel1.txt');
@@ -957,6 +975,9 @@
                 // debugLog('subtitleTracks: ' + subtitleTracks.length);
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
+
+                // After text loaded, try playing again if first failed?
+                setTimeout(attemptAutoPlay, 500);
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -1744,7 +1765,17 @@
                 }
 
                 // Apply Movement
-                const amount = player.speed * dt;
+                let moveSpeed = player.speed;
+                if (isReadingMode) {
+                    moveSpeed = player.speed * 0.35; // 65% Slower (User Request)
+                }
+
+                // LOG SPEED for Debug (Throttle)
+                if (player.isMoving && Math.random() < 0.01) {
+                    console.log(`[DEBUG_SYS] Player Move Speed: Base=${player.speed}, Actual=${moveSpeed} (Mode=${isReadingMode ? 'READING' : 'GAME'})`);
+                }
+
+                const amount = moveSpeed * dt;
 
                 // Collision Logic (restore if missing or use simplified slide)
                 const vx = dx * amount;
@@ -2498,7 +2529,13 @@
                     activeEl.classList.add('subtitle-current');
 
                     // Auto-Scroll nur, wenn User nicht gerade selbst scrollt
-                    if (!subtitleContainer.classList.contains('is-scrolling') && !subtitleContainer.dataset.isDragging) {
+                    // AND Only if Audio is Playing (Task 5b)
+                    const isPlaying = !audioPlayer.paused;
+
+                    if (!subtitleContainer.classList.contains('is-scrolling') &&
+                        !subtitleContainer.dataset.isDragging &&
+                        isPlaying) {
+
                         activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
                     }
                 }
@@ -2648,8 +2685,34 @@
             } else {
                 // MAIN CHAPTER FINISHED
                 console.log("Chapter 1 Finished. ReadingMode:", isReadingMode);
+
+                // BUGFIX: Prevent transition if Text is not finished!
+                // Only if we are in Reading Mode (where text matters).
+                // Or generally? User said "Cut off bug".
+
+                let textFinished = true;
+                if (subtitleTracks.length > 0) {
+                    // If we are significantly behind? use small buffer (e.g. within last 3 lines)
+                    if (currentSubtitleIndex < subtitleTracks.length - 1) {
+                        textFinished = false;
+                    }
+                }
+
+                // Debug Decision
+                console.log(`[DEBUG_SYS] Audio Ended. SubtitleIndex=${currentSubtitleIndex}/${subtitleTracks.length}. TextFinished=${textFinished}`);
+
                 if (isReadingMode) {
-                    transitionToNextChapter();
+                    if (textFinished) {
+                        transitionToNextChapter();
+                    } else {
+                        console.log("[DEBUG_SYS] Audio ended but text incomplete. Pausing audio, keeping Reading Mode open.");
+                        // Stop audio but do not transition. 
+                        // User can read remaining text, then manual action needed? 
+                        // Or maybe we don't need to do anything, just let it stop.
+                        audioPlayer.pause();
+                        iconPlay.style.display = 'block';
+                        iconPause.style.display = 'none';
+                    }
                 } else {
                     // Game Mode: Show Button
                     const btn = document.getElementById('nextChapterBtn');
@@ -2660,6 +2723,65 @@
                 }
             }
         });
+
+        // ============================================
+        // PINCH TO ZOOM SUPPORT (Task 7)
+        // ============================================
+        let initialPinchDistance = null;
+        let initialScale = 1.0;
+        // We use SPRITE.baseScale as the "Zoom Level" effectively, 
+        // OR we use a global ctx scale. Let's use ctx scale or cam distance?
+        // Changing SPRITE.scale affects collisions logic which is derived from sprite size... DANGEROUS.
+        // Better: Change CSS transform scale of the Canvas? No, blurry.
+        // Best: Apply a global Zoom Factor in draw() logic.
+        // But draw() uses camX/camY which are pixel based.
+        // Easiest "Visual Zoom" without breaking physics: CSS transform on #gameWrapper?
+        // OR: Modify draw() to scale everything.
+        // User asked "Zoomen können".
+
+        // Let's implement CSS Zoom for safety on "Physics"
+        const gameWrapperEl = document.getElementById('gameWrapper');
+        let currentZoom = 1.0;
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 2 && !isReadingMode) {
+                e.preventDefault();
+                initialPinchDistance = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initialScale = currentZoom;
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length === 2 && !isReadingMode && initialPinchDistance) {
+                e.preventDefault();
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+
+                const delta = dist / initialPinchDistance;
+                // Limit Zoom
+                let newZoom = initialScale * delta;
+                newZoom = Math.min(2.5, Math.max(1.0, newZoom)); // 1.0 to 2.5x
+
+                currentZoom = newZoom;
+                // Apply to Canvas Style
+                canvas.style.transform = `scale(${currentZoom})`;
+                canvas.style.transformOrigin = 'center center'; // Simple center zoom
+
+                // Better: Transform towards center of pinch? Too complex for now.
+            }
+        }, { passive: false });
+
+        canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) {
+                initialPinchDistance = null;
+            }
+        });
+
 
         window.transitionToNextChapter = function () {
             const overlay = document.getElementById('transitionOverlay');

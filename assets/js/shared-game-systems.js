@@ -102,6 +102,43 @@ class YellowLight {
 // ============================================
 // CLOUD (Parallax Background)
 // ============================================
+// ============================================
+// HELPER: iOS Detection
+// ============================================
+function isIOS() {
+    return [
+        'iPad Simulator',
+        'iPhone Simulator',
+        'iPod Simulator',
+        'iPad',
+        'iPhone',
+        'iPod'
+    ].includes(navigator.platform) || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
+}
+
+// ============================================
+// CLOUD (Parallax Background)
+// ============================================
+
+let cloudSprite = null;
+function createCloudSprite() {
+    const size = 128;
+    const half = size / 2;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+
+    const grad = ctx.createRadialGradient(half, half, 10, half, half, half);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.8)');
+    grad.addColorStop(0.4, 'rgba(255, 255, 255, 0.4)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    return c;
+}
+
 class Cloud {
     constructor(startX, startY) {
         // WELT-Koordinaten - Wolken sind an der KARTE fixiert
@@ -110,6 +147,8 @@ class Cloud {
         this.speed = 0.15 + Math.random() * 0.1; // Langsame Drift über Karte
         this.size = 100 + Math.random() * 150;
         this.alpha = 0.5;
+
+        // Debug Log only once per session/type load to avoid spam, but here acceptable on init
     }
     update() {
         this.x -= this.speed;
@@ -124,11 +163,29 @@ class Cloud {
         // KEIN setTransform Reset! Dadurch bewegen sich Wolken mit Karte
         ctx.save();
         ctx.globalAlpha = this.alpha;
-        ctx.filter = 'blur(25px)';
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.ellipse(this.x, this.y, this.size, this.size * 0.35, 0, 0, Math.PI * 2);
-        ctx.fill();
+
+        if (isIOS()) {
+            // iOS Optimization: Use Sprite instead of Blur Filter
+            if (!cloudSprite) cloudSprite = createCloudSprite();
+
+            // Draw the gradient sprite, scaled to this cloud's size
+            // Sprite base size is 128. We want to draw it at this.size
+            const scale = this.size / 128;
+
+            // Center draw
+            ctx.translate(this.x, this.y);
+            ctx.scale(scale * 1.5, scale); // Make it elliptical via scale
+            ctx.drawImage(cloudSprite, -64, -64); // -half size
+
+        } else {
+            // Desktop/Other: Use Blur Filter (Original Look)
+            ctx.filter = 'blur(25px)';
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.ellipse(this.x, this.y, this.size, this.size * 0.35, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
         ctx.restore();
     }
 }
@@ -317,9 +374,43 @@ class Particle {
         }
         // ==========================================
 
-        // 3. Speed Limit (50% langsamer)
+        // 3. Speed Limit calculation
         const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        const maxSpeed = 0.375; // 50% langsamer
+
+        // DYNAMIC MAX SPEED (User Request: PlayerSpeed - 20%)
+        // Player speed is usually 35 (px/sec) in main logic.
+        // But particles work on per-frame velocity mostly (vx, vy accumulated).
+        // Let's approximate: 
+        // Player moves 'amount = player.speed * dt' per frame.
+        // Particle velocity here is effectively 'pixels per frame' in the update loop concept unless dt is applied to vx/vy?
+        // Wait, vx/vy are added directly to x/y? No!
+        // IN MAIN LOOP (index.html): updates particles via `p.update(dt)`.
+        // BUT inside `update` here:
+        // `resetVelocity` sets `vx` to ~0.4 (random).
+        // `update` adds random chaos `0.4`.
+        // AND THEN... where is position updated? 
+        // MISSING IN THIS CLASS? No, it IS in this class (lines 229+).
+        // `this.x = nextX`. 
+        // WAIT. `nextX = this.x + this.vx`. It does NOT multiply by dt!
+        // This implies `vx` IS pixels per frame (assuming 60fps).
+
+        // So we need to convert player.speed (px/sec) to px/frame (approx 1/60).
+        // player.speed = 35 px/sec -> ~0.58 px/frame at 60fps.
+        // Requested: PlayerSpeed - 20% = PlayerSpeed * 0.8
+        // Metric: 35 * 0.8 / 60 = ~0.466
+
+        let maxSpeed = 0.375; // Default fallback
+        if (typeof player !== 'undefined' && player.speed) {
+            // Assume 60fps for conversation factor roughly
+            const playerPerFrame = player.speed / 60;
+            maxSpeed = playerPerFrame * 0.8;
+
+            // LOGGING (Throttled via Math.random)
+            if (Math.random() < 0.001) {
+                console.log(`[DEBUG_SYS] WhiteLight MaxSpeed: Player=${player.speed}(${playerPerFrame.toFixed(3)}/f) -> Limit=${maxSpeed.toFixed(3)}`);
+            }
+        }
+
         if (speed > maxSpeed) {
             this.vx = (this.vx / speed) * maxSpeed;
             this.vy = (this.vy / speed) * maxSpeed;
@@ -380,7 +471,6 @@ class Particle {
         if (typeof player !== 'undefined' && typeof getPlayerDrawCoords === 'function') {
             const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
             const refH = Math.floor(SPRITE.frameHeight * SPRITE.scale);
-            const visualShiftY = Math.floor(refH / 3) - 4;
 
             // Zentrum des gerenderten Sprites (Präzise Mitte der Bounding Box)
             const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
@@ -480,6 +570,9 @@ class Particle {
 function initClouds() {
     clouds.length = 0;
     if (mapW <= 0 || mapH <= 0) return;
+
+    // Log Mode on Init
+    console.log(`[DEBUG_SYS] Cloud System Init: Mode=${isIOS() ? 'IOS_GRADIENT' : 'DESKTOP_BLUR'}`);
 
     // Wolken verteilt über die Kartenfläche
     const numClouds = Math.max(3, Math.floor((mapW * mapH) / 150000));
