@@ -2481,6 +2481,65 @@
             return Math.min(15, Math.max(5, Math.floor(availableHeight / lineHeight)));
         }
 
+        // Custom Smooth Scroll with Variable Duration (1s-3s based on distance)
+        // No jumping - always smooth glide
+        let currentScrollAnimation = null;
+        function smoothScrollToElement(container, targetEl) {
+            if (!container || !targetEl) return;
+
+            // Cancel any existing animation
+            if (currentScrollAnimation) {
+                cancelAnimationFrame(currentScrollAnimation);
+                currentScrollAnimation = null;
+            }
+
+            const startY = container.scrollTop;
+
+            // Calculate Target Y to center the element
+            const relativeTop = targetEl.offsetTop;
+            const targetY = relativeTop - (container.clientHeight / 2) + (targetEl.clientHeight / 2);
+
+            const distance = Math.abs(targetY - startY);
+
+            // Skip if already very close (within 5px)
+            if (distance < 5) return;
+
+            // Dynamic Duration: 1s (near) to 3s (far)
+            // "Near" = within 200px, "Far" = 1000px+
+            let duration = 1000; // Base 1s
+            if (distance > 200) {
+                // Scale from 1s to 3s between 200px and 1000px
+                const extraDist = Math.min(800, distance - 200);
+                duration = 1000 + (extraDist / 800) * 2000;
+            }
+            duration = Math.min(3000, duration); // Cap at 3s
+
+            console.log(`[SmoothScroll] Dist=${distance.toFixed(0)}px -> Duration=${duration.toFixed(0)}ms`);
+
+            const startTime = performance.now();
+
+            // Easing function for smooth deceleration
+            const easeOutQuad = (t) => t * (2 - t);
+
+            const animate = (currentTime) => {
+                const elapsed = currentTime - startTime;
+                if (elapsed >= duration) {
+                    container.scrollTop = targetY; // Snap to final
+                    currentScrollAnimation = null;
+                    return;
+                }
+
+                const progress = elapsed / duration;
+                const eased = easeOutQuad(progress);
+
+                container.scrollTop = startY + (targetY - startY) * eased;
+
+                currentScrollAnimation = requestAnimationFrame(animate);
+            };
+
+            currentScrollAnimation = requestAnimationFrame(animate);
+        }
+
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
             // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
@@ -2511,6 +2570,8 @@
                             console.log(`Seek to ${track.time}s`);
                             audioPlayer.currentTime = track.time;
                             updateSubtitleDisplay(i);
+                            // Smooth scroll to clicked element
+                            smoothScrollToElement(subtitleContainer, div);
                         });
 
                         subtitleContainer.appendChild(div);
@@ -2529,10 +2590,10 @@
                     activeEl.classList.add('subtitle-current');
 
                     // Auto-Scroll only if user is NOT actively dragging AND audio is playing
-                    // Removed 'is-scrolling' check - it was blocking scroll updates for 1s after any scroll
+                    // Uses custom smooth scroll with variable duration (1-3s)
                     const isPlaying = !audioPlayer.paused;
                     if (subtitleContainer.dataset.isDragging !== 'true' && isPlaying) {
-                        activeEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                        smoothScrollToElement(subtitleContainer, activeEl);
                     }
                 }
                 return;

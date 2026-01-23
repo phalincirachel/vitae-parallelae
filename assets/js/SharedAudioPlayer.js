@@ -148,9 +148,9 @@ export class SharedAudioPlayer {
 
             if (i === centerIndex && this.isReadingMode && !this.audio.paused) {
                 // ONLY Auto-Scroll if Playing AND user is not actively dragging (Task 5b)
-                // Removed 'is-scrolling' check per user request - was blocking updates too long
+                // Uses custom smooth scroll with variable duration (1-3s)
                 if (this.container.dataset.isDragging !== 'true') {
-                    div.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    this.smoothScrollTo(div);
                 }
             }
         }
