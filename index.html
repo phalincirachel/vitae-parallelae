@@ -976,10 +976,8 @@
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
                 }).catch(e => {
-                    console.warn("[DEBUG_SYS] Auto-Play BLOCKED or interupted:", e);
-                    // FORCE SYNC: If blocked, ensure we show Play Button
-                    iconPlay.style.display = 'block';
-                    iconPause.style.display = 'none';
+                    console.warn("[DEBUG_SYS] Auto-Play BLOCKED by Browser:", e);
+                    // Fallback remains (click listener)
                 });
             };
 
@@ -2900,23 +2898,18 @@
             }, 1000); // 1 Sekunde nach Scroll-Ende ausblenden
         });
 
-        // 5. Play/Pause Steuerung (Simplified: Logic handles UI via events)
+        // 5. Play/Pause Steuerung
         playBtn.addEventListener('click', () => {
+            console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
             if (audioPlayer.paused) {
-                audioPlayer.play().catch(e => console.error("Manual Play failed:", e));
+                audioPlayer.play().catch(e => console.error("Play verification failed:", e));
+                iconPlay.style.display = 'none';
+                iconPause.style.display = 'block';
             } else {
                 audioPlayer.pause();
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
             }
-        });
-
-        // 5b. AUTO-SYNC ICONS (Robustness Fix)
-        audioPlayer.addEventListener('play', () => {
-            iconPlay.style.display = 'none';
-            iconPause.style.display = 'block';
-        });
-        audioPlayer.addEventListener('pause', () => {
-            iconPlay.style.display = 'block';
-            iconPause.style.display = 'none';
         });
 
         // 6. Skip Buttons (±15 Sekunden)
