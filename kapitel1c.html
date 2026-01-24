@@ -4322,17 +4322,35 @@
             }, 1000); // 1 Sekunde nach Scroll-Ende ausblenden
         });
 
-        // 5. Play/Pause Steuerung
+        // 5. Play/Pause Steuerung - CENTRALIZED UPDATE LOGIC
+        // Ensure UI state always matches audio state
+        const updatePlayPauseIcons = () => {
+            if (!audioPlayer.paused) {
+                iconPlay.style.display = 'none';
+                iconPause.style.display = 'block';
+            } else {
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
+            }
+        };
+
+        // Attach listeners to update UI automatically
+        audioPlayer.addEventListener('play', updatePlayPauseIcons);
+        audioPlayer.addEventListener('pause', updatePlayPauseIcons);
+
+        // Also update on 'ended'
+        audioPlayer.addEventListener('ended', () => {
+            updatePlayPauseIcons();
+        });
+
         playBtn.addEventListener('click', () => {
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
             if (audioPlayer.paused) {
                 audioPlayer.play().catch(e => console.error("Play verification failed:", e));
-                iconPlay.style.display = 'none';
-                iconPause.style.display = 'block';
+                // UI updates via event listener
             } else {
                 audioPlayer.pause();
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
+                // UI updates via event listener
             }
         });
 
