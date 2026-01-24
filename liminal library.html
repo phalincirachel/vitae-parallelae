@@ -164,17 +164,46 @@
 
     <!-- MAIN APPLICATION LOGIC -->
     <script>
-        // FIX: Block clicks on UI layers to prevent 3D movement / grab
-        // Expanded to include dblclick and up/end events to prevent leaky interactions
-        ['ui-layer', 'audioPlayerUI', 'archiveModal', 'loading', 'loading-screen'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                // Block ALL pointer/mouse/touch events
-                ['mousedown', 'touchstart', 'click', 'pointerdown', 'dblclick', 'mouseup', 'touchend', 'pointerup'].forEach(evt => {
-                    el.addEventListener(evt, e => e.stopPropagation());
-                });
+        // SOLUTION 1: CAPTURE PHASE INTERCEPTION (The "Root" Fix)
+        // We intercept events at the Window level BEFORE they reach the game listeners
+        window.addEventListener('click', (e) => {
+            if (e.target.closest('#ui-layer') ||
+                e.target.closest('#audioPlayerUI') ||
+                e.target.closest('#archiveModal') ||
+                e.target.closest('#loading') ||
+                e.target.closest('#loading-screen')) {
+
+                console.log("[Capture Shield] Intercepted CLICK on UI! Stopping propagation.");
+                e.stopPropagation();
+                e.stopImmediatePropagation();
             }
-        });
+        }, true); // TRUE = Capture Phase!
+
+        window.addEventListener('touchstart', (e) => {
+            if (e.target.closest('#ui-layer') ||
+                e.target.closest('#audioPlayerUI') ||
+                e.target.closest('#archiveModal') ||
+                e.target.closest('#loading') ||
+                e.target.closest('#loading-screen')) {
+
+                console.log("[Capture Shield] Intercepted TOUCHSTART on UI! Stopping propagation.");
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }
+        }, true); // TRUE = Capture Phase!
+
+        window.addEventListener('dblclick', (e) => {
+            if (e.target.closest('#ui-layer') ||
+                e.target.closest('#audioPlayerUI') ||
+                e.target.closest('#archiveModal') ||
+                e.target.closest('#loading') ||
+                e.target.closest('#loading-screen')) {
+
+                console.log("[Capture Shield] Intercepted DBLCLICK on UI! Stopping propagation.");
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+            }
+        }, true);
     </script>
     <script type="module">
         console.log("DEBUG: Script Wrapper Start");
@@ -1293,10 +1322,10 @@
                         return;
                     }
 
-                    // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
-                    // If click is in the bottom 80px (approx UI height), IGNORÉ
-                    if (event.clientY > window.innerHeight - 80) {
-                        console.log("Ignored Click in UI Deadzone");
+                    // CHECK DEADZONE (Bottom Screen - Mobile Buttons + Bar)
+                    // If click is in the bottom 150px (UI height + buffer), IGNORE
+                    if (event.clientY > window.innerHeight - 150) {
+                        console.log("Ignored Click in UI Deadzone (Bottom 150px)");
                         return;
                     }
 
