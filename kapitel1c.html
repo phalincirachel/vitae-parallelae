@@ -2468,14 +2468,20 @@
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("Electron Mode: Auto-Loading...");
 
-            // 0. IMMEDIATE AUDIO PRELOAD
-            const mainAudioSrc = 'assets/kapitel1c.mp3';
-            // Ensure getSCUrl is available (it is loaded in head)
-            audioPlayer.src = getSCUrl(mainAudioSrc);
-            if (audioPlayer.mode === 'html5' && audioPlayer.audioNode) {
-                audioPlayer.audioNode.preload = "auto";
-                audioPlayer.audioNode.load();
-                console.log("[Kapitel1c] Audio Preload triggered");
+            // 0. IMMEDIATE AUDIO PRELOAD - WRAPPED
+            try {
+                const mainAudioSrc = 'assets/kapitel1c.mp3';
+                // Ensure getSCUrl is available (it is loaded in head)
+                if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
+                    audioPlayer.src = getSCUrl(mainAudioSrc);
+                    if (audioPlayer.mode === 'html5' && audioPlayer.audioNode) {
+                        audioPlayer.audioNode.preload = "auto";
+                        // audioPlayer.audioNode.load(); 
+                        console.log("[Kapitel1c] Audio Preload triggered");
+                    }
+                }
+            } catch (e) {
+                console.warn("[Kapitel1c] Audio Preload Failed:", e);
             }
 
             // RESTORE READING MODE STATE
@@ -2487,6 +2493,7 @@
             }
 
             // FALLBACK: Hide DropZone after 3 seconds if map fails
+            // FALLBACK: Hide DropZone after 10 seconds if map fails
             setTimeout(() => {
                 const dz = document.getElementById('dropZone');
                 const pi = document.getElementById('processingInfo');

@@ -367,12 +367,14 @@
                 });
                 const player = window.audioPlayer;
 
-                // PRELOAD IMMEDIATELY
-                if (window.audioPlayer && window.audioPlayer.audio) {
-                    window.audioPlayer.audio.preload = "auto";
-                    window.audioPlayer.audio.load();
-                    console.log("Liminal Audio Preloading...");
-                }
+                // PRELOAD IMMEDIATELY - WRAPPED
+                try {
+                    if (window.audioPlayer && window.audioPlayer.audio) {
+                        window.audioPlayer.audio.preload = "auto";
+                        // window.audioPlayer.audio.load(); 
+                        console.log("Liminal Audio Preloading...");
+                    }
+                } catch (e) { console.warn("Liminal Preload Failed", e); }
 
                 // Initialize Game
                 (async () => {

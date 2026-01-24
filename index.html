@@ -891,16 +891,23 @@
             console.log("Electron Mode: Auto-Loading...");
 
             // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
-            const mainAudioSrc = 'assets/kapitel1.mp3';
-            window.mainAudioUrl = mainAudioSrc;
-            const scUrl = getSCUrl(mainAudioSrc);
-            // Initialize Source immediately to start buffering
-            audioPlayer.src = scUrl;
-            if (audioPlayer.mode === 'html5') {
-                // Force HTML5 Audio to preload
-                audioPlayer.audioNode.preload = "auto";
-                audioPlayer.audioNode.load();
-                console.log("Audio Preloading Started...");
+            // WRAPPED IN TRY-CATCH TO PREVENT CRASHING THE LOADING SCREEN
+            try {
+                const mainAudioSrc = 'assets/kapitel1.mp3';
+                window.mainAudioUrl = mainAudioSrc;
+                if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
+                    const scUrl = getSCUrl(mainAudioSrc);
+                    audioPlayer.src = scUrl;
+                    if (audioPlayer.mode === 'html5' && audioPlayer.audioNode) {
+                        audioPlayer.audioNode.preload = "auto";
+                        // audioPlayer.audioNode.load(); // Reduced aggression to prevent hang
+                        console.log("Audio Preloading Configured (Lazy)");
+                    }
+                } else {
+                    console.warn("AudioPlayer or getSCUrl not ready yet.");
+                }
+            } catch (e) {
+                console.warn("Audio Preload Failed (Non-Fatal):", e);
             }
 
             // RESTORE READING MODE STATE
@@ -912,11 +919,12 @@
             }
 
             // FALLBACK: Hide DropZone after 3 seconds if map fails
+            // FALLBACK: Hide DropZone after 10 seconds if map fails (User Request: 10s Buffer limit)
             setTimeout(() => {
                 const dz = document.getElementById('dropZone');
                 const pi = document.getElementById('processingInfo');
                 if (dz && !dz.classList.contains('hidden')) {
-                    console.warn("Force hiding DropZone due to timeout!");
+                    console.warn("Force hiding DropZone due to timeout (10s)!");
                     dz.classList.add('hidden');
                 }
                 if (pi) pi.style.display = 'none';
@@ -926,11 +934,13 @@
                     gameReady = true;
                     // Ensure Canvas Size
                     const c = document.getElementById('gameCanvas');
-                    c.width = window.innerWidth;
-                    c.height = window.innerHeight;
-                    startGameLoop();
+                    if (c) {
+                        c.width = window.innerWidth;
+                        c.height = window.innerHeight;
+                    }
+                    if (typeof startGameLoop === 'function') startGameLoop();
                 }
-            }, 3000);
+            }, 10000);
 
             // 1. Load Map (Default)
             const mapImg = new Image();
