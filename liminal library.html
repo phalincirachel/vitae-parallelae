@@ -163,6 +163,17 @@
     <!-- NO DEBUG CONSOLE -->
 
     <!-- MAIN APPLICATION LOGIC -->
+    <script>
+        // FIX: Block clicks on UI layers to prevent 3D movement / grab
+        ['ui-layer', 'audioPlayerUI', 'archiveModal', 'loading', 'loading-screen'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                ['mousedown', 'touchstart', 'click', 'pointerdown'].forEach(evt => {
+                    el.addEventListener(evt, e => e.stopPropagation());
+                });
+            }
+        });
+    </script>
     <script type="module">
         console.log("DEBUG: Script Wrapper Start");
 
