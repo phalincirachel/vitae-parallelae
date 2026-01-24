@@ -165,12 +165,10 @@
     <!-- MAIN APPLICATION LOGIC -->
     <script>
         // FIX: Block clicks on UI layers to prevent 3D movement / grab
-        // Expanded to include dblclick and up/end events to prevent leaky interactions
         ['ui-layer', 'audioPlayerUI', 'archiveModal', 'loading', 'loading-screen'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
-                // Block ALL pointer/mouse/touch events
-                ['mousedown', 'touchstart', 'click', 'pointerdown', 'dblclick', 'mouseup', 'touchend', 'pointerup'].forEach(evt => {
+                ['mousedown', 'touchstart', 'click', 'pointerdown'].forEach(evt => {
                     el.addEventListener(evt, e => e.stopPropagation());
                 });
             }

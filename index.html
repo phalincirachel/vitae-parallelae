@@ -262,17 +262,6 @@
     <!-- Shared Game Systems (Particle, Cloud, YellowLight) for code sharing - LOADED IN HEAD -->
 
     <script>
-        // FIX: Block clicks on UI layers to prevent game interaction
-        ['ui-layer', 'audioPlayerUI', 'loading-screen', 'controlsHint', 'filterControls'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                ['mousedown', 'touchstart', 'click', 'pointerdown', 'dblclick', 'mouseup', 'touchend', 'pointerup'].forEach(evt => {
-                    el.addEventListener(evt, e => e.stopPropagation());
-                });
-            }
-        });
-    </script>
-    <script>
         // ============================================
         // SETUP & FILTER LOGIK
         // ============================================
