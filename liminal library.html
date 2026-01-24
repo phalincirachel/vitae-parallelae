@@ -420,26 +420,9 @@
                 }
 
                 // --- EVENT LISTENERS ---
-                // FIX: Event-Driven UI Updates
-                const updatePlayPauseIcons = () => {
-                    if (!player.audio.paused) {
-                        iconPlay.style.display = 'none';
-                        iconPause.style.display = 'block';
-                    } else {
-                        iconPlay.style.display = 'block';
-                        iconPause.style.display = 'none';
-                    }
-                };
-
-                player.audio.addEventListener('play', updatePlayPauseIcons);
-                player.audio.addEventListener('pause', updatePlayPauseIcons);
-
-                // Initial check
-                // setTimeout(updatePlayPauseIcons, 500);
-
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
                     player.toggle();
-                    // updateIcons(); // Removed manual Sync check
+                    updateIcons();
                 });
 
                 document.getElementById('skipBackBtn').addEventListener('click', () => player.skip(-15));
@@ -556,8 +539,14 @@
 
 
 
-                // function updateIcons() { ... } // RELOCATED/REMOVED
-                // setInterval(updateIcons, 500); // REMOVED POLLING
+                function updateIcons() {
+                    if (player.paused) {
+                        iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+                    } else {
+                        iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+                    }
+                }
+                setInterval(updateIcons, 500);
 
                 // --- FULLSCREEN LOGIC ---
                 const fullscreenBtn = document.getElementById('fullscreenBtn');

@@ -973,10 +973,11 @@
                 audioPlayer.play().then(() => {
                     console.log("[DEBUG_SYS] Auto-Play SUCCESS");
                     unlockAudio(); // Unlock other sounds too
-                    // UI updates automatically via 'play' event
+                    iconPlay.style.display = 'none';
+                    iconPause.style.display = 'block';
                 }).catch(e => {
                     console.warn("[DEBUG_SYS] Auto-Play BLOCKED by Browser:", e);
-                    // UI remains in 'paused' state (Play button visible)
+                    // Fallback remains (click listener)
                 });
             };
 
@@ -2898,37 +2899,16 @@
         });
 
         // 5. Play/Pause Steuerung
-        // 5. Play/Pause Steuerung - CENTRALIZED UPDATE LOGIC
-        // Ensure UI state always matches audio state
-        const updatePlayPauseIcons = () => {
-            // If NOT paused, show PAUSE button. Else show PLAY.
-            if (!audioPlayer.paused) {
-                iconPlay.style.display = 'none';
-                iconPause.style.display = 'block';
-            } else {
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
-            }
-        };
-
-        // Attach listeners to update UI automatically
-        audioPlayer.addEventListener('play', updatePlayPauseIcons);
-        audioPlayer.addEventListener('pause', updatePlayPauseIcons);
-
-        // Also update on 'ended' via logic
-        audioPlayer.addEventListener('ended', () => {
-            // Logic handled in separate ended listener, but valid to resync here
-            updatePlayPauseIcons();
-        });
-
         playBtn.addEventListener('click', () => {
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
             if (audioPlayer.paused) {
                 audioPlayer.play().catch(e => console.error("Play verification failed:", e));
-                // UI updates via event listener
+                iconPlay.style.display = 'none';
+                iconPause.style.display = 'block';
             } else {
                 audioPlayer.pause();
-                // UI updates via event listener
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
             }
         });
 
