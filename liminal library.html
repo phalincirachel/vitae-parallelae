@@ -603,6 +603,13 @@
                     // DISABLED when camera is panning to a click target
                     if (cameraLookTarget) return;
 
+                    // COORDINATE GATE: Ignore clicks in bottom 180px (UI Area)
+                    // This is the "Leiste" safeguard
+                    if (event.clientY > window.innerHeight - 180) {
+                        console.log("DEBUG: Mouse Down REJECTED (Bottom Safe Zone)");
+                        return;
+                    }
+
                     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
                     mouse.y = (event.clientY / window.innerHeight) * 2 - 1;
                     targetMouseX = mouse.x;
@@ -638,7 +645,10 @@
                         const touch = event.touches[0];
 
                         // PERFORMANCE FIX: Check UI collision ONCE at start
-                        if (isTouchOnUI(event)) {
+                        const isBottomZone = (touch.clientY > window.innerHeight - 180);
+
+                        if (isTouchOnUI(event) || isBottomZone) {
+                            console.log("DEBUG: Touch Start REJECTED (UI or Bottom Zone)");
                             isTouchValid = false;
                             return;
                         }
