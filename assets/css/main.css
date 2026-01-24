@@ -408,6 +408,8 @@ body {
     transition: background 0.5s ease;
     max-height: none;
     min-height: 80px;
+    pointer-events: none;
+    /* User Request: Allow clicks to pass through in Game Mode */
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer {

@@ -367,17 +367,17 @@
                 });
                 const player = window.audioPlayer;
 
+                // PRELOAD IMMEDIATELY
+                if (window.audioPlayer && window.audioPlayer.audio) {
+                    window.audioPlayer.audio.preload = "auto";
+                    window.audioPlayer.audio.load();
+                    console.log("Liminal Audio Preloading...");
+                }
+
                 // Initialize Game
                 (async () => {
                     try {
-                        // 1. Subtitles loaded by Player internals
-                        // const res = await fetch('assets/kapitel1b.txt');
-                        // const text = await res.text();
-                        // window.subtitleTracks = parseSubtitles(text);
-                        // console.log("Subtitles loaded:", window.subtitleTracks.length);
-
-                        // 2. Load Audio State (Player handles init, just restore time)
-                        // player.src is handled by constructor
+                        // 2. Load Audio State
                         const savedState = PlayerStateManager.getState('liminal_library');
                         if (savedState && savedState.sentenceTime > 0) {
                             player.audio.currentTime = savedState.sentenceTime;
@@ -385,15 +385,6 @@
 
                         // 3. Init Visibility Manage - DISABLED (Bug suspected)
                         // AudioVisibilityManager.init(player.audio);
-
-                        // 4. Initial Render
-                        // player handles rendering
-
-                        // 5. Auto-Play
-                        // 5. Auto-Play moved to startGame() to prevent Pre-Load Audio
-                        // setTimeout(() => {
-                        //    player.play().then(() => updateIcons()).catch(e => console.warn("Auto-play", e));
-                        // }, 500);
 
                     } catch (e) {
                         console.error("Game Init Error:", e);
@@ -603,17 +594,16 @@
                 let isTouchValid = true; // FIX: Default true so clicks work from start
 
                 // Helper: Check if touch is on UI elements
-                function isTouchOnUI(touch) {
-                    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-                    if (!el) return false;
-                    return el.closest('#audioPlayerUI') ||
-                        el.closest('#audioControls') ||
-                        el.closest('.audio-btn') ||
-                        el.closest('#archiveModal') ||
-                        el.closest('.menu-item') ||
-                        el.closest('#subtitleContainer') ||
-                        el.closest('#nextChapterBtn') ||
-                        el.closest('#loading');
+                function isTouchOnUI(event) {
+                    const target = event.target;
+                    return target.closest('#audioPlayerUI') ||
+                        target.closest('#audioControls') ||
+                        target.closest('.audio-btn') ||
+                        target.closest('#archiveModal') ||
+                        target.closest('.menu-item') ||
+                        target.closest('#subtitleContainer') ||
+                        target.closest('#nextChapterBtn') ||
+                        target.closest('#loading');
                 }
 
                 document.addEventListener('touchstart', (event) => {
@@ -624,7 +614,7 @@
                         const touch = event.touches[0];
 
                         // PERFORMANCE FIX: Check UI collision ONCE at start
-                        if (isTouchOnUI(touch)) {
+                        if (isTouchOnUI(event)) {
                             isTouchValid = false;
                             return;
                         }

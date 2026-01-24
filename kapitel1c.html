@@ -2468,6 +2468,16 @@
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("Electron Mode: Auto-Loading...");
 
+            // 0. IMMEDIATE AUDIO PRELOAD
+            const mainAudioSrc = 'assets/kapitel1c.mp3';
+            // Ensure getSCUrl is available (it is loaded in head)
+            audioPlayer.src = getSCUrl(mainAudioSrc);
+            if (audioPlayer.mode === 'html5' && audioPlayer.audioNode) {
+                audioPlayer.audioNode.preload = "auto";
+                audioPlayer.audioNode.load();
+                console.log("[Kapitel1c] Audio Preload triggered");
+            }
+
             // RESTORE READING MODE STATE
             const savedMode = localStorage.getItem('gameboy_reading_mode');
             if (savedMode === 'true') {
@@ -2513,12 +2523,9 @@
                 // Try alternate path for debugging
             };
 
-            // 2. Load Audio & Text (Chapter 1c) -> Default Main Audio
-            const mainAudioSrc = 'assets/kapitel1c.mp3';
-            // Use SCAudioAdapter's src setter which handles SoundCloud URLs automatically via getSCUrl internal logic if implemented, 
-            // OR we ensure getSCUrl is called here.
-            // In index.html: ambientAudio.src = getSCUrl('...');
-            audioPlayer.src = getSCUrl(mainAudioSrc);
+            // 2. Load Audio & Text (Chapter 1c) -> Audio preloaded above
+            // const mainAudioSrc = 'assets/kapitel1c.mp3'; 
+            // audioPlayer.src = getSCUrl(mainAudioSrc);
             window.mainAudioUrl = mainAudioSrc;
 
             try {
@@ -2612,11 +2619,15 @@
         }
 
         canvas.addEventListener('click', e => {
+            // Guard: Ignore if clicking UI buttons
+            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
             handleClickMove(e.clientX, e.clientY);
         });
 
         // Simple Touch for Click-to-Move (Pinch-Zoom REMOVED per user request - caused jitter)
         canvas.addEventListener('touchstart', e => {
+            // Guard: Ignore if touching UI
+            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
             e.preventDefault();
             if (e.touches.length === 1) {
                 handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
@@ -3773,6 +3784,21 @@
                 };
             }
         }
+
+        // iOS FIX: Force integer coordinates helper wrapper
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        if (isIOS) {
+            const _origGetPlayerDrawCoords = getPlayerDrawCoords;
+            getPlayerDrawCoords = function (x, y, dir, frame) {
+                const res = _origGetPlayerDrawCoords(x, y, dir, frame);
+                res.x = Math.floor(res.x);
+                res.y = Math.floor(res.y);
+                return res;
+            };
+            console.log("[Kapitel1c] iOS Waddle Fix Applied (Wrapper)");
+        }
+
 
         // ============================================
         // SPIELER SPRITE ZEICHNEN

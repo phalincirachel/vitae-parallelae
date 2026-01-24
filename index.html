@@ -890,6 +890,19 @@
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("Electron Mode: Auto-Loading...");
 
+            // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
+            const mainAudioSrc = 'assets/kapitel1.mp3';
+            window.mainAudioUrl = mainAudioSrc;
+            const scUrl = getSCUrl(mainAudioSrc);
+            // Initialize Source immediately to start buffering
+            audioPlayer.src = scUrl;
+            if (audioPlayer.mode === 'html5') {
+                // Force HTML5 Audio to preload
+                audioPlayer.audioNode.preload = "auto";
+                audioPlayer.audioNode.load();
+                console.log("Audio Preloading Started...");
+            }
+
             // RESTORE READING MODE STATE
             const savedMode = localStorage.getItem('gameboy_reading_mode');
             if (savedMode === 'true') {
@@ -935,16 +948,8 @@
                 // Try alternate path for debugging
             };
 
-            // 2. Load Audio & Text (Chapter 1) -> Default Main Audio
-            // Debug logging removed per user request
-
-            // 2. Load Audio & Text (Chapter 1) -> Default Main Audio
-            const mainAudioSrc = 'assets/kapitel1.mp3';
-            const scUrl = getSCUrl(mainAudioSrc);
-            // console.log('SC URL: ' + scUrl.substring(0, 80));
-            audioPlayer.src = scUrl;
-
-            window.mainAudioUrl = mainAudioSrc;
+            // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
+            // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
 
             // IMMEDIATE PLAYBACK ATTEMPT (Task 4)
             // Try to play immediately once loaded
@@ -1093,10 +1098,14 @@
         }
 
         canvas.addEventListener('click', e => {
+            // Guard: Ignore if clicking UI buttons (propagated events)
+            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
             handleClickMove(e.clientX, e.clientY);
         });
 
         canvas.addEventListener('touchstart', e => {
+            // Guard: Ignore if touching UI
+            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
             e.preventDefault();
             if (e.touches.length > 0) {
                 handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
@@ -2196,11 +2205,16 @@
         }
 
         // NEU: Hilfsfunktion für konsistente Koordinatenberechnung
+        // iOS Detection
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
         function getPlayerDrawCoords(x, y, dir, frame) {
             const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
             const refH = Math.floor(SPRITE.frameHeight * SPRITE.scale);
             const visualShiftY = Math.floor(refH / 3) - 4;
             const flipX = (dir === 3);
+
+            let result = {};
 
             // FRONT (Marker-basiert, 6-Step)
             if (dir === 0) {
@@ -2217,7 +2231,7 @@
                 const dx = x + refW / 2 - footRelX * SPRITE.scale;
                 const dy = y + refH + visualShiftY - footRelY * SPRITE.scale;
 
-                return {
+                result = {
                     x: dx, y: dy, w: dw, h: dh,
                     isSide: false, frameIdx: frameIdx,
                     sx: data.left, sw: sw, sh: spriteFront.height,
@@ -2240,7 +2254,7 @@
                 const dx = x + refW / 2 - footRelX * SPRITE.scale;
                 const dy = y + refH + visualShiftY - footRelY * SPRITE.scale;
 
-                return {
+                result = {
                     x: dx, y: dy, w: dw, h: dh,
                     isSide: false, frameIdx: frameIdx,
                     sx: data.left, sw: sw, sh: spriteBack.height,
@@ -2270,7 +2284,7 @@
                 }
                 const dy = y + refH + visualShiftY - footRelY * SPRITE.scale;
 
-                return {
+                result = {
                     x: dx, y: dy, w: dw, h: dh,
                     isSide: true, frameIdx: frameIdx,
                     sx: data.left, sw: sw, sh: spriteSide.height,
@@ -2290,13 +2304,20 @@
 
                 const finalX = x;
                 const finalY = y + offsetY + visualShiftY;
-                return {
+                result = {
                     x: finalX, y: finalY, w: dw, h: dh,
                     isSide: false, frameIdx: frameIdx,
                     sx: sx, sw: sw, sh: sh,
                     flipX: false
                 };
             }
+
+            // iOS FIX: Force integer coordinates to prevent sub-pixel "wobble"
+            if (isIOS) {
+                result.x = Math.floor(result.x);
+                result.y = Math.floor(result.y);
+            }
+            return result;
         }
 
         // ============================================
