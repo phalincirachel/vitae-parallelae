@@ -928,6 +928,11 @@
                     dz.classList.add('hidden');
                 }
                 if (pi) pi.style.display = 'none';
+
+                // Force Hide Loading Screen
+                const ls = document.getElementById('loading-screen');
+                if (ls) ls.style.display = 'none';
+
                 // Force Start Loop if not ready
                 if (!gameReady) {
                     console.warn("Force starting game loop!");
@@ -2216,7 +2221,7 @@
 
         // NEU: Hilfsfunktion für konsistente Koordinatenberechnung
         // iOS Detection
-        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        // const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent); // REMOVED DUPLICATE
 
         function getPlayerDrawCoords(x, y, dir, frame) {
             const refW = Math.floor(SPRITE.frameWidth * SPRITE.scale);
@@ -2323,7 +2328,7 @@
             }
 
             // iOS FIX: Force integer coordinates to prevent sub-pixel "wobble"
-            if (isIOS) {
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
                 result.x = Math.floor(result.x);
                 result.y = Math.floor(result.y);
             }

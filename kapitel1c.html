@@ -2502,6 +2502,11 @@
                     dz.classList.add('hidden');
                 }
                 if (pi) pi.style.display = 'none';
+
+                // Force Hide Loading Screen
+                const ls = document.getElementById('loading-screen');
+                if (ls) ls.style.display = 'none';
+
                 // Force Start Loop if not ready
                 if (!gameReady) {
                     console.warn("Force starting game loop!");

@@ -166,6 +166,15 @@
     <script type="module">
         console.log("DEBUG: Script Wrapper Start");
 
+        // FALLBACK TIMEOUT: Force hide loading screens after 10s
+        setTimeout(() => {
+            console.warn("Liminal Fallback: Force hiding loading screens (10s)");
+            const l1 = document.getElementById('loading');
+            const l2 = document.getElementById('loading-screen');
+            if (l1) l1.style.display = 'none';
+            if (l2) l2.style.display = 'none';
+        }, 10000);
+
         // --- ERROR HANDLING ---
         window.addEventListener('unhandledrejection', function (event) {
             console.error("Unhandled Promise Rejection:", event.reason);
