@@ -3,7 +3,8 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Liminal Archive</title>
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
@@ -375,6 +376,18 @@
                 renderer.toneMappingExposure = 1.0;
                 document.body.appendChild(renderer.domElement);
 
+                function syncViewport() {
+                    const vv = window.visualViewport;
+                    const viewWidth = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
+                    const viewHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+                    camera.aspect = viewWidth / viewHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(viewWidth, viewHeight, false);
+                }
+
+                // Ensure initial calibration uses the real visual viewport on mobile.
+                syncViewport();
+
                 // --- AUDIO PLAYER SETUP (SCAudioAdapter) ---
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
@@ -638,6 +651,12 @@
                     // Disabled in reading mode
                     if (player && player.isReadingMode) return;
 
+                    if (event.touches.length !== 1) {
+                        isTouchValid = false;
+                        isTouchDragging = false;
+                        return;
+                    }
+
                     if (event.touches.length === 1) {
                         const touch = event.touches[0];
 
@@ -662,6 +681,7 @@
 
                     // Optimization: Early exit if touch started on UI
                     if (!isTouchValid) return;
+                    if (event.touches.length !== 1) return;
 
                     if (event.touches.length === 1) {
                         const touch = event.touches[0];
@@ -685,6 +705,11 @@
                         }
                     }
                 }, { passive: true });
+
+                // Prevent pinch-zoom from desynchronizing viewport/camera calibration.
+                document.addEventListener('touchmove', (event) => {
+                    if (event.touches && event.touches.length > 1) event.preventDefault();
+                }, { passive: false });
 
                 // --- TEXTURES & MATERIALS ---
                 function createWoodTexture() {
@@ -1512,9 +1537,7 @@
 
                 // Handle Window Resize
                 window.addEventListener('resize', () => {
-                    camera.aspect = window.innerWidth / window.innerHeight;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(window.innerWidth, window.innerHeight);
+                    syncViewport();
                 });
 
                 // Animate
@@ -2006,17 +2029,15 @@
                 });
                 // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
                 window.addEventListener('resize', () => {
-                    // Update Camera Aspect Ratio
-                    camera.aspect = window.innerWidth / window.innerHeight;
-                    camera.updateProjectionMatrix();
-
-                    // Update Renderer Size
-                    renderer.setSize(window.innerWidth, window.innerHeight);
-
-                    // Re-calculate UI or other dimensional dependencies if needed
-                    // (e.g. if we had custom HUD scaler)
+                    syncViewport();
                     console.log(`Resized to ${window.innerWidth}x${window.innerHeight}`);
                 });
+                window.addEventListener('orientationchange', syncViewport, { passive: true });
+                document.addEventListener('fullscreenchange', syncViewport);
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', syncViewport, { passive: true });
+                    window.visualViewport.addEventListener('scroll', syncViewport, { passive: true });
+                }
 
 
             } catch (err) {
