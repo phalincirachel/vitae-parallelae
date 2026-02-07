@@ -12,6 +12,8 @@ export class SharedAudioPlayer {
 
         this.subtitleTracks = [];
         this.currentSubtitleIndex = -1;
+        this.renderVersion = 0;
+        this.currentScrollAnimation = null;
         this.container = options.container || document.getElementById('subtitleContainer');
         this.isReadingMode = options.isReadingMode || false;
 
@@ -33,43 +35,58 @@ export class SharedAudioPlayer {
     async loadText(url) {
         try {
             const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
             const text = await response.text();
             this.parseSubtitles(text);
+            return true;
         } catch (e) {
             console.error("SharedAudioPlayer: Failed to load text", e);
             this.container.innerHTML = `<div class="subtitle-line subtitle-current">Fehler beim Laden des Textes: ${url}</div>`;
+            return false;
         }
     }
 
     parseSubtitles(rawText) {
         this.subtitleTracks = [];
-        // Robust regex from Liminal Library (supports hh:mm:ss and decimals)
+        this.currentSubtitleIndex = -1;
         const lines = rawText.split(/\r?\n/);
-        const timeReg = /^\[(\d{1,2}):(\d{1,2})(?::(\d{1,2}(?:\.\d+)?)?)?\][ ]*(.*)/;
+        const timeReg = /^\[(\d{1,2}):(\d{2})([:.])(\d{1,2}(?:\.\d+)?)\]\s*(.*)|\[(\d{1,2}):(\d{2})\]\s*(.*)/;
 
-        lines.forEach(line => {
+        lines.forEach((line) => {
             const match = line.match(timeReg);
             if (match) {
-                const part1 = parseFloat(match[1]);
-                const part2 = parseFloat(match[2]);
-                const part3 = match[3] ? parseFloat(match[3]) : null;
-
                 let totalSeconds = 0;
-                if (part3 !== null) {
-                    // hh:mm:ss
-                    totalSeconds = part1 * 3600 + part2 * 60 + part3;
+                let text = '';
+
+                if (match[1] !== undefined) {
+                    const first = parseFloat(match[1]);
+                    const second = parseFloat(match[2]);
+                    const separator = match[3];
+                    const third = parseFloat(match[4]);
+                    text = match[5] ? match[5].trim() : '';
+
+                    if (separator === ':') {
+                        totalSeconds = first * 3600 + second * 60 + third;
+                    } else {
+                        totalSeconds = first * 60 + second + (third / 100);
+                    }
                 } else {
-                    // mm:ss
-                    totalSeconds = part1 * 60 + part2;
+                    const first = parseFloat(match[6]);
+                    const second = parseFloat(match[7]);
+                    text = match[8] ? match[8].trim() : '';
+                    totalSeconds = first * 60 + second;
                 }
 
-                const text = match[4] ? match[4].trim() : '';
                 if (text) {
                     this.subtitleTracks.push({ time: totalSeconds, text });
                 }
             }
         });
+
         this.subtitleTracks.sort((a, b) => a.time - b.time);
+        this.renderVersion += 1;
         this.renderLines(0);
         console.log(`SharedAudioPlayer: Parsed ${this.subtitleTracks.length} lines.`);
     }
@@ -94,113 +111,118 @@ export class SharedAudioPlayer {
 
     renderLines(centerIndex) {
         if (!this.container) return;
-        this.container.innerHTML = '';
 
         if (this.subtitleTracks.length === 0) {
             this.container.innerHTML = '<div class="subtitle-line subtitle-current">...</div>';
             return;
         }
 
-        const maxLines = this.isReadingMode ? this.subtitleTracks.length : 3;
-
-        let start, end;
         if (this.isReadingMode) {
-            start = 0;
-            end = this.subtitleTracks.length - 1;
-        } else {
-            const half = Math.floor(maxLines / 2);
-            start = Math.max(0, centerIndex - half);
-            end = Math.min(this.subtitleTracks.length - 1, start + maxLines - 1);
-            // Adjust start if near end
-            start = Math.max(0, end - maxLines + 1);
+            const currentVersion = String(this.renderVersion);
+            const renderedVersion = this.container.dataset.version || '';
+
+            if (this.container.children.length !== this.subtitleTracks.length || renderedVersion !== currentVersion) {
+                this.container.innerHTML = '';
+                this.container.dataset.version = currentVersion;
+
+                for (let i = 0; i < this.subtitleTracks.length; i++) {
+                    const div = document.createElement('div');
+                    div.className = 'subtitle-line';
+                    div.innerText = this.subtitleTracks[i].text;
+                    div.dataset.index = String(i);
+
+                    div.style.cursor = 'pointer';
+                    div.title = 'Springe zu dieser Stelle';
+                    div.addEventListener('click', () => {
+                        if (this.container.dataset.wasDragging === 'true') return;
+                        this.audio.currentTime = this.subtitleTracks[i].time;
+                        this.onTimeUpdate();
+                        this.smoothScrollTo(div);
+                    });
+
+                    this.container.appendChild(div);
+                }
+            }
+
+            const oldActive = this.container.querySelector('.subtitle-current');
+            if (oldActive) oldActive.classList.remove('subtitle-current');
+
+            const safeIndex = centerIndex < 0 ? 0 : centerIndex;
+            if (this.container.children.length > safeIndex) {
+                const activeEl = this.container.children[safeIndex];
+                activeEl.classList.add('subtitle-current');
+                if (this.container.dataset.isDragging !== 'true' && !this.audio.paused) {
+                    this.smoothScrollTo(activeEl);
+                }
+            }
+
+            return;
         }
+
+        this.container.innerHTML = '';
+
+        const maxLines = 3;
+        const half = Math.floor(maxLines / 2);
+        let start = Math.max(0, centerIndex - half);
+        let end = Math.min(this.subtitleTracks.length - 1, start + maxLines - 1);
+        start = Math.max(0, end - maxLines + 1);
 
         for (let i = start; i <= end; i++) {
             const div = document.createElement('div');
             div.className = 'subtitle-line';
-            if (i === centerIndex) div.classList.add('subtitle-current');
-
-            // Fading logic
-            const dist = Math.abs(i - centerIndex);
-            if (dist >= 4) div.classList.add('fade-far');
-            else if (dist >= 2 && !this.isReadingMode) div.classList.add('fade-mid');
-
+            if (i === centerIndex) {
+                div.classList.add('subtitle-current');
+            } else {
+                const dist = Math.abs(i - centerIndex);
+                if (dist >= 4) div.classList.add('fade-far');
+                else if (dist >= 2) div.classList.add('fade-mid');
+            }
             div.innerHTML = this.subtitleTracks[i].text;
-
-            // Allow seeking in Reading Mode
-            if (this.isReadingMode) {
-                div.style.cursor = 'pointer';
-                div.title = 'Springe zu dieser Stelle';
-                div.addEventListener('click', () => {
-                    // Check drag state from container
-                    if (this.container.dataset.wasDragging === 'true') return;
-
-                    console.log(`Seek to ${this.subtitleTracks[i].time}`);
-                    this.audio.currentTime = this.subtitleTracks[i].time;
-                    this.onTimeUpdate(); // Update now
-
-                    // SMOOTH SCROLL (Task 5c)
-                    this.smoothScrollTo(div);
-                });
-            }
-
             this.container.appendChild(div);
-
-            if (i === centerIndex && this.isReadingMode && !this.audio.paused) {
-                // ONLY Auto-Scroll if Playing AND user is not actively dragging (Task 5b)
-                // Uses custom smooth scroll with variable duration (1-3s)
-                if (this.container.dataset.isDragging !== 'true') {
-                    this.smoothScrollTo(div);
-                }
-            }
         }
     }
 
-    // Custom Smooth Scroll (Task 5c)
     smoothScrollTo(targetEl) {
         if (!this.container || !targetEl) return;
 
+        if (this.currentScrollAnimation) {
+            cancelAnimationFrame(this.currentScrollAnimation);
+            this.currentScrollAnimation = null;
+        }
+
         const container = this.container;
         const startY = container.scrollTop;
-
-        // Calculate Target Y to center the element
-        const targetRect = targetEl.getBoundingClientRect();
-        const containerRect = container.getBoundingClientRect();
-
-        // Offset relative to container top
         const relativeTop = targetEl.offsetTop;
-        // We want: relativeTop - (containerHeight/2) + (elementHeight/2)
         const targetY = relativeTop - (container.clientHeight / 2) + (targetEl.clientHeight / 2);
-
         const distance = Math.abs(targetY - startY);
 
-        // Dynamic Duration: 1s (near) to 3s (far)
-        // Let's say "Far" is > 1000px
-        let duration = 1000 + (distance / 500) * 1000;
-        duration = Math.min(3000, duration); // Cap at 3s
+        if (distance < 5) return;
 
-        console.log(`[DEBUG_SYS] SmoothScroll: Dist=${distance.toFixed(0)}px -> Duration=${duration.toFixed(0)}ms`);
+        let duration = 1000;
+        if (distance > 200) {
+            const extraDist = Math.min(800, distance - 200);
+            duration = 1000 + (extraDist / 800) * 2000;
+        }
+        duration = Math.min(3000, duration);
 
         const startTime = performance.now();
-
-        const easeInOutQuad = (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+        const easeOutQuad = (t) => t * (2 - t);
 
         const animate = (currentTime) => {
             const elapsed = currentTime - startTime;
-            if (elapsed > duration) {
-                container.scrollTop = targetY; // Snap to final
+            if (elapsed >= duration) {
+                container.scrollTop = targetY;
+                this.currentScrollAnimation = null;
                 return;
             }
 
             const progress = elapsed / duration;
-            const eased = easeInOutQuad(progress);
-
+            const eased = easeOutQuad(progress);
             container.scrollTop = startY + (targetY - startY) * eased;
-
-            requestAnimationFrame(animate);
+            this.currentScrollAnimation = requestAnimationFrame(animate);
         };
 
-        requestAnimationFrame(animate);
+        this.currentScrollAnimation = requestAnimationFrame(animate);
     }
 
     setReadingMode(active) {

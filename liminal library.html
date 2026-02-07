@@ -251,7 +251,7 @@
                         p.audio.volume = 1.0;
 
                         // Restore Text
-                        p.loadText('assets/kapitel1b.txt');
+                        await p.loadText('assets/kapitel1b.txt');
 
                         // Restore Time (minus 5s)
                         const resumeTime = Math.max(0, mainAudioState.time - 5);
@@ -296,18 +296,32 @@
                     // Use SharedAudioPlayer API
                     p.audio.src = getSCUrl(content.audio);
                     p.audio.currentTime = 0;
-                    p.loadText(content.text || `assets/lore${id}.txt`);
+                    const textPath = content.text || `assets/lore${id}.txt`;
+                    await p.loadText(textPath);
 
                     // DEPRECATED: manual loadSubtitleTrack calls
                     // const textPath = content.text || `assets/lore${id}.txt`;
                     // await loadSubtitleTrack(textPath);
 
                     // Play
+                    let started = false;
                     try {
                         await p.play();
+                        started = true;
                     } catch (e) {
                         console.warn("Lore autoplay failed:", e);
+                        try {
+                            await new Promise(resolve => setTimeout(resolve, 250));
+                            await p.play();
+                            started = true;
+                        } catch (e2) {
+                            console.warn("Lore autoplay retry failed:", e2);
+                        }
                     }
+                    if (!started) {
+                        console.warn("Lore is loaded but still paused. Waiting for user input.");
+                    }
+                    updateIcons();
                 };
 
                 // --- CONFIG ---
@@ -422,7 +436,6 @@
                 // --- EVENT LISTENERS ---
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
                     player.toggle();
-                    updateIcons();
                 });
 
                 document.getElementById('skipBackBtn').addEventListener('click', () => player.skip(-15));
@@ -546,7 +559,11 @@
                         iconPlay.style.display = 'none'; iconPause.style.display = 'block';
                     }
                 }
-                setInterval(updateIcons, 500);
+                player.audio.addEventListener('play', updateIcons);
+                player.audio.addEventListener('pause', updateIcons);
+                player.audio.addEventListener('ended', updateIcons);
+                player.audio.addEventListener('loadedmetadata', updateIcons);
+                updateIcons();
 
                 // --- FULLSCREEN LOGIC ---
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -1248,21 +1265,43 @@
                 let cameraLookTarget = null; // 3D point camera should smoothly look at
                 const raycaster = new THREE.Raycaster();
                 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                let uiInteractionStarted = false;
+
+                function isUiClickTarget(target) {
+                    return !!(target && (
+                        target.closest('#audioPlayerUI') ||
+                        target.closest('#audioControls') ||
+                        target.closest('.audio-btn') ||
+                        target.closest('#archiveModal') ||
+                        target.closest('.menu-item') ||
+                        target.closest('#subtitleContainer') ||
+                        target.closest('#nextChapterBtn') ||
+                        target.closest('#loading')
+                    ));
+                }
+
+                function getUiDeadzoneTop() {
+                    const controls = document.getElementById('audioControls');
+                    if (!controls) return window.innerHeight - 80;
+                    const safetyMargin = 16;
+                    return Math.max(0, controls.getBoundingClientRect().top - safetyMargin);
+                }
+
+                document.addEventListener('pointerdown', (event) => {
+                    uiInteractionStarted = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
+                }, true);
 
                 document.addEventListener('click', (event) => {
+                    if (uiInteractionStarted) {
+                        uiInteractionStarted = false;
+                        return;
+                    }
+
                     // Use elementFromPoint for reliable detection (works with pointer events)
                     const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
 
                     // Ignore clicks on UI elements
-                    if (clickedEl && (
-                        clickedEl.closest('#audioPlayerUI') ||
-                        clickedEl.closest('#audioControls') ||
-                        clickedEl.closest('.audio-btn') ||
-                        clickedEl.closest('#archiveModal') || // This covers the entire modal
-                        clickedEl.closest('.menu-item') ||    // Explicitly safety check menu items
-                        clickedEl.closest('#subtitleContainer') ||
-                        clickedEl.closest('#nextChapterBtn') ||
-                        clickedEl.closest('#loading'))) {
+                    if (isUiClickTarget(clickedEl)) {
                         console.log("Click ignored: UI element");
                         return;
                     }
@@ -1282,7 +1321,7 @@
 
                     // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
                     // If click is in the bottom 80px (approx UI height), IGNORÉ
-                    if (event.clientY > window.innerHeight - 80) {
+                    if (event.clientY >= getUiDeadzoneTop()) {
                         console.log("Ignored Click in UI Deadzone");
                         return;
                     }

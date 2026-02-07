@@ -966,23 +966,11 @@
             // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
             // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
 
-            // IMMEDIATE PLAYBACK ATTEMPT (Task 4)
-            // Try to play immediately once loaded
+            // Keep initial state deterministic: do not auto-play chapter audio on startup.
+            // The user starts playback explicitly via play button.
             const attemptAutoPlay = () => {
-                console.log("[DEBUG_SYS] Attempting Auto-Play...");
-                audioPlayer.play().then(() => {
-                    console.log("[DEBUG_SYS] Auto-Play SUCCESS");
-                    unlockAudio(); // Unlock other sounds too
-                    iconPlay.style.display = 'none';
-                    iconPause.style.display = 'block';
-                }).catch(e => {
-                    console.warn("[DEBUG_SYS] Auto-Play BLOCKED by Browser:", e);
-                    // Fallback remains (click listener)
-                });
+                syncPlayPauseIcon();
             };
-
-            // Wait for audio to be ready?
-            setTimeout(attemptAutoPlay, 1000);
 
             try {
                 // debugLog('Fetching kapitel1.txt...');
@@ -996,8 +984,7 @@
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
 
-                // After text loaded, try playing again if first failed?
-                setTimeout(attemptAutoPlay, 500);
+                attemptAutoPlay();
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -2479,6 +2466,18 @@
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
 
+        function syncPlayPauseIcon() {
+            const isPaused = !audioPlayer || audioPlayer.paused;
+            iconPlay.style.display = isPaused ? 'block' : 'none';
+            iconPause.style.display = isPaused ? 'none' : 'block';
+        }
+
+        audioPlayer.addEventListener('play', syncPlayPauseIcon);
+        audioPlayer.addEventListener('pause', syncPlayPauseIcon);
+        audioPlayer.addEventListener('ended', syncPlayPauseIcon);
+        audioPlayer.addEventListener('canplay', syncPlayPauseIcon);
+        syncPlayPauseIcon();
+
         // FORCE REMOVE FOCUS FROM BUTTONS
         // This prevents the "Orange Box" from appearing when using arrow keys after clicking a button
         document.querySelectorAll('button').forEach(btn => {
@@ -2902,13 +2901,15 @@
         playBtn.addEventListener('click', () => {
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
             if (audioPlayer.paused) {
-                audioPlayer.play().catch(e => console.error("Play verification failed:", e));
-                iconPlay.style.display = 'none';
-                iconPause.style.display = 'block';
+                audioPlayer.play()
+                    .then(() => syncPlayPauseIcon())
+                    .catch(e => {
+                        console.error("Play verification failed:", e);
+                        syncPlayPauseIcon();
+                    });
             } else {
                 audioPlayer.pause();
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
+                syncPlayPauseIcon();
             }
         });
 
