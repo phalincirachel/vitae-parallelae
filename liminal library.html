@@ -633,6 +633,8 @@
                 let touchStartMouseY = 0;
                 let isTouchDragging = false;
                 let isTouchValid = true; // FIX: Default true so clicks work from start
+                let touchMovedForTap = false;
+                let touchStartedOnUi = false;
 
                 // Helper: Check if touch is on UI elements
                 function isTouchOnUI(event) {
@@ -659,10 +661,13 @@
 
                     if (event.touches.length === 1) {
                         const touch = event.touches[0];
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
 
                         // PERFORMANCE FIX: Check UI collision ONCE at start
                         if (isTouchOnUI(event)) {
                             isTouchValid = false;
+                            touchStartedOnUi = true;
                             lastUiInteractionAt = performance.now();
                             uiInteractionStarted = true;
                             moveTarget = null;
@@ -696,6 +701,7 @@
                         // Only treat as drag if moved more than 10 pixels
                         if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
                             isTouchDragging = true;
+                            touchMovedForTap = true;
 
                             // CANCEL any auto-pan when user swipes
                             cameraLookTarget = null;
@@ -1330,6 +1336,10 @@
 
                 document.addEventListener('click', (event) => {
                     const isMobile = window.innerWidth <= 768;
+                    if (isMobile) {
+                        return;
+                    }
+
                     const sinceUiInteraction = performance.now() - lastUiInteractionAt;
                     if (isMobile && sinceUiInteraction < UI_CLICK_SUPPRESS_MS) {
                         uiInteractionStarted = false;
@@ -1374,11 +1384,13 @@
                         return;
                     }
 
-                    // Calculate click position in normalized coordinates
-                    const clickScreenX = (event.clientX / window.innerWidth) * 2 - 1;
-                    const clickScreenY = (event.clientY / window.innerHeight) * 2 - 1;
+                    trySetMoveTargetFromScreenPoint(event.clientX, event.clientY, false);
+                });
 
-                    // Use local coordinates for raycast
+                function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    // Calculate click position in normalized coordinates
+                    const clickScreenX = (clientX / window.innerWidth) * 2 - 1;
+                    const clickScreenY = (clientY / window.innerHeight) * 2 - 1;
                     const clickMouse = new THREE.Vector2();
                     clickMouse.x = clickScreenX;
                     clickMouse.y = -clickScreenY; // Flip Y for Three.js
@@ -1404,9 +1416,7 @@
                     }
 
                     if (target) {
-                        // SET 3D CAMERA LOOK TARGET (MOBILE ONLY)
-                        // Desktop: Camera is controlled by mouse only
-                        if (window.innerWidth <= 768) {
+                        if (isMobileTap) {
                             cameraLookTarget = target.clone();
                         }
 
@@ -1425,7 +1435,34 @@
                         moveTarget = new THREE.Vector3(target.x, camera.position.y, target.z);
                         console.log("Moving to:", moveTarget, "Looking at:", cameraLookTarget);
                     }
-                });
+                }
+
+                document.addEventListener('touchend', (event) => {
+                    if (player && player.isReadingMode) return;
+                    if (window.innerWidth > 768) return;
+
+                    // Ignore UI-origin touches and drag gestures
+                    if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
+                        isTouchDragging = false;
+                        return;
+                    }
+
+                    if (!event.changedTouches || event.changedTouches.length === 0) return;
+                    const touch = event.changedTouches[0];
+
+                    // Ignore taps in control deadzone
+                    if (touch.clientY >= getUiDeadzoneTop()) {
+                        return;
+                    }
+
+                    const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (touchedEl !== renderer.domElement) {
+                        return;
+                    }
+
+                    trySetMoveTargetFromScreenPoint(touch.clientX, touch.clientY, true);
+                    isTouchDragging = false;
+                }, { passive: true });
                 document.addEventListener('keydown', (e) => {
                     // Debug: Log key code and Mode
                     // console.log("Keydown:", e.code, "ReadingMode:", isReadingMode);
