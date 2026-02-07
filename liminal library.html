@@ -663,6 +663,10 @@
                         // PERFORMANCE FIX: Check UI collision ONCE at start
                         if (isTouchOnUI(event)) {
                             isTouchValid = false;
+                            lastUiInteractionAt = performance.now();
+                            uiInteractionStarted = true;
+                            moveTarget = null;
+                            cameraLookTarget = null;
                             return;
                         }
                         isTouchValid = true;
@@ -1291,6 +1295,8 @@
                 const raycaster = new THREE.Raycaster();
                 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
                 let uiInteractionStarted = false;
+                let lastUiInteractionAt = 0;
+                const UI_CLICK_SUPPRESS_MS = 700;
 
                 function isUiClickTarget(target) {
                     return !!(target && (
@@ -1313,10 +1319,23 @@
                 }
 
                 document.addEventListener('pointerdown', (event) => {
-                    uiInteractionStarted = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
+                    const isUiHit = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
+                    uiInteractionStarted = isUiHit;
+                    if (isUiHit) {
+                        lastUiInteractionAt = performance.now();
+                        moveTarget = null;
+                        cameraLookTarget = null;
+                    }
                 }, true);
 
                 document.addEventListener('click', (event) => {
+                    const isMobile = window.innerWidth <= 768;
+                    const sinceUiInteraction = performance.now() - lastUiInteractionAt;
+                    if (isMobile && sinceUiInteraction < UI_CLICK_SUPPRESS_MS) {
+                        uiInteractionStarted = false;
+                        return;
+                    }
+
                     if (uiInteractionStarted) {
                         uiInteractionStarted = false;
                         return;
@@ -1328,6 +1347,10 @@
                     // Ignore clicks on UI elements
                     if (isUiClickTarget(clickedEl)) {
                         console.log("Click ignored: UI element");
+                        return;
+                    }
+
+                    if (isMobile && clickedEl !== renderer.domElement) {
                         return;
                     }
 
