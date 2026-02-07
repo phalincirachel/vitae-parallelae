@@ -233,9 +233,9 @@
                     </div>
 
                     <!-- Chapter 1c -->
-                    <div class="menu-item" id="chapter1cBtn">
+                    <div class="menu-item active" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
-                        <div class="item-sub-text">Steingasse</div>
+                        <div class="item-sub-text">Steingasse (Hier)</div>
                     </div>
                 </div>
 
@@ -297,7 +297,7 @@
         // }, 500);
 
         let gameReady = false;
-        const SCENE_NAME = 'marktplatz'; // Added SCENE_NAME
+        const SCENE_NAME = 'steingasse';
         let bgImage = null;
         let foregroundImage = null;
         let spriteReady = false;
@@ -367,8 +367,8 @@
             }
         })();
 
-        // kapitel1.mp3 als Haupt-Audio
-        window.mainAudioUrl = 'assets/kapitel1.mp3';
+        // kapitel1c.mp3 als Haupt-Audio
+        window.mainAudioUrl = 'assets/kapitel1c.mp3';
 
         // Unlock Logic Wrapper
         async function unlockLoreItem(id) {
@@ -450,25 +450,8 @@
                 ch1.parentNode.replaceChild(newCh1, ch1);
 
                 newCh1.addEventListener('click', () => {
-                    console.log("Loading Chapter 1...");
-                    document.getElementById('archiveModal').classList.remove('visible');
-
-                    // 1. RE-LOAD MAP 'platz3.png' (Only if needed)
-                    // If we are already here, do not reload map! 
-                    // processMap(mapImg); // REMOVED to prevent reload
-
-                    // 2. Audio Logic
-                    if (isLoreMode) {
-                        // If listening to Lore, switch back to Chapter
-                        restoreMainAudio();
-                    } else {
-                        // If already in Chapter mode, maybe just unpause?
-                        if (audioPlayer.paused) {
-                            audioPlayer.play();
-                            iconPlay.style.display = 'none';
-                            iconPause.style.display = 'block';
-                        }
-                    }
+                    console.log("Navigating to Chapter 1...");
+                    window.location.href = 'index.html';
                 });
             }
 
@@ -492,8 +475,15 @@
                 ch1c.parentNode.replaceChild(newCh1c, ch1c);
 
                 newCh1c.addEventListener('click', () => {
-                    console.log("Loading Chapter 1c...");
-                    window.location.href = 'index3.html';
+                    console.log("Already in Chapter 1c, closing modal...");
+                    document.getElementById('archiveModal').classList.remove('visible');
+                    if (isLoreMode) {
+                        restoreMainAudio();
+                    } else if (audioPlayer.paused) {
+                        audioPlayer.play();
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
+                    }
                 });
             }
         }
@@ -893,7 +883,7 @@
             // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
             // WRAPPED IN TRY-CATCH TO PREVENT CRASHING THE LOADING SCREEN
             try {
-                const mainAudioSrc = 'assets/kapitel1.mp3';
+                const mainAudioSrc = 'assets/kapitel1c.mp3';
                 window.mainAudioUrl = mainAudioSrc;
                 if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
                     const scUrl = getSCUrl(mainAudioSrc);
@@ -949,7 +939,7 @@
 
             // 1. Load Map (Default)
             const mapImg = new Image();
-            mapImg.src = 'assets/platz3.png';
+            mapImg.src = 'assets/kapitel1c.png';
             mapImg.onload = () => {
                 console.log("Map Loaded, processing...");
                 try {
@@ -963,8 +953,8 @@
                 // Try alternate path for debugging
             };
 
-            // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
-            // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
+            // 2. Load Audio & Text (Chapter 1c) -> Audio already preloaded above!
+            // const mainAudioSrc = 'assets/kapitel1c.mp3'; // Removed redundant def
 
             // Keep initial state deterministic: do not auto-play chapter audio on startup.
             // The user starts playback explicitly via play button.
@@ -973,8 +963,8 @@
             };
 
             try {
-                // debugLog('Fetching kapitel1.txt...');
-                const response = await fetch('assets/kapitel1.txt');
+                // debugLog('Fetching kapitel1c.txt...');
+                const response = await fetch('assets/kapitel1c.txt');
                 // debugLog('Fetch response: ' + response.status);
                 const text = await response.text();
                 // debugLog('Text length: ' + text.length);
@@ -2671,7 +2661,7 @@
 
 
         // 2. Parser für Timestamps - CORRECTLY distinguishes between formats:
-        // [hh:mm:ss] - Colon before third part means SECONDS (kapitel1.txt uses [00:mm:ss])
+        // [hh:mm:ss] - Colon before third part means SECONDS (kapitel1c.txt uses [00:mm:ss])
         // [mm:ss.xx] - Dot before third part means CENTISECONDS (lore format)
         function parseSubtitles(rawText) {
             subtitleTracks = [];
@@ -2827,7 +2817,8 @@
             fadeAudio(audioPlayer, 0, 1500);
 
             setTimeout(() => {
-                window.location.href = 'liminal library.html';
+                alert("Ende der aktuellen Demo-Inhalte.");
+                window.location.href = 'index.html';
             }, 2000); // 2s Fade Time
         };
 
@@ -3187,7 +3178,7 @@
             // SHIMMER SOUND TRIGGER (Unabhängig vom Text)
             if (nearestId && minDist < TRIGGER_DIST) {
                 // BUGFIX: Do not play shimmer if already collected!
-                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
                 const alreadyCollected = window.GameState ? window.GameState.isLightCollected(sc, nearestId) : (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId));
 
                 if (!alreadyCollected) {
@@ -3211,7 +3202,7 @@
                 }
 
                 // Check if this specific light was already collected
-                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
                 const alreadyCollected = window.GameState ? window.GameState.isLightCollected(sc, nearestId) : (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId));
                 if (alreadyCollected) {
                     return;
@@ -3278,21 +3269,21 @@
 
                 // Restore Tracks
                 // Fix: Explicitly reload Chapter 1 text to ensure correctness
-                console.log("[DEBUG] Reloading Main Chapter Text (kapitel1.txt)...");
-                fetch('assets/kapitel1.txt')
+                console.log("[DEBUG] Reloading Main Chapter Text (kapitel1c.txt)...");
+                fetch('assets/kapitel1c.txt')
                     .then(r => {
                         if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
                         return r.text();
                     })
                     .then(text => {
-                        console.log("[DEBUG] kapitel1.txt loaded, length:", text.length);
+                        console.log("[DEBUG] kapitel1c.txt loaded, length:", text.length);
                         parseSubtitles(text);
                         console.log("[DEBUG] After parseSubtitles, tracks:", subtitleTracks.length);
 
                         // Use PlayerStateManager for proper sentence-based position restoration
                         let resumeTime = 0;
                         if (window.PlayerStateManager) {
-                            const savedState = window.PlayerStateManager.getState('kapitel1');
+                            const savedState = window.PlayerStateManager.getState('kapitel1c');
                             if (savedState && savedState.sentenceTime !== undefined) {
                                 resumeTime = savedState.sentenceTime;
                                 console.log("[DEBUG] Restored from PlayerStateManager:", savedState);
@@ -3359,15 +3350,15 @@
             // CRITICAL FIX: Save main audio state BEFORE setting isLoreMode = true
             // Check if current track is actually MAIN audio before saving
             const isMainAudio = audioPlayer.src.includes(window.mainAudioUrl) ||
-                audioPlayer.src.includes('kapitel1') ||
-                audioPlayer.src.includes('2250158609'); // Kapitel 1 track ID
+                audioPlayer.src.includes('kapitel1c') ||
+                audioPlayer.src.includes('2250158603'); // Kapitel 1c track ID
 
             console.log(`[DEBUG] isMainAudio:`, isMainAudio, `mainAudioUrl:`, window.mainAudioUrl);
 
             if (isMainAudio && !isLoreMode) {
                 // Save state via Manager (Sentence Based)
                 if (window.PlayerStateManager) {
-                    window.PlayerStateManager.saveState('kapitel1', subtitleTracks, audioPlayer);
+                    window.PlayerStateManager.saveState('kapitel1c', subtitleTracks, audioPlayer);
                 }
 
                 // Fallback / legacy state object (keep for now as backup)
@@ -3554,8 +3545,8 @@
                             console.log('[DEBUG] endLoreMode: Parsing main text from window.mainTextContent');
                             parseSubtitles(window.mainTextContent);
                         } else {
-                            console.log('[DEBUG] endLoreMode: Fetching kapitel1.txt...');
-                            fetch('assets/kapitel1.txt')
+                            console.log('[DEBUG] endLoreMode: Fetching kapitel1c.txt...');
+                            fetch('assets/kapitel1c.txt')
                                 .then(r => r.text())
                                 .then(text => {
                                     window.mainTextContent = text;
@@ -3570,7 +3561,7 @@
                         // RESTORE MAIN AUDIO STATE (Sentence Based)
                         let resumeTime = 0;
                         if (window.PlayerStateManager) {
-                            const saved = window.PlayerStateManager.getState('kapitel1');
+                            const saved = window.PlayerStateManager.getState('kapitel1c');
                             if (saved) {
                                 resumeTime = saved.sentenceTime;
                                 console.log(`[DEBUG] Restoring Main Audio to sentence start: ${resumeTime}s`);
