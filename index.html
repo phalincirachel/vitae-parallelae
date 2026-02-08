@@ -949,7 +949,6 @@
 
             // 1. Load Map (Default)
             const mapImg = new Image();
-            mapImg.src = 'assets/platz3.png';
             mapImg.onload = () => {
                 console.log("Map Loaded, processing...");
                 try {
@@ -962,6 +961,7 @@
                 console.error("Map Load Error", e);
                 // Try alternate path for debugging
             };
+            mapImg.src = 'assets/platz3.png';
 
             // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
             // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
@@ -1368,10 +1368,7 @@
                 fgCanvas.getContext('2d').putImageData(new ImageData(fgData, mapW, mapH), 0, 0);
 
                 bgImage = new Image();
-                bgImage.src = bgCanvas.toDataURL();
-
                 foregroundImage = new Image();
-                foregroundImage.src = fgCanvas.toDataURL();
 
                 bgImage.onload = () => {
                     gameReady = true;
@@ -1418,6 +1415,14 @@
                     startGameLoop();
                     console.log("Map Processed & Ready.");
                 };
+                bgImage.onerror = (e) => {
+                    console.error("Processed background image failed to load", e);
+                };
+                foregroundImage.onerror = (e) => {
+                    console.error("Processed foreground image failed to load", e);
+                };
+                bgImage.src = bgCanvas.toDataURL();
+                foregroundImage.src = fgCanvas.toDataURL();
 
 
             } catch (e) {
