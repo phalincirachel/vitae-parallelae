@@ -917,34 +917,25 @@
                 const ui = document.getElementById('audioPlayerUI');
                 if (ui) ui.classList.add('reading-mode');
             }
+            // Load watchdog: never start the game loop without a loaded map.
+            const loadingScreen = document.getElementById('loading-screen');
+            const processingInfo = document.getElementById('processingInfo');
+            const dropZone = document.getElementById('dropZone');
 
-            // FALLBACK: Hide DropZone after 3 seconds if map fails
-            // FALLBACK: Hide DropZone after 10 seconds if map fails (User Request: 10s Buffer limit)
             setTimeout(() => {
-                const dz = document.getElementById('dropZone');
-                const pi = document.getElementById('processingInfo');
-                if (dz && !dz.classList.contains('hidden')) {
-                    console.warn("Force hiding DropZone due to timeout (10s)!");
-                    dz.classList.add('hidden');
-                }
-                if (pi) pi.style.display = 'none';
+                if (gameReady) return;
 
-                // Force Hide Loading Screen
-                const ls = document.getElementById('loading-screen');
-                if (ls) ls.style.display = 'none';
+                console.warn("Map still not ready after 10s. Waiting for map load instead of force-start.");
+                if (dropZone && !dropZone.classList.contains('hidden')) dropZone.classList.add('hidden');
 
-                // Force Start Loop if not ready
-                if (!gameReady) {
-                    console.warn("Force starting game loop!");
-                    gameReady = true;
-                    // Ensure Canvas Size
-                    const c = document.getElementById('gameCanvas');
-                    if (c) {
-                        c.width = window.innerWidth;
-                        c.height = window.innerHeight;
-                    }
-                    if (typeof startGameLoop === 'function') startGameLoop();
+                if (processingInfo) {
+                    processingInfo.style.display = 'block';
+                    processingInfo.style.color = '#ffd54a';
+                    processingInfo.style.background = 'rgba(0,0,0,0.75)';
+                    processingInfo.innerText = 'Map is still loading... please wait.';
                 }
+
+                if (loadingScreen) loadingScreen.style.display = 'flex';
             }, 10000);
 
             // 1. Load Map (Default)
@@ -959,7 +950,13 @@
             };
             mapImg.onerror = (e) => {
                 console.error("Map Load Error", e);
-                // Try alternate path for debugging
+                if (processingInfo) {
+                    processingInfo.style.display = 'block';
+                    processingInfo.style.color = '#ff5555';
+                    processingInfo.style.background = 'rgba(0,0,0,0.85)';
+                    processingInfo.innerText = 'Map failed to load. Please reload the page.';
+                }
+                if (loadingScreen) loadingScreen.style.display = 'flex';
             };
             mapImg.src = 'assets/platz3.png';
 
