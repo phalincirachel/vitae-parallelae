@@ -220,109 +220,253 @@
                 // State to resume main chapter
                 let mainAudioState = { time: 0, wasPlaying: false, src: 'assets/kapitel1b.mp3' };
 
-                // Helper: Load Subtitles
-                // Helper: Load Subtitles - REMOVED (Handled by SharedAudioPlayer)
+                // Content switching + resume helpers
+                const MAIN_CONTENT_KEY = 'liminal_library';
+                let contentSwitchInProgress = false;
+                let contentSwitchToken = 0;
 
-                // Helper: Restore Main Audio
-                window.restoreMainAudio = async function () {
-                    if (!isLoreMode) return;
-                    console.log("Restoring Main Audio (Chapter 1b)...");
+                function getActiveContentKey() {
+                    if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
+                    return MAIN_CONTENT_KEY;
+                }
+
+                function getActiveSubtitleTracks() {
+                    return window.audioPlayer && Array.isArray(window.audioPlayer.subtitleTracks)
+                        ? window.audioPlayer.subtitleTracks
+                        : [];
+                }
+
+                function getActiveSubtitleIndex() {
+                    return window.audioPlayer && Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                        ? window.audioPlayer.currentSubtitleIndex
+                        : -1;
+                }
+
+                function clearContentState(key) {
+                    if (!key) return;
+                    if (window.PlayerStateManager) {
+                        window.PlayerStateManager.clear(key);
+                    }
+                    if (key === MAIN_CONTENT_KEY) {
+                        mainAudioState.time = 0;
+                        mainAudioState.wasPlaying = false;
+                    }
+                }
+
+                function isCurrentContentCompleted() {
                     const p = window.audioPlayer;
+                    if (!p || !p.audio) return false;
+                    const tracks = getActiveSubtitleTracks();
+                    if (tracks.length === 0) return false;
 
-                    isLoreMode = false;
-                    activeLoreId = null;
+                    const t = p.audio.currentTime || 0;
+                    const duration = p.audio.duration || 0;
+                    const lastSubtitleTime = tracks[tracks.length - 1].time || 0;
+                    const subtitleIndex = getActiveSubtitleIndex();
+                    const reachedTextEnd = subtitleIndex >= tracks.length - 1 && t >= Math.max(0, lastSubtitleTime);
+                    const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.4);
+                    return reachedTextEnd || reachedAudioEnd;
+                }
 
-                    // Fade out Lore (Simple volume drop)
-                    if (p && !p.paused) {
-                        const fadeOut = setInterval(() => {
-                            if (p.volume > 0.1) p.volume -= 0.1;
-                            else {
-                                clearInterval(fadeOut);
-                                _doRestore();
-                            }
-                        }, 50);
-                    } else {
-                        _doRestore();
+                function saveCurrentContentState(options = {}) {
+                    const {
+                        force = false,
+                        keyOverride = null
+                    } = options;
+
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    const key = keyOverride || getActiveContentKey();
+                    if (!key) return;
+
+                    if (!force && isCurrentContentCompleted()) {
+                        clearContentState(key);
+                        return;
                     }
 
-                    async function _doRestore() {
-                        if (!p) return;
-                        // Restore Source
+                    if (window.PlayerStateManager) {
+                        window.PlayerStateManager.saveState(key, getActiveSubtitleTracks(), p.audio);
+                    }
+
+                    if (key === MAIN_CONTENT_KEY) {
+                        mainAudioState.wasPlaying = !p.audio.paused;
+                        mainAudioState.time = p.audio.currentTime || 0;
+                    }
+                }
+
+                async function pauseWithFade(duration = 350) {
+                    const p = window.audioPlayer;
+                    if (!p || p.paused) return;
+
+                    await new Promise(resolve => {
+                        const stepMs = 35;
+                        const startVolume = p.volume;
+                        const steps = Math.max(1, Math.floor(duration / stepMs));
+                        let i = 0;
+                        const timer = setInterval(() => {
+                            i += 1;
+                            p.volume = Math.max(0, startVolume * (1 - (i / steps)));
+                            if (i >= steps) {
+                                clearInterval(timer);
+                                p.pause();
+                                resolve();
+                            }
+                        }, stepMs);
+                    });
+                }
+
+                function wait(ms) {
+                    return new Promise(resolve => setTimeout(resolve, ms));
+                }
+
+                async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
+                    const p = window.audioPlayer;
+                    if (!p) return false;
+
+                    for (let attempt = 0; attempt <= retries; attempt++) {
+                        try {
+                            await p.play();
+                        } catch (e) {
+                            console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
+                        }
+                        await wait(delayMs);
+                        if (!p.paused) return true;
+                    }
+                    return false;
+                }
+
+                function findSubtitleIndexForTime(timeSec) {
+                    const tracks = getActiveSubtitleTracks();
+                    if (tracks.length === 0) return 0;
+                    for (let i = tracks.length - 1; i >= 0; i--) {
+                        if (timeSec >= tracks[i].time) return i;
+                    }
+                    return 0;
+                }
+
+                // Helper: Restore Main Audio
+                window.restoreMainAudio = async function (options = {}) {
+                    const {
+                        saveCurrent = true
+                    } = options;
+
+                    if (!isLoreMode && !contentSwitchInProgress) return;
+                    if (contentSwitchInProgress) return;
+
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    contentSwitchInProgress = true;
+                    const switchToken = ++contentSwitchToken;
+
+                    try {
+                        const loreIdBeforeSwitch = activeLoreId;
+                        if (saveCurrent && loreIdBeforeSwitch) {
+                            saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
+                        } else if (!saveCurrent && loreIdBeforeSwitch) {
+                            clearContentState(`lore${loreIdBeforeSwitch}`);
+                        }
+
+                        isLoreMode = false;
+                        activeLoreId = null;
+
+                        await pauseWithFade(320);
+                        if (switchToken !== contentSwitchToken) return;
+
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
-                        p.audio.volume = 1.0;
+                        p.volume = 1.0;
+                        const textLoaded = await p.loadText('assets/kapitel1b.txt');
+                        if (!textLoaded || switchToken !== contentSwitchToken) return;
 
-                        // Restore Text
-                        await p.loadText('assets/kapitel1b.txt');
+                        const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
+                        const resumeTime = savedMain && savedMain.sentenceTime !== undefined
+                            ? savedMain.sentenceTime
+                            : Math.max(0, mainAudioState.time || 0);
 
-                        // Restore Time (minus 5s)
-                        const resumeTime = Math.max(0, mainAudioState.time - 5);
                         p.audio.currentTime = resumeTime;
+                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                        p.renderLines(p.currentSubtitleIndex);
 
-                        // Resume
-                        if (mainAudioState.wasPlaying) {
-                            try {
-                                await p.play();
-                                updateIcons(); // Ensure icons are available in scope? Yes, defined later.
-                            } catch (e) { console.warn("Resume failed", e); }
+                        const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
+                        if (shouldResume) {
+                            p.volume = 0;
+                            const started = await verifyPlaybackStarted(2, 320);
+                            if (started) {
+                                p.volume = 1.0;
+                            } else {
+                                p.volume = 1.0;
+                            }
+                        }
+
+                        updateIcons();
+                    } catch (e) {
+                        console.warn('Restore failed', e);
+                        updateIcons();
+                    } finally {
+                        if (switchToken === contentSwitchToken) {
+                            contentSwitchInProgress = false;
                         }
                     }
                 };
 
                 // Real startLoreMode implementation
                 window.startLoreMode = async function (id) {
-                    if (!window.GameState) return;
-                    const content = window.GameState.getLore(id);
-                    if (!content) {
-                        console.error("Lore Content not found for ID:", id);
-                        return;
-                    }
+                    if (isLoreMode && activeLoreId === id) return;
+                    if (contentSwitchInProgress) return;
+
+                    const content = window.GameState?.getLore(id) || {
+                        audio: `assets/lore${id}.mp3`,
+                        text: `assets/lore${id}.txt`
+                    };
 
                     const p = window.audioPlayer;
-                    if (!p) return;
+                    if (!p || !p.audio) return;
 
-                    // Save Main Audio State
-                    if (!isLoreMode) {
-                        mainAudioState.wasPlaying = !p.audio.paused; // p is SharedAudioPlayer
-                        mainAudioState.time = p.audio.currentTime;
-                    }
+                    contentSwitchInProgress = true;
+                    const switchToken = ++contentSwitchToken;
 
-                    console.log(`Starting Lore Mode: ${content.title} (ID: ${id})`);
-                    isLoreMode = true;
-                    activeLoreId = id;
-
-                    // Stop current
-                    p.pause();
-
-                    // Load new source
-                    // Use SharedAudioPlayer API
-                    p.audio.src = getSCUrl(content.audio);
-                    p.audio.currentTime = 0;
-                    const textPath = content.text || `assets/lore${id}.txt`;
-                    await p.loadText(textPath);
-
-                    // DEPRECATED: manual loadSubtitleTrack calls
-                    // const textPath = content.text || `assets/lore${id}.txt`;
-                    // await loadSubtitleTrack(textPath);
-
-                    // Play
-                    let started = false;
                     try {
-                        await p.play();
-                        started = true;
+                        saveCurrentContentState();
+
+                        isLoreMode = true;
+                        activeLoreId = id;
+
+                        await pauseWithFade(320);
+                        if (switchToken !== contentSwitchToken) return;
+
+                        p.audio.src = getSCUrl(content.audio);
+                        const textPath = content.text || `assets/lore${id}.txt`;
+                        const textLoaded = await p.loadText(textPath);
+                        if (!textLoaded || switchToken !== contentSwitchToken) return;
+
+                        const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
+                        const resumeTime = savedLore && savedLore.sentenceTime !== undefined
+                            ? savedLore.sentenceTime
+                            : 0;
+
+                        p.audio.currentTime = resumeTime;
+                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                        p.renderLines(p.currentSubtitleIndex);
+
+                        p.volume = 0;
+                        const started = await verifyPlaybackStarted(3, 320);
+                        if (started) {
+                            p.volume = 1.0;
+                        } else {
+                            p.volume = 1.0;
+                            console.warn(`Lore ${id} loaded but still paused.`);
+                        }
+
+                        updateIcons();
                     } catch (e) {
-                        console.warn("Lore autoplay failed:", e);
-                        try {
-                            await new Promise(resolve => setTimeout(resolve, 250));
-                            await p.play();
-                            started = true;
-                        } catch (e2) {
-                            console.warn("Lore autoplay retry failed:", e2);
+                        console.warn('Lore switch failed', e);
+                        updateIcons();
+                    } finally {
+                        if (switchToken === contentSwitchToken) {
+                            contentSwitchInProgress = false;
                         }
                     }
-                    if (!started) {
-                        console.warn("Lore is loaded but still paused. Waiting for user input.");
-                    }
-                    updateIcons();
                 };
 
                 // --- CONFIG ---
@@ -471,9 +615,11 @@
                 // For now, access the audio element directly.
                 player.audio.addEventListener('ended', () => {
                     if (isLoreMode) {
-                        window.restoreMainAudio();
+                        window.restoreMainAudio({ saveCurrent: false });
+                        return;
                     } else {
                         // MAIN CHAPTER ENDED
+                        clearContentState(MAIN_CONTENT_KEY);
                         console.log("Chapter Finished.");
                         // Use global variable
                         if (isReadingMode) {
@@ -490,6 +636,7 @@
                 window.transitionToNextChapter = function () {
                     const overlay = document.getElementById('transitionOverlay');
                     if (overlay) overlay.classList.add('active');
+                    saveCurrentContentState();
 
                     // Fade Audio
                     const fade = setInterval(() => {
@@ -1555,6 +1702,7 @@
                         if (document.hidden) {
                             // APP BACKGROUNDED -> PAUSE ALL
                             window.gamePaused = true;
+                            saveCurrentContentState();
 
                             if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
                                 wasAmbientPlaying = true;
@@ -1585,6 +1733,10 @@
                                 }
                             }, 100);
                         }
+                    });
+
+                    window.addEventListener('pagehide', () => {
+                        saveCurrentContentState();
                     });
 
                     // Start Animation Loop only after preload
@@ -1997,6 +2149,7 @@
                 if (chapter1Btn) {
                     chapter1Btn.addEventListener('click', () => {
                         console.log("Returning to Chapter 1...");
+                        saveCurrentContentState();
                         window.location.href = 'index.html';
                     });
                 }
@@ -2025,6 +2178,7 @@
                 if (chapter1cBtn) {
                     chapter1cBtn.addEventListener('click', () => {
                         console.log("Going to Chapter 1c...");
+                        saveCurrentContentState();
                         window.location.href = 'index3.html';
                     });
                 }
@@ -2108,3 +2262,4 @@
 </body>
 
 </html>
+

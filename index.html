@@ -331,6 +331,9 @@
         let isLoreMode = false;
         let isMenuTriggeredLore = false;
         let loreResumeTimeout = null;
+        const MAIN_CONTENT_KEY = 'kapitel1';
+        let contentSwitchInProgress = false;
+        let contentSwitchToken = 0;
 
         const loreData = {
             audio: {},
@@ -481,6 +484,7 @@
 
                 newCh1b.addEventListener('click', () => {
                     console.log("Loading Chapter 1b...");
+                    saveCurrentContentState();
                     window.location.href = 'liminal library.html';
                 });
             }
@@ -493,6 +497,7 @@
 
                 newCh1c.addEventListener('click', () => {
                     console.log("Loading Chapter 1c...");
+                    saveCurrentContentState();
                     window.location.href = 'index3.html';
                 });
             }
@@ -1451,6 +1456,7 @@
             if (document.hidden) {
                 // APP BACKGROUNDED -> PAUSE ALL
                 window.gamePaused = true; // Stop loop logic
+                saveCurrentContentState();
 
                 if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
                     wasAmbientPlaying = true;
@@ -1483,6 +1489,10 @@
                     }
                 }, 100);
             }
+        });
+
+        window.addEventListener('pagehide', () => {
+            saveCurrentContentState();
         });
 
         function findSafeStart() {
@@ -2766,18 +2776,14 @@
 
         // 4b. Chapter Transition Logic (Main Audio Ended)
         audioPlayer.addEventListener('ended', () => {
-            // If Lore Mode, we let the OTHER listener (if exists) or restoreMainAudio handle it.
-            // But since I couldn't find the other listener, I'll add a safe check here.
-            // If we are in Lore Mode, we usually want to go back to Main Audio.
-            // Converting to "Global" logic:
             if (isLoreMode) {
-                // Determine if there is another handler. 
-                // If restoreMainAudio exists, call it.
                 if (window.restoreMainAudio) {
-                    window.restoreMainAudio();
+                    window.restoreMainAudio({ saveCurrent: false });
                 }
+                return;
             } else {
                 // MAIN CHAPTER FINISHED
+                clearContentState(MAIN_CONTENT_KEY);
                 console.log("Chapter 1 Finished. ReadingMode:", isReadingMode);
 
                 // BUGFIX: Prevent transition if Text is not finished!
@@ -3002,13 +3008,7 @@
         // 8. Wenn Audio zu Ende ist, Reset
         // 8. Wenn Audio zu Ende ist
         audioPlayer.addEventListener('ended', () => {
-            // Auto-Resume Main Audio if in Lore Mode
-            if (isLoreMode) {
-                console.log("Lore ended. Returning to Main Audio...");
-                restoreMainAudio();
-                return;
-            }
-
+            if (isLoreMode || contentSwitchInProgress) return;
             iconPlay.style.display = 'block';
             renderSubtitleLines(subtitleTracks.length - 1);
         });
@@ -3254,378 +3254,288 @@
         } // End updateLoreSystem
 
         // NEW: Restore Main Audio Function (Replaces basic endLoreMode logic)
-        function restoreMainAudio() {
-            if (!isLoreMode) {
-                console.log("[DEBUG] restoreMainAudio called but not in lore mode - skipping");
+        function getActiveContentKey() {
+            if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
+            return MAIN_CONTENT_KEY;
+        }
+
+        function clearContentState(key) {
+            if (!key) return;
+            if (window.PlayerStateManager) {
+                window.PlayerStateManager.clear(key);
+            }
+
+            if (key === MAIN_CONTENT_KEY) {
+                mainAudioState.time = 0;
+                mainAudioState.wasPlaying = false;
+            } else if (key.startsWith('lore')) {
+                const loreId = parseInt(key.replace('lore', ''), 10);
+                if (Number.isFinite(loreId)) {
+                    loreData.resumeTimes[loreId] = 0;
+                }
+            }
+        }
+
+        function isCurrentContentCompleted() {
+            if (!subtitleTracks || subtitleTracks.length === 0) return false;
+            const t = audioPlayer.currentTime || 0;
+            const duration = audioPlayer.duration || 0;
+            const lastSubtitleTime = subtitleTracks[subtitleTracks.length - 1].time || 0;
+            const reachedTextEnd = currentSubtitleIndex >= subtitleTracks.length - 1 && t >= Math.max(0, lastSubtitleTime);
+            const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.4);
+            return reachedTextEnd || reachedAudioEnd;
+        }
+
+        function saveCurrentContentState(options = {}) {
+            const {
+                force = false,
+                keyOverride = null
+            } = options;
+
+            const key = keyOverride || getActiveContentKey();
+            if (!key || !audioPlayer) return;
+
+            if (!force && isCurrentContentCompleted()) {
+                clearContentState(key);
                 return;
             }
 
-            console.log("[DEBUG] restoreMainAudio: Starting audio restoration...");
-            console.log("[DEBUG] mainAudioState:", JSON.stringify(mainAudioState));
-            console.log("[DEBUG] mainAudioUrl:", window.mainAudioUrl);
-            console.log("[DEBUG] mainTextContent available:", !!window.mainTextContent);
+            if (window.PlayerStateManager) {
+                window.PlayerStateManager.saveState(key, subtitleTracks, audioPlayer);
+            }
 
-            isLoreMode = false;
-            // isReadingMode intentionally left as is (User can switch manually)
+            if (key === MAIN_CONTENT_KEY) {
+                mainAudioState.wasPlaying = !audioPlayer.paused;
+                mainAudioState.time = audioPlayer.currentTime || 0;
+                mainAudioState.tracks = [...subtitleTracks];
+            } else if (key.startsWith('lore')) {
+                const loreId = parseInt(key.replace('lore', ''), 10);
+                if (Number.isFinite(loreId)) {
+                    loreData.resumeTimes[loreId] = audioPlayer.currentTime || 0;
+                }
+            }
+        }
 
-            // Fade out Lore
-            fadeAudio(audioPlayer, 0, 800, () => {
-                audioPlayer.pause();
-                console.log("[DEBUG] Lore audio paused. Loading main audio...");
+        async function ensureMainTextLoaded() {
+            if (window.mainTextContent && window.mainTextContent.length > 0) {
+                return window.mainTextContent;
+            }
+            const response = await fetch('assets/kapitel1.txt');
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+            window.mainTextContent = await response.text();
+            return window.mainTextContent;
+        }
 
-                // Restore Main Track
-                const mainUrl = getSCUrl(window.mainAudioUrl);
-                console.log("[DEBUG] Restoring audio src to:", mainUrl);
-                audioPlayer.src = mainUrl;
+        async function ensureLoreTextLoaded(id) {
+            if (loreData.text[id] && loreData.text[id].length > 0) {
+                return loreData.text[id];
+            }
 
-                // Restore Tracks
-                // Fix: Explicitly reload Chapter 1 text to ensure correctness
-                console.log("[DEBUG] Reloading Main Chapter Text (kapitel1.txt)...");
-                fetch('assets/kapitel1.txt')
-                    .then(r => {
-                        if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
-                        return r.text();
-                    })
-                    .then(text => {
-                        console.log("[DEBUG] kapitel1.txt loaded, length:", text.length);
-                        parseSubtitles(text);
-                        console.log("[DEBUG] After parseSubtitles, tracks:", subtitleTracks.length);
+            const content = window.GameState?.getLore(id);
+            const textPath = content ? content.text : `assets/lore${id}.txt`;
+            const response = await fetch(textPath);
+            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
+            loreData.text[id] = await response.text();
+            return loreData.text[id];
+        }
 
-                        // Use PlayerStateManager for proper sentence-based position restoration
-                        let resumeTime = 0;
-                        if (window.PlayerStateManager) {
-                            const savedState = window.PlayerStateManager.getState('kapitel1');
-                            if (savedState && savedState.sentenceTime !== undefined) {
-                                resumeTime = savedState.sentenceTime;
-                                console.log("[DEBUG] Restored from PlayerStateManager:", savedState);
-                            } else {
-                                resumeTime = Math.max(0, mainAudioState.time - 5);
-                                console.log("[DEBUG] No saved state, using legacy:", mainAudioState.time);
-                            }
-                        } else {
-                            resumeTime = Math.max(0, mainAudioState.time - 5);
-                        }
-                        console.log("[DEBUG] Setting currentTime to:", resumeTime);
-                        audioPlayer.currentTime = resumeTime;
-                        renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+        function findSubtitleIndexForTime(timeSec) {
+            if (!subtitleTracks || subtitleTracks.length === 0) return 0;
+            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                if (timeSec >= subtitleTracks[i].time) return i;
+            }
+            return 0;
+        }
 
-                        // Resume playback NOW after text is loaded
-                        if (mainAudioState.wasPlaying) {
-                            console.log("[DEBUG] Resuming playback...");
-                            audioPlayer.volume = 0;
-                            audioPlayer.play().then(() => {
-                                console.log("[DEBUG] Play successful!");
-                                fadeAudio(audioPlayer, 1, 800);
-                            }).catch(e => {
-                                console.error("[DEBUG] Resume blocked:", e);
-                            });
-                            iconPlay.style.display = 'none';
-                            iconPause.style.display = 'block';
-                        } else {
-                            console.log("[DEBUG] Not resuming playback (was paused before lore)");
-                            iconPlay.style.display = 'block';
-                            iconPause.style.display = 'none';
-                        }
-                    })
-                    .catch(e => {
-                        console.error("[DEBUG] Failed to restore main text:", e);
-                        // Fallback to cached state if fetch fails
-                        if (mainAudioState.tracks && mainAudioState.tracks.length > 0) {
-                            subtitleTracks = [...mainAudioState.tracks];
-                            const resumeTime = Math.max(0, mainAudioState.time - 5);
-                            audioPlayer.currentTime = resumeTime;
-                            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-                        }
-                    });
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
 
-                // Reset Active Lore Flags
-                activeLoreId = null;
-                activeLightSourceId = null;
-                isMenuTriggeredLore = false;
-
-                uiContainer.classList.remove('mode-switching'); // Clean up class
+        async function pauseWithFade(duration = 800) {
+            if (!audioPlayer || audioPlayer.paused) return;
+            await new Promise(resolve => {
+                fadeAudio(audioPlayer, 0, duration, () => {
+                    audioPlayer.pause();
+                    resolve();
+                });
             });
         }
 
-        // endLoreMode() defined below (full implementation)
-
-        function startLoreMode(id, fromMenu = false) {
-            if (isLoreMode && activeLoreId === id) return; // Prevent restart of same
-
-            console.log(`[DEBUG] startLoreMode called with id=${id}, fromMenu=${fromMenu}`);
-            console.log(`[DEBUG] isLoreMode before:`, isLoreMode);
-            console.log(`[DEBUG] audioPlayer.src:`, audioPlayer.src);
-            console.log(`[DEBUG] audioPlayer.paused:`, audioPlayer.paused);
-            console.log(`[DEBUG] audioPlayer.currentTime:`, audioPlayer.currentTime);
-
-            // CRITICAL FIX: Save main audio state BEFORE setting isLoreMode = true
-            // Check if current track is actually MAIN audio before saving
-            const isMainAudio = audioPlayer.src.includes(window.mainAudioUrl) ||
-                audioPlayer.src.includes('kapitel1') ||
-                audioPlayer.src.includes('2250158609'); // Kapitel 1 track ID
-
-            console.log(`[DEBUG] isMainAudio:`, isMainAudio, `mainAudioUrl:`, window.mainAudioUrl);
-
-            if (isMainAudio && !isLoreMode) {
-                // Save state via Manager (Sentence Based)
-                if (window.PlayerStateManager) {
-                    window.PlayerStateManager.saveState('kapitel1', subtitleTracks, audioPlayer);
+        async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    await audioPlayer.play();
+                } catch (e) {
+                    console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
                 }
 
-                // Fallback / legacy state object (keep for now as backup)
-                mainAudioState.wasPlaying = !audioPlayer.paused;
-                mainAudioState.time = audioPlayer.currentTime;
-                console.log(`[DEBUG] Saved mainAudioState (Manager + Legacy):`, JSON.stringify(mainAudioState));
+                await wait(delayMs);
+                if (!audioPlayer.paused) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        async function restoreMainAudio(options = {}) {
+            const {
+                saveCurrent = true
+            } = options;
+
+            if (!isLoreMode && !contentSwitchInProgress) {
+                return;
             }
 
-            // NOW set loreMode flag
-            isLoreMode = true;
-            // isReadingMode = true; // REMOVED: Respect current mode!
-            // uiContainer.classList.add('reading-mode'); // REMOVED: Respect current mode!
-
-            // If we are ALREADY in reading mode, update UI class just in case
-            if (isReadingMode) {
-                uiContainer.classList.add('reading-mode');
-            } else {
-                uiContainer.classList.remove('reading-mode');
+            if (contentSwitchInProgress) {
+                return;
             }
-            moveTarget = null; // Stoppe Bewegung
-            activeLoreId = id;
-            isMenuTriggeredLore = fromMenu; // Set flag
+            contentSwitchInProgress = true;
+            const switchToken = ++contentSwitchToken;
 
-            if (loreResumeTimeout) clearTimeout(loreResumeTimeout);
+            try {
+                const loreIdBeforeSwitch = activeLoreId;
+                if (saveCurrent && loreIdBeforeSwitch) {
+                    saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
+                } else if (!saveCurrent && loreIdBeforeSwitch) {
+                    clearContentState(`lore${loreIdBeforeSwitch}`);
+                }
 
-            // Sanftes Ausblenden (Main Audio) - 2 Sekunden (oder sofort bei Switch?)
-            fadeAudio(audioPlayer, 0, 1000, async () => {
-                audioPlayer.pause();
-                // ... rest of logic stays mostly same, just ensure flag is used
-                // ...
+                isLoreMode = false;
+                isMenuTriggeredLore = false;
+                activeLoreId = null;
+                activeLightSourceId = null;
 
+                if (loreResumeTimeout) {
+                    clearTimeout(loreResumeTimeout);
+                    loreResumeTimeout = null;
+                }
 
-                // UI Feedback
                 uiContainer.classList.add('mode-switching');
 
-                // Debugging Lore Text Loading
-                console.log(`[DEBUG] startLoreMode ID: ${id}`);
-                console.log(`[DEBUG] Text in loreData for ID ${id}:`, loreData.text[id] ? loreData.text[id].substring(0, 50) + "..." : "UNDEFINED/NULL");
+                await pauseWithFade(700);
+                if (switchToken !== contentSwitchToken) return;
 
-                // RETRY LOADING TEXT IF MISSING
-                // Hardcoded Backup because Fetch might fail on file:// protocol
-                if (!loreData.text[id] || loreData.text[id].length < 10) {
-                    // Try fetch first
-                    try {
-                        // Use path from GameState if available
-                        const content = window.GameState?.getLore(id);
-                        const textPath = content ? content.text : `assets/lore${id}.txt`;
-                        console.log(`Loading text from ${textPath} (ID: ${id})...`);
+                audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
 
-                        const res = await fetch(textPath);
-                        if (res.ok) {
-                            loreData.text[id] = await res.text();
-                            console.log(`Lore ${id} text recovered.`);
-                        } else {
-                            console.warn(`Fetch failed for ${textPath}: ${res.status}`);
-                        }
-                    } catch (e) {
-                        console.warn("Lore retry failed:", e);
-                    }
-                }
+                const mainText = await ensureMainTextLoaded();
+                if (switchToken !== contentSwitchToken) return;
+                parseSubtitles(mainText);
 
-                setTimeout(() => {
-                    // Lore laden
-                    audioPlayer.src = getSCUrl(loreData.audio[id]);
+                const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
+                const resumeTime = savedMain && savedMain.sentenceTime !== undefined
+                    ? savedMain.sentenceTime
+                    : Math.max(0, mainAudioState.time || 0);
 
-                    // Rewind 5s beim Wiederaufnehmen (User-Wunsch)
-                    // 1. TEXT LOAD & PARSING
-                    if (loreData.text[id] && loreData.text[id].length > 0) {
-                        console.log(`[DEBUG] Parsing Subtitles for ID ${id}...`);
-                        parseSubtitles(loreData.text[id]);
-                        console.log(`[DEBUG] Subtitle Tracks Found: ${subtitleTracks.length}`);
-                    } else {
-                        console.warn(`[DEBUG] No text found for ID ${id}!`);
-                        subtitleTracks = [];
-                        subtitleContainer.innerHTML = '<div class="subtitle-line subtitle-current">♪ Lore Audio (Warte auf Text...) ♪</div>';
-                    }
+                audioPlayer.currentTime = resumeTime;
+                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                renderSubtitleLines(currentSubtitleIndex);
 
-                    // 2. RESTORE PLAYER STATE (Sentence-Based)
-                    let resumeTime = 0;
-                    if (window.PlayerStateManager) {
-                        const saved = window.PlayerStateManager.getState('lore' + id);
-                        if (saved) {
-                            resumeTime = saved.sentenceTime;
-                            console.log(`[DEBUG] Restoring Lore ${id} to sentence start: ${resumeTime}s`);
-                        } else {
-                            const last = loreData.resumeTimes[id] || 0;
-                            resumeTime = Math.max(0, last - 5);
-                        }
-                    } else {
-                        const last = loreData.resumeTimes[id] || 0;
-                        resumeTime = Math.max(0, last - 5);
-                    }
-
-                    audioPlayer.currentTime = resumeTime;
-
-                    // 3. INITIAL RENDER
-                    let startIndex = 0;
-                    if (subtitleTracks.length > 0) {
-                        for (let i = subtitleTracks.length - 1; i >= 0; i--) {
-                            if (resumeTime >= subtitleTracks[i].time) {
-                                startIndex = i;
-                                break;
-                            }
-                        }
-                    }
-                    currentSubtitleIndex = startIndex;
-                    renderSubtitleLines(startIndex);
-                    console.log(`[DEBUG] Starting lore audio playback...`);
-                    console.log(`[DEBUG] audioPlayer.src before play:`, audioPlayer.src);
-
+                const shouldResumePlayback = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
+                if (shouldResumePlayback) {
                     audioPlayer.volume = 0;
-                    audioPlayer.play()
-                        .then(() => {
-                            console.log(`[DEBUG] Lore play() succeeded! Starting fade in...`);
-                            fadeAudio(audioPlayer, 1.0, 1000); // Sanftes Einblenden
-                        })
-                        .catch(e => {
-                            console.error("[DEBUG] Lore play error:", e);
-                            // Try playing again after a short delay (widget might not be ready)
-                            setTimeout(() => {
-                                console.log(`[DEBUG] Retrying lore play after delay...`);
-                                audioPlayer.play().catch(e2 => console.error("[DEBUG] Retry failed:", e2));
-                                fadeAudio(audioPlayer, 1.0, 1000);
-                            }, 500);
-                        });
+                    const started = await verifyPlaybackStarted(2, 320);
+                    if (started) {
+                        fadeAudio(audioPlayer, 1.0, 700);
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
+                    } else {
+                        audioPlayer.volume = 1.0;
+                        iconPlay.style.display = 'block';
+                        iconPause.style.display = 'none';
+                    }
+                } else {
+                    audioPlayer.volume = 1.0;
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                }
+            } catch (e) {
+                console.error('[Switch] Failed to restore main audio:', e);
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
+            } finally {
+                if (switchToken === contentSwitchToken) {
+                    contentSwitchInProgress = false;
+                    uiContainer.classList.remove('mode-switching');
+                }
+            }
+        }
 
+        async function startLoreMode(id, fromMenu = false) {
+            if (isLoreMode && activeLoreId === id) return;
+            if (contentSwitchInProgress) return;
+
+            const content = window.GameState?.getLore(id) || {
+                audio: loreData.audio[id] || `assets/lore${id}.mp3`,
+                text: `assets/lore${id}.txt`
+            };
+
+            contentSwitchInProgress = true;
+            const switchToken = ++contentSwitchToken;
+
+            try {
+                saveCurrentContentState();
+
+                isLoreMode = true;
+                activeLoreId = id;
+                isMenuTriggeredLore = !!fromMenu;
+                moveTarget = null;
+
+                if (isReadingMode) {
+                    uiContainer.classList.add('reading-mode');
+                } else {
+                    uiContainer.classList.remove('reading-mode');
+                }
+                uiContainer.classList.add('mode-switching');
+
+                await pauseWithFade(800);
+                if (switchToken !== contentSwitchToken) return;
+
+                const loreText = await ensureLoreTextLoaded(id);
+                if (switchToken !== contentSwitchToken) return;
+
+                const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
+                audioPlayer.src = loreAudioSrc;
+
+                parseSubtitles(loreText);
+                const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
+                const resumeTime = savedLore && savedLore.sentenceTime !== undefined
+                    ? savedLore.sentenceTime
+                    : Math.max(0, loreData.resumeTimes[id] || 0);
+
+                audioPlayer.currentTime = resumeTime;
+                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                renderSubtitleLines(currentSubtitleIndex);
+
+                audioPlayer.volume = 0;
+                const started = await verifyPlaybackStarted(3, 320);
+                if (switchToken !== contentSwitchToken) return;
+
+                if (started) {
+                    fadeAudio(audioPlayer, 1.0, 900);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
-
-                    audioPlayer.onended = () => {
-                        console.log(`[DEBUG] Lore audio ended naturally`);
-                        loreData.resumeTimes[id] = 0; // Reset wenn fertig
-                        endLoreMode();
-                    };
-
+                } else {
+                    audioPlayer.volume = 1.0;
+                    console.warn(`[Switch] Lore ${id} loaded but playback did not start.`);
+                    iconPlay.style.display = 'block';
+                    iconPause.style.display = 'none';
+                }
+            } catch (e) {
+                console.error(`[Switch] Failed to start lore ${id}:`, e);
+                iconPlay.style.display = 'block';
+                iconPause.style.display = 'none';
+            } finally {
+                if (switchToken === contentSwitchToken) {
+                    contentSwitchInProgress = false;
                     uiContainer.classList.remove('mode-switching');
-                    console.log(`Lore ${id} gestartet bei ${audioPlayer.currentTime.toFixed(1)}s`);
-                }, 250);
-            });
+                }
+            }
         }
 
         function endLoreMode() {
-            console.log(`[DEBUG] endLoreMode called!`);
-            console.log(`[DEBUG] isLoreMode: ${isLoreMode}, activeLoreId: ${activeLoreId}`);
-            console.log(`[DEBUG] Stack trace:`, new Error().stack);
-
-            if (!isLoreMode) {
-                console.log(`[DEBUG] endLoreMode: Not in lore mode, skipping`);
-                return;
-            }
-            isLoreMode = false;
-            isMenuTriggeredLore = false; // Reset menu flag
-
-            const id = activeLoreId;
-            // Fortschritt speichern
-            if (id) {
-                loreData.resumeTimes[id] = audioPlayer.currentTime;
-                if (window.PlayerStateManager) {
-                    window.PlayerStateManager.saveState('lore' + id, subtitleTracks, audioPlayer);
-                }
-            }
-            activeLoreId = null;
-            activeLightSourceId = null; // Licht zurücksetzen
-
-            fadeAudio(audioPlayer, 0, 2000, () => {
-                audioPlayer.pause();
-                audioPlayer.onended = null;
-
-                uiContainer.classList.add('mode-switching');
-                subtitleContainer.innerHTML = '';
-
-                // ... logic to resume main audio continues below ...
-
-                // 1 Sekunde Pause vor Resume (wie vom User gewünscht)
-                loreResumeTimeout = setTimeout(() => {
-                    if (window.mainAudioUrl) {
-                        audioPlayer.src = getSCUrl(window.mainAudioUrl);
-
-                        // CRITICAL: Force clear container to rebuild click handlers
-                        subtitleContainer.innerHTML = '';
-
-                        // Load main chapter text
-                        if (window.mainTextContent) {
-                            console.log('[DEBUG] endLoreMode: Parsing main text from window.mainTextContent');
-                            parseSubtitles(window.mainTextContent);
-                        } else {
-                            console.log('[DEBUG] endLoreMode: Fetching kapitel1.txt...');
-                            fetch('assets/kapitel1.txt')
-                                .then(r => r.text())
-                                .then(text => {
-                                    window.mainTextContent = text;
-                                    parseSubtitles(text);
-                                    // Force rebuild after async load
-                                    subtitleContainer.innerHTML = '';
-                                    renderSubtitleLines(0);
-                                })
-                                .catch(e => console.error('[DEBUG] Fetch failed:', e));
-                        }
-
-                        // RESTORE MAIN AUDIO STATE (Sentence Based)
-                        let resumeTime = 0;
-                        if (window.PlayerStateManager) {
-                            const saved = window.PlayerStateManager.getState('kapitel1');
-                            if (saved) {
-                                resumeTime = saved.sentenceTime;
-                                console.log(`[DEBUG] Restoring Main Audio to sentence start: ${resumeTime}s`);
-                            } else {
-                                resumeTime = Math.max(0, mainAudioState.time - 5);
-                            }
-                        } else {
-                            resumeTime = Math.max(0, mainAudioState.time - 5);
-                        }
-
-                        audioPlayer.currentTime = resumeTime;
-
-                        // Find correct subtitle index for current time
-                        let correctIndex = 0;
-                        for (let i = subtitleTracks.length - 1; i >= 0; i--) {
-                            if (resumeTime >= subtitleTracks[i].time) {
-                                correctIndex = i;
-                                break;
-                            }
-                        }
-                        currentSubtitleIndex = correctIndex;
-
-                        console.log(`[DEBUG] endLoreMode: subtitleTracks.length=${subtitleTracks.length}, resumeTime=${resumeTime.toFixed(1)}s, correctIndex=${correctIndex}`);
-
-                        // FORCE rebuild subtitle lines
-                        renderSubtitleLines(correctIndex);
-
-                        if (mainAudioState.wasPlaying) {
-                            audioPlayer.volume = 0;
-                            audioPlayer.play();
-                            fadeAudio(audioPlayer, 1.0, 2000); // 2 Sekunden Einblenden
-                            iconPlay.style.display = 'none';
-                            iconPause.style.display = 'block';
-                        } else {
-                            audioPlayer.volume = 1.0;
-                            iconPlay.style.display = 'block';
-                            iconPause.style.display = 'none';
-                        }
-
-                        audioPlayer.onended = () => {
-                            iconPlay.style.display = 'block';
-                            iconPause.style.display = 'none';
-                            renderSubtitleLines(subtitleTracks.length - 1);
-                        };
-
-                        console.log(`Haupt-Audio fortgesetzt bei ${resumeTime.toFixed(1)}s`);
-                    }
-                    uiContainer.classList.remove('mode-switching');
-                }, 1000); // 1 Sekunde Pause
-            });
+            restoreMainAudio({ saveCurrent: true });
         }
 
-        // Hilfsfunktion für Audio-Fading
         function fadeAudio(audio, targetVolume, duration, callback) {
             const startVolume = audio.volume;
             const diff = targetVolume - startVolume;
@@ -3650,3 +3560,4 @@
 </body>
 
 </html>
+
