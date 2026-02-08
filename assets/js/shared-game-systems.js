@@ -340,7 +340,7 @@ class Particle {
         const dx = pCenterX - this.x;
         const dy = pCenterY - this.y;
         const distToPlayer = Math.sqrt(dx * dx + dy * dy);
-        const magnetRange = 200;
+        const magnetRange = 170;
 
         if (distToPlayer < magnetRange) {
             // Quadratische Zunahme der Kraft: Je näher, desto stärker
@@ -349,10 +349,12 @@ class Particle {
 
             // Stärke des Magneten.
             // Muss gegen die Randomness (0.4) und Flow (0.02) ankommen, aber nicht teleportieren.
-            const pullStrength = 1.0 * urgency;
+            const pullStrength = 0.65 * urgency;
 
-            this.vx += (dx / distToPlayer) * pullStrength;
-            this.vy += (dy / distToPlayer) * pullStrength;
+            if (distToPlayer > 0.001) {
+                this.vx += (dx / distToPlayer) * pullStrength;
+                this.vy += (dy / distToPlayer) * pullStrength;
+            }
         }
         // ==========================================
 
@@ -360,16 +362,20 @@ class Particle {
         // RUBBER BAND: Pull particle back to spawn point
         // ==========================================
         if (this.spawnX !== undefined && this.spawnY !== undefined) {
-            const RUBBER_BAND_RANGE = 150; // Start pulling back after 150px
+            const RUBBER_BAND_RANGE = 220; // Start pulling back after 220px
+            const MAX_TETHER_DISTANCE = 500; // Hard cap from fixed spawn anchor
             const spawnDx = this.x - this.spawnX;
             const spawnDy = this.y - this.spawnY;
             const distToSpawn = Math.sqrt(spawnDx * spawnDx + spawnDy * spawnDy);
 
             if (distToSpawn > RUBBER_BAND_RANGE) {
-                // Strong pull back to spawn, increasing with distance
-                const returnStrength = 0.5 * ((distToSpawn - RUBBER_BAND_RANGE) / 100);
-                this.vx -= (spawnDx / distToSpawn) * returnStrength;
-                this.vy -= (spawnDy / distToSpawn) * returnStrength;
+                // Strong pull back to anchor, scaling up as we approach tether limit
+                const stretch = Math.min(1, (distToSpawn - RUBBER_BAND_RANGE) / (MAX_TETHER_DISTANCE - RUBBER_BAND_RANGE));
+                const returnStrength = 0.25 + (1.8 * stretch);
+                if (distToSpawn > 0.001) {
+                    this.vx -= (spawnDx / distToSpawn) * returnStrength;
+                    this.vy -= (spawnDy / distToSpawn) * returnStrength;
+                }
             }
         }
         // ==========================================
@@ -403,7 +409,7 @@ class Particle {
         if (typeof player !== 'undefined' && player.speed) {
             // Assume 60fps for conversation factor roughly
             const playerPerFrame = player.speed / 60;
-            maxSpeed = playerPerFrame * 0.8; // 20% slower than player
+            maxSpeed = playerPerFrame * 0.6; // Clearly slower than player, easier to outrun
 
             // LOGGING (Throttled via Math.random)
             if (Math.random() < 0.001) {
@@ -465,6 +471,28 @@ class Particle {
         } else {
             this.x = nextX;
             this.y = nextY;
+        }
+
+        // Hard tether clamp: white lights can never drift further than 500px from their fixed spawn anchor.
+        if (this.spawnX !== undefined && this.spawnY !== undefined) {
+            const MAX_TETHER_DISTANCE = 500;
+            const anchorDx = this.x - this.spawnX;
+            const anchorDy = this.y - this.spawnY;
+            const anchorDist = Math.sqrt(anchorDx * anchorDx + anchorDy * anchorDy);
+
+            if (anchorDist > MAX_TETHER_DISTANCE && anchorDist > 0.001) {
+                const nx = anchorDx / anchorDist;
+                const ny = anchorDy / anchorDist;
+                this.x = this.spawnX + nx * MAX_TETHER_DISTANCE;
+                this.y = this.spawnY + ny * MAX_TETHER_DISTANCE;
+
+                // Remove outward velocity component so the particle does not slide along the boundary forever.
+                const outwardVel = this.vx * nx + this.vy * ny;
+                if (outwardVel > 0) {
+                    this.vx -= outwardVel * nx;
+                    this.vy -= outwardVel * ny;
+                }
+            }
         }
 
         // 5. Spieler Beleuchtung - Sammle nur NAHE Lichtquellen
