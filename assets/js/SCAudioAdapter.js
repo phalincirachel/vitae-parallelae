@@ -26,6 +26,9 @@ class SCAudioAdapter {
         this._volume = 1.0;
         this._scPaused = true;
         this._scCurrentTime = 0;
+        this._playIntent = false;
+        this._scLastProgressAt = 0;
+        this._pendingSeek = undefined;
 
         // Event Listeners Storage
         this._listeners = {
@@ -51,6 +54,8 @@ class SCAudioAdapter {
         events.forEach(ev => {
             this.audioNode.addEventListener(ev, () => {
                 if (this.mode === 'html5') {
+                    if (ev === 'play') this._playIntent = true;
+                    if (ev === 'pause' || ev === 'ended') this._playIntent = false;
                     this._dispatch(ev);
                 }
             });
@@ -97,6 +102,8 @@ class SCAudioAdapter {
     _switchToHtml5(url) {
         console.log('[SCAudioAdapter] Switching to HTML5 Audio for:', url);
         this.mode = 'html5';
+        this._scPaused = true;
+        this._playIntent = false;
 
         // Pause Widget if active
         if (this.widget) this.widget.pause();
@@ -115,6 +122,8 @@ class SCAudioAdapter {
     _switchToSC(url) {
         console.log('[SCAudioAdapter] Switching to SoundCloud for:', url);
         this.mode = 'sc';
+        this._scPaused = true;
+        this._playIntent = false;
 
         // Pause HTML5 if active
         this.audioNode.pause();
@@ -159,6 +168,7 @@ class SCAudioAdapter {
             this.widget.setVolume(this._volume * 100);
             if (this._pendingPlay) {
                 this._pendingPlay = false;
+                this._playIntent = true;
                 this.widget.play();
             }
         });
@@ -166,6 +176,8 @@ class SCAudioAdapter {
         this.widget.bind(SC.Widget.Events.PLAY, () => {
             if (this.mode !== 'sc') return;
             this._scPaused = false;
+            this._playIntent = true;
+            this._scLastProgressAt = Date.now();
             this._dispatch('play');
             // Apply pending seek after playback starts
             this._applyPendingSeek();
@@ -174,17 +186,21 @@ class SCAudioAdapter {
         this.widget.bind(SC.Widget.Events.PAUSE, () => {
             if (this.mode !== 'sc') return;
             this._scPaused = true;
+            this._playIntent = false;
             this._dispatch('pause');
         });
 
         this.widget.bind(SC.Widget.Events.FINISH, () => {
             if (this.mode !== 'sc') return;
             this._scPaused = true;
+            this._playIntent = false;
             this._dispatch('ended');
         });
 
         this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
             if (this.mode !== 'sc') return;
+            this._scPaused = false;
+            this._scLastProgressAt = Date.now();
             this._dispatch('timeupdate');
         });
 
@@ -197,6 +213,7 @@ class SCAudioAdapter {
     // --- Controls ---
 
     play() {
+        this._playIntent = true;
         if (this.mode === 'html5') {
             return this.audioNode.play();
         } else if (this.mode === 'sc' && this.widget && this._isReady) {
@@ -212,10 +229,12 @@ class SCAudioAdapter {
         // DEBUG: Trace who causes pause
         console.log('[SCAudioAdapter] pause() called. Trace:', new Error().stack);
 
+        this._playIntent = false;
         this._pendingPlay = false;
         if (this.mode === 'html5') {
             this.audioNode.pause();
         } else if (this.mode === 'sc' && this.widget) {
+            this._scPaused = true;
             this.widget.pause();
         }
     }
@@ -229,7 +248,12 @@ class SCAudioAdapter {
 
     get paused() {
         if (this.mode === 'html5') return this.audioNode.paused;
-        // RELIABLE PAUSE STATE FOR SC
+        // SoundCloud pause state can lag behind; combine intent + recent progress.
+        if (this._pendingPlay || this._playIntent) {
+            if (Date.now() - this._scLastProgressAt < 1500) {
+                return false;
+            }
+        }
         return this._scPaused !== false; // Default to true (paused)
     }
 
@@ -274,6 +298,57 @@ class SCAudioAdapter {
 
     skip(amount) {
         this.currentTime = this.currentTime + amount;
+    }
+
+    /**
+     * Returns best-effort "is playing" signal across HTML5 and SC modes.
+     */
+    isProbablyPlaying() {
+        if (this.mode === 'html5') return !this.audioNode.paused;
+        if (this.mode === 'sc') return !this.paused || this._pendingPlay || this._playIntent;
+        return false;
+    }
+
+    /**
+     * Resolve the latest playback position.
+     * For SC this actively queries widget position instead of only using cached value.
+     *
+     * @param {number} timeoutMs
+     * @returns {Promise<number>}
+     */
+    getAccurateCurrentTime(timeoutMs = 700) {
+        if (this.mode === 'html5') {
+            return Promise.resolve(this.audioNode.currentTime || 0);
+        }
+
+        if (this.mode !== 'sc' || !this.widget) {
+            return Promise.resolve(this._scCurrentTime || 0);
+        }
+
+        return new Promise(resolve => {
+            let settled = false;
+            const timer = setTimeout(() => {
+                if (settled) return;
+                settled = true;
+                resolve(this._scCurrentTime || 0);
+            }, Math.max(100, timeoutMs));
+
+            try {
+                this.widget.getPosition(ms => {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(timer);
+                    this._scCurrentTime = (ms || 0) / 1000;
+                    this._scLastProgressAt = Date.now();
+                    resolve(this._scCurrentTime);
+                });
+            } catch (e) {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                resolve(this._scCurrentTime || 0);
+            }
+        });
     }
 
     // --- Event System ---

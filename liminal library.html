@@ -261,17 +261,17 @@
 
                     const t = p.audio.currentTime || 0;
                     const duration = p.audio.duration || 0;
-                    const lastSubtitleTime = tracks[tracks.length - 1].time || 0;
                     const subtitleIndex = getActiveSubtitleIndex();
-                    const reachedTextEnd = subtitleIndex >= tracks.length - 1 && t >= Math.max(0, lastSubtitleTime);
-                    const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.4);
-                    return reachedTextEnd || reachedAudioEnd;
+                    const reachedTextEnd = subtitleIndex >= tracks.length - 1;
+                    const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.25);
+                    return reachedTextEnd && reachedAudioEnd;
                 }
 
-                function saveCurrentContentState(options = {}) {
+                async function saveCurrentContentState(options = {}) {
                     const {
-                        force = false,
-                        keyOverride = null
+                        keyOverride = null,
+                        clear = false,
+                        preferCachedTime = false
                     } = options;
 
                     const p = window.audioPlayer;
@@ -280,18 +280,41 @@
                     const key = keyOverride || getActiveContentKey();
                     if (!key) return;
 
-                    if (!force && isCurrentContentCompleted()) {
+                    if (clear) {
                         clearContentState(key);
                         return;
                     }
 
-                    if (window.PlayerStateManager) {
-                        window.PlayerStateManager.saveState(key, getActiveSubtitleTracks(), p.audio);
-                    }
+                    try {
+                        let currentTime = p.audio.currentTime || 0;
+                        if (!preferCachedTime && typeof p.audio.getAccurateCurrentTime === 'function') {
+                            currentTime = await p.audio.getAccurateCurrentTime(800);
+                        }
 
-                    if (key === MAIN_CONTENT_KEY) {
-                        mainAudioState.wasPlaying = !p.audio.paused;
-                        mainAudioState.time = p.audio.currentTime || 0;
+                        const wasPlaying = (typeof p.audio.isProbablyPlaying === 'function')
+                            ? p.audio.isProbablyPlaying()
+                            : !p.audio.paused;
+
+                        if (window.PlayerStateManager) {
+                            const tracks = getActiveSubtitleTracks();
+                            if (typeof window.PlayerStateManager.saveStateAt === 'function') {
+                                const sentence = window.PlayerStateManager.findSentenceStart(currentTime, tracks);
+                                window.PlayerStateManager.saveStateAt(key, {
+                                    sentenceIndex: sentence.index,
+                                    sentenceTime: sentence.time,
+                                    wasPlaying
+                                });
+                            } else {
+                                window.PlayerStateManager.saveState(key, tracks, p.audio);
+                            }
+                        }
+
+                        if (key === MAIN_CONTENT_KEY) {
+                            mainAudioState.wasPlaying = wasPlaying;
+                            mainAudioState.time = currentTime || 0;
+                        }
+                    } catch (e) {
+                        console.warn('[State] saveCurrentContentState failed', e);
                     }
                 }
 
@@ -363,7 +386,7 @@
                     try {
                         const loreIdBeforeSwitch = activeLoreId;
                         if (saveCurrent && loreIdBeforeSwitch) {
-                            saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
+                            await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
                         } else if (!saveCurrent && loreIdBeforeSwitch) {
                             clearContentState(`lore${loreIdBeforeSwitch}`);
                         }
@@ -427,7 +450,7 @@
                     const switchToken = ++contentSwitchToken;
 
                     try {
-                        saveCurrentContentState();
+                        await saveCurrentContentState();
 
                         isLoreMode = true;
                         activeLoreId = id;
@@ -606,6 +629,7 @@
                 document.getElementById('gameModeBtn').addEventListener('click', () => {
                     isReadingMode = false;
                     updateReadingModeUI();
+                    markUiInteraction();
                 });
 
                 // Auto-Resume when Lore ends or Transition
@@ -633,10 +657,10 @@
                 });
 
                 // Global Transition Logic
-                window.transitionToNextChapter = function () {
+                window.transitionToNextChapter = async function () {
                     const overlay = document.getElementById('transitionOverlay');
                     if (overlay) overlay.classList.add('active');
-                    saveCurrentContentState();
+                    await saveCurrentContentState({ preferCachedTime: true });
 
                     // Fade Audio
                     const fade = setInterval(() => {
@@ -810,15 +834,13 @@
                         const touch = event.touches[0];
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        const startedInDeadzone = touch.clientY >= getUiDeadzoneTop();
 
                         // PERFORMANCE FIX: Check UI collision ONCE at start
-                        if (isTouchOnUI(event)) {
+                        if (isTouchOnUI(event) || startedInDeadzone) {
                             isTouchValid = false;
                             touchStartedOnUi = true;
-                            lastUiInteractionAt = performance.now();
-                            uiInteractionStarted = true;
-                            moveTarget = null;
-                            cameraLookTarget = null;
+                            markUiInteraction();
                             return;
                         }
                         isTouchValid = true;
@@ -1450,6 +1472,16 @@
                 let uiInteractionStarted = false;
                 let lastUiInteractionAt = 0;
                 const UI_CLICK_SUPPRESS_MS = 700;
+                let suppressWorldInputUntil = 0;
+
+                function markUiInteraction() {
+                    lastUiInteractionAt = performance.now();
+                    suppressWorldInputUntil = lastUiInteractionAt + UI_CLICK_SUPPRESS_MS;
+                    uiInteractionStarted = true;
+                    moveTarget = null;
+                    cameraLookTarget = null;
+                    isCenteringCamera = false;
+                }
 
                 function isUiClickTarget(target) {
                     return !!(target && (
@@ -1473,15 +1505,19 @@
 
                 document.addEventListener('pointerdown', (event) => {
                     const isUiHit = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
-                    uiInteractionStarted = isUiHit;
                     if (isUiHit) {
-                        lastUiInteractionAt = performance.now();
-                        moveTarget = null;
-                        cameraLookTarget = null;
+                        markUiInteraction();
+                    } else {
+                        uiInteractionStarted = false;
                     }
                 }, true);
 
                 document.addEventListener('click', (event) => {
+                    if (performance.now() < suppressWorldInputUntil) {
+                        uiInteractionStarted = false;
+                        return;
+                    }
+
                     const isMobile = window.innerWidth <= 768;
                     if (isMobile) {
                         return;
@@ -1502,7 +1538,8 @@
                     const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
 
                     // Ignore clicks on UI elements
-                    if (isUiClickTarget(clickedEl)) {
+                    if (isUiClickTarget(clickedEl) || event.clientY >= getUiDeadzoneTop()) {
+                        markUiInteraction();
                         console.log("Click ignored: UI element");
                         return;
                     }
@@ -1535,6 +1572,8 @@
                 });
 
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    if (performance.now() < suppressWorldInputUntil) return;
+
                     // Calculate click position in normalized coordinates
                     const clickScreenX = (clientX / window.innerWidth) * 2 - 1;
                     const clickScreenY = (clientY / window.innerHeight) * 2 - 1;
@@ -1587,6 +1626,7 @@
                 document.addEventListener('touchend', (event) => {
                     if (player && player.isReadingMode) return;
                     if (window.innerWidth > 768) return;
+                    if (performance.now() < suppressWorldInputUntil) return;
 
                     // Ignore UI-origin touches and drag gestures
                     if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
@@ -1603,6 +1643,10 @@
                     }
 
                     const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (isUiClickTarget(touchedEl)) {
+                        markUiInteraction();
+                        return;
+                    }
                     if (touchedEl !== renderer.domElement) {
                         return;
                     }
@@ -1702,17 +1746,21 @@
                         if (document.hidden) {
                             // APP BACKGROUNDED -> PAUSE ALL
                             window.gamePaused = true;
-                            saveCurrentContentState();
+                            saveCurrentContentState({ preferCachedTime: true });
 
-                            if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
-                                wasAmbientPlaying = true;
+                            if (typeof ambientAudio !== 'undefined') {
+                                wasAmbientPlaying = (typeof ambientAudio.isProbablyPlaying === 'function')
+                                    ? ambientAudio.isProbablyPlaying()
+                                    : !ambientAudio.paused;
                                 ambientAudio.pause();
                             } else {
                                 wasAmbientPlaying = false;
                             }
 
-                            if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
-                                wasPlayerPlaying = true;
+                            if (typeof audioPlayer !== 'undefined') {
+                                wasPlayerPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
+                                    ? audioPlayer.isProbablyPlaying()
+                                    : !audioPlayer.paused;
                                 audioPlayer.pause();
                             } else {
                                 wasPlayerPlaying = false;
@@ -1727,16 +1775,20 @@
                             setTimeout(() => {
                                 if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                                     ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
+                                    wasAmbientPlaying = false;
                                 }
                                 if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
                                     audioPlayer.play().catch(e => console.warn("Resume player failed", e));
+                                    wasPlayerPlaying = false;
                                 }
                             }, 100);
                         }
                     });
 
                     window.addEventListener('pagehide', () => {
-                        saveCurrentContentState();
+                        saveCurrentContentState({ preferCachedTime: true });
+                        if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
+                        if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
                     });
 
                     // Start Animation Loop only after preload
@@ -2147,9 +2199,9 @@
                     });
                 }
                 if (chapter1Btn) {
-                    chapter1Btn.addEventListener('click', () => {
+                    chapter1Btn.addEventListener('click', async () => {
                         console.log("Returning to Chapter 1...");
-                        saveCurrentContentState();
+                        await saveCurrentContentState({ preferCachedTime: true });
                         window.location.href = 'index.html';
                     });
                 }
@@ -2176,9 +2228,9 @@
                 // Chapter 1c
                 const chapter1cBtn = document.getElementById('chapter1cBtn');
                 if (chapter1cBtn) {
-                    chapter1cBtn.addEventListener('click', () => {
+                    chapter1cBtn.addEventListener('click', async () => {
                         console.log("Going to Chapter 1c...");
-                        saveCurrentContentState();
+                        await saveCurrentContentState({ preferCachedTime: true });
                         window.location.href = 'index3.html';
                     });
                 }

@@ -75,15 +75,36 @@ const PlayerStateManager = {
 
         const sentence = this.findSentenceStart(currentTime, subtitleTracks);
 
-        this._states[playerId] = {
+        this.saveStateAt(playerId, {
             sentenceIndex: sentence.index,
             sentenceTime: sentence.time,
-            wasPlaying: wasPlaying,
+            wasPlaying
+        });
+    },
+
+    /**
+     * Save state with explicit sentence position.
+     * Useful when playback time has already been resolved externally (e.g. streaming adapters).
+     *
+     * @param {string} playerId
+     * @param {{sentenceIndex:number, sentenceTime:number, wasPlaying:boolean}} state
+     */
+    saveStateAt(playerId, state) {
+        if (!playerId || !state) return;
+
+        const safeIndex = Number.isFinite(state.sentenceIndex) ? state.sentenceIndex : 0;
+        const safeTime = Number.isFinite(state.sentenceTime) ? state.sentenceTime : 0;
+        const wasPlaying = !!state.wasPlaying;
+
+        this._states[playerId] = {
+            sentenceIndex: safeIndex,
+            sentenceTime: safeTime,
+            wasPlaying,
             lastUpdate: Date.now()
         };
 
         console.log(`[PlayerStateManager] Saved state for "${playerId}":`,
-            `sentence ${sentence.index} at ${sentence.time}s, wasPlaying: ${wasPlaying}`);
+            `sentence ${safeIndex} at ${safeTime}s, wasPlaying: ${wasPlaying}`);
 
         this._persist();
     },
