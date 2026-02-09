@@ -418,6 +418,7 @@
                         rows.push(`input uiInteractionStarted=${uiInteractionStarted} suppressMs=${suppressLeft}`);
                         rows.push(`input touchValid=${isTouchValid} touchUI=${touchStartedOnUi} drag=${isTouchDragging} movedForTap=${touchMovedForTap}`);
                         rows.push(`input worldLock=${worldLockReason || '-'}`);
+                        rows.push(`motion vx=${fmt(velocity ? velocity.x : NaN)} vz=${fmt(velocity ? velocity.z : NaN)}`);
                         rows.push(`target move=${moveTarget ? 'set' : '-'} look=${cameraLookTarget ? 'set' : '-'} centering=${isCenteringCamera}`);
                         rows.push(`lastSave=${liminalDebug.lastSave ? JSON.stringify(liminalDebug.lastSave) : '-'}`);
                         rows.push('causes:');
@@ -1107,6 +1108,15 @@
                 let targetMouseY = 0; // Target look direction (screen Y normalized)
                 let isLookingAtClickTarget = false; // True when camera should rotate toward click
                 // let isCenteringCamera = false; // Moved to global scope
+
+                function syncLookTargetsToCamera() {
+                    if (!camera || !camera.quaternion) return;
+                    euler.setFromQuaternion(camera.quaternion);
+                    mouse.x = Math.max(-1, Math.min(1, -euler.y / 1.5));
+                    mouse.y = Math.max(-1, Math.min(1, -euler.x / 0.5));
+                    targetMouseX = mouse.x;
+                    targetMouseY = mouse.y;
+                }
 
                 // Desktop: Mouse move controls camera look
                 document.addEventListener('mousemove', (event) => {
@@ -1865,12 +1875,14 @@
                     uiInteractionStarted = true;
                     moveTarget = null;
                     cameraLookTarget = null;
+                    isLookingAtClickTarget = false;
                     isCenteringCamera = false;
                     isTouchDragging = false;
                     touchMovedForTap = false;
                     touchStartedOnUi = true;
                     touchStartedOnRenderer = false;
                     isTouchValid = false;
+                    syncLookTargetsToCamera();
                     if (velocity) {
                         const v2 = Math.abs(velocity.x) + Math.abs(velocity.z);
                         if (v2 > 0.02) {
@@ -2444,10 +2456,16 @@
                     try {
                         const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
                         const time = clock.getElapsedTime();
+                        const worldLockReason = getWorldInputLockReason();
+                        const lookSuppressed = (!isReadingMode) && (!!worldLockReason || performance.now() < suppressWorldInputUntil);
 
                         // Free Look
                         // If we have a 3D look target, smoothly rotate camera toward it
-                        if (cameraLookTarget) {
+                        if (lookSuppressed) {
+                            cameraLookTarget = null;
+                            isLookingAtClickTarget = false;
+                            syncLookTargetsToCamera();
+                        } else if (cameraLookTarget) {
                             // Calculate direction from camera to 3D target point
                             const lookDir = new THREE.Vector3();
                             lookDir.subVectors(cameraLookTarget, camera.position).normalize();
