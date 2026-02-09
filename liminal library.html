@@ -191,7 +191,7 @@
                 console.log("DEBUG: THREE Loaded");
 
                 // 2. Load Audio Player
-                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js');
+                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260209-1');
                 console.log("DEBUG: SharedAudioPlayer Loaded");
 
                 // 3. Load GameState
@@ -659,6 +659,66 @@
                     return false;
                 }
 
+                async function skipBySecondsInLiminal(deltaSec) {
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    const delta = Number(deltaSec) || 0;
+                    if (!delta) return;
+
+                    await waitForContentSwitchIdle(`skip:${delta}`);
+                    const before = (typeof p.audio.getAccurateCurrentTime === 'function')
+                        ? await p.audio.getAccurateCurrentTime(900)
+                        : (p.audio.currentTime || 0);
+                    let target = Math.max(0, before + delta);
+                    const duration = Number(p.audio.duration);
+                    if (Number.isFinite(duration) && duration > 0) {
+                        target = Math.min(duration, target);
+                    }
+
+                    let seekResult = {
+                        ok: false,
+                        target,
+                        position: before,
+                        attempts: 0
+                    };
+
+                    try {
+                        if (typeof p.audio.seekAndConfirm === 'function') {
+                            seekResult = await p.audio.seekAndConfirm(target, {
+                                maxAttempts: 5,
+                                settleMs: 220,
+                                tolerance: 1.0
+                            });
+                        } else {
+                            p.audio.currentTime = target;
+                            await wait(260);
+                            const pos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                                ? await p.audio.getAccurateCurrentTime(900)
+                                : (p.audio.currentTime || 0);
+                            seekResult = {
+                                ok: Math.abs(pos - target) <= 1.2 || pos >= target - 1.2,
+                                target,
+                                position: pos,
+                                attempts: 1
+                            };
+                        }
+                    } catch (e) {
+                        liminalDebugNote('skip-error', `${delta}: ${e && e.message ? e.message : e}`);
+                    }
+
+                    const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : target;
+                    p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
+                    p.renderLines(p.currentSubtitleIndex);
+                    liminalDebugNote(
+                        'skip',
+                        `delta=${delta} before=${before.toFixed(2)} target=${target.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`
+                    );
+                    if (!seekResult.ok) {
+                        liminalCause('C10_SEEK_CONFIRM_FAILED', `skip delta=${delta} target=${target.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
+                    }
+                }
+
                 function findSubtitleIndexForTime(timeSec) {
                     const tracks = getActiveSubtitleTracks();
                     if (tracks.length === 0) return 0;
@@ -925,8 +985,14 @@
                     player.toggle();
                 });
 
-                document.getElementById('skipBackBtn').addEventListener('click', () => player.skip(-15));
-                document.getElementById('skipForwardBtn').addEventListener('click', () => player.skip(15));
+                document.getElementById('skipBackBtn').addEventListener('click', () => {
+                    markUiInteraction('btn:skip-back');
+                    skipBySecondsInLiminal(-15);
+                });
+                document.getElementById('skipForwardBtn').addEventListener('click', () => {
+                    markUiInteraction('btn:skip-forward');
+                    skipBySecondsInLiminal(15);
+                });
 
                 document.getElementById('readingModeBtn').addEventListener('click', () => {
                     isReadingMode = true;
