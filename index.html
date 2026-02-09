@@ -171,6 +171,18 @@
                         stroke-linecap="round" stroke-linejoin="round" style="display:none;">
                         <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
                     </svg>
+                    <svg id="sceneDimmerIconSun" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <circle cx="12" cy="12" r="4" fill="white" stroke="none"></circle>
+                        <path d="M12 2v3"></path>
+                        <path d="M12 19v3"></path>
+                        <path d="M2 12h3"></path>
+                        <path d="M19 12h3"></path>
+                        <path d="M4.9 4.9l2.1 2.1"></path>
+                        <path d="M17 17l2.1 2.1"></path>
+                        <path d="M19.1 4.9L17 7"></path>
+                        <path d="M7 17l-2.1 2.1"></path>
+                    </svg>
                 </button>
                 <button id="fullscreenBtn" class="audio-btn" title="Vollbild" tabindex="-1">
                     <!-- ENTER FULLSCREEN (Corners pointing OUT) -->
@@ -2547,7 +2559,8 @@
                 toggleButtonId: 'sceneDimmerToggleBtn',
                 iconFullId: 'sceneDimmerIconFull',
                 iconHalfId: 'sceneDimmerIconHalf',
-                iconCrescentId: 'sceneDimmerIconCrescent'
+                iconCrescentId: 'sceneDimmerIconCrescent',
+                iconSunId: 'sceneDimmerIconSun'
             })
             : null;
         let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;

@@ -1,11 +1,45 @@
 /**
- * Global scene dimmer with hard freeze at full black.
- * Click cycle: 0 -> 50 -> 100 -> 50 -> 0
+ * Global scene dimmer with hard freeze at full coverage.
+ * Click cycle: 0 -> 50 -> 100 black -> 100 white -> 0
  */
 (function initGlobalVisualDimmer() {
     const STORAGE_LEVEL_KEY = 'gb_background_dim_level';
     const STORAGE_PHASE_KEY = 'gb_background_dim_phase';
-    const LEVELS = [0, 50, 100, 50];
+    const LIGHT_MODE_CLASS = 'scene-dimmer-light-mode';
+    const STEPS = [
+        {
+            key: 'off',
+            level: 0,
+            freeze: false,
+            overlayColor: '#000000',
+            icon: 'full',
+            aria: 'Hintergrunddimmer aus'
+        },
+        {
+            key: 'half',
+            level: 50,
+            freeze: false,
+            overlayColor: '#000000',
+            icon: 'half',
+            aria: 'Hintergrunddimmer 50 Prozent'
+        },
+        {
+            key: 'black-freeze',
+            level: 100,
+            freeze: true,
+            overlayColor: '#000000',
+            icon: 'crescent',
+            aria: 'Hintergrunddimmer 100 Prozent schwarz, Grafik eingefroren'
+        },
+        {
+            key: 'white-freeze',
+            level: 100,
+            freeze: true,
+            overlayColor: '#ffffff',
+            icon: 'sun',
+            aria: 'Hintergrunddimmer 100 Prozent weiss, Grafik eingefroren'
+        }
+    ];
 
     const state = {
         level: 0,
@@ -18,10 +52,20 @@
         toggleButton: null,
         iconFull: null,
         iconHalf: null,
-        iconCrescent: null
+        iconCrescent: null,
+        iconSun: null
     };
 
     const listeners = new Set();
+
+    function getCurrentStep() {
+        return STEPS[state.phase] || STEPS[0];
+    }
+
+    function isFrozenPhase(phase) {
+        const step = STEPS[clampPhase(phase)];
+        return !!(step && step.freeze);
+    }
 
     function isFrozenLevel(level) {
         return Number(level) >= 100;
@@ -31,7 +75,7 @@
         const num = Number(value);
         if (!Number.isFinite(num)) return 0;
         const int = Math.round(num);
-        if (int < 0 || int >= LEVELS.length) return 0;
+        if (int < 0 || int >= STEPS.length) return 0;
         return int;
     }
 
@@ -61,7 +105,7 @@
             level = 0;
         }
 
-        if (LEVELS[phase] !== level) {
+        if (STEPS[phase].level !== level) {
             phase = phaseForLevel(level);
         }
 
@@ -78,9 +122,12 @@
     }
 
     function emitChange() {
+        const step = getCurrentStep();
         const payload = {
             level: state.level,
-            frozen: isFrozenLevel(state.level)
+            frozen: !!step.freeze,
+            mode: step.key,
+            isWhiteMode: step.overlayColor === '#ffffff'
         };
         listeners.forEach((cb) => {
             try {
@@ -92,37 +139,51 @@
     }
 
     function setIconState() {
-        if (ui.iconFull) ui.iconFull.style.display = state.level === 0 ? 'block' : 'none';
-        if (ui.iconHalf) ui.iconHalf.style.display = state.level === 50 ? 'block' : 'none';
-        if (ui.iconCrescent) ui.iconCrescent.style.display = state.level === 100 ? 'block' : 'none';
+        const step = getCurrentStep();
+        if (ui.iconFull) ui.iconFull.style.display = step.icon === 'full' ? 'block' : 'none';
+        if (ui.iconHalf) ui.iconHalf.style.display = step.icon === 'half' ? 'block' : 'none';
+        if (ui.iconCrescent) ui.iconCrescent.style.display = step.icon === 'crescent' ? 'block' : 'none';
+        if (ui.iconSun) ui.iconSun.style.display = step.icon === 'sun' ? 'block' : 'none';
     }
 
     function updateAriaLabel() {
         if (!ui.toggleButton) return;
-        const label = state.level === 0
-            ? 'Hintergrunddimmer aus'
-            : state.level === 50
-                ? 'Hintergrunddimmer 50 Prozent'
-                : 'Hintergrunddimmer 100 Prozent, Grafik eingefroren';
+        const step = getCurrentStep();
+        const label = step.aria;
         ui.toggleButton.setAttribute('aria-label', label);
+        ui.toggleButton.setAttribute('title', label);
+    }
+
+    function syncLightModeClass() {
+        const step = getCurrentStep();
+        const isWhiteMode = step.overlayColor === '#ffffff';
+        if (document.body) {
+            document.body.classList.toggle(LIGHT_MODE_CLASS, isWhiteMode);
+        }
+        if (document.documentElement) {
+            document.documentElement.classList.toggle(LIGHT_MODE_CLASS, isWhiteMode);
+        }
     }
 
     function syncUi() {
+        const step = getCurrentStep();
         if (ui.overlay) {
-            ui.overlay.style.opacity = (state.level / 100).toFixed(3);
+            ui.overlay.style.opacity = (step.level / 100).toFixed(3);
+            ui.overlay.style.backgroundColor = step.overlayColor;
         }
         if (ui.toggleButton) {
             ui.toggleButton.classList.toggle('is-active', state.level > 0);
-            ui.toggleButton.dataset.dimState = String(state.level);
+            ui.toggleButton.dataset.dimState = step.key;
         }
         setIconState();
         updateAriaLabel();
-        window.visualFreezeActive = isFrozenLevel(state.level);
+        syncLightModeClass();
+        window.visualFreezeActive = !!step.freeze;
     }
 
     function setFromPhase(phase, options = {}) {
         state.phase = clampPhase(phase);
-        state.level = LEVELS[state.phase];
+        state.level = STEPS[state.phase].level;
         syncUi();
         if (!options.skipPersist) {
             persistState();
@@ -134,12 +195,13 @@
 
     function setLevel(level, options = {}) {
         const normalized = clampLevel(level);
-        const phase = phaseForLevel(normalized);
+        const fallbackPhase = phaseForLevel(normalized);
+        const phase = normalized >= 100 && isFrozenPhase(state.phase) ? state.phase : fallbackPhase;
         setFromPhase(phase, options);
     }
 
     function cycleLevel() {
-        const next = (state.phase + 1) % LEVELS.length;
+        const next = (state.phase + 1) % STEPS.length;
         setFromPhase(next, { forceEmit: true });
     }
 
@@ -166,6 +228,7 @@
         ui.iconFull = document.getElementById(config.iconFullId || 'sceneDimmerIconFull');
         ui.iconHalf = document.getElementById(config.iconHalfId || 'sceneDimmerIconHalf');
         ui.iconCrescent = document.getElementById(config.iconCrescentId || 'sceneDimmerIconCrescent');
+        ui.iconSun = document.getElementById(config.iconSunId || 'sceneDimmerIconSun');
     }
 
     function init(config = {}) {

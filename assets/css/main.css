@@ -461,6 +461,23 @@ body {
     background-color: rgba(255, 255, 255, 0.6);
 }
 
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer {
+    scrollbar-color: rgba(0, 0, 0, 0.35) transparent;
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.35);
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer:hover::-webkit-scrollbar-thumb,
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.is-scrolling::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.5);
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(0, 0, 0, 0.65);
+}
+
 /* ==========================================
    SUBTITLE LINES
    ========================================== */
@@ -479,6 +496,16 @@ body {
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
+body.scene-dimmer-light-mode .subtitle-line {
+    color: rgba(0, 0, 0, 0.82);
+    text-shadow: 2px 2px 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.85);
+}
+
+body.scene-dimmer-light-mode .subtitle-current {
+    color: rgba(0, 0, 0, 0.96) !important;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 1);
+}
+
 /* Reading mode: stronger text shadow for readability */
 #audioPlayerUI.reading-mode .subtitle-line {
     text-shadow:
@@ -488,6 +515,15 @@ body {
         0 0 30px rgba(0, 0, 0, 1),
         0 0 45px rgba(0, 0, 0, 1);
     opacity: 1 !important;
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
+    text-shadow:
+        0 0 5px rgba(255, 255, 255, 1),
+        0 0 10px rgba(255, 255, 255, 1),
+        0 0 20px rgba(255, 255, 255, 1),
+        0 0 30px rgba(255, 255, 255, 1),
+        0 0 45px rgba(255, 255, 255, 1);
 }
 
 /* Soft Edges Mask for Reading Mode Container */
@@ -515,6 +551,7 @@ body {
    AUDIO CONTROLS
    ========================================== */
 #audioControls {
+    --audio-control-col-size: 46px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -529,10 +566,11 @@ body {
 /* Horizontal row: Back - Play - Forward (game mode) */
 .controls-row {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(3, var(--audio-control-col-size));
+    justify-content: center;
     justify-items: center;
     align-items: center;
-    width: 140px;
+    width: calc(var(--audio-control-col-size) * 3);
     transition: opacity 0.3s ease;
 }
 
@@ -564,6 +602,10 @@ body {
     height: 24px;
 }
 
+body.scene-dimmer-light-mode .audio-btn svg {
+    filter: invert(1) drop-shadow(2px 2px 6px rgba(255, 255, 255, 0.9));
+}
+
 #audioToggleBtn svg {
     width: 32px;
     height: 32px;
@@ -584,12 +626,13 @@ body {
 .mode-btn-wrapper {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, var(--audio-control-col-size));
     grid-template-rows: auto auto;
-    gap: 2px 4px;
+    gap: 4px 0;
+    justify-content: center;
     justify-items: center;
     align-items: center;
-    width: 176px;
+    width: calc(var(--audio-control-col-size) * 3);
     min-height: 56px;
 }
 
@@ -645,7 +688,7 @@ body {
     opacity: 0;
     pointer-events: none;
     z-index: 900;
-    transition: opacity 0.2s linear;
+    transition: opacity 0.2s linear, background-color 0.2s linear;
 }
 
 /* ==========================================
@@ -681,6 +724,16 @@ body {
 #nextChapterBtn.visible {
     opacity: 1;
     pointer-events: auto;
+}
+
+body.scene-dimmer-light-mode #nextChapterBtn {
+    background: rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    color: rgba(0, 0, 0, 0.9);
+}
+
+body.scene-dimmer-light-mode #nextChapterBtn:hover {
+    background: rgba(0, 0, 0, 0.14);
 }
 
 /* ==========================================
@@ -738,6 +791,12 @@ body {
     text-shadow: none;
 }
 
+body.scene-dimmer-light-mode .archive-card,
+body.scene-dimmer-light-mode .archive-title,
+body.scene-dimmer-light-mode .col-header {
+    color: rgba(0, 0, 0, 0.92);
+}
+
 .archive-header {
     display: flex;
     justify-content: space-between;
@@ -762,6 +821,10 @@ body {
     cursor: pointer;
     opacity: 0.8;
     transition: opacity 0.2s;
+}
+
+body.scene-dimmer-light-mode .close-btn {
+    color: rgba(0, 0, 0, 0.88);
 }
 
 .close-btn:hover {
@@ -825,10 +888,18 @@ body {
     font-weight: normal;
 }
 
+body.scene-dimmer-light-mode .item-main-text {
+    color: rgba(0, 0, 0, 0.9);
+}
+
 .item-sub-text {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.5);
     font-style: italic;
+}
+
+body.scene-dimmer-light-mode .item-sub-text {
+    color: rgba(0, 0, 0, 0.55);
 }
 
 /* Active State (current chapter) */
@@ -836,6 +907,11 @@ body {
     color: #ffd700;
     text-decoration: underline;
     text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+body.scene-dimmer-light-mode .menu-item.active .item-main-text {
+    color: #7b5a00;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
 }
 
 /* Scroll bars hidden */
