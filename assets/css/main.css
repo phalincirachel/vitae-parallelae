@@ -623,6 +623,75 @@ body {
     height: 22px;
 }
 
+#sceneDimmerToggleBtn svg {
+    width: 20px;
+    height: 20px;
+}
+
+#sceneDimmerToggleBtn.is-active {
+    opacity: 1;
+}
+
+/* ==========================================
+   GLOBAL SCENE DIMMER
+   ========================================== */
+#sceneDimmerOverlay {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 900;
+    transition: opacity 0.2s linear;
+}
+
+#sceneDimmerPanel {
+    position: fixed;
+    left: 50%;
+    bottom: 112px;
+    transform: translateX(-50%) translateY(10px);
+    min-width: 260px;
+    max-width: 360px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(0, 0, 0, 0.88);
+    backdrop-filter: blur(6px);
+    color: rgba(255, 255, 255, 0.92);
+    z-index: 1400;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+#sceneDimmerPanel.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateX(-50%) translateY(0);
+}
+
+#sceneDimmerPanel label {
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+
+#sceneDimmerRange {
+    flex: 1;
+    accent-color: #d8d8d8;
+}
+
+#sceneDimmerValue {
+    min-width: 76px;
+    text-align: right;
+    font-size: 11px;
+    opacity: 0.9;
+    letter-spacing: 0.4px;
+}
+
 /* ==========================================
    NEXT CHAPTER BUTTON
    ========================================== */
@@ -943,5 +1012,11 @@ body {
     #audioPlayerUI.reading-mode #audioControls,
     #audioPlayerUI.reading-mode #gameModeBtn {
         pointer-events: auto;
+    }
+
+    #sceneDimmerPanel {
+        width: min(92vw, 360px);
+        min-width: 0;
+        bottom: 86px;
     }
 }

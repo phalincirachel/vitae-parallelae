@@ -12,6 +12,7 @@
     <script src="assets/js/PlayerStateManager.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
+    <script src="assets/js/GlobalVisualDimmer.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
     <link rel="stylesheet" href="assets/css/main.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
@@ -178,8 +179,21 @@
                         <path d="M4 10h6V4" />
                     </svg>
                 </button>
+                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" tabindex="-1"
+                    aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 1 0 9.8 9.8z"></path>
+                    </svg>
+                </button>
             </div>
         </div>
+    </div>
+    <div id="sceneDimmerOverlay" aria-hidden="true"></div>
+    <div id="sceneDimmerPanel" aria-label="Hintergrundabdunkelung">
+        <label for="sceneDimmerRange">Hintergrund</label>
+        <input type="range" id="sceneDimmerRange" min="0" max="100" step="1" value="0" />
+        <span id="sceneDimmerValue">0%</span>
     </div>
 
     <!-- DEBUG PANEL: Press 'D' to toggle -->
@@ -1602,6 +1616,7 @@
         let wasAmbientPlaying = false;
         let wasPlayerPlaying = false;
         window.gamePaused = false; // Flag for Game Loop
+        window.visualFreezeActive = !!window.visualFreezeActive;
 
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
@@ -1637,6 +1652,9 @@
                 // Reset time to prevent delta spikes
                 lastTime = 0;
                 window.gamePaused = false;
+                if (!window.visualFreezeActive) {
+                    startGameLoop();
+                }
                 indexDebugNote('visibility', 'visible');
 
                 setTimeout(() => {
@@ -1781,6 +1799,7 @@
         // ============================================
         function startGameLoop() {
             if (window.gameLoopRunning) return;
+            if (window.visualFreezeActive) return;
             window.gameLoopRunning = true;
             lastTime = 0;
             console.log("startGameLoop");
@@ -1791,6 +1810,11 @@
         let lastTime = 0;
 
         function gameLoop(timestamp) {
+            if (window.visualFreezeActive) {
+                window.gameLoopRunning = false;
+                return;
+            }
+
             if (window.gamePaused) {
                 requestAnimationFrame(gameLoop);
                 return;
@@ -2643,6 +2667,27 @@
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
+        const globalVisualDimmer = window.GlobalVisualDimmer
+            ? window.GlobalVisualDimmer.init({
+                overlayId: 'sceneDimmerOverlay',
+                panelId: 'sceneDimmerPanel',
+                toggleButtonId: 'sceneDimmerToggleBtn',
+                sliderId: 'sceneDimmerRange',
+                valueId: 'sceneDimmerValue'
+            })
+            : null;
+        let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+        if (globalVisualDimmer) {
+            globalVisualDimmer.onChange(({ level, frozen }) => {
+                manualBackgroundDimLevel = level;
+                window.visualFreezeActive = frozen;
+                if (!frozen && gameReady && !document.hidden) {
+                    lastTime = 0;
+                    startGameLoop();
+                }
+            });
+            window.visualFreezeActive = globalVisualDimmer.isFrozen();
+        }
 
         function syncPlayPauseIcon() {
             const isPaused = !audioPlayer || audioPlayer.paused;
@@ -3252,6 +3297,13 @@
 
         let lastBrightnessCheck = 0;
         function checkBackgroundBrightness(timestamp) {
+            if (manualBackgroundDimLevel > 0) {
+                subtitleContainer.style.background = 'rgba(0, 0, 0, 0)';
+                audioControlsEl.style.background = 'rgba(0, 0, 0, 0)';
+                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
+                return;
+            }
+
             // Im Lesemodus immer dunkler Hintergrund
             if (isReadingMode) {
                 setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);

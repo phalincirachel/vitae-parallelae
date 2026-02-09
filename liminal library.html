@@ -14,6 +14,7 @@
     <script src="assets/js/PlayerStateManager.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script>
+    <script src="assets/js/GlobalVisualDimmer.js"></script>
 
     <!-- Stylesheets -->
     <link rel="stylesheet" href="assets/css/main.css">
@@ -110,9 +111,21 @@
                         <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
                     </svg>
                 </button>
+                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 1 0 9.8 9.8z"></path>
+                    </svg>
+                </button>
             </div>
         </div>
 
+    </div>
+    <div id="sceneDimmerOverlay" aria-hidden="true"></div>
+    <div id="sceneDimmerPanel" aria-label="Hintergrundabdunkelung">
+        <label for="sceneDimmerRange">Hintergrund</label>
+        <input type="range" id="sceneDimmerRange" min="0" max="100" step="1" value="0" />
+        <span id="sceneDimmerValue">0%</span>
     </div>
 
     <!-- ARCHIVE MODAL -->
@@ -926,6 +939,17 @@
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
+                const globalVisualDimmer = window.GlobalVisualDimmer
+                    ? window.GlobalVisualDimmer.init({
+                        overlayId: 'sceneDimmerOverlay',
+                        panelId: 'sceneDimmerPanel',
+                        toggleButtonId: 'sceneDimmerToggleBtn',
+                        sliderId: 'sceneDimmerRange',
+                        valueId: 'sceneDimmerValue'
+                    })
+                    : null;
+                let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+                window.visualFreezeActive = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
 
                 // --- GLOBAL GAME STATE ---
                 // Locals aliasing globals
@@ -1236,6 +1260,7 @@
                     const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
                         el.closest('#audioControls') ||
+                        el.closest('#sceneDimmerPanel') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
@@ -1768,6 +1793,9 @@
                             // Alternative:
                             // Just update `zStart` in this closure?
                             // New generator run.
+                            if (typeof this.pauseBookGeneration === 'function') {
+                                this.pauseBookGeneration();
+                            }
                             this.meshBooks.count = 0;
                             this.startBookGeneration();
                         };
@@ -1787,6 +1815,8 @@
 
                             let globalIndex = 0;
                             const workQueue = [];
+                            this.bookBuildRaf = null;
+                            this.bookBuildPaused = false;
                             // Use 'local' start (original zStart) 
                             // because Group translation handles current World Pos.
                             const localZStart = zStart;
@@ -1799,9 +1829,34 @@
                                 }
                             }
 
+                            this.pauseBookGeneration = () => {
+                                this.bookBuildPaused = true;
+                                if (this.bookBuildRaf !== null) {
+                                    cancelAnimationFrame(this.bookBuildRaf);
+                                    this.bookBuildRaf = null;
+                                }
+                            };
+
+                            this.resumeBookGeneration = () => {
+                                if (!this.bookBuildPaused) return;
+                                this.bookBuildPaused = false;
+                                if (workQueue.length === 0 || globalIndex >= this.bookCount) return;
+                                if (this.bookBuildRaf === null) {
+                                    this.bookBuildRaf = requestAnimationFrame(processBatch);
+                                }
+                            };
+
                             const processBatch = () => {
+                                if (this.bookBuildPaused || window.visualFreezeActive) {
+                                    this.bookBuildPaused = true;
+                                    this.bookBuildRaf = null;
+                                    return;
+                                }
+
                                 // Stop if we are reset again? (version check?)
                                 if (workQueue.length === 0 || globalIndex >= this.bookCount) {
+                                    this.bookBuildPaused = false;
+                                    this.bookBuildRaf = null;
                                     if (onReady) {
                                         onReady();
                                         onReady = null; // Prevent re-triggering during Recycle/Reset!
@@ -1855,7 +1910,7 @@
                                 this.meshBooks.count = globalIndex;
                                 this.meshBooks.instanceMatrix.needsUpdate = true;
                                 if (this.meshBooks.instanceColor) this.meshBooks.instanceColor.needsUpdate = true;
-                                requestAnimationFrame(processBatch);
+                                this.bookBuildRaf = requestAnimationFrame(processBatch);
                             };
                             processBatch();
                         };
@@ -1917,6 +1972,40 @@
                 const clock = new THREE.Clock();
                 const velocity = new THREE.Vector3();
                 const move = { f: false, b: false, l: false, r: false };
+                let animationLoopRunning = false;
+                let hasStartedGame = false;
+
+                function setSegmentGenerationPaused(paused) {
+                    for (const seg of segments) {
+                        if (!seg) continue;
+                        if (paused && typeof seg.pauseBookGeneration === 'function') {
+                            seg.pauseBookGeneration();
+                        } else if (!paused && typeof seg.resumeBookGeneration === 'function') {
+                            seg.resumeBookGeneration();
+                        }
+                    }
+                }
+
+                function applyVisualFreezeState(frozen) {
+                    window.visualFreezeActive = !!frozen;
+                    if (window.visualFreezeActive) {
+                        setSegmentGenerationPaused(true);
+                        return;
+                    }
+                    setSegmentGenerationPaused(false);
+                    if (hasStartedGame && !document.hidden) {
+                        clock.getDelta(); // Discard stale frame delta after resume.
+                        startAnimationLoop();
+                    }
+                }
+
+                if (globalVisualDimmer) {
+                    globalVisualDimmer.onChange(({ level, frozen }) => {
+                        manualBackgroundDimLevel = level;
+                        applyVisualFreezeState(frozen);
+                    });
+                }
+                applyVisualFreezeState(window.visualFreezeActive);
 
                 // Click-to-Move State
                 let moveTarget = null;
@@ -1977,6 +2066,7 @@
                     const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
                         el.closest('#audioControls') ||
+                        el.closest('#sceneDimmerPanel') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
@@ -1994,9 +2084,13 @@
                     const controls = document.getElementById('audioControls');
                     const ui = document.getElementById('audioPlayerUI');
                     const subtitle = document.getElementById('subtitleContainer');
+                    const dimmerPanel = document.getElementById('sceneDimmerPanel');
 
                     if (controls) {
                         tops.push(controls.getBoundingClientRect().top - 8);
+                    }
+                    if (dimmerPanel) {
+                        tops.push(dimmerPanel.getBoundingClientRect().top - 8);
                     }
                     if (window.innerWidth <= 768 && isReadingMode && subtitle) {
                         tops.push(subtitle.getBoundingClientRect().top - 12);
@@ -2024,6 +2118,7 @@
                 function isPointInsideUi(clientX, clientY) {
                     const roots = [
                         document.getElementById('audioControls'),
+                        document.getElementById('sceneDimmerPanel'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
                         document.getElementById('chapterMenu'),
@@ -2047,6 +2142,7 @@
                 function bindUiInputShield() {
                     const roots = [
                         document.getElementById('audioControls'),
+                        document.getElementById('sceneDimmerPanel'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
                         document.getElementById('chapterMenu'),
@@ -2399,6 +2495,8 @@
                 });
 
                 function startGame() {
+                    hasStartedGame = true;
+
                     // Hide 'Click to Start' and Loading Screens
                     const loadingText = document.getElementById('loading');
                     if (loadingText) loadingText.style.display = 'none';
@@ -2470,6 +2568,9 @@
                             // APP FOREGROUND -> RESUME
                             window.gamePaused = false;
                             liminalDebugNote('visibility', 'visible');
+                            if (!window.visualFreezeActive) {
+                                startAnimationLoop();
+                            }
                             // Discard accumulated clock time on resume
                             if (typeof clock !== 'undefined') clock.getDelta();
 
@@ -2496,7 +2597,7 @@
                     });
 
                     // Start Animation Loop only after preload
-                    animate();
+                    startAnimationLoop();
                 }
 
                 // Global Animation State
@@ -2513,7 +2614,19 @@
                 let frameCount = 0;
                 let fpsLogTimer = 0;
 
+                function startAnimationLoop() {
+                    if (animationLoopRunning || window.visualFreezeActive) return;
+                    animationLoopRunning = true;
+                    lastFrameTime = performance.now();
+                    requestAnimationFrame(animate);
+                }
+
                 function animate() {
+                    if (window.visualFreezeActive) {
+                        animationLoopRunning = false;
+                        return;
+                    }
+
                     // FPS Diagnostic
                     const now = performance.now();
                     const frameDelta = now - lastFrameTime;
