@@ -379,11 +379,24 @@ body {
     gap: 15px;
     z-index: 1000;
     transition: bottom 0.4s ease, transform 0.4s ease;
+    pointer-events: none;
+}
+
+/* Game mode: only controls should catch input; subtitle area must be pass-through. */
+#audioPlayerUI #audioControls,
+#audioPlayerUI #audioControls * {
+    pointer-events: auto;
 }
 
 #audioPlayerUI.reading-mode {
     bottom: 50%;
     transform: translateX(-50%) translateY(50%);
+    pointer-events: auto;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer,
+#audioPlayerUI.reading-mode #subtitleContainer * {
+    pointer-events: auto;
 }
 
 /* During mode switch: hide buttons */

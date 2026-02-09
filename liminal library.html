@@ -981,8 +981,26 @@
                 }
 
                 // --- EVENT LISTENERS ---
+                async function handleAudioToggleClick() {
+                    // Use visible icon state instead of paused getter to avoid stale SC paused state.
+                    const wantsPlay = iconPlay.style.display !== 'none';
+                    if (wantsPlay) {
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
+                        try {
+                            await player.play();
+                        } catch (e) {
+                            liminalDebugNote('toggle-error', e && e.message ? e.message : String(e));
+                        }
+                        setTimeout(updateIcons, 120);
+                    } else {
+                        player.pause();
+                        updateIcons();
+                    }
+                }
+
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
-                    player.toggle();
+                    handleAudioToggleClick();
                 });
 
                 document.getElementById('skipBackBtn').addEventListener('click', () => {
@@ -1215,13 +1233,13 @@
                         ? target
                         : (target && target.parentElement ? target.parentElement : null);
                     if (!el || typeof el.closest !== 'function') return false;
+                    const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
-                        el.closest('#audioPlayerUI') ||
                         el.closest('#audioControls') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
-                        el.closest('#subtitleContainer') ||
+                        (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
                         el.closest('#loading') ||
                         el.closest('#liminalDebugToggle') ||
@@ -1939,7 +1957,6 @@
                     lastUiInteractionAt = performance.now();
                     suppressWorldInputUntil = lastUiInteractionAt + UI_CLICK_SUPPRESS_MS;
                     uiInteractionStarted = true;
-                    moveTarget = null;
                     cameraLookTarget = null;
                     isLookingAtClickTarget = false;
                     isCenteringCamera = false;
@@ -1949,14 +1966,6 @@
                     touchStartedOnRenderer = false;
                     isTouchValid = false;
                     syncLookTargetsToCamera();
-                    if (velocity) {
-                        const v2 = Math.abs(velocity.x) + Math.abs(velocity.z);
-                        if (v2 > 0.02) {
-                            liminalDebugNote('ui-stop-velocity', `${reason} v=${v2.toFixed(2)}`);
-                        }
-                        velocity.x = 0;
-                        velocity.z = 0;
-                    }
                     liminalDebugNote('ui-hit', reason);
                 }
 
@@ -1965,13 +1974,13 @@
                         ? target
                         : (target && target.parentElement ? target.parentElement : null);
                     if (!el || typeof el.closest !== 'function') return false;
+                    const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
-                        el.closest('#audioPlayerUI') ||
                         el.closest('#audioControls') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
-                        el.closest('#subtitleContainer') ||
+                        (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
                         el.closest('#loading') ||
                         el.closest('#liminalDebugToggle') ||
@@ -1987,12 +1996,12 @@
                     const subtitle = document.getElementById('subtitleContainer');
 
                     if (controls) {
-                        tops.push(controls.getBoundingClientRect().top - 72);
+                        tops.push(controls.getBoundingClientRect().top - 8);
                     }
-                    if (window.innerWidth <= 768 && !isReadingMode && subtitle) {
+                    if (window.innerWidth <= 768 && isReadingMode && subtitle) {
                         tops.push(subtitle.getBoundingClientRect().top - 12);
                     }
-                    if (window.innerWidth <= 768 && !isReadingMode && ui) {
+                    if (window.innerWidth <= 768 && isReadingMode && ui) {
                         tops.push(ui.getBoundingClientRect().top - 8);
                     }
 
@@ -2014,7 +2023,7 @@
 
                 function isPointInsideUi(clientX, clientY) {
                     const roots = [
-                        document.getElementById('audioPlayerUI'),
+                        document.getElementById('audioControls'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
                         document.getElementById('chapterMenu'),
@@ -2022,6 +2031,9 @@
                         document.getElementById('liminalDebugCopy'),
                         document.getElementById('liminalDebugPanel')
                     ];
+                    if (isReadingMode) {
+                        roots.push(document.getElementById('subtitleContainer'));
+                    }
                     for (const root of roots) {
                         if (!root) continue;
                         const r = root.getBoundingClientRect();
@@ -2034,7 +2046,7 @@
 
                 function bindUiInputShield() {
                     const roots = [
-                        document.getElementById('audioPlayerUI'),
+                        document.getElementById('audioControls'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
                         document.getElementById('chapterMenu'),
@@ -2042,6 +2054,9 @@
                         document.getElementById('liminalDebugCopy'),
                         document.getElementById('liminalDebugPanel')
                     ];
+                    if (isReadingMode) {
+                        roots.push(document.getElementById('subtitleContainer'));
+                    }
                     const shieldEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
                     const onShield = (event) => {
                         const targetInfo = event.target && event.target.id ? event.target.id : (event.target && event.target.className ? String(event.target.className) : event.type);
@@ -2675,13 +2690,10 @@
                                     cameraLookTarget = null;
                                     velocity.x = 0;
                                     velocity.z = 0;
-                                } else if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
-                                    liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
-                                    moveTarget = null;
-                                    cameraLookTarget = null;
-                                    velocity.x = 0;
-                                    velocity.z = 0;
                                 } else {
+                                    if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
+                                        liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
+                                    }
                                     const dx = moveTarget.x - camera.position.x;
                                     const dz = moveTarget.z - camera.position.z;
                                     const dist = Math.sqrt(dx * dx + dz * dz);
