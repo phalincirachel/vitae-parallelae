@@ -247,6 +247,58 @@
                     liminalDebug.push(label, detail);
                 }
 
+                function writeStateHandoff(targetPageKey) {
+                    try {
+                        if (!window.PlayerStateManager || typeof window.PlayerStateManager.exportStates !== 'function') return;
+                        const states = window.PlayerStateManager.exportStates();
+                        const payload = {
+                            from: MAIN_CONTENT_KEY,
+                            to: targetPageKey,
+                            at: Date.now(),
+                            states
+                        };
+                        sessionStorage.setItem('gb_state_handoff', JSON.stringify(payload));
+                        liminalDebugNote('handoff-out', `to=${targetPageKey} states=${Object.keys(states).length}`);
+                    } catch (e) {
+                        liminalDebugNote('handoff-out-error', e && e.message ? e.message : String(e));
+                    }
+                }
+
+                function mergeIncomingStateHandoff(expectedTargetKey) {
+                    try {
+                        const raw = sessionStorage.getItem('gb_state_handoff');
+                        if (!raw || !window.PlayerStateManager) return;
+
+                        const payload = JSON.parse(raw);
+                        if (!payload || payload.to !== expectedTargetKey || !payload.states || typeof payload.states !== 'object') {
+                            return;
+                        }
+
+                        let merged = 0;
+                        for (const [key, incoming] of Object.entries(payload.states)) {
+                            if (!incoming || typeof incoming !== 'object') continue;
+                            const current = window.PlayerStateManager.getState(key);
+                            const incomingStamp = Number(incoming.lastUpdate || 0);
+                            const currentStamp = Number((current && current.lastUpdate) || 0);
+                            if (current && currentStamp > incomingStamp) continue;
+
+                            if (typeof window.PlayerStateManager.saveStateAt === 'function') {
+                                window.PlayerStateManager.saveStateAt(key, {
+                                    sentenceIndex: Number.isFinite(incoming.sentenceIndex) ? incoming.sentenceIndex : 0,
+                                    sentenceTime: Number.isFinite(incoming.sentenceTime) ? incoming.sentenceTime : 0,
+                                    wasPlaying: !!incoming.wasPlaying
+                                });
+                                merged++;
+                            }
+                        }
+
+                        sessionStorage.removeItem('gb_state_handoff');
+                        liminalDebugNote('handoff-in', `from=${payload.from || '-'} merged=${merged}`);
+                    } catch (e) {
+                        liminalDebugNote('handoff-in-error', e && e.message ? e.message : String(e));
+                    }
+                }
+
                 (function initLiminalDebugHud() {
                     const toggle = document.createElement('button');
                     toggle.id = 'liminalDebugToggle';
@@ -326,6 +378,7 @@
                         panel.textContent = liminalDebug.lastSnapshot;
                     }, 300);
                 })();
+                mergeIncomingStateHandoff(MAIN_CONTENT_KEY);
 
                 function getActiveContentKey() {
                     if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
@@ -467,6 +520,20 @@
 
                 function wait(ms) {
                     return new Promise(resolve => setTimeout(resolve, ms));
+                }
+
+                async function waitForContentSwitchIdle(reason, timeoutMs = 2200) {
+                    const endAt = Date.now() + Math.max(300, timeoutMs || 0);
+                    let waited = 0;
+                    while (contentSwitchInProgress && Date.now() < endAt) {
+                        await wait(60);
+                        waited += 60;
+                    }
+                    if (contentSwitchInProgress) {
+                        liminalDebugNote('switch-wait-timeout', `${reason || 'unknown'} waited=${waited}ms`);
+                    } else if (waited > 0) {
+                        liminalDebugNote('switch-wait', `${reason || 'unknown'} waited=${waited}ms`);
+                    }
                 }
 
                 async function seekAndSyncSubtitle(p, targetTime, reason) {
@@ -849,6 +916,7 @@
                 window.transitionToNextChapter = async function () {
                     const overlay = document.getElementById('transitionOverlay');
                     if (overlay) overlay.classList.add('active');
+                    await waitForContentSwitchIdle('transition:next-chapter');
                     await saveCurrentContentState({ reason: 'transition:next-chapter' });
 
                     // Fade Audio
@@ -1692,10 +1760,25 @@
                 }
 
                 function getUiDeadzoneTop() {
+                    const tops = [];
                     const controls = document.getElementById('audioControls');
-                    if (!controls) return window.innerHeight - 80;
-                    const safetyMargin = 48;
-                    return Math.max(0, controls.getBoundingClientRect().top - safetyMargin);
+                    const ui = document.getElementById('audioPlayerUI');
+                    const subtitle = document.getElementById('subtitleContainer');
+
+                    if (controls) {
+                        tops.push(controls.getBoundingClientRect().top - 72);
+                    }
+                    if (window.innerWidth <= 768 && !isReadingMode && subtitle) {
+                        tops.push(subtitle.getBoundingClientRect().top - 12);
+                    }
+                    if (window.innerWidth <= 768 && !isReadingMode && ui) {
+                        tops.push(ui.getBoundingClientRect().top - 8);
+                    }
+
+                    if (tops.length === 0) {
+                        return window.innerHeight - 160;
+                    }
+                    return Math.max(0, Math.min(...tops));
                 }
 
                 function isPointInsideUi(clientX, clientY) {
@@ -1811,6 +1894,10 @@
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('move-skip', 'suppressed-window');
+                        return;
+                    }
+                    if (clientY >= getUiDeadzoneTop() || isPointInsideUi(clientX, clientY)) {
+                        liminalDebugNote('move-skip', 'ui-deadzone-boundary');
                         return;
                     }
 
@@ -2486,7 +2573,9 @@
                 if (chapter1Btn) {
                     chapter1Btn.addEventListener('click', async () => {
                         console.log("Returning to Chapter 1...");
+                        await waitForContentSwitchIdle('chapter-menu:to-1');
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
+                        writeStateHandoff('kapitel1');
                         window.location.href = 'index.html';
                     });
                 }
@@ -2515,7 +2604,9 @@
                 if (chapter1cBtn) {
                     chapter1cBtn.addEventListener('click', async () => {
                         console.log("Going to Chapter 1c...");
+                        await waitForContentSwitchIdle('chapter-menu:to-1c');
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
+                        writeStateHandoff('kapitel1c');
                         window.location.href = 'index3.html';
                     });
                 }
