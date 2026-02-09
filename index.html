@@ -161,6 +161,23 @@
                         <path d="M10 12h4" stroke="white" stroke-width="2" />
                     </svg>
                 </button>
+                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" tabindex="-1"
+                    aria-label="Hintergrunddimmer aus">
+                    <svg id="sceneDimmerIconFull" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <circle cx="12" cy="12" r="6" fill="white" stroke="none"></circle>
+                    </svg>
+                    <svg id="sceneDimmerIconHalf" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="M12 4a8 8 0 0 0 0 16z" fill="white" stroke="none"></path>
+                    </svg>
+                    <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
+                    </svg>
+                </button>
                 <button id="fullscreenBtn" class="audio-btn" title="Vollbild" tabindex="-1">
                     <!-- ENTER FULLSCREEN (Corners pointing OUT) -->
                     <svg id="iconFsEnter" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
@@ -179,48 +196,10 @@
                         <path d="M4 10h6V4" />
                     </svg>
                 </button>
-                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" tabindex="-1"
-                    aria-expanded="false">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 1 0 9.8 9.8z"></path>
-                    </svg>
-                </button>
             </div>
         </div>
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
-    <div id="sceneDimmerPanel" aria-label="Hintergrundabdunkelung">
-        <label for="sceneDimmerRange">Hintergrund</label>
-        <input type="range" id="sceneDimmerRange" min="0" max="100" step="1" value="0" />
-        <span id="sceneDimmerValue">0%</span>
-    </div>
-
-    <!-- DEBUG PANEL: Press 'D' to toggle -->
-    <div id="debugPanel"
-        style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 99999; display: none; min-width: 280px;">
-        <div style="font-weight: bold; margin-bottom: 10px; color: #ff0;">🔧 DEBUG PANEL (D = Toggle)</div>
-
-        <div style="margin-bottom: 8px;">
-            <label>Main Audio: <span id="dbgMainVol">100%</span></label><br>
-            <input type="range" id="sliderMainVol" min="0" max="100" value="100" style="width: 100%;">
-        </div>
-
-        <div style="margin-bottom: 8px;">
-            <label>Ambient: <span id="dbgAmbientVol">30%</span></label><br>
-            <input type="range" id="sliderAmbientVol" min="0" max="100" value="30" style="width: 100%;">
-        </div>
-
-        <div style="margin-bottom: 8px;">
-            <label>Footsteps: <span id="dbgFootstepsVol">40%</span></label><br>
-            <input type="range" id="sliderFootstepsVol" min="0" max="100" value="40" style="width: 100%;">
-        </div>
-
-        <div id="dbgStatus"
-            style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888; font-size: 10px;">
-            Status: Loading...
-        </div>
-    </div>
 
     <!-- ARCHIVE MODAL (INHALT) -->
     <div id="archiveModal">
@@ -356,26 +335,13 @@
         };
 
         // ============================================
-        // DEBUG HUD (INDEX)
+        // DEBUG (disabled in production UI)
         // ============================================
         const indexDebug = {
-            enabled: localStorage.getItem('gb_debug_index') !== '0',
-            events: [],
-            lastSave: null,
-            lastSnapshot: '',
-            push(label, detail = '') {
-                const stamp = new Date().toISOString().slice(11, 19);
-                const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
-                this.events.push(row);
-                if (this.events.length > 14) this.events.shift();
-            }
+            lastSave: null
         };
-        window.__gbIndexDebug = indexDebug;
 
-        function indexDebugNote(label, detail = '') {
-            if (!indexDebug.enabled) return;
-            indexDebug.push(label, detail);
-        }
+        function indexDebugNote() { }
 
         function writeStateHandoff(targetPageKey) {
             try {
@@ -438,91 +404,6 @@
             }
         }
 
-        (function initIndexDebugHud() {
-            const toggle = document.createElement('button');
-            toggle.id = 'indexDebugToggle';
-            toggle.textContent = 'DBG';
-            toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#9cf;border:1px solid #9cf;padding:4px 8px;font:12px monospace;pointer-events:auto;';
-            document.body.appendChild(toggle);
-
-            const copyBtn = document.createElement('button');
-            copyBtn.id = 'indexDebugCopy';
-            copyBtn.textContent = 'COPY';
-            copyBtn.style.cssText = 'position:fixed;top:10px;right:58px;z-index:1000000;background:rgba(0,0,0,0.75);color:#9cf;border:1px solid #9cf;padding:4px 8px;font:12px monospace;pointer-events:auto;';
-            document.body.appendChild(copyBtn);
-
-            const panel = document.createElement('div');
-            panel.id = 'indexDebugPanel';
-            panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#b7ffcb;border:1px solid rgba(183,255,203,0.5);padding:8px;max-width:92vw;width:430px;max-height:60vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;user-select:text;';
-            panel.style.display = indexDebug.enabled ? 'block' : 'none';
-            document.body.appendChild(panel);
-
-            toggle.addEventListener('click', () => {
-                indexDebug.enabled = !indexDebug.enabled;
-                localStorage.setItem('gb_debug_index', indexDebug.enabled ? '1' : '0');
-                panel.style.display = indexDebug.enabled ? 'block' : 'none';
-            });
-
-            copyBtn.addEventListener('click', async () => {
-                const text = indexDebug.lastSnapshot || panel.textContent || '';
-                try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        await navigator.clipboard.writeText(text);
-                        copyBtn.textContent = 'COPIED';
-                    } else {
-                        copyBtn.textContent = 'NO API';
-                    }
-                } catch (_) {
-                    copyBtn.textContent = 'FAILED';
-                }
-                setTimeout(() => { copyBtn.textContent = 'COPY'; }, 1200);
-            });
-
-            const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
-
-            setInterval(() => {
-                if (!indexDebug.enabled) return;
-
-                const playerReady = typeof audioPlayer !== 'undefined' && audioPlayer;
-                const ambReady = typeof ambientAudio !== 'undefined' && ambientAudio;
-                const activeKey = (typeof getActiveContentKey === 'function') ? getActiveContentKey() : '-';
-                const currentState = window.PlayerStateManager ? window.PlayerStateManager.getState(activeKey) : null;
-                const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
-                const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
-                const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
-                const stateKeysDbg = (window.PlayerStateManager && typeof window.PlayerStateManager.exportStates === 'function')
-                    ? Object.keys(window.PlayerStateManager.exportStates()).sort()
-                    : [];
-                const subtitleTotal = Array.isArray(subtitleTracks) ? subtitleTracks.length : 0;
-
-                const rows = [];
-                rows.push('INDEX DEBUG');
-                rows.push(`mode reading=${!!isReadingMode} loreMode=${!!isLoreMode} loreId=${activeLoreId || '-'} key=${activeKey}`);
-                rows.push(`switch inProgress=${!!contentSwitchInProgress} token=${contentSwitchToken}`);
-                if (playerReady) {
-                    rows.push(`player t=${fmt(audioPlayer.currentTime)} d=${fmt(audioPlayer.duration)} paused=${!!audioPlayer.paused} playing?=${typeof audioPlayer.isProbablyPlaying === 'function' ? audioPlayer.isProbablyPlaying() : !audioPlayer.paused}`);
-                } else {
-                    rows.push('player unavailable');
-                }
-                rows.push(`subtitle idx=${currentSubtitleIndex} / ${Math.max(0, subtitleTotal - 1)}`);
-                rows.push(`audioUnlocked=${audioUnlocked} footstepPlaying=${footstepPlaying}`);
-                if (ambReady) {
-                    rows.push(`ambient t=${fmt(ambientAudio.currentTime)} paused=${!!ambientAudio.paused} playing?=${typeof ambientAudio.isProbablyPlaying === 'function' ? ambientAudio.isProbablyPlaying() : !ambientAudio.paused} vol=${fmt(ambientAudio.volume)}`);
-                } else {
-                    rows.push('ambient unavailable');
-                }
-                rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
-                rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
-                rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
-                rows.push(`stateKeys=${stateKeysDbg.length ? stateKeysDbg.join(',') : '-'}`);
-                rows.push(`lastSave=${indexDebug.lastSave ? JSON.stringify(indexDebug.lastSave) : '-'}`);
-                rows.push('events:');
-                for (const ev of indexDebug.events.slice(-10)) rows.push(`- ${ev}`);
-
-                indexDebug.lastSnapshot = rows.join('\n');
-                panel.textContent = indexDebug.lastSnapshot;
-            }, 300);
-        })();
         mergeIncomingStateHandoff(MAIN_CONTENT_KEY);
 
         // Initialize GameState
@@ -2670,10 +2551,10 @@
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
                 overlayId: 'sceneDimmerOverlay',
-                panelId: 'sceneDimmerPanel',
                 toggleButtonId: 'sceneDimmerToggleBtn',
-                sliderId: 'sceneDimmerRange',
-                valueId: 'sceneDimmerValue'
+                iconFullId: 'sceneDimmerIconFull',
+                iconHalfId: 'sceneDimmerIconHalf',
+                iconCrescentId: 'sceneDimmerIconCrescent'
             })
             : null;
         let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
@@ -2812,6 +2693,15 @@
             // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
             if (isReadingMode) {
                 // Version Check: Ensure we are rendering the current set of subtitles
+                if (subtitleTracks.length === 0) {
+                    subtitleContainer.innerHTML = '';
+                    const emptyLine = document.createElement('div');
+                    emptyLine.className = 'subtitle-line subtitle-current';
+                    emptyLine.innerText = 'Warte auf Audio/Text...';
+                    subtitleContainer.appendChild(emptyLine);
+                    return;
+                }
+
                 const currentVersion = window.subtitleVersion || 0;
                 const renderedVersion = parseInt(subtitleContainer.dataset.version || '-1');
 
@@ -3163,24 +3053,47 @@
             audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 15);
         });
 
-        // 7. Modus-Wechsel mit schneller Animation
-        readingModeBtn.addEventListener('click', () => {
-            uiContainer.classList.add('mode-switching');
-            // Sofort umschalten, Buttons faden währenddessen
-            isReadingMode = true;
-            localStorage.setItem('gameboy_reading_mode', 'true'); // STATE PERSISTENCE
+        // 7. Modus-Wechsel mit robuster Animation
+        let modeSwitchUiTimer = null;
+        let modeSwitchLockUntil = 0;
 
-            // CRITICAL: Synchronize Path Direction
-            // Do not re-sort! Just find where we are on the existing Spawn->End path.
-            syncAutoWalkToIndex();
+        function setReadingMode(nextMode, reason = 'manual') {
+            const normalized = !!nextMode;
+            const now = performance.now();
 
-            moveTarget = null; // Stoppe Bewegung
-            uiContainer.classList.add('reading-mode');
+            if (now < modeSwitchLockUntil && normalized === isReadingMode) return;
+            modeSwitchLockUntil = now + 120;
+
+            isReadingMode = normalized;
+            localStorage.setItem('gameboy_reading_mode', normalized ? 'true' : 'false');
+
+            if (normalized) {
+                syncAutoWalkToIndex();
+                uiContainer.classList.add('reading-mode');
+            } else {
+                if (isLoreMode && !isMenuTriggeredLore) {
+                    endLoreMode();
+                }
+                uiContainer.classList.remove('reading-mode');
+            }
+
+            moveTarget = null;
             renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-            // Nach kurzer Zeit Buttons wieder einblenden
-            setTimeout(() => {
+
+            uiContainer.classList.add('mode-switching');
+            if (modeSwitchUiTimer) clearTimeout(modeSwitchUiTimer);
+            modeSwitchUiTimer = setTimeout(() => {
                 uiContainer.classList.remove('mode-switching');
             }, 150);
+
+            indexDebugNote(
+                'mode-switch',
+                `${reason} reading=${isReadingMode} tracks=${subtitleTracks.length} switching=${contentSwitchInProgress}`
+            );
+        }
+
+        readingModeBtn.addEventListener('click', () => {
+            setReadingMode(true, 'ui-reading');
         });
 
         // HELPER: Sync AutoWalk Index to current Player Position
@@ -3215,27 +3128,7 @@
         }
 
         gameModeBtn.addEventListener('click', () => {
-            uiContainer.classList.add('mode-switching');
-            isReadingMode = false;
-            localStorage.setItem('gameboy_reading_mode', 'false'); // STATE PERSISTENCE
-
-            // Fix: Ensure Lore Mode is also exited IF it was proximity triggered
-            // If menu triggered, allow it to continue (as per user request)
-            if (isLoreMode && !isMenuTriggeredLore) {
-                endLoreMode();
-            }
-
-            // Do NOT force isLoreMode = false if we want it to continue playing!
-            // isLoreMode = false; // REMOVED to allow playback
-
-            // But if we kept it running, we must ensure moveTarget is clear?
-            moveTarget = null;  // Clear any pending movement
-
-            uiContainer.classList.remove('reading-mode');
-            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-            setTimeout(() => {
-                uiContainer.classList.remove('mode-switching');
-            }, 150);
+            setReadingMode(false, 'ui-game');
         });
 
         // 8. Wenn Audio zu Ende ist, Reset

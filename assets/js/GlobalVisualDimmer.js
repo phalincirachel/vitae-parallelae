@@ -1,51 +1,79 @@
 /**
- * Global scene dimmer with optional hard freeze at full black.
- * Shared across chapters via localStorage.
+ * Global scene dimmer with hard freeze at full black.
+ * Click cycle: 0 -> 50 -> 100 -> 50 -> 0
  */
 (function initGlobalVisualDimmer() {
-    const STORAGE_KEY = 'gb_background_dim_level';
-    const FREEZE_THRESHOLD = 100;
-    const OPEN_CLASS = 'is-open';
-    const ACTIVE_CLASS = 'is-active';
+    const STORAGE_LEVEL_KEY = 'gb_background_dim_level';
+    const STORAGE_PHASE_KEY = 'gb_background_dim_phase';
+    const LEVELS = [0, 50, 100, 50];
 
     const state = {
         level: 0,
+        phase: 0,
         initialized: false
     };
 
     const ui = {
         overlay: null,
-        panel: null,
         toggleButton: null,
-        slider: null,
-        value: null
+        iconFull: null,
+        iconHalf: null,
+        iconCrescent: null
     };
 
     const listeners = new Set();
 
+    function isFrozenLevel(level) {
+        return Number(level) >= 100;
+    }
+
+    function clampPhase(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return 0;
+        const int = Math.round(num);
+        if (int < 0 || int >= LEVELS.length) return 0;
+        return int;
+    }
+
     function clampLevel(value) {
         const num = Number(value);
         if (!Number.isFinite(num)) return 0;
-        return Math.max(0, Math.min(100, num));
+        if (num >= 75) return 100;
+        if (num >= 25) return 50;
+        return 0;
     }
 
-    function isFrozenLevel(level) {
-        return level >= FREEZE_THRESHOLD;
+    function phaseForLevel(level) {
+        if (level >= 100) return 2;
+        if (level >= 50) return 1;
+        return 0;
     }
 
-    function getStoredLevel() {
+    function loadStoredState() {
+        let phase = 0;
+        let level = 0;
+
         try {
-            return clampLevel(localStorage.getItem(STORAGE_KEY));
+            phase = clampPhase(localStorage.getItem(STORAGE_PHASE_KEY));
+            level = clampLevel(localStorage.getItem(STORAGE_LEVEL_KEY));
         } catch (_) {
-            return 0;
+            phase = 0;
+            level = 0;
         }
+
+        if (LEVELS[phase] !== level) {
+            phase = phaseForLevel(level);
+        }
+
+        return { phase, level };
     }
 
-    function persistLevel(level) {
+    function persistState() {
         try {
-            localStorage.setItem(STORAGE_KEY, String(Math.round(level)));
+            localStorage.setItem(STORAGE_LEVEL_KEY, String(state.level));
+            localStorage.setItem(STORAGE_PHASE_KEY, String(state.phase));
         } catch (_) {
-            // Ignore storage failures (private mode/quota etc.)
+            // Ignore storage failures.
         }
     }
 
@@ -63,118 +91,98 @@
         });
     }
 
-    function syncUi() {
-        const frozen = isFrozenLevel(state.level);
-        const opacity = (state.level / 100).toFixed(3);
-
-        if (ui.overlay) {
-            ui.overlay.style.opacity = opacity;
-        }
-
-        if (ui.slider) {
-            const value = String(Math.round(state.level));
-            if (ui.slider.value !== value) ui.slider.value = value;
-        }
-
-        if (ui.value) {
-            ui.value.textContent = frozen ? '100% (Freeze)' : `${Math.round(state.level)}%`;
-        }
-
-        if (ui.toggleButton) {
-            ui.toggleButton.classList.toggle(ACTIVE_CLASS, state.level > 0);
-            ui.toggleButton.setAttribute(
-                'aria-label',
-                frozen
-                    ? 'Hintergrunddimmer aktiv, Grafik eingefroren'
-                    : `Hintergrunddimmer ${Math.round(state.level)} Prozent`
-            );
-        }
-
-        window.visualFreezeActive = frozen;
+    function setIconState() {
+        if (ui.iconFull) ui.iconFull.style.display = state.level === 0 ? 'block' : 'none';
+        if (ui.iconHalf) ui.iconHalf.style.display = state.level === 50 ? 'block' : 'none';
+        if (ui.iconCrescent) ui.iconCrescent.style.display = state.level === 100 ? 'block' : 'none';
     }
 
-    function setLevel(level, options = {}) {
-        const clamped = clampLevel(level);
-        const changed = Math.abs(clamped - state.level) > 0.0001;
+    function updateAriaLabel() {
+        if (!ui.toggleButton) return;
+        const label = state.level === 0
+            ? 'Hintergrunddimmer aus'
+            : state.level === 50
+                ? 'Hintergrunddimmer 50 Prozent'
+                : 'Hintergrunddimmer 100 Prozent, Grafik eingefroren';
+        ui.toggleButton.setAttribute('aria-label', label);
+    }
 
-        state.level = clamped;
-        syncUi();
-
-        if (!options.skipPersist) {
-            persistLevel(state.level);
+    function syncUi() {
+        if (ui.overlay) {
+            ui.overlay.style.opacity = (state.level / 100).toFixed(3);
         }
+        if (ui.toggleButton) {
+            ui.toggleButton.classList.toggle('is-active', state.level > 0);
+            ui.toggleButton.dataset.dimState = String(state.level);
+        }
+        setIconState();
+        updateAriaLabel();
+        window.visualFreezeActive = isFrozenLevel(state.level);
+    }
 
-        if (changed || options.forceEmit) {
+    function setFromPhase(phase, options = {}) {
+        state.phase = clampPhase(phase);
+        state.level = LEVELS[state.phase];
+        syncUi();
+        if (!options.skipPersist) {
+            persistState();
+        }
+        if (options.forceEmit) {
             emitChange();
         }
     }
 
-    function closePanel() {
-        if (ui.panel) ui.panel.classList.remove(OPEN_CLASS);
-        if (ui.toggleButton) ui.toggleButton.setAttribute('aria-expanded', 'false');
+    function setLevel(level, options = {}) {
+        const normalized = clampLevel(level);
+        const phase = phaseForLevel(normalized);
+        setFromPhase(phase, options);
     }
 
-    function togglePanel() {
-        if (!ui.panel) return;
-        const willOpen = !ui.panel.classList.contains(OPEN_CLASS);
-        ui.panel.classList.toggle(OPEN_CLASS, willOpen);
-        if (ui.toggleButton) ui.toggleButton.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    function cycleLevel() {
+        const next = (state.phase + 1) % LEVELS.length;
+        setFromPhase(next, { forceEmit: true });
     }
 
     function bindUi() {
-        if (!ui.toggleButton || !ui.slider) return;
-
+        if (!ui.toggleButton) return;
         ui.toggleButton.addEventListener('click', (event) => {
             event.preventDefault();
-            togglePanel();
-        });
-
-        ui.slider.addEventListener('input', (event) => {
-            setLevel(event.target.value, { forceEmit: true });
-        });
-
-        document.addEventListener('click', (event) => {
-            if (!ui.panel || !ui.panel.classList.contains(OPEN_CLASS)) return;
-            const target = event.target;
-            if (!(target instanceof Element)) return;
-            const insidePanel = ui.panel.contains(target);
-            const onToggle = !!ui.toggleButton && ui.toggleButton.contains(target);
-            if (!insidePanel && !onToggle) {
-                closePanel();
-            }
-        });
-
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                closePanel();
-            }
+            cycleLevel();
         });
 
         window.addEventListener('storage', (event) => {
-            if (event.key !== STORAGE_KEY) return;
-            setLevel(getStoredLevel(), { skipPersist: true, forceEmit: true });
+            if (event.key !== STORAGE_PHASE_KEY && event.key !== STORAGE_LEVEL_KEY) return;
+            const loaded = loadStoredState();
+            state.phase = loaded.phase;
+            state.level = loaded.level;
+            syncUi();
+            emitChange();
         });
     }
 
     function resolveElements(config = {}) {
         ui.overlay = document.getElementById(config.overlayId || 'sceneDimmerOverlay');
-        ui.panel = document.getElementById(config.panelId || 'sceneDimmerPanel');
         ui.toggleButton = document.getElementById(config.toggleButtonId || 'sceneDimmerToggleBtn');
-        ui.slider = document.getElementById(config.sliderId || 'sceneDimmerRange');
-        ui.value = document.getElementById(config.valueId || 'sceneDimmerValue');
+        ui.iconFull = document.getElementById(config.iconFullId || 'sceneDimmerIconFull');
+        ui.iconHalf = document.getElementById(config.iconHalfId || 'sceneDimmerIconHalf');
+        ui.iconCrescent = document.getElementById(config.iconCrescentId || 'sceneDimmerIconCrescent');
     }
 
     function init(config = {}) {
         resolveElements(config);
 
         if (!state.initialized) {
-            state.level = getStoredLevel();
+            const loaded = loadStoredState();
+            state.phase = loaded.phase;
+            state.level = loaded.level;
             state.initialized = true;
+            bindUi();
         } else {
-            state.level = getStoredLevel();
+            const loaded = loadStoredState();
+            state.phase = loaded.phase;
+            state.level = loaded.level;
         }
 
-        bindUi();
         syncUi();
         emitChange();
         return api;
@@ -182,7 +190,7 @@
 
     function onChange(callback) {
         if (typeof callback !== 'function') {
-            return () => { };
+            return function noopUnsubscribe() { };
         }
         listeners.add(callback);
         return () => listeners.delete(callback);
@@ -194,7 +202,7 @@
         setLevel,
         getLevel: () => state.level,
         isFrozen: () => isFrozenLevel(state.level),
-        FREEZE_THRESHOLD
+        cycleLevel
     };
 
     window.GlobalVisualDimmer = api;

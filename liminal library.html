@@ -102,6 +102,23 @@
                         <path d="M10 12h4" stroke="white" stroke-width="2" />
                     </svg>
                 </button>
+                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln"
+                    aria-label="Hintergrunddimmer aus">
+                    <svg id="sceneDimmerIconFull" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <circle cx="12" cy="12" r="6" fill="white" stroke="none"></circle>
+                    </svg>
+                    <svg id="sceneDimmerIconHalf" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="M12 4a8 8 0 0 0 0 16z" fill="white" stroke="none"></path>
+                    </svg>
+                    <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
+                    </svg>
+                </button>
                 <!-- FULLSCREEN BUTTON -->
                 <button id="fullscreenBtn" class="audio-btn" title="Vollbild">
                     <svg id="iconFsEnter" viewBox="0 0 24 24" fill="white">
@@ -111,22 +128,11 @@
                         <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
                     </svg>
                 </button>
-                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" aria-expanded="false">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 1 0 9.8 9.8z"></path>
-                    </svg>
-                </button>
             </div>
         </div>
 
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
-    <div id="sceneDimmerPanel" aria-label="Hintergrundabdunkelung">
-        <label for="sceneDimmerRange">Hintergrund</label>
-        <input type="range" id="sceneDimmerRange" min="0" max="100" step="1" value="0" />
-        <span id="sceneDimmerValue">0%</span>
-    </div>
 
     <!-- ARCHIVE MODAL -->
     <div id="archiveModal">
@@ -239,57 +245,15 @@
                 let contentSwitchToken = 0;
 
                 // ============================================
-                // DEBUG HUD (LIMINAL)
+                // DEBUG (disabled in production UI)
                 // ============================================
                 const liminalDebug = {
-                    enabled: localStorage.getItem('gb_debug_liminal') !== '0',
-                    events: [],
-                    lastSave: null,
-                    lastSnapshot: '',
-                    causes: {
-                        C01_WORLD_PATH_CLICK: 0,
-                        C02_WORLD_BLOCKED_CLICK: 0,
-                        C03_WORLD_PATH_TOUCH: 0,
-                        C04_WORLD_BLOCKED_TOUCH: 0,
-                        C05_MOVE_SET_FROM_UI_REGION: 0,
-                        C06_MOVE_SET_RECENT_UI_WINDOW: 0,
-                        C07_DEADZONE_LAYOUT_DRIFT: 0,
-                        C08_TOUCHFLAGS_STUCK: 0,
-                        C09_RESTORE_WITHOUT_STATE: 0,
-                        C10_SEEK_CONFIRM_FAILED: 0
-                    },
-                    push(label, detail = '') {
-                        const stamp = new Date().toISOString().slice(11, 19);
-                        const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
-                        this.events.push(row);
-                        if (this.events.length > 20) this.events.shift();
-                    }
+                    lastSave: null
                 };
-                window.__gbLiminalDebug = liminalDebug;
 
-                function liminalDebugNote(label, detail = '') {
-                    if (!liminalDebug.enabled) return;
-                    liminalDebug.push(label, detail);
-                }
+                function liminalDebugNote() { }
 
-                function liminalCause(id, detail = '') {
-                    if (!liminalDebug.causes[id] && liminalDebug.causes[id] !== 0) return;
-                    liminalDebug.causes[id] += 1;
-                    liminalDebugNote(`CAUSE ${id}`, detail);
-                }
-
-                const liminalCauseHelp = {
-                    C01_WORLD_PATH_CLICK: 'Desktop click path reached world-input.',
-                    C02_WORLD_BLOCKED_CLICK: 'Click blocked by UI/deadzone/suppress window.',
-                    C03_WORLD_PATH_TOUCH: 'Mobile touchend path reached world-input.',
-                    C04_WORLD_BLOCKED_TOUCH: 'Touch blocked by UI/deadzone/flags/suppress window.',
-                    C05_MOVE_SET_FROM_UI_REGION: 'Move target set although pointer was in UI region.',
-                    C06_MOVE_SET_RECENT_UI_WINDOW: 'Move target set too soon after UI interaction.',
-                    C07_DEADZONE_LAYOUT_DRIFT: 'UI/deadzone boundary moved unexpectedly.',
-                    C08_TOUCHFLAGS_STUCK: 'Touch flags stayed in blocked state without recent UI hit.',
-                    C09_RESTORE_WITHOUT_STATE: 'Restore fallback used because saved state missing.',
-                    C10_SEEK_CONFIRM_FAILED: 'Seek verification failed; stream likely ignored seek.'
-                };
+                function liminalCause() { }
 
                 function writeStateHandoff(targetPageKey) {
                     try {
@@ -355,102 +319,6 @@
                     }
                 }
 
-                (function initLiminalDebugHud() {
-                    const toggle = document.createElement('button');
-                    toggle.id = 'liminalDebugToggle';
-                    toggle.textContent = 'DBG';
-                    toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#7ef;border:1px solid #7ef;padding:4px 8px;font:12px monospace;pointer-events:auto;';
-                    document.body.appendChild(toggle);
-
-                    const copyBtn = document.createElement('button');
-                    copyBtn.id = 'liminalDebugCopy';
-                    copyBtn.textContent = 'COPY';
-                    copyBtn.style.cssText = 'position:fixed;top:10px;right:58px;z-index:1000000;background:rgba(0,0,0,0.75);color:#7ef;border:1px solid #7ef;padding:4px 8px;font:12px monospace;pointer-events:auto;';
-                    document.body.appendChild(copyBtn);
-
-                    const panel = document.createElement('div');
-                    panel.id = 'liminalDebugPanel';
-                    panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#d4ffd8;border:1px solid rgba(212,255,216,0.5);padding:8px;max-width:92vw;width:450px;max-height:62vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;user-select:text;';
-                    panel.style.display = liminalDebug.enabled ? 'block' : 'none';
-                    document.body.appendChild(panel);
-
-                    toggle.addEventListener('click', () => {
-                        liminalDebug.enabled = !liminalDebug.enabled;
-                        localStorage.setItem('gb_debug_liminal', liminalDebug.enabled ? '1' : '0');
-                        panel.style.display = liminalDebug.enabled ? 'block' : 'none';
-                    });
-
-                    copyBtn.addEventListener('click', async () => {
-                        const text = liminalDebug.lastSnapshot || panel.textContent || '';
-                        try {
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                                await navigator.clipboard.writeText(text);
-                                copyBtn.textContent = 'COPIED';
-                            } else {
-                                copyBtn.textContent = 'NO API';
-                            }
-                        } catch (_) {
-                            copyBtn.textContent = 'FAILED';
-                        }
-                        setTimeout(() => { copyBtn.textContent = 'COPY'; }, 1200);
-                    });
-
-                    const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
-
-                    setInterval(() => {
-                        if (!liminalDebug.enabled) return;
-
-                        const p = window.audioPlayer || null;
-                        const audio = p && p.audio ? p.audio : null;
-                        const activeKey = (typeof getActiveContentKey === 'function') ? getActiveContentKey() : '-';
-                        const currentState = window.PlayerStateManager ? window.PlayerStateManager.getState(activeKey) : null;
-                        const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
-                        const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
-                        const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
-                        const stateKeysDbg = (window.PlayerStateManager && typeof window.PlayerStateManager.exportStates === 'function')
-                            ? Object.keys(window.PlayerStateManager.exportStates()).sort()
-                            : [];
-                        const worldLockReason = getWorldInputLockReason();
-                        const suppressLeft = Math.max(0, Math.round((suppressWorldInputUntil - performance.now())));
-                        const subtitleTotal = p && Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : 0;
-
-                        const rows = [];
-                        rows.push('LIMINAL DEBUG');
-                        rows.push(`mode reading=${!!isReadingMode} loreMode=${!!isLoreMode} loreId=${activeLoreId || '-'} key=${activeKey}`);
-                        rows.push(`switch inProgress=${!!contentSwitchInProgress} token=${contentSwitchToken}`);
-                        if (audio) {
-                            rows.push(`player t=${fmt(audio.currentTime)} d=${fmt(audio.duration)} paused=${!!audio.paused} playing?=${typeof audio.isProbablyPlaying === 'function' ? audio.isProbablyPlaying() : !audio.paused}`);
-                        } else {
-                            rows.push('player unavailable');
-                        }
-                        rows.push(`subtitle idx=${p ? p.currentSubtitleIndex : '-'} / ${Math.max(0, subtitleTotal - 1)}`);
-                        rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
-                        rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
-                        rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
-                        rows.push(`stateKeys=${stateKeysDbg.length ? stateKeysDbg.join(',') : '-'}`);
-                        rows.push(`input uiInteractionStarted=${uiInteractionStarted} suppressMs=${suppressLeft}`);
-                        rows.push(`input touchValid=${isTouchValid} touchUI=${touchStartedOnUi} drag=${isTouchDragging} movedForTap=${touchMovedForTap}`);
-                        rows.push(`input worldLock=${worldLockReason || '-'}`);
-                        rows.push(`motion vx=${fmt(velocity ? velocity.x : NaN)} vz=${fmt(velocity ? velocity.z : NaN)}`);
-                        rows.push(`target move=${moveTarget ? 'set' : '-'} look=${cameraLookTarget ? 'set' : '-'} centering=${isCenteringCamera}`);
-                        rows.push(`lastSave=${liminalDebug.lastSave ? JSON.stringify(liminalDebug.lastSave) : '-'}`);
-                        rows.push('causes:');
-                        let hasCause = false;
-                        Object.keys(liminalDebug.causes).forEach(k => {
-                            const count = liminalDebug.causes[k] || 0;
-                            if (count > 0) {
-                                hasCause = true;
-                                rows.push(`- ${k}=${count}`);
-                            }
-                        });
-                        if (!hasCause) rows.push('- none');
-                        rows.push('events:');
-                        for (const ev of liminalDebug.events.slice(-12)) rows.push(`- ${ev}`);
-
-                        liminalDebug.lastSnapshot = rows.join('\n');
-                        panel.textContent = liminalDebug.lastSnapshot;
-                    }, 300);
-                })();
                 mergeIncomingStateHandoff(MAIN_CONTENT_KEY);
 
                 function getActiveContentKey() {
@@ -942,10 +810,10 @@
                 const globalVisualDimmer = window.GlobalVisualDimmer
                     ? window.GlobalVisualDimmer.init({
                         overlayId: 'sceneDimmerOverlay',
-                        panelId: 'sceneDimmerPanel',
                         toggleButtonId: 'sceneDimmerToggleBtn',
-                        sliderId: 'sceneDimmerRange',
-                        valueId: 'sceneDimmerValue'
+                        iconFullId: 'sceneDimmerIconFull',
+                        iconHalfId: 'sceneDimmerIconHalf',
+                        iconCrescentId: 'sceneDimmerIconCrescent'
                     })
                     : null;
                 let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
@@ -1260,16 +1128,12 @@
                     const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
                         el.closest('#audioControls') ||
-                        el.closest('#sceneDimmerPanel') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
                         (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
-                        el.closest('#loading') ||
-                        el.closest('#liminalDebugToggle') ||
-                        el.closest('#liminalDebugCopy') ||
-                        el.closest('#liminalDebugPanel')
+                        el.closest('#loading')
                     );
                 }
 
@@ -2066,16 +1930,12 @@
                     const subtitleHit = !!el.closest('#subtitleContainer');
                     return !!(
                         el.closest('#audioControls') ||
-                        el.closest('#sceneDimmerPanel') ||
                         el.closest('.audio-btn') ||
                         el.closest('#archiveModal') ||
                         el.closest('.menu-item') ||
                         (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
-                        el.closest('#loading') ||
-                        el.closest('#liminalDebugToggle') ||
-                        el.closest('#liminalDebugCopy') ||
-                        el.closest('#liminalDebugPanel')
+                        el.closest('#loading')
                     );
                 }
 
@@ -2084,13 +1944,9 @@
                     const controls = document.getElementById('audioControls');
                     const ui = document.getElementById('audioPlayerUI');
                     const subtitle = document.getElementById('subtitleContainer');
-                    const dimmerPanel = document.getElementById('sceneDimmerPanel');
 
                     if (controls) {
                         tops.push(controls.getBoundingClientRect().top - 8);
-                    }
-                    if (dimmerPanel) {
-                        tops.push(dimmerPanel.getBoundingClientRect().top - 8);
                     }
                     if (window.innerWidth <= 768 && isReadingMode && subtitle) {
                         tops.push(subtitle.getBoundingClientRect().top - 12);
@@ -2118,13 +1974,9 @@
                 function isPointInsideUi(clientX, clientY) {
                     const roots = [
                         document.getElementById('audioControls'),
-                        document.getElementById('sceneDimmerPanel'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
-                        document.getElementById('chapterMenu'),
-                        document.getElementById('liminalDebugToggle'),
-                        document.getElementById('liminalDebugCopy'),
-                        document.getElementById('liminalDebugPanel')
+                        document.getElementById('chapterMenu')
                     ];
                     if (isReadingMode) {
                         roots.push(document.getElementById('subtitleContainer'));
@@ -2142,13 +1994,9 @@
                 function bindUiInputShield() {
                     const roots = [
                         document.getElementById('audioControls'),
-                        document.getElementById('sceneDimmerPanel'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
-                        document.getElementById('chapterMenu'),
-                        document.getElementById('liminalDebugToggle'),
-                        document.getElementById('liminalDebugCopy'),
-                        document.getElementById('liminalDebugPanel')
+                        document.getElementById('chapterMenu')
                     ];
                     if (isReadingMode) {
                         roots.push(document.getElementById('subtitleContainer'));

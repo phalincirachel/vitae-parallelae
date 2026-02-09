@@ -577,37 +577,35 @@ body {
 }
 
 #gameModeBtn {
-    opacity: 0;
-    pointer-events: none;
-    position: absolute;
+    display: none;
+    opacity: 0.7;
     transition: opacity 0.3s ease;
 }
 
 #readingModeBtn {
+    display: inline-flex;
     opacity: 0.7;
     transition: opacity 0.3s ease;
 }
 
 #audioPlayerUI.reading-mode #readingModeBtn {
-    opacity: 0;
-    pointer-events: none;
-    position: absolute;
+    display: none;
 }
 
 #audioPlayerUI.reading-mode #gameModeBtn {
-    opacity: 1 !important;
+    display: inline-flex;
+    opacity: 0.7;
     pointer-events: auto;
-    position: relative;
-    display: block !important;
+    position: static;
 }
 
 .mode-btn-wrapper {
     position: relative;
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(4, 1fr);
     justify-items: center;
     align-items: center;
-    width: 140px;
+    width: 176px;
     min-height: 32px;
 }
 
@@ -643,53 +641,6 @@ body {
     pointer-events: none;
     z-index: 900;
     transition: opacity 0.2s linear;
-}
-
-#sceneDimmerPanel {
-    position: fixed;
-    left: 50%;
-    bottom: 112px;
-    transform: translateX(-50%) translateY(10px);
-    min-width: 260px;
-    max-width: 360px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    background: rgba(0, 0, 0, 0.88);
-    backdrop-filter: blur(6px);
-    color: rgba(255, 255, 255, 0.92);
-    z-index: 1400;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-#sceneDimmerPanel.is-open {
-    opacity: 1;
-    pointer-events: auto;
-    transform: translateX(-50%) translateY(0);
-}
-
-#sceneDimmerPanel label {
-    font-size: 12px;
-    letter-spacing: 0.5px;
-    white-space: nowrap;
-}
-
-#sceneDimmerRange {
-    flex: 1;
-    accent-color: #d8d8d8;
-}
-
-#sceneDimmerValue {
-    min-width: 76px;
-    text-align: right;
-    font-size: 11px;
-    opacity: 0.9;
-    letter-spacing: 0.4px;
 }
 
 /* ==========================================
@@ -921,15 +872,15 @@ body {
         object-fit: fill;
     }
 
-    /* ALL 6 BUTTONS IN ONE ROW */
+    /* ALL CONTROL BUTTONS IN ONE ROW */
     #audioControls {
         flex-direction: row !important;
         flex-wrap: nowrap !important;
-        justify-content: space-evenly !important;
+        justify-content: space-between !important;
         align-items: center !important;
         width: 100% !important;
-        gap: 0 !important;
-        padding: 8px 10px !important;
+        gap: 2px !important;
+        padding: 8px 6px !important;
         position: fixed !important;
         bottom: 15px !important;
         left: 0 !important;
@@ -946,12 +897,16 @@ body {
 
     /* Buttons */
     .audio-btn {
-        padding: 8px !important;
+        padding: 6px !important;
+        min-width: 34px !important;
+        display: inline-flex !important;
+        justify-content: center !important;
+        align-items: center !important;
     }
 
     .audio-btn svg {
-        width: 26px !important;
-        height: 26px !important;
+        width: 24px !important;
+        height: 24px !important;
     }
 
     #audioToggleBtn svg {
@@ -962,6 +917,35 @@ body {
     .audio-btn:focus,
     .audio-btn:focus-visible {
         outline: none !important;
+    }
+
+    #skipBackBtn {
+        order: 1;
+    }
+
+    #audioToggleBtn {
+        order: 2;
+    }
+
+    #skipForwardBtn {
+        order: 3;
+    }
+
+    #bookBtn {
+        order: 4;
+    }
+
+    #readingModeBtn,
+    #gameModeBtn {
+        order: 5;
+    }
+
+    #sceneDimmerToggleBtn {
+        order: 6;
+    }
+
+    #fullscreenBtn {
+        order: 7;
     }
 
     /* AUDIO PLAYER UI - Fixed at Bottom */
@@ -1012,11 +996,5 @@ body {
     #audioPlayerUI.reading-mode #audioControls,
     #audioPlayerUI.reading-mode #gameModeBtn {
         pointer-events: auto;
-    }
-
-    #sceneDimmerPanel {
-        width: min(92vw, 360px);
-        min-width: 0;
-        bottom: 86px;
     }
 }
