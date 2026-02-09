@@ -201,7 +201,7 @@ export const GameState = {
 
                 // Audio Persistence
                 if (window.PlayerStateManager && this.state.audioPositions) {
-                    window.PlayerStateManager.importStates(this.state.audioPositions);
+                    window.PlayerStateManager.importStates(this.state.audioPositions, { replace: true });
                 }
 
                 await this.save();

@@ -476,6 +476,9 @@
                 const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
                 const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
                 const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
+                const stateKeysDbg = (window.PlayerStateManager && typeof window.PlayerStateManager.exportStates === 'function')
+                    ? Object.keys(window.PlayerStateManager.exportStates()).sort()
+                    : [];
                 const subtitleTotal = Array.isArray(subtitleTracks) ? subtitleTracks.length : 0;
 
                 const rows = [];
@@ -497,6 +500,7 @@
                 rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
                 rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
                 rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
+                rows.push(`stateKeys=${stateKeysDbg.length ? stateKeysDbg.join(',') : '-'}`);
                 rows.push(`lastSave=${indexDebug.lastSave ? JSON.stringify(indexDebug.lastSave) : '-'}`);
                 rows.push('events:');
                 for (const ev of indexDebug.events.slice(-10)) rows.push(`- ${ev}`);

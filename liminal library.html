@@ -394,6 +394,10 @@
                         const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
                         const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
                         const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
+                        const stateKeysDbg = (window.PlayerStateManager && typeof window.PlayerStateManager.exportStates === 'function')
+                            ? Object.keys(window.PlayerStateManager.exportStates()).sort()
+                            : [];
+                        const worldLockReason = getWorldInputLockReason();
                         const suppressLeft = Math.max(0, Math.round((suppressWorldInputUntil - performance.now())));
                         const subtitleTotal = p && Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : 0;
 
@@ -410,8 +414,10 @@
                         rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
                         rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
                         rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
+                        rows.push(`stateKeys=${stateKeysDbg.length ? stateKeysDbg.join(',') : '-'}`);
                         rows.push(`input uiInteractionStarted=${uiInteractionStarted} suppressMs=${suppressLeft}`);
                         rows.push(`input touchValid=${isTouchValid} touchUI=${touchStartedOnUi} drag=${isTouchDragging} movedForTap=${touchMovedForTap}`);
+                        rows.push(`input worldLock=${worldLockReason || '-'}`);
                         rows.push(`target move=${moveTarget ? 'set' : '-'} look=${cameraLookTarget ? 'set' : '-'} centering=${isCenteringCamera}`);
                         rows.push(`lastSave=${liminalDebug.lastSave ? JSON.stringify(liminalDebug.lastSave) : '-'}`);
                         rows.push('causes:');
@@ -1128,15 +1134,24 @@
 
                 // Helper: Check if touch is on UI elements
                 function isTouchOnUI(event) {
-                    const target = event.target;
-                    return target.closest('#audioPlayerUI') ||
-                        target.closest('#audioControls') ||
-                        target.closest('.audio-btn') ||
-                        target.closest('#archiveModal') ||
-                        target.closest('.menu-item') ||
-                        target.closest('#subtitleContainer') ||
-                        target.closest('#nextChapterBtn') ||
-                        target.closest('#loading');
+                    const target = event && event.target;
+                    const el = target && target.nodeType === 1
+                        ? target
+                        : (target && target.parentElement ? target.parentElement : null);
+                    if (!el || typeof el.closest !== 'function') return false;
+                    return !!(
+                        el.closest('#audioPlayerUI') ||
+                        el.closest('#audioControls') ||
+                        el.closest('.audio-btn') ||
+                        el.closest('#archiveModal') ||
+                        el.closest('.menu-item') ||
+                        el.closest('#subtitleContainer') ||
+                        el.closest('#nextChapterBtn') ||
+                        el.closest('#loading') ||
+                        el.closest('#liminalDebugToggle') ||
+                        el.closest('#liminalDebugCopy') ||
+                        el.closest('#liminalDebugPanel')
+                    );
                 }
 
                 document.addEventListener('touchstart', (event) => {
@@ -1158,16 +1173,37 @@
                         const touch = event.touches[0];
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         const startedInDeadzone = touch.clientY >= getUiDeadzoneTop();
+                        const worldLockReason = getWorldInputLockReason();
 
                         // PERFORMANCE FIX: Check UI collision ONCE at start
+                        if (worldLockReason) {
+                            isTouchValid = false;
+                            touchStartedOnUi = true;
+                            markUiInteraction(`touchstart-world-lock:${worldLockReason}`);
+                            liminalCause('C04_WORLD_BLOCKED_TOUCH', `touchstart-world-lock:${worldLockReason}`);
+                            return;
+                        }
                         if (isTouchOnUI(event) || startedInDeadzone) {
                             isTouchValid = false;
                             touchStartedOnUi = true;
                             markUiInteraction(startedInDeadzone ? 'touchstart-deadzone' : 'touchstart-ui');
                             return;
                         }
+
+                        const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                        const startedOnRenderer = isRendererElement(event.target) || isRendererElement(touchedEl);
+                        if (!startedOnRenderer) {
+                            isTouchValid = false;
+                            touchStartedOnUi = true;
+                            markUiInteraction('touchstart-not-renderer');
+                            liminalCause('C04_WORLD_BLOCKED_TOUCH', 'touchstart-not-renderer');
+                            return;
+                        }
+
                         isTouchValid = true;
+                        touchStartedOnRenderer = true;
 
                         touchStartX = touch.clientX;
                         touchStartY = touch.clientY;
@@ -1798,6 +1834,30 @@
                 const UI_CLICK_SUPPRESS_MS = 700;
                 let suppressWorldInputUntil = 0;
                 let lastDeadzoneTop = null;
+                let touchStartedOnRenderer = false;
+
+                function getWorldInputLockReason() {
+                    const archiveModal = document.getElementById('archiveModal');
+                    if (archiveModal && archiveModal.classList.contains('visible')) return 'archive-modal';
+
+                    const overlay = document.getElementById('transitionOverlay');
+                    if (overlay && overlay.classList.contains('active')) return 'transition-overlay';
+
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) {
+                        const style = window.getComputedStyle(loadingScreen);
+                        if (style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0.01) {
+                            return 'loading-screen';
+                        }
+                    }
+                    return '';
+                }
+
+                function isRendererElement(target) {
+                    if (!target || !renderer || !renderer.domElement) return false;
+                    if (target === renderer.domElement) return true;
+                    return !!(target.nodeType === 1 && renderer.domElement.contains(target));
+                }
 
                 function markUiInteraction(reason = 'ui') {
                     lastUiInteractionAt = performance.now();
@@ -1809,21 +1869,37 @@
                     isTouchDragging = false;
                     touchMovedForTap = false;
                     touchStartedOnUi = true;
+                    touchStartedOnRenderer = false;
                     isTouchValid = false;
+                    if (velocity) {
+                        const v2 = Math.abs(velocity.x) + Math.abs(velocity.z);
+                        if (v2 > 0.02) {
+                            liminalDebugNote('ui-stop-velocity', `${reason} v=${v2.toFixed(2)}`);
+                        }
+                        velocity.x = 0;
+                        velocity.z = 0;
+                    }
                     liminalDebugNote('ui-hit', reason);
                 }
 
                 function isUiClickTarget(target) {
-                    return !!(target && (
-                        target.closest('#audioPlayerUI') ||
-                        target.closest('#audioControls') ||
-                        target.closest('.audio-btn') ||
-                        target.closest('#archiveModal') ||
-                        target.closest('.menu-item') ||
-                        target.closest('#subtitleContainer') ||
-                        target.closest('#nextChapterBtn') ||
-                        target.closest('#loading')
-                    ));
+                    const el = target && target.nodeType === 1
+                        ? target
+                        : (target && target.parentElement ? target.parentElement : null);
+                    if (!el || typeof el.closest !== 'function') return false;
+                    return !!(
+                        el.closest('#audioPlayerUI') ||
+                        el.closest('#audioControls') ||
+                        el.closest('.audio-btn') ||
+                        el.closest('#archiveModal') ||
+                        el.closest('.menu-item') ||
+                        el.closest('#subtitleContainer') ||
+                        el.closest('#nextChapterBtn') ||
+                        el.closest('#loading') ||
+                        el.closest('#liminalDebugToggle') ||
+                        el.closest('#liminalDebugCopy') ||
+                        el.closest('#liminalDebugPanel')
+                    );
                 }
 
                 function getUiDeadzoneTop() {
@@ -1863,7 +1939,10 @@
                         document.getElementById('audioPlayerUI'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
-                        document.getElementById('chapterMenu')
+                        document.getElementById('chapterMenu'),
+                        document.getElementById('liminalDebugToggle'),
+                        document.getElementById('liminalDebugCopy'),
+                        document.getElementById('liminalDebugPanel')
                     ];
                     for (const root of roots) {
                         if (!root) continue;
@@ -1880,7 +1959,10 @@
                         document.getElementById('audioPlayerUI'),
                         document.getElementById('nextChapterBtn'),
                         document.getElementById('archiveModal'),
-                        document.getElementById('chapterMenu')
+                        document.getElementById('chapterMenu'),
+                        document.getElementById('liminalDebugToggle'),
+                        document.getElementById('liminalDebugCopy'),
+                        document.getElementById('liminalDebugPanel')
                     ];
                     const shieldEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
                     const onShield = (event) => {
@@ -1898,6 +1980,12 @@
                 bindUiInputShield();
 
                 document.addEventListener('pointerdown', (event) => {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`pointerdown-world-lock:${worldLockReason}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `pointerdown-world-lock:${worldLockReason}`);
+                        return;
+                    }
                     const isUiHit = isUiClickTarget(event.target) || isPointInsideUi(event.clientX, event.clientY) || event.clientY >= getUiDeadzoneTop();
                     if (isUiHit) {
                         markUiInteraction(`pointerdown-ui:${event.clientY}`);
@@ -1907,6 +1995,13 @@
                 }, true);
 
                 document.addEventListener('click', (event) => {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`click-world-lock:${worldLockReason}`);
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', `world-lock:${worldLockReason}`);
+                        return;
+                    }
+
                     if (performance.now() < suppressWorldInputUntil) {
                         uiInteractionStarted = false;
                         liminalDebugNote('world-click-skip', 'suppressed-window');
@@ -1979,6 +2074,13 @@
                 });
 
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        liminalDebugNote('move-skip', `world-lock:${worldLockReason}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `move-skip:world-lock:${worldLockReason}`);
+                        return;
+                    }
+
                     const sinceUi = performance.now() - lastUiInteractionAt;
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('move-skip', 'suppressed-window');
@@ -2052,13 +2154,25 @@
                     if (player && player.isReadingMode) {
                         liminalDebugNote('touchend-skip', 'reading-mode');
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'reading-mode');
+                        touchStartedOnRenderer = false;
                         return;
                     }
                     if (window.innerWidth > 768) return;
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`touchend-world-lock:${worldLockReason}`);
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `world-lock:${worldLockReason}`);
+                        return;
+                    }
                     if (isUiClickTarget(event.target)) {
                         markUiInteraction('touchend-event-target-ui');
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         isTouchValid = true;
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'event-target-ui');
                         return;
@@ -2066,6 +2180,7 @@
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('touchend-skip', 'suppressed-window');
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'suppressed-window');
+                        touchStartedOnRenderer = false;
                         return;
                     }
 
@@ -2080,6 +2195,7 @@
                         isTouchDragging = false;
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         isTouchValid = true;
                         return;
                     }
@@ -2091,6 +2207,7 @@
                         markUiInteraction('touchend-point-ui');
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         isTouchValid = true;
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'point-inside-ui');
                         return;
@@ -2101,6 +2218,7 @@
                         liminalDebugNote('touchend-skip', 'deadzone');
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         isTouchValid = true;
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'deadzone');
                         return;
@@ -2109,13 +2227,24 @@
                     const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     if (isUiClickTarget(touchedEl)) {
                         markUiInteraction('touchend-ui-target');
+                        touchStartedOnRenderer = false;
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'touchedEl-ui-target');
                         return;
                     }
-                    if (touchedEl !== renderer.domElement) {
+                    if (!touchStartedOnRenderer) {
+                        liminalDebugNote('touchend-skip', 'start-not-renderer');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'start-not-renderer');
+                        return;
+                    }
+                    if (!isRendererElement(touchedEl)) {
                         liminalDebugNote('touchend-skip', 'not-renderer');
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
                         isTouchValid = true;
                         liminalCause('C04_WORLD_BLOCKED_TOUCH', 'not-renderer');
                         return;
@@ -2126,6 +2255,7 @@
                     isTouchDragging = false;
                     touchMovedForTap = false;
                     touchStartedOnUi = false;
+                    touchStartedOnRenderer = false;
                     isTouchValid = true;
                 }, { passive: true });
                 document.addEventListener('keydown', (e) => {
@@ -2453,29 +2583,42 @@
                             } else if (moveTarget) {
                                 // CLICK-TO-MOVE LOGIC
                                 const sinceUi = performance.now() - lastUiInteractionAt;
-                                if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
-                                    liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
-                                }
-                                const dx = moveTarget.x - camera.position.x;
-                                const dz = moveTarget.z - camera.position.z;
-                                const dist = Math.sqrt(dx * dx + dz * dz);
-
-                                // FIX: Stop Looking earlier to prevent swing/spin at singularity
-                                if (dist < 2.0) {
-                                    cameraLookTarget = null;
-                                }
-
-                                if (dist < 0.2) {
+                                const worldLockReason = getWorldInputLockReason();
+                                if (worldLockReason) {
+                                    liminalDebugNote('move-skip', `loop-world-lock:${worldLockReason}`);
+                                    liminalCause('C04_WORLD_BLOCKED_TOUCH', `loop-world-lock:${worldLockReason}`);
                                     moveTarget = null;
                                     cameraLookTarget = null;
-                                    velocity.set(0, 0, 0); // Full stop
-                                    // Skip remaining movement logic this frame
+                                    velocity.x = 0;
+                                    velocity.z = 0;
+                                } else if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
+                                    liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
+                                    moveTarget = null;
+                                    cameraLookTarget = null;
+                                    velocity.x = 0;
+                                    velocity.z = 0;
                                 } else {
-                                    const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+                                    const dx = moveTarget.x - camera.position.x;
+                                    const dz = moveTarget.z - camera.position.z;
+                                    const dist = Math.sqrt(dx * dx + dz * dz);
 
-                                    // UNIFIED SPEED: Use gameSpeed for click movement too.
-                                    // Direct World Space addition (since velocity is World Space)
-                                    velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                                    // FIX: Stop Looking earlier to prevent swing/spin at singularity
+                                    if (dist < 2.0) {
+                                        cameraLookTarget = null;
+                                    }
+
+                                    if (dist < 0.2) {
+                                        moveTarget = null;
+                                        cameraLookTarget = null;
+                                        velocity.set(0, 0, 0); // Full stop
+                                        // Skip remaining movement logic this frame
+                                    } else {
+                                        const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+
+                                        // UNIFIED SPEED: Use gameSpeed for click movement too.
+                                        // Direct World Space addition (since velocity is World Space)
+                                        velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                                    }
                                 }
                             }
 
@@ -2777,11 +2920,6 @@
                     }
                 }
 
-                // Hookup Archive Button
-                document.getElementById('bookBtn').addEventListener('click', () => {
-                    renderArchiveContent();
-                    document.getElementById('archiveModal').classList.add('visible');
-                });
                 // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
                 window.addEventListener('resize', () => {
                     syncViewport();

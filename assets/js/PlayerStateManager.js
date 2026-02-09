@@ -148,15 +148,54 @@ const PlayerStateManager = {
     },
 
     /**
-     * Import states from game save
+     * Import states from game save.
+     * Default behavior is a timestamp-aware merge to avoid wiping fresher runtime state.
+     *
      * @param {Object} states - States to import
+     * @param {{replace?: boolean}} options
      */
-    importStates(states) {
-        if (states && typeof states === 'object') {
+    importStates(states, options = {}) {
+        if (!states || typeof states !== 'object') return;
+
+        const replace = !!(options && options.replace);
+        if (replace) {
             this._states = { ...states };
             this._persist();
-            console.log('[PlayerStateManager] Imported states:', Object.keys(this._states));
+            console.log('[PlayerStateManager] Imported states (replace):', Object.keys(this._states));
+            return;
         }
+
+        let merged = 0;
+        let skipped = 0;
+        const now = Date.now();
+        for (const [key, incoming] of Object.entries(states)) {
+            if (!incoming || typeof incoming !== 'object') {
+                skipped += 1;
+                continue;
+            }
+
+            const safeIndex = Number.isFinite(incoming.sentenceIndex) ? incoming.sentenceIndex : 0;
+            const safeTime = Number.isFinite(incoming.sentenceTime) ? incoming.sentenceTime : 0;
+            const incomingStamp = Number.isFinite(incoming.lastUpdate) ? incoming.lastUpdate : 0;
+            const current = this._states[key];
+            const currentStamp = Number((current && current.lastUpdate) || 0);
+
+            if (current && currentStamp > incomingStamp) {
+                skipped += 1;
+                continue;
+            }
+
+            this._states[key] = {
+                sentenceIndex: safeIndex,
+                sentenceTime: safeTime,
+                wasPlaying: !!incoming.wasPlaying,
+                lastUpdate: incomingStamp || now
+            };
+            merged += 1;
+        }
+
+        this._persist();
+        console.log(`[PlayerStateManager] Imported states (merge): merged=${merged}, skipped=${skipped}, total=${Object.keys(this._states).length}`);
     },
 
     /**
