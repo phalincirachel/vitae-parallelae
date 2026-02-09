@@ -233,6 +233,18 @@
                     events: [],
                     lastSave: null,
                     lastSnapshot: '',
+                    causes: {
+                        C01_WORLD_PATH_CLICK: 0,
+                        C02_WORLD_BLOCKED_CLICK: 0,
+                        C03_WORLD_PATH_TOUCH: 0,
+                        C04_WORLD_BLOCKED_TOUCH: 0,
+                        C05_MOVE_SET_FROM_UI_REGION: 0,
+                        C06_MOVE_SET_RECENT_UI_WINDOW: 0,
+                        C07_DEADZONE_LAYOUT_DRIFT: 0,
+                        C08_TOUCHFLAGS_STUCK: 0,
+                        C09_RESTORE_WITHOUT_STATE: 0,
+                        C10_SEEK_CONFIRM_FAILED: 0
+                    },
                     push(label, detail = '') {
                         const stamp = new Date().toISOString().slice(11, 19);
                         const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
@@ -247,6 +259,25 @@
                     liminalDebug.push(label, detail);
                 }
 
+                function liminalCause(id, detail = '') {
+                    if (!liminalDebug.causes[id] && liminalDebug.causes[id] !== 0) return;
+                    liminalDebug.causes[id] += 1;
+                    liminalDebugNote(`CAUSE ${id}`, detail);
+                }
+
+                const liminalCauseHelp = {
+                    C01_WORLD_PATH_CLICK: 'Desktop click path reached world-input.',
+                    C02_WORLD_BLOCKED_CLICK: 'Click blocked by UI/deadzone/suppress window.',
+                    C03_WORLD_PATH_TOUCH: 'Mobile touchend path reached world-input.',
+                    C04_WORLD_BLOCKED_TOUCH: 'Touch blocked by UI/deadzone/flags/suppress window.',
+                    C05_MOVE_SET_FROM_UI_REGION: 'Move target set although pointer was in UI region.',
+                    C06_MOVE_SET_RECENT_UI_WINDOW: 'Move target set too soon after UI interaction.',
+                    C07_DEADZONE_LAYOUT_DRIFT: 'UI/deadzone boundary moved unexpectedly.',
+                    C08_TOUCHFLAGS_STUCK: 'Touch flags stayed in blocked state without recent UI hit.',
+                    C09_RESTORE_WITHOUT_STATE: 'Restore fallback used because saved state missing.',
+                    C10_SEEK_CONFIRM_FAILED: 'Seek verification failed; stream likely ignored seek.'
+                };
+
                 function writeStateHandoff(targetPageKey) {
                     try {
                         if (!window.PlayerStateManager || typeof window.PlayerStateManager.exportStates !== 'function') return;
@@ -258,6 +289,7 @@
                             states
                         };
                         sessionStorage.setItem('gb_state_handoff', JSON.stringify(payload));
+                        sessionStorage.setItem('gb_handoff_expect', String(targetPageKey || ''));
                         liminalDebugNote('handoff-out', `to=${targetPageKey} states=${Object.keys(states).length}`);
                     } catch (e) {
                         liminalDebugNote('handoff-out-error', e && e.message ? e.message : String(e));
@@ -267,7 +299,14 @@
                 function mergeIncomingStateHandoff(expectedTargetKey) {
                     try {
                         const raw = sessionStorage.getItem('gb_state_handoff');
-                        if (!raw || !window.PlayerStateManager) return;
+                        const expected = sessionStorage.getItem('gb_handoff_expect');
+                        if (!raw || !window.PlayerStateManager) {
+                            if (expected && expected === expectedTargetKey) {
+                                liminalCause('C09_RESTORE_WITHOUT_STATE', 'handoff missing');
+                                sessionStorage.removeItem('gb_handoff_expect');
+                            }
+                            return;
+                        }
 
                         const payload = JSON.parse(raw);
                         if (!payload || payload.to !== expectedTargetKey || !payload.states || typeof payload.states !== 'object') {
@@ -293,7 +332,11 @@
                         }
 
                         sessionStorage.removeItem('gb_state_handoff');
+                        sessionStorage.removeItem('gb_handoff_expect');
                         liminalDebugNote('handoff-in', `from=${payload.from || '-'} merged=${merged}`);
+                        if (merged === 0) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', 'handoff merged=0');
+                        }
                     } catch (e) {
                         liminalDebugNote('handoff-in-error', e && e.message ? e.message : String(e));
                     }
@@ -371,6 +414,16 @@
                         rows.push(`input touchValid=${isTouchValid} touchUI=${touchStartedOnUi} drag=${isTouchDragging} movedForTap=${touchMovedForTap}`);
                         rows.push(`target move=${moveTarget ? 'set' : '-'} look=${cameraLookTarget ? 'set' : '-'} centering=${isCenteringCamera}`);
                         rows.push(`lastSave=${liminalDebug.lastSave ? JSON.stringify(liminalDebug.lastSave) : '-'}`);
+                        rows.push('causes:');
+                        let hasCause = false;
+                        Object.keys(liminalDebug.causes).forEach(k => {
+                            const count = liminalDebug.causes[k] || 0;
+                            if (count > 0) {
+                                hasCause = true;
+                                rows.push(`- ${k}=${count}`);
+                            }
+                        });
+                        if (!hasCause) rows.push('- none');
                         rows.push('events:');
                         for (const ev of liminalDebug.events.slice(-12)) rows.push(`- ${ev}`);
 
@@ -573,6 +626,9 @@
                     p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
                     p.renderLines(p.currentSubtitleIndex);
                     liminalDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
+                    if (!seekResult.ok) {
+                        liminalCause('C10_SEEK_CONFIRM_FAILED', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
+                    }
                     return seekResult;
                 }
 
@@ -644,6 +700,9 @@
                             ? savedMain.sentenceTime
                             : Math.max(0, mainAudioState.time || 0);
                         liminalDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
+                        if (!savedMain && (mainAudioState.time || 0) <= 0.01) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', 'main restore fallback at 0');
+                        }
 
                         await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
@@ -706,6 +765,9 @@
                             ? savedLore.sentenceTime
                             : 0;
                         liminalDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore}`);
+                        if (!savedLore && resumeTime <= 0.01) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', `lore${id} restore fallback at 0`);
+                        }
 
                         await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:pre-play`);
 
@@ -1080,6 +1142,10 @@
                 document.addEventListener('touchstart', (event) => {
                     // Disabled in reading mode
                     if (player && player.isReadingMode) return;
+
+                    if (!isTouchValid && performance.now() - lastUiInteractionAt > 1200) {
+                        liminalCause('C08_TOUCHFLAGS_STUCK', `touchstart with stale invalid flag (${(performance.now() - lastUiInteractionAt).toFixed(0)}ms)`);
+                    }
 
                     if (event.touches.length !== 1) {
                         isTouchValid = false;
@@ -1731,6 +1797,7 @@
                 let lastUiInteractionAt = 0;
                 const UI_CLICK_SUPPRESS_MS = 700;
                 let suppressWorldInputUntil = 0;
+                let lastDeadzoneTop = null;
 
                 function markUiInteraction(reason = 'ui') {
                     lastUiInteractionAt = performance.now();
@@ -1776,9 +1843,19 @@
                     }
 
                     if (tops.length === 0) {
-                        return window.innerHeight - 160;
+                        const fallback = window.innerHeight - 160;
+                        if (lastDeadzoneTop !== null && Math.abs(fallback - lastDeadzoneTop) > 60) {
+                            liminalCause('C07_DEADZONE_LAYOUT_DRIFT', `fallback ${lastDeadzoneTop.toFixed(1)} -> ${fallback.toFixed(1)}`);
+                        }
+                        lastDeadzoneTop = fallback;
+                        return fallback;
                     }
-                    return Math.max(0, Math.min(...tops));
+                    const resolved = Math.max(0, Math.min(...tops));
+                    if (lastDeadzoneTop !== null && Math.abs(resolved - lastDeadzoneTop) > 60) {
+                        liminalCause('C07_DEADZONE_LAYOUT_DRIFT', `${lastDeadzoneTop.toFixed(1)} -> ${resolved.toFixed(1)}`);
+                    }
+                    lastDeadzoneTop = resolved;
+                    return resolved;
                 }
 
                 function isPointInsideUi(clientX, clientY) {
@@ -1833,11 +1910,13 @@
                     if (performance.now() < suppressWorldInputUntil) {
                         uiInteractionStarted = false;
                         liminalDebugNote('world-click-skip', 'suppressed-window');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'suppressed-window');
                         return;
                     }
 
                     const isMobile = window.innerWidth <= 768;
                     if (isMobile) {
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-click-path-disabled');
                         return;
                     }
 
@@ -1845,12 +1924,14 @@
                     if (isMobile && sinceUiInteraction < UI_CLICK_SUPPRESS_MS) {
                         uiInteractionStarted = false;
                         liminalDebugNote('world-click-skip', 'mobile-ui-window');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-ui-window');
                         return;
                     }
 
                     if (uiInteractionStarted) {
                         uiInteractionStarted = false;
                         liminalDebugNote('world-click-skip', 'ui-started');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'ui-started');
                         return;
                     }
 
@@ -1861,16 +1942,19 @@
                     if (isUiClickTarget(clickedEl) || event.clientY >= getUiDeadzoneTop()) {
                         markUiInteraction('click-ui-target');
                         console.log("Click ignored: UI element");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'click-ui-target');
                         return;
                     }
 
                     if (isMobile && clickedEl !== renderer.domElement) {
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
                         return;
                     }
 
                     // DISABLED in reading mode
                     if (player.isReadingMode) {
                         console.log("Click-to-move disabled in reading mode");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'reading-mode');
                         return;
                     }
 
@@ -1878,6 +1962,7 @@
                     if (isTouchDragging) {
                         console.log("Click ignored: was a drag gesture");
                         isTouchDragging = false;
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'drag-gesture');
                         return;
                     }
 
@@ -1885,19 +1970,24 @@
                     // If click is in the bottom 80px (approx UI height), IGNORÉ
                     if (event.clientY >= getUiDeadzoneTop()) {
                         console.log("Ignored Click in UI Deadzone");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'deadzone');
                         return;
                     }
 
+                    liminalCause('C01_WORLD_PATH_CLICK', `x=${event.clientX} y=${event.clientY}`);
                     trySetMoveTargetFromScreenPoint(event.clientX, event.clientY, false);
                 });
 
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    const sinceUi = performance.now() - lastUiInteractionAt;
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('move-skip', 'suppressed-window');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'move-skip:suppressed-window');
                         return;
                     }
                     if (clientY >= getUiDeadzoneTop() || isPointInsideUi(clientX, clientY)) {
                         liminalDebugNote('move-skip', 'ui-deadzone-boundary');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'move-skip:ui-deadzone-boundary');
                         return;
                     }
 
@@ -1929,6 +2019,12 @@
                     }
 
                     if (target) {
+                        if (isPointInsideUi(clientX, clientY) || clientY >= getUiDeadzoneTop()) {
+                            liminalCause('C05_MOVE_SET_FROM_UI_REGION', `x=${clientX} y=${clientY}`);
+                        }
+                        if (sinceUi < UI_CLICK_SUPPRESS_MS + 30) {
+                            liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `sinceUi=${sinceUi.toFixed(0)}ms`);
+                        }
                         if (isMobileTap) {
                             cameraLookTarget = target.clone();
                         }
@@ -1955,6 +2051,7 @@
                 document.addEventListener('touchend', (event) => {
                     if (player && player.isReadingMode) {
                         liminalDebugNote('touchend-skip', 'reading-mode');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'reading-mode');
                         return;
                     }
                     if (window.innerWidth > 768) return;
@@ -1963,16 +2060,23 @@
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
                         isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'event-target-ui');
                         return;
                     }
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('touchend-skip', 'suppressed-window');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'suppressed-window');
                         return;
                     }
 
                     // Ignore UI-origin touches and drag gestures
                     if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
+                        const sinceUi = performance.now() - lastUiInteractionAt;
                         liminalDebugNote('touchend-skip', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
+                        if (!touchStartedOnUi && !isTouchDragging && !touchMovedForTap && !isTouchValid && sinceUi > 1200) {
+                            liminalCause('C08_TOUCHFLAGS_STUCK', `isTouchValid=false sinceUi=${sinceUi.toFixed(0)}ms`);
+                        }
                         isTouchDragging = false;
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
@@ -1988,6 +2092,7 @@
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
                         isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'point-inside-ui');
                         return;
                     }
 
@@ -1997,12 +2102,14 @@
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
                         isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'deadzone');
                         return;
                     }
 
                     const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     if (isUiClickTarget(touchedEl)) {
                         markUiInteraction('touchend-ui-target');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'touchedEl-ui-target');
                         return;
                     }
                     if (touchedEl !== renderer.domElement) {
@@ -2010,9 +2117,11 @@
                         touchMovedForTap = false;
                         touchStartedOnUi = false;
                         isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'not-renderer');
                         return;
                     }
 
+                    liminalCause('C03_WORLD_PATH_TOUCH', `x=${touch.clientX} y=${touch.clientY}`);
                     trySetMoveTargetFromScreenPoint(touch.clientX, touch.clientY, true);
                     isTouchDragging = false;
                     touchMovedForTap = false;
@@ -2343,6 +2452,10 @@
                                 cameraLookTarget = null;
                             } else if (moveTarget) {
                                 // CLICK-TO-MOVE LOGIC
+                                const sinceUi = performance.now() - lastUiInteractionAt;
+                                if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
+                                    liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
+                                }
                                 const dx = moveTarget.x - camera.position.x;
                                 const dz = moveTarget.z - camera.position.z;
                                 const dist = Math.sqrt(dx * dx + dz * dz);

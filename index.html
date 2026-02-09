@@ -374,6 +374,7 @@
                     states
                 };
                 sessionStorage.setItem('gb_state_handoff', JSON.stringify(payload));
+                sessionStorage.setItem('gb_handoff_expect', String(targetPageKey || ''));
                 indexDebugNote('handoff-out', `to=${targetPageKey} states=${Object.keys(states).length}`);
             } catch (e) {
                 indexDebugNote('handoff-out-error', e && e.message ? e.message : String(e));
@@ -383,7 +384,14 @@
         function mergeIncomingStateHandoff(expectedTargetKey) {
             try {
                 const raw = sessionStorage.getItem('gb_state_handoff');
-                if (!raw || !window.PlayerStateManager) return;
+                const expected = sessionStorage.getItem('gb_handoff_expect');
+                if (!raw || !window.PlayerStateManager) {
+                    if (expected && expected === expectedTargetKey) {
+                        indexDebugNote('handoff-in-missing', `expected=${expectedTargetKey}`);
+                        sessionStorage.removeItem('gb_handoff_expect');
+                    }
+                    return;
+                }
 
                 const payload = JSON.parse(raw);
                 if (!payload || payload.to !== expectedTargetKey || !payload.states || typeof payload.states !== 'object') {
@@ -409,6 +417,7 @@
                 }
 
                 sessionStorage.removeItem('gb_state_handoff');
+                sessionStorage.removeItem('gb_handoff_expect');
                 indexDebugNote('handoff-in', `from=${payload.from || '-'} merged=${merged}`);
             } catch (e) {
                 indexDebugNote('handoff-in-error', e && e.message ? e.message : String(e));
