@@ -284,11 +284,62 @@ export class SharedAudioPlayer {
         this.renderLines(this.currentSubtitleIndex);
     }
 
+    async _skipBySeconds(sec) {
+        const delta = Number(sec) || 0;
+        if (!delta) return;
+
+        const wasPlaying = (typeof this.audio.isProbablyPlaying === 'function')
+            ? this.audio.isProbablyPlaying()
+            : !this.audio.paused;
+
+        let baseTime = this.audio.currentTime || 0;
+        try {
+            if (typeof this.audio.getAccurateCurrentTime === 'function') {
+                baseTime = await this.audio.getAccurateCurrentTime(900);
+            }
+        } catch (_) {
+            // Keep baseTime fallback
+        }
+
+        let target = Math.max(0, baseTime + delta);
+        const duration = Number(this.audio.duration);
+        if (Number.isFinite(duration) && duration > 0) {
+            target = Math.min(duration, target);
+        }
+
+        if (typeof this.audio.seekAndConfirm === 'function') {
+            await this.audio.seekAndConfirm(target, {
+                maxAttempts: 4,
+                settleMs: 180,
+                tolerance: 0.9
+            });
+        } else {
+            this.audio.currentTime = target;
+            await this._wait(160);
+        }
+
+        const effectiveTime = (typeof this.audio.getAccurateCurrentTime === 'function')
+            ? await this.audio.getAccurateCurrentTime(900)
+            : (this.audio.currentTime || target);
+        this.currentSubtitleIndex = this.subtitleTracks.length ? this.findSubtitleIndexForTime(effectiveTime) : 0;
+        this.renderLines(this.currentSubtitleIndex);
+
+        if (wasPlaying && this.audio.paused) {
+            try { await this.audio.play(); } catch (_) { /* ignored */ }
+        } else if (!wasPlaying && !this.audio.paused) {
+            this.audio.pause();
+        }
+    }
+
     // Controls
     play() { return this.audio.play(); }
     pause() { this.audio.pause(); }
     toggle() { if (this.audio.paused) this.play(); else this.pause(); }
-    skip(sec) { this.audio.currentTime = Math.max(0, Math.min(this.audio.duration || 0, this.audio.currentTime + sec)); }
+    skip(sec) {
+        this._skipBySeconds(sec).catch(e => {
+            console.warn('SharedAudioPlayer skip failed:', e);
+        });
+    }
 
     // Getters/Setters for compatibility
     get paused() { return this.audio.paused; }
