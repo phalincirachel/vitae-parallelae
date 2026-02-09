@@ -199,6 +199,9 @@ class SCAudioAdapter {
 
         this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
             if (this.mode !== 'sc') return;
+            if (data && Number.isFinite(data.currentPosition)) {
+                this._scCurrentTime = data.currentPosition / 1000;
+            }
             this._scPaused = false;
             this._scLastProgressAt = Date.now();
             this._dispatch('timeupdate');
@@ -263,14 +266,16 @@ class SCAudioAdapter {
     }
 
     set currentTime(val) {
+        const safeVal = Math.max(0, Number(val) || 0);
+        this._scCurrentTime = safeVal;
         if (this.mode === 'html5') {
-            this.audioNode.currentTime = val;
+            this.audioNode.currentTime = safeVal;
         } else if (this.mode === 'sc' && this.widget) {
             // Store pending seek - SC widget may not be ready
-            this._pendingSeek = val;
+            this._pendingSeek = safeVal;
             // Try to seek immediately
-            this.widget.seekTo(val * 1000);
-            console.log(`[SCAudioAdapter] Seeking to ${val}s (pending: ${this._pendingSeek})`);
+            this.widget.seekTo(safeVal * 1000);
+            console.log(`[SCAudioAdapter] Seeking to ${safeVal}s (pending: ${this._pendingSeek})`);
         }
     }
 
@@ -280,6 +285,7 @@ class SCAudioAdapter {
             const seekVal = this._pendingSeek;
             this._pendingSeek = undefined;
             console.log(`[SCAudioAdapter] Applying pending seek to ${seekVal}s`);
+            this._scCurrentTime = seekVal;
             setTimeout(() => {
                 this.widget.seekTo(seekVal * 1000);
             }, 500); // Small delay to ensure widget is ready

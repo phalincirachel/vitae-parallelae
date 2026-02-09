@@ -225,6 +225,85 @@
                 let contentSwitchInProgress = false;
                 let contentSwitchToken = 0;
 
+                // ============================================
+                // DEBUG HUD (LIMINAL)
+                // ============================================
+                const liminalDebug = {
+                    enabled: localStorage.getItem('gb_debug_liminal') !== '0',
+                    events: [],
+                    lastSave: null,
+                    push(label, detail = '') {
+                        const stamp = new Date().toISOString().slice(11, 19);
+                        const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
+                        this.events.push(row);
+                        if (this.events.length > 20) this.events.shift();
+                    }
+                };
+                window.__gbLiminalDebug = liminalDebug;
+
+                function liminalDebugNote(label, detail = '') {
+                    if (!liminalDebug.enabled) return;
+                    liminalDebug.push(label, detail);
+                }
+
+                (function initLiminalDebugHud() {
+                    const toggle = document.createElement('button');
+                    toggle.id = 'liminalDebugToggle';
+                    toggle.textContent = 'DBG';
+                    toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#7ef;border:1px solid #7ef;padding:4px 8px;font:12px monospace;pointer-events:auto;';
+                    document.body.appendChild(toggle);
+
+                    const panel = document.createElement('div');
+                    panel.id = 'liminalDebugPanel';
+                    panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#d4ffd8;border:1px solid rgba(212,255,216,0.5);padding:8px;max-width:92vw;width:450px;max-height:62vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;';
+                    panel.style.display = liminalDebug.enabled ? 'block' : 'none';
+                    document.body.appendChild(panel);
+
+                    toggle.addEventListener('click', () => {
+                        liminalDebug.enabled = !liminalDebug.enabled;
+                        localStorage.setItem('gb_debug_liminal', liminalDebug.enabled ? '1' : '0');
+                        panel.style.display = liminalDebug.enabled ? 'block' : 'none';
+                    });
+
+                    const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
+
+                    setInterval(() => {
+                        if (!liminalDebug.enabled) return;
+
+                        const p = window.audioPlayer || null;
+                        const audio = p && p.audio ? p.audio : null;
+                        const activeKey = (typeof getActiveContentKey === 'function') ? getActiveContentKey() : '-';
+                        const currentState = window.PlayerStateManager ? window.PlayerStateManager.getState(activeKey) : null;
+                        const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
+                        const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
+                        const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
+                        const suppressLeft = Math.max(0, Math.round((suppressWorldInputUntil - performance.now())));
+                        const subtitleTotal = p && Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : 0;
+
+                        const rows = [];
+                        rows.push('LIMINAL DEBUG');
+                        rows.push(`mode reading=${!!isReadingMode} loreMode=${!!isLoreMode} loreId=${activeLoreId || '-'} key=${activeKey}`);
+                        rows.push(`switch inProgress=${!!contentSwitchInProgress} token=${contentSwitchToken}`);
+                        if (audio) {
+                            rows.push(`player t=${fmt(audio.currentTime)} d=${fmt(audio.duration)} paused=${!!audio.paused} playing?=${typeof audio.isProbablyPlaying === 'function' ? audio.isProbablyPlaying() : !audio.paused}`);
+                        } else {
+                            rows.push('player unavailable');
+                        }
+                        rows.push(`subtitle idx=${p ? p.currentSubtitleIndex : '-'} / ${Math.max(0, subtitleTotal - 1)}`);
+                        rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
+                        rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
+                        rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
+                        rows.push(`input uiInteractionStarted=${uiInteractionStarted} suppressMs=${suppressLeft}`);
+                        rows.push(`input touchValid=${isTouchValid} touchUI=${touchStartedOnUi} drag=${isTouchDragging} movedForTap=${touchMovedForTap}`);
+                        rows.push(`target move=${moveTarget ? 'set' : '-'} look=${cameraLookTarget ? 'set' : '-'} centering=${isCenteringCamera}`);
+                        rows.push(`lastSave=${liminalDebug.lastSave ? JSON.stringify(liminalDebug.lastSave) : '-'}`);
+                        rows.push('events:');
+                        for (const ev of liminalDebug.events.slice(-12)) rows.push(`- ${ev}`);
+
+                        panel.textContent = rows.join('\n');
+                    }, 300);
+                })();
+
                 function getActiveContentKey() {
                     if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
                     return MAIN_CONTENT_KEY;
@@ -271,7 +350,8 @@
                     const {
                         keyOverride = null,
                         clear = false,
-                        preferCachedTime = false
+                        preferCachedTime = false,
+                        reason = 'unspecified'
                     } = options;
 
                     const p = window.audioPlayer;
@@ -282,6 +362,8 @@
 
                     if (clear) {
                         clearContentState(key);
+                        liminalDebug.lastSave = { key, cleared: true, reason, at: Date.now() };
+                        liminalDebugNote('state-clear', `${key} (${reason})`);
                         return;
                     }
 
@@ -304,8 +386,28 @@
                                     sentenceTime: sentence.time,
                                     wasPlaying
                                 });
+                                liminalDebug.lastSave = {
+                                    key,
+                                    reason,
+                                    currentTime: Number((currentTime || 0).toFixed(3)),
+                                    sentenceIndex: sentence.index,
+                                    sentenceTime: Number((sentence.time || 0).toFixed(3)),
+                                    wasPlaying,
+                                    at: Date.now()
+                                };
+                                liminalDebugNote('state-save', `${key} -> ${sentence.time.toFixed(2)}s idx=${sentence.index} play=${wasPlaying} (${reason})`);
                             } else {
                                 window.PlayerStateManager.saveState(key, tracks, p.audio);
+                                liminalDebug.lastSave = {
+                                    key,
+                                    reason,
+                                    currentTime: Number((currentTime || 0).toFixed(3)),
+                                    sentenceIndex: null,
+                                    sentenceTime: Number((currentTime || 0).toFixed(3)),
+                                    wasPlaying,
+                                    at: Date.now()
+                                };
+                                liminalDebugNote('state-save', `${key} (legacy) ${currentTime.toFixed(2)}s (${reason})`);
                             }
                         }
 
@@ -315,6 +417,7 @@
                         }
                     } catch (e) {
                         console.warn('[State] saveCurrentContentState failed', e);
+                        liminalDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
                     }
                 }
 
@@ -386,7 +489,7 @@
                     try {
                         const loreIdBeforeSwitch = activeLoreId;
                         if (saveCurrent && loreIdBeforeSwitch) {
-                            await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
+                            await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}`, reason: 'restore-main:save-lore' });
                         } else if (!saveCurrent && loreIdBeforeSwitch) {
                             clearContentState(`lore${loreIdBeforeSwitch}`);
                         }
@@ -406,6 +509,7 @@
                         const resumeTime = savedMain && savedMain.sentenceTime !== undefined
                             ? savedMain.sentenceTime
                             : Math.max(0, mainAudioState.time || 0);
+                        liminalDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
 
                         p.audio.currentTime = resumeTime;
                         p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -425,6 +529,7 @@
                         updateIcons();
                     } catch (e) {
                         console.warn('Restore failed', e);
+                        liminalDebugNote('restore-main-error', e && e.message ? e.message : String(e));
                         updateIcons();
                     } finally {
                         if (switchToken === contentSwitchToken) {
@@ -450,7 +555,7 @@
                     const switchToken = ++contentSwitchToken;
 
                     try {
-                        await saveCurrentContentState();
+                        await saveCurrentContentState({ reason: `start-lore:${id}` });
 
                         isLoreMode = true;
                         activeLoreId = id;
@@ -467,6 +572,7 @@
                         const resumeTime = savedLore && savedLore.sentenceTime !== undefined
                             ? savedLore.sentenceTime
                             : 0;
+                        liminalDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore}`);
 
                         p.audio.currentTime = resumeTime;
                         p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -629,7 +735,14 @@
                 document.getElementById('gameModeBtn').addEventListener('click', () => {
                     isReadingMode = false;
                     updateReadingModeUI();
-                    markUiInteraction();
+                    markUiInteraction('btn:game-mode');
+                });
+
+                document.querySelectorAll('#audioControls button, #nextChapterBtn, #chapterMenu .menu-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const name = el.id || el.className || 'ui';
+                        liminalDebugNote('ui-click', String(name));
+                    });
                 });
 
                 // Auto-Resume when Lore ends or Transition
@@ -639,15 +752,26 @@
                 // For now, access the audio element directly.
                 player.audio.addEventListener('ended', () => {
                     if (isLoreMode) {
+                        liminalDebugNote('audio-ended', 'lore -> restore main');
                         window.restoreMainAudio({ saveCurrent: false });
                         return;
                     } else {
                         // MAIN CHAPTER ENDED
-                        clearContentState(MAIN_CONTENT_KEY);
-                        console.log("Chapter Finished.");
-                        // Use global variable
+                        const textFinished = isCurrentContentCompleted();
+                        liminalDebugNote('audio-ended', `main idx=${getActiveSubtitleIndex()}/${getActiveSubtitleTracks().length} textFinished=${textFinished} reading=${isReadingMode}`);
+
+                        const shouldClearMainState = !isReadingMode || textFinished;
+                        if (shouldClearMainState) {
+                            clearContentState(MAIN_CONTENT_KEY);
+                        }
+
                         if (isReadingMode) {
-                            transitionToNextChapter();
+                            if (textFinished) {
+                                transitionToNextChapter();
+                            } else {
+                                player.pause();
+                                updateIcons();
+                            }
                         } else {
                             // Game Mode: Show Button
                             const btn = document.getElementById('nextChapterBtn');
@@ -660,7 +784,7 @@
                 window.transitionToNextChapter = async function () {
                     const overlay = document.getElementById('transitionOverlay');
                     if (overlay) overlay.classList.add('active');
-                    await saveCurrentContentState({ preferCachedTime: true });
+                    await saveCurrentContentState({ reason: 'transition:next-chapter' });
 
                     // Fade Audio
                     const fade = setInterval(() => {
@@ -827,6 +951,7 @@
                     if (event.touches.length !== 1) {
                         isTouchValid = false;
                         isTouchDragging = false;
+                        liminalDebugNote('touchstart-skip', `multi-touch:${event.touches.length}`);
                         return;
                     }
 
@@ -840,7 +965,7 @@
                         if (isTouchOnUI(event) || startedInDeadzone) {
                             isTouchValid = false;
                             touchStartedOnUi = true;
-                            markUiInteraction();
+                            markUiInteraction(startedInDeadzone ? 'touchstart-deadzone' : 'touchstart-ui');
                             return;
                         }
                         isTouchValid = true;
@@ -1474,13 +1599,14 @@
                 const UI_CLICK_SUPPRESS_MS = 700;
                 let suppressWorldInputUntil = 0;
 
-                function markUiInteraction() {
+                function markUiInteraction(reason = 'ui') {
                     lastUiInteractionAt = performance.now();
                     suppressWorldInputUntil = lastUiInteractionAt + UI_CLICK_SUPPRESS_MS;
                     uiInteractionStarted = true;
                     moveTarget = null;
                     cameraLookTarget = null;
                     isCenteringCamera = false;
+                    liminalDebugNote('ui-hit', reason);
                 }
 
                 function isUiClickTarget(target) {
@@ -1503,10 +1629,33 @@
                     return Math.max(0, controls.getBoundingClientRect().top - safetyMargin);
                 }
 
+                function bindUiInputShield() {
+                    const roots = [
+                        document.getElementById('audioPlayerUI'),
+                        document.getElementById('nextChapterBtn'),
+                        document.getElementById('archiveModal'),
+                        document.getElementById('chapterMenu')
+                    ];
+                    const shieldEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
+                    const onShield = (event) => {
+                        const targetInfo = event.target && event.target.id ? event.target.id : (event.target && event.target.className ? String(event.target.className) : event.type);
+                        markUiInteraction(`shield:${event.type}:${targetInfo}`);
+                        event.stopPropagation();
+                    };
+
+                    for (const root of roots) {
+                        if (!root) continue;
+                        for (const ev of shieldEvents) {
+                            root.addEventListener(ev, onShield, true);
+                        }
+                    }
+                }
+                bindUiInputShield();
+
                 document.addEventListener('pointerdown', (event) => {
                     const isUiHit = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
                     if (isUiHit) {
-                        markUiInteraction();
+                        markUiInteraction(`pointerdown-ui:${event.clientY}`);
                     } else {
                         uiInteractionStarted = false;
                     }
@@ -1515,6 +1664,7 @@
                 document.addEventListener('click', (event) => {
                     if (performance.now() < suppressWorldInputUntil) {
                         uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'suppressed-window');
                         return;
                     }
 
@@ -1526,11 +1676,13 @@
                     const sinceUiInteraction = performance.now() - lastUiInteractionAt;
                     if (isMobile && sinceUiInteraction < UI_CLICK_SUPPRESS_MS) {
                         uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'mobile-ui-window');
                         return;
                     }
 
                     if (uiInteractionStarted) {
                         uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'ui-started');
                         return;
                     }
 
@@ -1539,7 +1691,7 @@
 
                     // Ignore clicks on UI elements
                     if (isUiClickTarget(clickedEl) || event.clientY >= getUiDeadzoneTop()) {
-                        markUiInteraction();
+                        markUiInteraction('click-ui-target');
                         console.log("Click ignored: UI element");
                         return;
                     }
@@ -1572,7 +1724,10 @@
                 });
 
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
-                    if (performance.now() < suppressWorldInputUntil) return;
+                    if (performance.now() < suppressWorldInputUntil) {
+                        liminalDebugNote('move-skip', 'suppressed-window');
+                        return;
+                    }
 
                     // Calculate click position in normalized coordinates
                     const clickScreenX = (clientX / window.innerWidth) * 2 - 1;
@@ -1614,23 +1769,32 @@
                         if (target.z > camera.position.z + 2.0) {
                             console.log("Ignored Backwards Click");
                             cameraLookTarget = null; // Don't look at backwards target
+                            liminalDebugNote('move-skip', 'backwards-target');
                             return;
                         }
 
                         // Set movement Target
                         moveTarget = new THREE.Vector3(target.x, camera.position.y, target.z);
+                        liminalDebugNote('move-set', `${isMobileTap ? 'tap' : 'click'} x=${target.x.toFixed(2)} z=${target.z.toFixed(2)}`);
                         console.log("Moving to:", moveTarget, "Looking at:", cameraLookTarget);
                     }
                 }
 
                 document.addEventListener('touchend', (event) => {
-                    if (player && player.isReadingMode) return;
+                    if (player && player.isReadingMode) {
+                        liminalDebugNote('touchend-skip', 'reading-mode');
+                        return;
+                    }
                     if (window.innerWidth > 768) return;
-                    if (performance.now() < suppressWorldInputUntil) return;
+                    if (performance.now() < suppressWorldInputUntil) {
+                        liminalDebugNote('touchend-skip', 'suppressed-window');
+                        return;
+                    }
 
                     // Ignore UI-origin touches and drag gestures
                     if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
                         isTouchDragging = false;
+                        liminalDebugNote('touchend-skip', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
                         return;
                     }
 
@@ -1639,15 +1803,17 @@
 
                     // Ignore taps in control deadzone
                     if (touch.clientY >= getUiDeadzoneTop()) {
+                        liminalDebugNote('touchend-skip', 'deadzone');
                         return;
                     }
 
                     const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     if (isUiClickTarget(touchedEl)) {
-                        markUiInteraction();
+                        markUiInteraction('touchend-ui-target');
                         return;
                     }
                     if (touchedEl !== renderer.domElement) {
+                        liminalDebugNote('touchend-skip', 'not-renderer');
                         return;
                     }
 
@@ -1746,13 +1912,15 @@
                         if (document.hidden) {
                             // APP BACKGROUNDED -> PAUSE ALL
                             window.gamePaused = true;
-                            saveCurrentContentState({ preferCachedTime: true });
+                            saveCurrentContentState({ preferCachedTime: true, reason: 'visibility:hidden' });
+                            liminalDebugNote('visibility', 'hidden');
 
                             if (typeof ambientAudio !== 'undefined') {
                                 wasAmbientPlaying = (typeof ambientAudio.isProbablyPlaying === 'function')
                                     ? ambientAudio.isProbablyPlaying()
                                     : !ambientAudio.paused;
                                 ambientAudio.pause();
+                                liminalDebugNote('ambient', `pause hidden (wasPlaying=${wasAmbientPlaying})`);
                             } else {
                                 wasAmbientPlaying = false;
                             }
@@ -1762,6 +1930,7 @@
                                     ? audioPlayer.isProbablyPlaying()
                                     : !audioPlayer.paused;
                                 audioPlayer.pause();
+                                liminalDebugNote('player', `pause hidden (wasPlaying=${wasPlayerPlaying})`);
                             } else {
                                 wasPlayerPlaying = false;
                             }
@@ -1769,6 +1938,7 @@
                         } else {
                             // APP FOREGROUND -> RESUME
                             window.gamePaused = false;
+                            liminalDebugNote('visibility', 'visible');
                             // Discard accumulated clock time on resume
                             if (typeof clock !== 'undefined') clock.getDelta();
 
@@ -1776,19 +1946,22 @@
                                 if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                                     ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
                                     wasAmbientPlaying = false;
+                                    liminalDebugNote('ambient', 'resume on visible');
                                 }
                                 if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
                                     audioPlayer.play().catch(e => console.warn("Resume player failed", e));
                                     wasPlayerPlaying = false;
+                                    liminalDebugNote('player', 'resume on visible');
                                 }
                             }, 100);
                         }
                     });
 
                     window.addEventListener('pagehide', () => {
-                        saveCurrentContentState({ preferCachedTime: true });
+                        saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
                         if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
                         if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
+                        liminalDebugNote('lifecycle', 'pagehide');
                     });
 
                     // Start Animation Loop only after preload
@@ -2201,7 +2374,7 @@
                 if (chapter1Btn) {
                     chapter1Btn.addEventListener('click', async () => {
                         console.log("Returning to Chapter 1...");
-                        await saveCurrentContentState({ preferCachedTime: true });
+                        await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
                         window.location.href = 'index.html';
                     });
                 }
@@ -2230,7 +2403,7 @@
                 if (chapter1cBtn) {
                     chapter1cBtn.addEventListener('click', async () => {
                         console.log("Going to Chapter 1c...");
-                        await saveCurrentContentState({ preferCachedTime: true });
+                        await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
                         window.location.href = 'index3.html';
                     });
                 }

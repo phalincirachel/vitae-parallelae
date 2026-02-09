@@ -341,6 +341,87 @@
             resumeTimes: {}
         };
 
+        // ============================================
+        // DEBUG HUD (INDEX)
+        // ============================================
+        const indexDebug = {
+            enabled: localStorage.getItem('gb_debug_index') !== '0',
+            events: [],
+            lastSave: null,
+            push(label, detail = '') {
+                const stamp = new Date().toISOString().slice(11, 19);
+                const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
+                this.events.push(row);
+                if (this.events.length > 14) this.events.shift();
+            }
+        };
+        window.__gbIndexDebug = indexDebug;
+
+        function indexDebugNote(label, detail = '') {
+            if (!indexDebug.enabled) return;
+            indexDebug.push(label, detail);
+        }
+
+        (function initIndexDebugHud() {
+            const toggle = document.createElement('button');
+            toggle.id = 'indexDebugToggle';
+            toggle.textContent = 'DBG';
+            toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#9cf;border:1px solid #9cf;padding:4px 8px;font:12px monospace;pointer-events:auto;';
+            document.body.appendChild(toggle);
+
+            const panel = document.createElement('div');
+            panel.id = 'indexDebugPanel';
+            panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#b7ffcb;border:1px solid rgba(183,255,203,0.5);padding:8px;max-width:92vw;width:430px;max-height:60vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;';
+            panel.style.display = indexDebug.enabled ? 'block' : 'none';
+            document.body.appendChild(panel);
+
+            toggle.addEventListener('click', () => {
+                indexDebug.enabled = !indexDebug.enabled;
+                localStorage.setItem('gb_debug_index', indexDebug.enabled ? '1' : '0');
+                panel.style.display = indexDebug.enabled ? 'block' : 'none';
+            });
+
+            const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
+
+            setInterval(() => {
+                if (!indexDebug.enabled) return;
+
+                const playerReady = typeof audioPlayer !== 'undefined' && audioPlayer;
+                const ambReady = typeof ambientAudio !== 'undefined' && ambientAudio;
+                const activeKey = (typeof getActiveContentKey === 'function') ? getActiveContentKey() : '-';
+                const currentState = window.PlayerStateManager ? window.PlayerStateManager.getState(activeKey) : null;
+                const mainStateDbg = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
+                const loreKey = activeLoreId ? `lore${activeLoreId}` : '';
+                const loreStateDbg = loreKey && window.PlayerStateManager ? window.PlayerStateManager.getState(loreKey) : null;
+                const subtitleTotal = Array.isArray(subtitleTracks) ? subtitleTracks.length : 0;
+
+                const rows = [];
+                rows.push('INDEX DEBUG');
+                rows.push(`mode reading=${!!isReadingMode} loreMode=${!!isLoreMode} loreId=${activeLoreId || '-'} key=${activeKey}`);
+                rows.push(`switch inProgress=${!!contentSwitchInProgress} token=${contentSwitchToken}`);
+                if (playerReady) {
+                    rows.push(`player t=${fmt(audioPlayer.currentTime)} d=${fmt(audioPlayer.duration)} paused=${!!audioPlayer.paused} playing?=${typeof audioPlayer.isProbablyPlaying === 'function' ? audioPlayer.isProbablyPlaying() : !audioPlayer.paused}`);
+                } else {
+                    rows.push('player unavailable');
+                }
+                rows.push(`subtitle idx=${currentSubtitleIndex} / ${Math.max(0, subtitleTotal - 1)}`);
+                rows.push(`audioUnlocked=${audioUnlocked} footstepPlaying=${footstepPlaying}`);
+                if (ambReady) {
+                    rows.push(`ambient t=${fmt(ambientAudio.currentTime)} paused=${!!ambientAudio.paused} playing?=${typeof ambientAudio.isProbablyPlaying === 'function' ? ambientAudio.isProbablyPlaying() : !ambientAudio.paused} vol=${fmt(ambientAudio.volume)}`);
+                } else {
+                    rows.push('ambient unavailable');
+                }
+                rows.push(`saved(active)=${currentState ? `${fmt(currentState.sentenceTime)}s idx=${currentState.sentenceIndex} play=${currentState.wasPlaying}` : '-'}`);
+                rows.push(`saved(main)=${mainStateDbg ? `${fmt(mainStateDbg.sentenceTime)}s idx=${mainStateDbg.sentenceIndex} play=${mainStateDbg.wasPlaying}` : '-'}`);
+                rows.push(`saved(lore)=${loreStateDbg ? `${fmt(loreStateDbg.sentenceTime)}s idx=${loreStateDbg.sentenceIndex} play=${loreStateDbg.wasPlaying}` : '-'}`);
+                rows.push(`lastSave=${indexDebug.lastSave ? JSON.stringify(indexDebug.lastSave) : '-'}`);
+                rows.push('events:');
+                for (const ev of indexDebug.events.slice(-10)) rows.push(`- ${ev}`);
+
+                panel.textContent = rows.join('\n');
+            }, 300);
+        })();
+
         // Initialize GameState
         (async function initGameState() {
             try {
@@ -484,7 +565,7 @@
 
                 newCh1b.addEventListener('click', async () => {
                     console.log("Loading Chapter 1b...");
-                    await saveCurrentContentState({ preferCachedTime: true });
+                    await saveCurrentContentState({ reason: 'chapter-menu:to-1b' });
                     window.location.href = 'liminal library.html';
                 });
             }
@@ -497,7 +578,7 @@
 
                 newCh1c.addEventListener('click', async () => {
                     console.log("Loading Chapter 1c...");
-                    await saveCurrentContentState({ preferCachedTime: true });
+                    await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
                     window.location.href = 'index3.html';
                 });
             }
@@ -605,29 +686,6 @@
         let footstepPlaying = false;
 
         let audioUnlocked = false;
-
-        // Ambient-Sound (permanent)
-        const ambientSound = new SCAudioAdapter();
-        ambientSound.src = getSCUrl('assets/medieval_town.mp3');
-        ambientSound.volume = 0.024; // +20% from 0.02
-
-        // Audio entsperren bei erstem User-Input
-        function unlockAudio() {
-            if (audioUnlocked) return;
-            audioUnlocked = true;
-            // Starte Ambient-Sound
-            ambientSound.play().catch(() => { });
-        }
-        document.addEventListener('click', unlockAudio, { once: true });
-        document.addEventListener('keydown', unlockAudio, { once: true });
-        document.addEventListener('touchstart', unlockAudio, { once: true });
-
-        // Periodisch Ambient neu starten falls gestoppt
-        setInterval(() => {
-            if (audioUnlocked && ambientSound.paused) {
-                ambientSound.play().catch(() => { });
-            }
-        }, 3000);
 
         // createGlowSprite(), Particle class, and initParticles()
         // now loaded from assets/js/shared-game-systems.js
@@ -1456,13 +1514,15 @@
             if (document.hidden) {
                 // APP BACKGROUNDED -> PAUSE ALL
                 window.gamePaused = true; // Stop loop logic
-                saveCurrentContentState({ preferCachedTime: true });
+                saveCurrentContentState({ preferCachedTime: true, reason: 'visibility:hidden' });
+                indexDebugNote('visibility', 'hidden');
 
                 if (typeof ambientAudio !== 'undefined') {
                     wasAmbientPlaying = (typeof ambientAudio.isProbablyPlaying === 'function')
                         ? ambientAudio.isProbablyPlaying()
                         : !ambientAudio.paused;
                     ambientAudio.pause();
+                    indexDebugNote('ambient', `pause hidden (wasPlaying=${wasAmbientPlaying})`);
                 } else {
                     wasAmbientPlaying = false;
                 }
@@ -1472,6 +1532,7 @@
                         ? audioPlayer.isProbablyPlaying()
                         : !audioPlayer.paused;
                     audioPlayer.pause();
+                    indexDebugNote('player', `pause hidden (wasPlaying=${wasPlayerPlaying})`);
                 } else {
                     wasPlayerPlaying = false;
                 }
@@ -1483,24 +1544,28 @@
                 // Reset time to prevent delta spikes
                 lastTime = 0;
                 window.gamePaused = false;
+                indexDebugNote('visibility', 'visible');
 
                 setTimeout(() => {
                     if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                         ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
                         wasAmbientPlaying = false;
+                        indexDebugNote('ambient', 'resume on visible');
                     }
                     if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
                         audioPlayer.play().catch(e => console.warn("Resume player failed", e));
                         wasPlayerPlaying = false;
+                        indexDebugNote('player', 'resume on visible');
                     }
                 }, 100);
             }
         });
 
         window.addEventListener('pagehide', () => {
-            saveCurrentContentState({ preferCachedTime: true });
+            saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
             if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
             if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
+            indexDebugNote('lifecycle', 'pagehide');
         });
 
         function findSafeStart() {
@@ -2523,10 +2588,19 @@
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
         ambientAudio.volume = 0.02;
 
-        const footstepsAudio = new SCAudioAdapter();
-        footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
-        footstepsAudio.volume = 0.02;
-        console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
+        // Audio unlock on first interaction (required for mobile autoplay policies)
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            audioUnlocked = true;
+            if (ambientAudio.paused) {
+                ambientAudio.play().catch(() => { });
+            }
+        }
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+
+        console.log('[Audio] Created SCAudioAdapters for main/ambient/footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
         function getMaxVisibleLines() {
@@ -2807,6 +2881,7 @@
 
                 // Debug Decision
                 console.log(`[DEBUG_SYS] Audio Ended. SubtitleIndex=${currentSubtitleIndex}/${subtitleTracks.length}. TextFinished=${textFinished}`);
+                indexDebugNote('audio-ended', `idx=${currentSubtitleIndex}/${subtitleTracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
                 const shouldClearMainState = !isReadingMode || textFinished;
                 if (shouldClearMainState) {
                     clearContentState(MAIN_CONTENT_KEY);
@@ -2842,7 +2917,8 @@
             const overlay = document.getElementById('transitionOverlay');
             if (overlay) overlay.classList.add('active');
 
-            await saveCurrentContentState({ preferCachedTime: true });
+            await saveCurrentContentState({ reason: 'transition:next-chapter' });
+            indexDebugNote('transition', 'to chapter 1b');
 
             // Fade out any remaining audio
             fadeAudio(audioPlayer, 0, 1500);
@@ -3302,7 +3378,8 @@
             const {
                 keyOverride = null,
                 clear = false,
-                preferCachedTime = false
+                preferCachedTime = false,
+                reason = 'unspecified'
             } = options;
 
             const key = keyOverride || getActiveContentKey();
@@ -3310,6 +3387,8 @@
 
             if (clear) {
                 clearContentState(key);
+                indexDebug.lastSave = { key, cleared: true, reason, at: Date.now() };
+                indexDebugNote('state-clear', `${key} (${reason})`);
                 return;
             }
 
@@ -3331,8 +3410,29 @@
                             sentenceTime: sentence.time,
                             wasPlaying
                         });
+
+                        indexDebug.lastSave = {
+                            key,
+                            reason,
+                            currentTime: Number(currentTime.toFixed(3)),
+                            sentenceIndex: sentence.index,
+                            sentenceTime: Number((sentence.time || 0).toFixed(3)),
+                            wasPlaying,
+                            at: Date.now()
+                        };
+                        indexDebugNote('state-save', `${key} -> ${sentence.time.toFixed(2)}s idx=${sentence.index} play=${wasPlaying} (${reason})`);
                     } else {
                         window.PlayerStateManager.saveState(key, subtitleTracks, audioPlayer);
+                        indexDebug.lastSave = {
+                            key,
+                            reason,
+                            currentTime: Number(currentTime.toFixed(3)),
+                            sentenceIndex: null,
+                            sentenceTime: Number((currentTime || 0).toFixed(3)),
+                            wasPlaying,
+                            at: Date.now()
+                        };
+                        indexDebugNote('state-save', `${key} (legacy) ${currentTime.toFixed(2)}s (${reason})`);
                     }
                 }
 
@@ -3348,6 +3448,7 @@
                 }
             } catch (e) {
                 console.warn('[State] saveCurrentContentState failed:', e);
+                indexDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
             }
         }
 
@@ -3430,7 +3531,7 @@
             try {
                 const loreIdBeforeSwitch = activeLoreId;
                 if (saveCurrent && loreIdBeforeSwitch) {
-                    await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}` });
+                    await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}`, reason: 'restore-main:save-lore' });
                 } else if (!saveCurrent && loreIdBeforeSwitch) {
                     clearContentState(`lore${loreIdBeforeSwitch}`);
                 }
@@ -3460,6 +3561,7 @@
                 const resumeTime = savedMain && savedMain.sentenceTime !== undefined
                     ? savedMain.sentenceTime
                     : Math.max(0, mainAudioState.time || 0);
+                indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
 
                 audioPlayer.currentTime = resumeTime;
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -3485,6 +3587,7 @@
                 }
             } catch (e) {
                 console.error('[Switch] Failed to restore main audio:', e);
+                indexDebugNote('restore-main-error', e && e.message ? e.message : String(e));
                 iconPlay.style.display = 'block';
                 iconPause.style.display = 'none';
             } finally {
@@ -3508,7 +3611,7 @@
             const switchToken = ++contentSwitchToken;
 
             try {
-                await saveCurrentContentState();
+                await saveCurrentContentState({ reason: `start-lore:${id}` });
 
                 isLoreMode = true;
                 activeLoreId = id;
@@ -3536,6 +3639,7 @@
                 const resumeTime = savedLore && savedLore.sentenceTime !== undefined
                     ? savedLore.sentenceTime
                     : Math.max(0, loreData.resumeTimes[id] || 0);
+                indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
 
                 audioPlayer.currentTime = resumeTime;
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
