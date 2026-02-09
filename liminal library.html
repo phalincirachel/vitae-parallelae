@@ -1432,6 +1432,7 @@
                         this.zStart = zStart;
                         this.originalZStart = zStart; // Store for consistent local positioning
                         this.length = length;
+                        this.isPreload = !!isPreload;
                         this.meshGroup = new THREE.Group();
                         this.lights = [];
 
@@ -1629,6 +1630,7 @@
                         const bookCount = 6000;
                         // SAVE REFERENCES for Reset
                         this.bookCount = bookCount;
+                        this.isPreload = !!isPreload;
                         if (!this.meshBooks) {
                             this.meshBooks = new THREE.InstancedMesh(sharedBookGeo, bookMat, bookCount);
                             this.meshBooks.castShadow = true; this.meshBooks.receiveShadow = true;
@@ -1720,7 +1722,10 @@
                             };
 
                             const processBatch = () => {
-                                if (this.bookBuildPaused || window.visualFreezeActive) {
+                                // Keep preload alive even if coming from another page with freeze enabled.
+                                const freezeBypassDuringBoot = this.isPreload && !hasStartedGame;
+                                const shouldPauseForFreeze = window.visualFreezeActive && !freezeBypassDuringBoot;
+                                if (this.bookBuildPaused || shouldPauseForFreeze) {
                                     this.bookBuildPaused = true;
                                     this.bookBuildRaf = null;
                                     return;
@@ -1851,6 +1856,7 @@
                 function setSegmentGenerationPaused(paused) {
                     for (const seg of segments) {
                         if (!seg) continue;
+                        if (!hasStartedGame && seg.isPreload) continue;
                         if (paused && typeof seg.pauseBookGeneration === 'function') {
                             seg.pauseBookGeneration();
                         } else if (!paused && typeof seg.resumeBookGeneration === 'function') {
