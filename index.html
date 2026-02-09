@@ -348,6 +348,7 @@
             enabled: localStorage.getItem('gb_debug_index') !== '0',
             events: [],
             lastSave: null,
+            lastSnapshot: '',
             push(label, detail = '') {
                 const stamp = new Date().toISOString().slice(11, 19);
                 const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
@@ -369,9 +370,15 @@
             toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#9cf;border:1px solid #9cf;padding:4px 8px;font:12px monospace;pointer-events:auto;';
             document.body.appendChild(toggle);
 
+            const copyBtn = document.createElement('button');
+            copyBtn.id = 'indexDebugCopy';
+            copyBtn.textContent = 'COPY';
+            copyBtn.style.cssText = 'position:fixed;top:10px;right:58px;z-index:1000000;background:rgba(0,0,0,0.75);color:#9cf;border:1px solid #9cf;padding:4px 8px;font:12px monospace;pointer-events:auto;';
+            document.body.appendChild(copyBtn);
+
             const panel = document.createElement('div');
             panel.id = 'indexDebugPanel';
-            panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#b7ffcb;border:1px solid rgba(183,255,203,0.5);padding:8px;max-width:92vw;width:430px;max-height:60vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;';
+            panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#b7ffcb;border:1px solid rgba(183,255,203,0.5);padding:8px;max-width:92vw;width:430px;max-height:60vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;user-select:text;';
             panel.style.display = indexDebug.enabled ? 'block' : 'none';
             document.body.appendChild(panel);
 
@@ -379,6 +386,21 @@
                 indexDebug.enabled = !indexDebug.enabled;
                 localStorage.setItem('gb_debug_index', indexDebug.enabled ? '1' : '0');
                 panel.style.display = indexDebug.enabled ? 'block' : 'none';
+            });
+
+            copyBtn.addEventListener('click', async () => {
+                const text = indexDebug.lastSnapshot || panel.textContent || '';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        await navigator.clipboard.writeText(text);
+                        copyBtn.textContent = 'COPIED';
+                    } else {
+                        copyBtn.textContent = 'NO API';
+                    }
+                } catch (_) {
+                    copyBtn.textContent = 'FAILED';
+                }
+                setTimeout(() => { copyBtn.textContent = 'COPY'; }, 1200);
             });
 
             const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
@@ -418,7 +440,8 @@
                 rows.push('events:');
                 for (const ev of indexDebug.events.slice(-10)) rows.push(`- ${ev}`);
 
-                panel.textContent = rows.join('\n');
+                indexDebug.lastSnapshot = rows.join('\n');
+                panel.textContent = indexDebug.lastSnapshot;
             }, 300);
         })();
 
@@ -3487,6 +3510,46 @@
             return new Promise(resolve => setTimeout(resolve, ms));
         }
 
+        async function seekAndSyncSubtitle(targetTime, reason) {
+            const safeTarget = Math.max(0, Number(targetTime) || 0);
+            let seekResult = {
+                ok: false,
+                target: safeTarget,
+                position: audioPlayer.currentTime || 0,
+                attempts: 0
+            };
+
+            try {
+                if (typeof audioPlayer.seekAndConfirm === 'function') {
+                    seekResult = await audioPlayer.seekAndConfirm(safeTarget, {
+                        maxAttempts: 5,
+                        settleMs: 220,
+                        tolerance: 0.9
+                    });
+                } else {
+                    audioPlayer.currentTime = safeTarget;
+                    await wait(260);
+                    const pos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
+                        ? await audioPlayer.getAccurateCurrentTime(900)
+                        : (audioPlayer.currentTime || 0);
+                    seekResult = {
+                        ok: Math.abs(pos - safeTarget) <= 1.0 || pos >= safeTarget - 1.0,
+                        target: safeTarget,
+                        position: pos,
+                        attempts: 1
+                    };
+                }
+            } catch (e) {
+                indexDebugNote('seek-error', `${reason}: ${e && e.message ? e.message : e}`);
+            }
+
+            const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
+            currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
+            renderSubtitleLines(currentSubtitleIndex);
+            indexDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
+            return seekResult;
+        }
+
         async function pauseWithFade(duration = 800) {
             if (!audioPlayer || audioPlayer.paused) return;
             await new Promise(resolve => {
@@ -3506,6 +3569,10 @@
                 }
 
                 await wait(delayMs);
+                const currentPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
+                    ? await audioPlayer.getAccurateCurrentTime(700)
+                    : (audioPlayer.currentTime || 0);
+                indexDebugNote('play-check', `attempt=${attempt + 1} paused=${audioPlayer.paused} t=${currentPos.toFixed(2)}`);
                 if (!audioPlayer.paused) {
                     return true;
                 }
@@ -3562,16 +3629,14 @@
                     ? savedMain.sentenceTime
                     : Math.max(0, mainAudioState.time || 0);
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
-
-                audioPlayer.currentTime = resumeTime;
-                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                renderSubtitleLines(currentSubtitleIndex);
+                await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
                 const shouldResumePlayback = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
                 if (shouldResumePlayback) {
                     audioPlayer.volume = 0;
                     const started = await verifyPlaybackStarted(2, 320);
                     if (started) {
+                        await seekAndSyncSubtitle(resumeTime, 'restore-main:post-play');
                         fadeAudio(audioPlayer, 1.0, 700);
                         iconPlay.style.display = 'none';
                         iconPause.style.display = 'block';
@@ -3640,16 +3705,14 @@
                     ? savedLore.sentenceTime
                     : Math.max(0, loreData.resumeTimes[id] || 0);
                 indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
-
-                audioPlayer.currentTime = resumeTime;
-                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                renderSubtitleLines(currentSubtitleIndex);
+                await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
                 audioPlayer.volume = 0;
                 const started = await verifyPlaybackStarted(3, 320);
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
+                    await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:post-play`);
                     fadeAudio(audioPlayer, 1.0, 900);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';

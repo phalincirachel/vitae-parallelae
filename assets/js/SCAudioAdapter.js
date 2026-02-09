@@ -306,6 +306,49 @@ class SCAudioAdapter {
         this.currentTime = this.currentTime + amount;
     }
 
+    _wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, Math.max(0, ms || 0)));
+    }
+
+    /**
+     * Force-seek and verify the resulting position, useful for streamed SC tracks.
+     *
+     * @param {number} targetSeconds
+     * @param {{maxAttempts?:number, settleMs?:number, tolerance?:number}} options
+     * @returns {Promise<{ok:boolean,target:number,position:number,attempts:number}>}
+     */
+    async seekAndConfirm(targetSeconds, options = {}) {
+        const target = Math.max(0, Number(targetSeconds) || 0);
+        const maxAttempts = Math.max(1, options.maxAttempts || 4);
+        const settleMs = Math.max(80, options.settleMs || 220);
+        const tolerance = Math.max(0.1, options.tolerance || 0.9);
+
+        this.currentTime = target;
+
+        let lastPos = this.currentTime || 0;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+            if (this.mode === 'sc' && this.widget) {
+                try {
+                    this.widget.seekTo(target * 1000);
+                } catch (_) {
+                    // ignore and continue with verification
+                }
+            } else if (this.mode === 'html5') {
+                this.audioNode.currentTime = target;
+            }
+
+            await this._wait(settleMs * attempt);
+            lastPos = await this.getAccurateCurrentTime(900);
+
+            const ok = Math.abs(lastPos - target) <= tolerance || lastPos >= (target - tolerance);
+            if (ok) {
+                return { ok: true, target, position: lastPos, attempts: attempt };
+            }
+        }
+
+        return { ok: false, target, position: lastPos, attempts: maxAttempts };
+    }
+
     /**
      * Returns best-effort "is playing" signal across HTML5 and SC modes.
      */

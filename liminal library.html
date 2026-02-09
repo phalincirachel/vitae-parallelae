@@ -232,6 +232,7 @@
                     enabled: localStorage.getItem('gb_debug_liminal') !== '0',
                     events: [],
                     lastSave: null,
+                    lastSnapshot: '',
                     push(label, detail = '') {
                         const stamp = new Date().toISOString().slice(11, 19);
                         const row = `${stamp} ${label}${detail ? ` | ${detail}` : ''}`;
@@ -253,9 +254,15 @@
                     toggle.style.cssText = 'position:fixed;top:10px;right:10px;z-index:1000000;background:rgba(0,0,0,0.75);color:#7ef;border:1px solid #7ef;padding:4px 8px;font:12px monospace;pointer-events:auto;';
                     document.body.appendChild(toggle);
 
+                    const copyBtn = document.createElement('button');
+                    copyBtn.id = 'liminalDebugCopy';
+                    copyBtn.textContent = 'COPY';
+                    copyBtn.style.cssText = 'position:fixed;top:10px;right:58px;z-index:1000000;background:rgba(0,0,0,0.75);color:#7ef;border:1px solid #7ef;padding:4px 8px;font:12px monospace;pointer-events:auto;';
+                    document.body.appendChild(copyBtn);
+
                     const panel = document.createElement('div');
                     panel.id = 'liminalDebugPanel';
-                    panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#d4ffd8;border:1px solid rgba(212,255,216,0.5);padding:8px;max-width:92vw;width:450px;max-height:62vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;';
+                    panel.style.cssText = 'position:fixed;top:44px;right:10px;z-index:999999;background:rgba(0,0,0,0.78);color:#d4ffd8;border:1px solid rgba(212,255,216,0.5);padding:8px;max-width:92vw;width:450px;max-height:62vh;overflow:auto;font:11px/1.35 monospace;white-space:pre-wrap;pointer-events:none;user-select:text;';
                     panel.style.display = liminalDebug.enabled ? 'block' : 'none';
                     document.body.appendChild(panel);
 
@@ -263,6 +270,21 @@
                         liminalDebug.enabled = !liminalDebug.enabled;
                         localStorage.setItem('gb_debug_liminal', liminalDebug.enabled ? '1' : '0');
                         panel.style.display = liminalDebug.enabled ? 'block' : 'none';
+                    });
+
+                    copyBtn.addEventListener('click', async () => {
+                        const text = liminalDebug.lastSnapshot || panel.textContent || '';
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                await navigator.clipboard.writeText(text);
+                                copyBtn.textContent = 'COPIED';
+                            } else {
+                                copyBtn.textContent = 'NO API';
+                            }
+                        } catch (_) {
+                            copyBtn.textContent = 'FAILED';
+                        }
+                        setTimeout(() => { copyBtn.textContent = 'COPY'; }, 1200);
                     });
 
                     const fmt = (v) => Number.isFinite(v) ? v.toFixed(2) : '-';
@@ -300,7 +322,8 @@
                         rows.push('events:');
                         for (const ev of liminalDebug.events.slice(-12)) rows.push(`- ${ev}`);
 
-                        panel.textContent = rows.join('\n');
+                        liminalDebug.lastSnapshot = rows.join('\n');
+                        panel.textContent = liminalDebug.lastSnapshot;
                     }, 300);
                 })();
 
@@ -446,6 +469,46 @@
                     return new Promise(resolve => setTimeout(resolve, ms));
                 }
 
+                async function seekAndSyncSubtitle(p, targetTime, reason) {
+                    const safeTarget = Math.max(0, Number(targetTime) || 0);
+                    let seekResult = {
+                        ok: false,
+                        target: safeTarget,
+                        position: p.audio.currentTime || 0,
+                        attempts: 0
+                    };
+
+                    try {
+                        if (typeof p.audio.seekAndConfirm === 'function') {
+                            seekResult = await p.audio.seekAndConfirm(safeTarget, {
+                                maxAttempts: 5,
+                                settleMs: 220,
+                                tolerance: 0.9
+                            });
+                        } else {
+                            p.audio.currentTime = safeTarget;
+                            await wait(260);
+                            const pos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                                ? await p.audio.getAccurateCurrentTime(900)
+                                : (p.audio.currentTime || 0);
+                            seekResult = {
+                                ok: Math.abs(pos - safeTarget) <= 1.0 || pos >= safeTarget - 1.0,
+                                target: safeTarget,
+                                position: pos,
+                                attempts: 1
+                            };
+                        }
+                    } catch (e) {
+                        liminalDebugNote('seek-error', `${reason}: ${e && e.message ? e.message : e}`);
+                    }
+
+                    const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
+                    p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
+                    p.renderLines(p.currentSubtitleIndex);
+                    liminalDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
+                    return seekResult;
+                }
+
                 async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
                     const p = window.audioPlayer;
                     if (!p) return false;
@@ -457,6 +520,10 @@
                             console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
                         }
                         await wait(delayMs);
+                        const currentPos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                            ? await p.audio.getAccurateCurrentTime(700)
+                            : (p.audio.currentTime || 0);
+                        liminalDebugNote('play-check', `attempt=${attempt + 1} paused=${p.paused} t=${currentPos.toFixed(2)}`);
                         if (!p.paused) return true;
                     }
                     return false;
@@ -511,15 +578,14 @@
                             : Math.max(0, mainAudioState.time || 0);
                         liminalDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
 
-                        p.audio.currentTime = resumeTime;
-                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                        p.renderLines(p.currentSubtitleIndex);
+                        await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
                         const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
                         if (shouldResume) {
                             p.volume = 0;
                             const started = await verifyPlaybackStarted(2, 320);
                             if (started) {
+                                await seekAndSyncSubtitle(p, resumeTime, 'restore-main:post-play');
                                 p.volume = 1.0;
                             } else {
                                 p.volume = 1.0;
@@ -574,13 +640,12 @@
                             : 0;
                         liminalDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore}`);
 
-                        p.audio.currentTime = resumeTime;
-                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                        p.renderLines(p.currentSubtitleIndex);
+                        await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:pre-play`);
 
                         p.volume = 0;
                         const started = await verifyPlaybackStarted(3, 320);
                         if (started) {
+                            await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:post-play`);
                             p.volume = 1.0;
                         } else {
                             p.volume = 1.0;
@@ -1606,6 +1671,10 @@
                     moveTarget = null;
                     cameraLookTarget = null;
                     isCenteringCamera = false;
+                    isTouchDragging = false;
+                    touchMovedForTap = false;
+                    touchStartedOnUi = true;
+                    isTouchValid = false;
                     liminalDebugNote('ui-hit', reason);
                 }
 
@@ -1640,7 +1709,6 @@
                     const onShield = (event) => {
                         const targetInfo = event.target && event.target.id ? event.target.id : (event.target && event.target.className ? String(event.target.className) : event.type);
                         markUiInteraction(`shield:${event.type}:${targetInfo}`);
-                        event.stopPropagation();
                     };
 
                     for (const root of roots) {
@@ -1793,8 +1861,11 @@
 
                     // Ignore UI-origin touches and drag gestures
                     if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
-                        isTouchDragging = false;
                         liminalDebugNote('touchend-skip', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
+                        isTouchDragging = false;
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        isTouchValid = true;
                         return;
                     }
 
@@ -1804,6 +1875,9 @@
                     // Ignore taps in control deadzone
                     if (touch.clientY >= getUiDeadzoneTop()) {
                         liminalDebugNote('touchend-skip', 'deadzone');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        isTouchValid = true;
                         return;
                     }
 
@@ -1814,11 +1888,17 @@
                     }
                     if (touchedEl !== renderer.domElement) {
                         liminalDebugNote('touchend-skip', 'not-renderer');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        isTouchValid = true;
                         return;
                     }
 
                     trySetMoveTargetFromScreenPoint(touch.clientX, touch.clientY, true);
                     isTouchDragging = false;
+                    touchMovedForTap = false;
+                    touchStartedOnUi = false;
+                    isTouchValid = true;
                 }, { passive: true });
                 document.addEventListener('keydown', (e) => {
                     // Debug: Log key code and Mode
