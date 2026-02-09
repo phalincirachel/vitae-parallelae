@@ -147,14 +147,8 @@
                     </svg>
                 </button>
 
-                <button id="readingModeBtn" class="audio-btn" title="Lesemodus" tabindex="-1">
-                    <svg viewBox="0 0 24 24" fill="white">
-                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
-                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
-                        <path d="M10 12h4" stroke="white" stroke-width="2" />
-                    </svg>
-                </button>
-                <button id="gameModeBtn" class="audio-btn" title="Spielmodus" tabindex="-1">
+                <button id="readingModeBtn" class="audio-btn" title="Lesemodus aktivieren" tabindex="-1"
+                    aria-label="Lesemodus aktivieren">
                     <svg viewBox="0 0 24 24" fill="white">
                         <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
                         <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
@@ -2541,8 +2535,7 @@
         const playBtn = document.getElementById('audioToggleBtn');
         const skipBackBtn = document.getElementById('skipBackBtn');
         const skipForwardBtn = document.getElementById('skipForwardBtn');
-        const readingModeBtn = document.getElementById('readingModeBtn');
-        const gameModeBtn = document.getElementById('gameModeBtn');
+        const modeToggleBtn = document.getElementById('readingModeBtn');
         const iconPlay = document.getElementById('iconPlay');
         const iconPause = document.getElementById('iconPause');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
@@ -3057,6 +3050,13 @@
         let modeSwitchUiTimer = null;
         let modeSwitchLockUntil = 0;
 
+        function syncModeToggleButton() {
+            if (!modeToggleBtn) return;
+            const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
+            modeToggleBtn.title = nextModeLabel;
+            modeToggleBtn.setAttribute('aria-label', nextModeLabel);
+        }
+
         function setReadingMode(nextMode, reason = 'manual') {
             const normalized = !!nextMode;
             const now = performance.now();
@@ -3077,6 +3077,7 @@
                 uiContainer.classList.remove('reading-mode');
             }
 
+            syncModeToggleButton();
             moveTarget = null;
             renderSubtitleLines(Math.max(0, currentSubtitleIndex));
 
@@ -3092,8 +3093,10 @@
             );
         }
 
-        readingModeBtn.addEventListener('click', () => {
-            setReadingMode(true, 'ui-reading');
+        syncModeToggleButton();
+
+        modeToggleBtn.addEventListener('click', () => {
+            setReadingMode(!isReadingMode, 'ui-mode-toggle');
         });
 
         // HELPER: Sync AutoWalk Index to current Player Position
@@ -3126,10 +3129,6 @@
             autoWalkIndex = closestIdx;
             console.log(`AutoWalk Synced to Index: ${closestIdx} / ${autoWalkPath.length}`);
         }
-
-        gameModeBtn.addEventListener('click', () => {
-            setReadingMode(false, 'ui-game');
-        });
 
         // 8. Wenn Audio zu Ende ist, Reset
         // 8. Wenn Audio zu Ende ist

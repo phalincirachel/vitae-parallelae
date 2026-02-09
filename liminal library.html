@@ -88,14 +88,8 @@
                         <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
                     </svg>
                 </button>
-                <button id="readingModeBtn" class="audio-btn" title="Lesemodus">
-                    <svg viewBox="0 0 24 24" fill="white">
-                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
-                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
-                        <path d="M10 12h4" stroke="white" stroke-width="2" />
-                    </svg>
-                </button>
-                <button id="gameModeBtn" class="audio-btn" title="Spielmodus">
+                <button id="readingModeBtn" class="audio-btn" title="Lesemodus aktivieren"
+                    aria-label="Lesemodus aktivieren">
                     <svg viewBox="0 0 24 24" fill="white">
                         <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
                         <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
@@ -807,6 +801,7 @@
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
+                const modeToggleBtn = document.getElementById('readingModeBtn');
                 const globalVisualDimmer = window.GlobalVisualDimmer
                     ? window.GlobalVisualDimmer.init({
                         overlayId: 'sceneDimmerOverlay',
@@ -870,6 +865,12 @@
                         uiContainer.classList.remove('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'false');
                     }
+
+                    if (modeToggleBtn) {
+                        const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
+                        modeToggleBtn.title = nextModeLabel;
+                        modeToggleBtn.setAttribute('aria-label', nextModeLabel);
+                    }
                 }
 
                 // --- EVENT LISTENERS ---
@@ -904,15 +905,10 @@
                     skipBySecondsInLiminal(15);
                 });
 
-                document.getElementById('readingModeBtn').addEventListener('click', () => {
-                    isReadingMode = true;
+                modeToggleBtn.addEventListener('click', () => {
+                    isReadingMode = !isReadingMode;
                     updateReadingModeUI();
-                });
-
-                document.getElementById('gameModeBtn').addEventListener('click', () => {
-                    isReadingMode = false;
-                    updateReadingModeUI();
-                    markUiInteraction('btn:game-mode');
+                    markUiInteraction(isReadingMode ? 'btn:reading-mode' : 'btn:game-mode');
                 });
 
                 document.querySelectorAll('#audioControls button, #nextChapterBtn, #chapterMenu .menu-item').forEach(el => {

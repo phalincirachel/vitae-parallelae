@@ -570,16 +570,9 @@ body {
 }
 
 /* Mode button styling */
-#readingModeBtn svg,
-#gameModeBtn svg {
+#readingModeBtn svg {
     width: 20px;
     height: 20px;
-}
-
-#gameModeBtn {
-    display: none;
-    opacity: 0.7;
-    transition: opacity 0.3s ease;
 }
 
 #readingModeBtn {
@@ -588,31 +581,43 @@ body {
     transition: opacity 0.3s ease;
 }
 
-#audioPlayerUI.reading-mode #readingModeBtn {
-    display: none;
-}
-
-#audioPlayerUI.reading-mode #gameModeBtn {
-    display: inline-flex;
-    opacity: 0.7;
-    pointer-events: auto;
-    position: static;
-}
-
 .mode-btn-wrapper {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: auto auto;
+    gap: 2px 4px;
     justify-items: center;
     align-items: center;
     width: 176px;
-    min-height: 32px;
+    min-height: 56px;
+}
+
+#bookBtn {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+#readingModeBtn {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+#fullscreenBtn {
+    grid-column: 3;
+    grid-row: 1;
+}
+
+#sceneDimmerToggleBtn {
+    grid-column: 2;
+    grid-row: 2;
 }
 
 #audioPlayerUI.reading-mode .mode-btn-wrapper {
     display: flex;
     flex-direction: column;
     width: auto;
+    min-height: 0;
     margin-top: 4px;
 }
 
@@ -935,8 +940,7 @@ body {
         order: 4;
     }
 
-    #readingModeBtn,
-    #gameModeBtn {
+    #readingModeBtn {
         order: 5;
     }
 
@@ -994,7 +998,7 @@ body {
     }
 
     #audioPlayerUI.reading-mode #audioControls,
-    #audioPlayerUI.reading-mode #gameModeBtn {
+    #audioPlayerUI.reading-mode #readingModeBtn {
         pointer-events: auto;
     }
 }
