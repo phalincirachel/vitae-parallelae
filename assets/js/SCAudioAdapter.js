@@ -310,6 +310,16 @@ class SCAudioAdapter {
         return new Promise(resolve => setTimeout(resolve, Math.max(0, ms || 0)));
     }
 
+    async _waitForScReady(timeoutMs = 2200) {
+        if (this.mode !== 'sc') return true;
+        const end = Date.now() + Math.max(200, timeoutMs || 0);
+        while (Date.now() < end) {
+            if (this._isReady && this.widget) return true;
+            await this._wait(80);
+        }
+        return !!(this._isReady && this.widget);
+    }
+
     /**
      * Force-seek and verify the resulting position, useful for streamed SC tracks.
      *
@@ -322,6 +332,10 @@ class SCAudioAdapter {
         const maxAttempts = Math.max(1, options.maxAttempts || 4);
         const settleMs = Math.max(80, options.settleMs || 220);
         const tolerance = Math.max(0.1, options.tolerance || 0.9);
+
+        if (this.mode === 'sc') {
+            await this._waitForScReady(options.readyTimeoutMs || 2500);
+        }
 
         this.currentTime = target;
 

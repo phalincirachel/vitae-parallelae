@@ -2714,14 +2714,18 @@
                         // Click to Seek
                         div.title = "Klicken zum Springen";
                         div.style.cursor = "pointer";
-                        div.addEventListener('click', (e) => {
+                        div.addEventListener('click', async (e) => {
                             if (subtitleContainer.dataset.wasDragging === 'true') {
                                 console.log("Click ignored due to drag");
                                 return;
                             }
                             console.log(`Seek to ${track.time}s`);
-                            audioPlayer.currentTime = track.time;
-                            updateSubtitleDisplay(i);
+                            await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
+                            try {
+                                await audioPlayer.play();
+                            } catch (_) {
+                                // ignore autoplay gesture restrictions
+                            }
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
                         });

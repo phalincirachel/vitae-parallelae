@@ -1694,8 +1694,25 @@
                 function getUiDeadzoneTop() {
                     const controls = document.getElementById('audioControls');
                     if (!controls) return window.innerHeight - 80;
-                    const safetyMargin = 16;
+                    const safetyMargin = 48;
                     return Math.max(0, controls.getBoundingClientRect().top - safetyMargin);
+                }
+
+                function isPointInsideUi(clientX, clientY) {
+                    const roots = [
+                        document.getElementById('audioPlayerUI'),
+                        document.getElementById('nextChapterBtn'),
+                        document.getElementById('archiveModal'),
+                        document.getElementById('chapterMenu')
+                    ];
+                    for (const root of roots) {
+                        if (!root) continue;
+                        const r = root.getBoundingClientRect();
+                        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+                            return true;
+                        }
+                    }
+                    return false;
                 }
 
                 function bindUiInputShield() {
@@ -1721,7 +1738,7 @@
                 bindUiInputShield();
 
                 document.addEventListener('pointerdown', (event) => {
-                    const isUiHit = isUiClickTarget(event.target) || event.clientY >= getUiDeadzoneTop();
+                    const isUiHit = isUiClickTarget(event.target) || isPointInsideUi(event.clientX, event.clientY) || event.clientY >= getUiDeadzoneTop();
                     if (isUiHit) {
                         markUiInteraction(`pointerdown-ui:${event.clientY}`);
                     } else {
@@ -1854,6 +1871,13 @@
                         return;
                     }
                     if (window.innerWidth > 768) return;
+                    if (isUiClickTarget(event.target)) {
+                        markUiInteraction('touchend-event-target-ui');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        isTouchValid = true;
+                        return;
+                    }
                     if (performance.now() < suppressWorldInputUntil) {
                         liminalDebugNote('touchend-skip', 'suppressed-window');
                         return;
@@ -1871,6 +1895,14 @@
 
                     if (!event.changedTouches || event.changedTouches.length === 0) return;
                     const touch = event.changedTouches[0];
+
+                    if (isPointInsideUi(touch.clientX, touch.clientY)) {
+                        markUiInteraction('touchend-point-ui');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        isTouchValid = true;
+                        return;
+                    }
 
                     // Ignore taps in control deadzone
                     if (touch.clientY >= getUiDeadzoneTop()) {

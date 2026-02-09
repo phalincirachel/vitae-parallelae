@@ -48,6 +48,61 @@ export class SharedAudioPlayer {
         }
     }
 
+    _wait(ms) {
+        return new Promise(resolve => setTimeout(resolve, Math.max(0, ms || 0)));
+    }
+
+    async seekToTime(targetSec, options = {}) {
+        const target = Math.max(0, Number(targetSec) || 0);
+        const autoplay = options.autoplay !== false;
+        let result = { ok: false, target, position: this.audio.currentTime || 0, attempts: 0 };
+
+        try {
+            if (typeof this.audio.seekAndConfirm === 'function') {
+                result = await this.audio.seekAndConfirm(target, {
+                    maxAttempts: 5,
+                    settleMs: 220,
+                    tolerance: 0.9
+                });
+            } else {
+                this.audio.currentTime = target;
+                await this._wait(260);
+                const pos = (typeof this.audio.getAccurateCurrentTime === 'function')
+                    ? await this.audio.getAccurateCurrentTime(900)
+                    : (this.audio.currentTime || 0);
+                result = {
+                    ok: Math.abs(pos - target) <= 1.0 || pos >= target - 1.0,
+                    target,
+                    position: pos,
+                    attempts: 1
+                };
+            }
+        } catch (e) {
+            console.warn('SharedAudioPlayer seekToTime failed:', e);
+        }
+
+        const effectiveTime = Number.isFinite(result.position) ? result.position : target;
+        this.currentSubtitleIndex = this.subtitleTracks.length ? this.findSubtitleIndexForTime(effectiveTime) : 0;
+        this.renderLines(this.currentSubtitleIndex);
+
+        if (autoplay) {
+            try {
+                await this.audio.play();
+            } catch (e) {
+                console.warn('SharedAudioPlayer autoplay after seek failed:', e);
+            }
+        }
+        return result;
+    }
+
+    findSubtitleIndexForTime(timeSec) {
+        if (!this.subtitleTracks || this.subtitleTracks.length === 0) return 0;
+        for (let i = this.subtitleTracks.length - 1; i >= 0; i--) {
+            if (timeSec >= this.subtitleTracks[i].time) return i;
+        }
+        return 0;
+    }
+
     parseSubtitles(rawText) {
         this.subtitleTracks = [];
         this.currentSubtitleIndex = -1;
@@ -133,10 +188,9 @@ export class SharedAudioPlayer {
 
                     div.style.cursor = 'pointer';
                     div.title = 'Springe zu dieser Stelle';
-                    div.addEventListener('click', () => {
+                    div.addEventListener('click', async () => {
                         if (this.container.dataset.wasDragging === 'true') return;
-                        this.audio.currentTime = this.subtitleTracks[i].time;
-                        this.onTimeUpdate();
+                        await this.seekToTime(this.subtitleTracks[i].time, { autoplay: true });
                         this.smoothScrollTo(div);
                     });
 
