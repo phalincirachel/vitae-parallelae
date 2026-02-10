@@ -10,11 +10,18 @@ const AudioVisibilityManager = {
     // Registered audio sources (WeakRefs or direct references if unavoidable, but we'll use a Set)
     // We use a Set of objects: { adapter: SCAudioAdapter, wasPlaying: boolean }
     _sources: new Set(),
+    _isBackgrounded: false,
+    _blurTimer: null,
 
     init() {
-        document.addEventListener('visibilitychange', () => {
-            this._handleVisibilityChange();
-        });
+        document.addEventListener('visibilitychange', () => this._handleVisibilityChange('visibilitychange'));
+        document.addEventListener('webkitvisibilitychange', () => this._handleVisibilityChange('webkitvisibilitychange'));
+        window.addEventListener('pagehide', () => this._enterBackground('pagehide'));
+        window.addEventListener('freeze', () => this._enterBackground('freeze'));
+        window.addEventListener('blur', () => this._handleBlurFallback());
+        window.addEventListener('focus', () => this._handlePotentialForeground('focus'));
+        window.addEventListener('pageshow', () => this._handlePotentialForeground('pageshow'));
+        document.addEventListener('resume', () => this._handlePotentialForeground('resume'));
         console.log('[AudioVisibilityManager] Initialized');
     },
 
@@ -28,6 +35,16 @@ const AudioVisibilityManager = {
         // Actually, let's just add a property to the adapter itself or keep a simple list.
         // For simplicity and since we don't have many adapters:
         this._sources.add(adapter);
+        // If an adapter is created while the app is already backgrounded,
+        // force it paused immediately so iOS/Safari lifecycle races cannot leak audio.
+        if (this._isBackgrounded && adapter) {
+            adapter._wasPlayingBeforeHide = false;
+            try {
+                adapter.pause();
+            } catch (e) {
+                console.warn('[AudioVisibilityManager] Pause-on-register failed:', e);
+            }
+        }
     },
 
     /**
@@ -38,26 +55,85 @@ const AudioVisibilityManager = {
         this._sources.delete(adapter);
     },
 
-    _handleVisibilityChange() {
-        if (document.hidden) {
-            console.log('[AudioVisibilityManager] Tab hidden - Pausing all audio');
-            this._pauseAll();
+    _isDocumentHidden() {
+        if (typeof document.hidden === 'boolean') return document.hidden;
+        if (typeof document.webkitHidden === 'boolean') return document.webkitHidden;
+        return false;
+    },
+
+    _handleVisibilityChange(reason = 'visibilitychange') {
+        if (this._isDocumentHidden()) {
+            this._enterBackground(reason);
         } else {
-            console.log('[AudioVisibilityManager] Tab visible - Resuming audio');
-            this._resumeAll();
+            this._handlePotentialForeground(reason);
+        }
+    },
+
+    _handleBlurFallback() {
+        if (this._blurTimer) clearTimeout(this._blurTimer);
+        this._blurTimer = setTimeout(() => {
+            this._blurTimer = null;
+            const hidden = this._isDocumentHidden();
+            const hasFocus = typeof document.hasFocus === 'function' ? document.hasFocus() : true;
+            if (hidden || !hasFocus) {
+                this._enterBackground(hidden ? 'blur-hidden' : 'blur-no-focus');
+            }
+        }, 120);
+    },
+
+    _handlePotentialForeground(reason = 'foreground') {
+        if (this._isDocumentHidden()) return;
+        if (this._blurTimer) {
+            clearTimeout(this._blurTimer);
+            this._blurTimer = null;
+        }
+        if (!this._isBackgrounded) return;
+        this._isBackgrounded = false;
+        console.log(`[AudioVisibilityManager] Foreground (${reason}) - Resuming audio`);
+        this._resumeAll();
+    },
+
+    _enterBackground(reason = 'background') {
+        if (this._blurTimer) {
+            clearTimeout(this._blurTimer);
+            this._blurTimer = null;
+        }
+        if (this._isBackgrounded) return;
+        this._isBackgrounded = true;
+        console.log(`[AudioVisibilityManager] Background (${reason}) - Pausing all audio`);
+        this._pauseAll();
+    },
+
+    _handleVisibilityLegacy() {
+        if (this._isDocumentHidden()) {
+            this._enterBackground('legacy-hidden');
+        } else {
+            this._handlePotentialForeground('legacy-visible');
+        }
+    },
+
+    _wasAdapterPlaying(adapter) {
+        if (!adapter) return false;
+        try {
+            if (typeof adapter.isProbablyPlaying === 'function') {
+                return !!adapter.isProbablyPlaying();
+            }
+            return !adapter.paused;
+        } catch (_) {
+            return false;
         }
     },
 
     _pauseAll() {
         this._sources.forEach(adapter => {
-            // Save state: was it playing?
-            // Note: adapter.paused might be true if it ended, or false if playing.
-            // We attach a temporary property to the adapter instance to remember state across visibility toggle
-            if (adapter && !adapter.paused) {
-                adapter._wasPlayingBeforeHide = true;
+            if (!adapter) return;
+            // Save state first, then always send a pause signal.
+            // This avoids stale paused-state races on iOS/Safari SoundCloud playback.
+            adapter._wasPlayingBeforeHide = this._wasAdapterPlaying(adapter);
+            try {
                 adapter.pause();
-            } else {
-                if (adapter) adapter._wasPlayingBeforeHide = false;
+            } catch (e) {
+                console.warn('[AudioVisibilityManager] Pause failed:', e);
             }
         });
     },
@@ -72,6 +148,7 @@ const AudioVisibilityManager = {
 
                 // Small delay to ensure browser is ready
                 setTimeout(() => {
+                    if (this._isBackgrounded || this._isDocumentHidden()) return;
                     adapter.play().catch(e => console.warn('[AudioVisibilityManager] Resume failed:', e));
                 }, 100);
             }
