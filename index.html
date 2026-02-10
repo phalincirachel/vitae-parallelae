@@ -78,10 +78,10 @@
             top: -9999px;
             display: none;
             pointer-events: none;
-            border: 2px solid rgba(255, 64, 64, 0.95);
+            border: none;
             border-radius: 50%;
-            background: rgba(255, 64, 64, 0.08);
-            box-shadow: 0 0 0 1px rgba(255, 64, 64, 0.35);
+            background: transparent;
+            box-shadow: none;
             z-index: 2598;
         }
     </style>
@@ -2622,7 +2622,7 @@
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
         const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
-        const RECENTER_MOBILE_RADIUS_PX = 250;
+        const RECENTER_MOBILE_RADIUS_PX = 75;
         if (subtitleRecenterBtn && subtitleRecenterBtn.parentElement !== document.body) {
             // Keep fixed-position math viewport-based: transformed UI containers skew fixed children.
             document.body.appendChild(subtitleRecenterBtn);
