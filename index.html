@@ -56,28 +56,18 @@
         }
 
         #subtitleRecenterBtn {
-            position: absolute;
-            top: -48px;
-            right: 2px;
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
             display: none;
             pointer-events: auto;
             opacity: 0.92;
-            z-index: 2200;
+            z-index: 2600;
         }
 
         #subtitleRecenterBtn svg {
             width: 22px;
             height: 22px;
-        }
-
-        @media (max-width: 768px) {
-            #subtitleRecenterBtn {
-                position: fixed !important;
-                top: auto !important;
-                right: 14px !important;
-                bottom: 62px !important;
-                z-index: 2600 !important;
-            }
         }
     </style>
 </head>
@@ -2772,13 +2762,41 @@
         function updateRecenterButtonVisibility() {
             if (!subtitleRecenterBtn) return;
             const show = isReadingMode && subtitleFollowLocked;
-            subtitleRecenterBtn.style.display = show ? 'inline-flex' : 'none';
-            subtitleRecenterBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
+            if (!show) {
+                subtitleRecenterBtn.style.display = 'none';
+                subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
+                return;
+            }
+
+            subtitleRecenterBtn.style.display = 'inline-flex';
+            subtitleRecenterBtn.setAttribute('aria-hidden', 'false');
+            requestAnimationFrame(positionRecenterButton);
         }
 
         function setSubtitleFollowLocked(nextLocked) {
             subtitleFollowLocked = !!nextLocked;
             updateRecenterButtonVisibility();
+        }
+
+        function positionRecenterButton() {
+            if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
+
+            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+            const anchorBtn = isMobileLayout ? fullscreenBtn : skipBackBtn;
+            if (!anchorBtn) return;
+
+            const anchorRect = anchorBtn.getBoundingClientRect();
+            const btnRect = subtitleRecenterBtn.getBoundingClientRect();
+            const gap = isMobileLayout ? 8 : 10;
+
+            let left = anchorRect.left + (anchorRect.width - btnRect.width) / 2;
+            let top = anchorRect.top - btnRect.height - gap;
+
+            left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
+            top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
+
+            subtitleRecenterBtn.style.left = `${left}px`;
+            subtitleRecenterBtn.style.top = `${top}px`;
         }
 
         function recenterToCurrentTimestamp() {
@@ -2807,12 +2825,19 @@
         }
 
         if (subtitleRecenterBtn) {
-            subtitleRecenterBtn.addEventListener('click', (e) => {
+            subtitleRecenterBtn.addEventListener('pointerdown', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 recenterToCurrentTimestamp();
             });
         }
+
+        window.addEventListener('resize', () => {
+            positionRecenterButton();
+        });
+        window.addEventListener('orientationchange', () => {
+            positionRecenterButton();
+        });
 
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
@@ -3330,6 +3355,7 @@
                 iconFsEnter.style.display = 'block';
                 iconFsExit.style.display = 'none';
             }
+            positionRecenterButton();
         });
 
         // 11. Custom Fullscreen Button (siehe oben)
