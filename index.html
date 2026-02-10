@@ -2778,19 +2778,35 @@
             updateRecenterButtonVisibility();
         }
 
+        function isCompactControlsLayout() {
+            if (!audioControlsEl) return false;
+            const controlsStyle = window.getComputedStyle(audioControlsEl);
+            if (controlsStyle.position === 'fixed') return true;
+
+            const controlsRow = audioControlsEl.querySelector('.controls-row');
+            if (!controlsRow) return false;
+            return window.getComputedStyle(controlsRow).display === 'contents';
+        }
+
         function positionRecenterButton() {
             if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
 
-            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
-            const anchorBtn = isMobileLayout ? fullscreenBtn : skipBackBtn;
+            const isCompactLayout = isCompactControlsLayout();
+            const anchorBtn = isCompactLayout ? fullscreenBtn : skipBackBtn;
             if (!anchorBtn) return;
 
             const anchorRect = anchorBtn.getBoundingClientRect();
             const btnRect = subtitleRecenterBtn.getBoundingClientRect();
-            const gap = isMobileLayout ? 8 : 10;
+            const gap = 10;
 
             let left = anchorRect.left + (anchorRect.width - btnRect.width) / 2;
             let top = anchorRect.top - btnRect.height - gap;
+
+            if (isCompactLayout) {
+                const subtitleRect = subtitleContainer.getBoundingClientRect();
+                const targetCenterY = subtitleRect.top + subtitleRect.height * 0.5;
+                top = targetCenterY - btnRect.height * 0.5;
+            }
 
             left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
             top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
@@ -2815,6 +2831,8 @@
             );
 
             setSubtitleFollowLocked(false);
+            subtitleContainer.dataset.isDragging = 'false';
+            subtitleContainer.dataset.wasDragging = 'false';
             currentSubtitleIndex = safeIndex;
             renderSubtitleLines(safeIndex);
 
@@ -2824,12 +2842,22 @@
             }
         }
 
-        if (subtitleRecenterBtn) {
-            subtitleRecenterBtn.addEventListener('pointerdown', (e) => {
+        let lastRecenterActivationAt = 0;
+        function handleRecenterActivate(e) {
+            if (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                recenterToCurrentTimestamp();
-            });
+            }
+            const now = Date.now();
+            if (now - lastRecenterActivationAt < 260) return;
+            lastRecenterActivationAt = now;
+            recenterToCurrentTimestamp();
+        }
+
+        if (subtitleRecenterBtn) {
+            subtitleRecenterBtn.addEventListener('pointerdown', handleRecenterActivate);
+            subtitleRecenterBtn.addEventListener('touchstart', handleRecenterActivate, { passive: false });
+            subtitleRecenterBtn.addEventListener('click', handleRecenterActivate);
         }
 
         window.addEventListener('resize', () => {
