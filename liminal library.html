@@ -20,6 +20,36 @@
     <!-- Stylesheets -->
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/liminal.css">
+    <style>
+        .subtitle-current {
+            font-weight: 500 !important;
+        }
+
+        #subtitleRecenterBtn {
+            position: absolute;
+            top: -48px;
+            right: 2px;
+            display: none;
+            pointer-events: auto;
+            opacity: 0.92;
+            z-index: 2200;
+        }
+
+        #subtitleRecenterBtn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        @media (max-width: 768px) {
+            #subtitleRecenterBtn {
+                position: fixed !important;
+                top: auto !important;
+                right: 14px !important;
+                bottom: 62px !important;
+                z-index: 2600 !important;
+            }
+        }
+    </style>
     <script type="importmap">
         {
             "imports": {
@@ -133,6 +163,17 @@
                     </svg>
                     <svg id="iconFsExit" viewBox="0 0 24 24" fill="white" style="display:none;">
                         <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
+                    </svg>
+                </button>
+                <button id="subtitleRecenterBtn" class="audio-btn" title="Text auf aktuelle Stelle zentrieren"
+                    aria-label="Text auf aktuelle Stelle zentrieren" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M3 7h10" />
+                        <path d="M3 12h10" />
+                        <path d="M3 17h10" />
+                        <path d="M14 12h7" />
+                        <path d="M18 9l3 3-3 3" />
                     </svg>
                 </button>
             </div>
@@ -827,6 +868,8 @@
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
                 const modeToggleBtn = document.getElementById('readingModeBtn');
+                const subtitleContainer = document.getElementById('subtitleContainer');
+                const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
                 const globalVisualDimmer = window.GlobalVisualDimmer
                     ? window.GlobalVisualDimmer.init({
                         overlayId: 'sceneDimmerOverlay',
@@ -849,6 +892,61 @@
                     isReadingMode: isReadingMode // Pass initial state
                 });
                 const player = window.audioPlayer;
+                let subtitleFollowLocked = false;
+
+                function updateRecenterButtonVisibility() {
+                    if (!subtitleRecenterBtn) return;
+                    const show = isReadingMode && subtitleFollowLocked;
+                    subtitleRecenterBtn.style.display = show ? 'inline-flex' : 'none';
+                    subtitleRecenterBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
+                }
+
+                function setSubtitleFollowLocked(nextLocked) {
+                    subtitleFollowLocked = !!nextLocked;
+                    // SharedAudioPlayer checks this flag before auto-scroll.
+                    subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
+                    updateRecenterButtonVisibility();
+                }
+
+                function recenterToCurrentTimestamp() {
+                    const tracks = getActiveSubtitleTracks();
+                    if (!tracks || tracks.length === 0) {
+                        setSubtitleFollowLocked(false);
+                        return;
+                    }
+
+                    const fallbackIndex = findSubtitleIndexForTime(player.currentTime || 0);
+                    const safeIndex = Math.max(
+                        0,
+                        Math.min(
+                            tracks.length - 1,
+                            Number.isFinite(player.currentSubtitleIndex) && player.currentSubtitleIndex >= 0
+                                ? player.currentSubtitleIndex
+                                : fallbackIndex
+                        )
+                    );
+
+                    setSubtitleFollowLocked(false);
+                    player.currentSubtitleIndex = safeIndex;
+                    player.renderLines(safeIndex);
+                    const activeEl = subtitleContainer.children[safeIndex];
+                    if (activeEl && typeof player.smoothScrollTo === 'function') {
+                        player.smoothScrollTo(activeEl);
+                    }
+                }
+
+                if (subtitleRecenterBtn) {
+                    subtitleRecenterBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        recenterToCurrentTimestamp();
+                    });
+                }
+
+                subtitleContainer.addEventListener('click', (e) => {
+                    if (!e.target.closest('.subtitle-line')) return;
+                    setSubtitleFollowLocked(false);
+                }, true);
 
                 // PRELOAD IMMEDIATELY - WRAPPED
                 try {
@@ -892,6 +990,7 @@
                         localStorage.setItem('gameboy_reading_mode', 'true');
                         isCenteringCamera = true;
                     } else {
+                        setSubtitleFollowLocked(false);
                         uiContainer.classList.remove('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'false');
                     }
@@ -901,6 +1000,7 @@
                         modeToggleBtn.title = nextModeLabel;
                         modeToggleBtn.setAttribute('aria-label', nextModeLabel);
                     }
+                    updateRecenterButtonVisibility();
                 }
 
                 // --- EVENT LISTENERS ---
@@ -1017,7 +1117,6 @@
                 updateReadingModeUI();
 
                 // --- DRAG TO SCROLL LOGIC ---
-                const subtitleContainer = document.getElementById('subtitleContainer');
 
                 // SMART MASK LOGIC (Opacity on scroll)
                 subtitleContainer.addEventListener('scroll', () => {
@@ -1035,6 +1134,7 @@
                 const handleDown = (e) => {
                     isDown = true;
                     subtitleContainer.dataset.isDragging = 'false';
+                    subtitleContainer.dataset.wasDragging = 'false';
                     const pageY = e.pageY || e.touches[0].pageY;
                     startY = pageY - subtitleContainer.offsetTop;
                     scrollTop = subtitleContainer.scrollTop;
@@ -1049,12 +1149,17 @@
                     const walk = (y - startY) * 1.0;
                     if (Math.abs(walk) > 5) {
                         subtitleContainer.dataset.isDragging = 'true';
+                        subtitleContainer.dataset.wasDragging = 'true';
+                        if (isReadingMode) {
+                            setSubtitleFollowLocked(true);
+                        }
                         subtitleContainer.scrollTop = scrollTop - walk;
                     }
                 };
 
                 const handleUp = () => {
                     isDown = false;
+                    subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     subtitleContainer.style.cursor = 'auto';
                 };
 
@@ -1369,6 +1474,11 @@
                 const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
                 shimmerSound.src = getSCUrl('assets/shimmer.mp3');
                 shimmerSound.volume = 0.4;
+                let lastShimmerAt = 0;
+                // One-shot SFX should not auto-resume after visibility changes.
+                if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+                    window.AudioVisibilityManager.unregister(shimmerSound);
+                }
 
                 // Helper function to get global collected lore count
                 function getGlobalCollectedLoreCount() {
@@ -2795,23 +2905,31 @@
                                     book.mesh.getWorldPosition(worldPos);
                                     const distZ = Math.abs(worldPos.z - camera.position.z);
                                     const distX = Math.abs(worldPos.x - camera.position.x);
+                                    const SCENE_NAME = 'liminal_library';
+                                    const alreadyCollected = !!(
+                                        window.GameState
+                                        && typeof window.GameState.isLightCollected === 'function'
+                                        && window.GameState.isLightCollected(SCENE_NAME, book.id)
+                                    );
 
                                     // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
-                                    if (distZ < 1.5 && distX < 1.0) {
+                                    if (distZ < 1.5 && distX < 1.0 && !alreadyCollected) {
                                         // Collect!
                                         book.collect();
                                         // Collect - use GameState for global lore tracking!
                                         // DON'T increment local counter - GameState handles which lore is next globally
 
-                                        // Play shimmer
-                                        shimmerSound.currentTime = 0;
-                                        shimmerSound.play().catch(() => { });
-
                                         // Register in GameState (GLOBAL - same logic as marketplace)
-                                        const SCENE_NAME = 'liminal_library';
                                         if (window.GameState && window.GameState.collectLight) {
                                             window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
                                                 if (newLoreId) {
+                                                    const now = Date.now();
+                                                    if (now - lastShimmerAt > 400) {
+                                                        lastShimmerAt = now;
+                                                        shimmerSound.pause();
+                                                        shimmerSound.currentTime = 0;
+                                                        shimmerSound.play().catch(() => { });
+                                                    }
                                                     console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
                                                     // Refresh archive menu so new lore appears immediately
                                                     if (typeof renderArchive === 'function') renderArchive();

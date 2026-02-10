@@ -50,6 +50,35 @@
                 transform: rotate(360deg);
             }
         }
+
+        .subtitle-current {
+            font-weight: 500 !important;
+        }
+
+        #subtitleRecenterBtn {
+            position: absolute;
+            top: -48px;
+            right: 2px;
+            display: none;
+            pointer-events: auto;
+            opacity: 0.92;
+            z-index: 2200;
+        }
+
+        #subtitleRecenterBtn svg {
+            width: 22px;
+            height: 22px;
+        }
+
+        @media (max-width: 768px) {
+            #subtitleRecenterBtn {
+                position: fixed !important;
+                top: auto !important;
+                right: 14px !important;
+                bottom: 62px !important;
+                z-index: 2600 !important;
+            }
+        }
     </style>
 </head>
 
@@ -201,6 +230,17 @@
                         <path d="M20 14h-6v6" />
                         <path d="M20 10h-6V4" />
                         <path d="M4 10h6V4" />
+                    </svg>
+                </button>
+                <button id="subtitleRecenterBtn" class="audio-btn" title="Text auf aktuelle Stelle zentrieren"
+                    aria-label="Text auf aktuelle Stelle zentrieren" tabindex="-1" type="button">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M3 7h10" />
+                        <path d="M3 12h10" />
+                        <path d="M3 17h10" />
+                        <path d="M14 12h7" />
+                        <path d="M18 9l3 3-3 3" />
                     </svg>
                 </button>
             </div>
@@ -2561,6 +2601,7 @@
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
+        let subtitleFollowLocked = false;
 
         const uiContainer = document.getElementById('audioPlayerUI');
         const subtitleContainer = document.getElementById('subtitleContainer');
@@ -2574,6 +2615,7 @@
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
+        const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
                 overlayId: 'sceneDimmerOverlay',
@@ -2727,6 +2769,51 @@
             currentScrollAnimation = requestAnimationFrame(animate);
         }
 
+        function updateRecenterButtonVisibility() {
+            if (!subtitleRecenterBtn) return;
+            const show = isReadingMode && subtitleFollowLocked;
+            subtitleRecenterBtn.style.display = show ? 'inline-flex' : 'none';
+            subtitleRecenterBtn.setAttribute('aria-hidden', show ? 'false' : 'true');
+        }
+
+        function setSubtitleFollowLocked(nextLocked) {
+            subtitleFollowLocked = !!nextLocked;
+            updateRecenterButtonVisibility();
+        }
+
+        function recenterToCurrentTimestamp() {
+            if (!subtitleTracks || subtitleTracks.length === 0) {
+                setSubtitleFollowLocked(false);
+                return;
+            }
+
+            const fallbackIndex = findSubtitleIndexForTime(audioPlayer.currentTime || 0);
+            const safeIndex = Math.max(
+                0,
+                Math.min(
+                    subtitleTracks.length - 1,
+                    Number.isFinite(currentSubtitleIndex) && currentSubtitleIndex >= 0 ? currentSubtitleIndex : fallbackIndex
+                )
+            );
+
+            setSubtitleFollowLocked(false);
+            currentSubtitleIndex = safeIndex;
+            renderSubtitleLines(safeIndex);
+
+            const activeEl = subtitleContainer.children[safeIndex];
+            if (activeEl) {
+                smoothScrollToElement(subtitleContainer, activeEl);
+            }
+        }
+
+        if (subtitleRecenterBtn) {
+            subtitleRecenterBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                recenterToCurrentTimestamp();
+            });
+        }
+
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
             // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
@@ -2763,6 +2850,7 @@
                                 console.log("Click ignored due to drag");
                                 return;
                             }
+                            setSubtitleFollowLocked(false);
                             console.log(`Seek to ${track.time}s`);
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
                             try {
@@ -2792,7 +2880,7 @@
                     // Auto-Scroll only if user is NOT actively dragging AND audio is playing
                     // Uses custom smooth scroll with variable duration (1-3s)
                     const isPlaying = !audioPlayer.paused;
-                    if (subtitleContainer.dataset.isDragging !== 'true' && isPlaying) {
+                    if (subtitleContainer.dataset.isDragging !== 'true' && !subtitleFollowLocked && isPlaying) {
                         smoothScrollToElement(subtitleContainer, activeEl);
                     }
                 }
@@ -2900,6 +2988,7 @@
             }
 
             subtitleTracks.sort((a, b) => a.time - b.time);
+            setSubtitleFollowLocked(false);
 
             // Increment version to force re-render in Reading Mode
             window.subtitleVersion = (window.subtitleVersion || 0) + 1;
@@ -3038,6 +3127,9 @@
             if (Math.abs(walk) > 5) {
                 subtitleContainer.dataset.isDragging = 'true';
                 subtitleContainer.dataset.wasDragging = 'true';
+                if (isReadingMode) {
+                    setSubtitleFollowLocked(true);
+                }
                 subtitleContainer.scrollTop = scrollTop - walk;
             }
         };
@@ -3121,6 +3213,7 @@
                 syncAutoWalkToIndex();
                 uiContainer.classList.add('reading-mode');
             } else {
+                setSubtitleFollowLocked(false);
                 if (isLoreMode && !isMenuTriggeredLore) {
                     endLoreMode();
                 }
@@ -3141,6 +3234,7 @@
                 'mode-switch',
                 `${reason} reading=${isReadingMode} tracks=${subtitleTracks.length} switching=${contentSwitchInProgress}`
             );
+            updateRecenterButtonVisibility();
         }
 
         syncModeToggleButton();
