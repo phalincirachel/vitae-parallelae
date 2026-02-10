@@ -10,6 +10,7 @@
     <script src="assets/js/SoundCloudURLs.js"></script>
     <script src="assets/js/shared-game-systems.js"></script>
     <script src="assets/js/PlayerStateManager.js"></script>
+    <script src="assets/js/ChapterAutoplayIntent.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
     <script src="assets/js/GlobalVisualDimmer.js"></script>
@@ -333,6 +334,18 @@
         const MAIN_CONTENT_KEY = 'kapitel1';
         let contentSwitchInProgress = false;
         let contentSwitchToken = 0;
+        const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
+            ? window.ChapterAutoplayIntent.consume(MAIN_CONTENT_KEY, { defaultPolicy: 'auto' })
+            : { policy: 'auto', shouldAutoplay: true, source: 'fallback', reason: 'intent-missing' };
+
+        function markChapterAutoplayIntent(targetPageKey, policy = 'auto', reason = '') {
+            if (!window.ChapterAutoplayIntent || !targetPageKey) return;
+            if (policy === 'manual') {
+                window.ChapterAutoplayIntent.markManual(targetPageKey, MAIN_CONTENT_KEY, reason || 'chapter-menu');
+                return;
+            }
+            window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
+        }
 
         const loreData = {
             audio: {},
@@ -557,6 +570,7 @@
                     console.log("Loading Chapter 1b...");
                     await waitForContentSwitchIdle('chapter-menu:to-1b');
                     await saveCurrentContentState({ reason: 'chapter-menu:to-1b' });
+                    markChapterAutoplayIntent('liminal_library', 'manual', 'chapter-menu');
                     writeStateHandoff('liminal_library');
                     window.location.href = 'liminal library.html';
                 });
@@ -572,6 +586,7 @@
                     console.log("Loading Chapter 1c...");
                     await waitForContentSwitchIdle('chapter-menu:to-1c');
                     await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
+                    markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
                     writeStateHandoff('kapitel1c');
                     window.location.href = 'index3.html';
                 });
@@ -1020,10 +1035,16 @@
             // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
             // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
 
-            // Keep initial state deterministic: do not auto-play chapter audio on startup.
-            // The user starts playback explicitly via play button.
-            const attemptAutoPlay = () => {
+            const attemptAutoPlay = async () => {
+                if (!mainChapterAutoplayIntent.shouldAutoplay) {
+                    indexDebugNote('autoplay', `suppressed policy=${mainChapterAutoplayIntent.policy} reason=${mainChapterAutoplayIntent.reason}`);
+                    syncPlayPauseIcon();
+                    return false;
+                }
+                const started = await verifyPlaybackStarted(3, 320);
+                indexDebugNote('autoplay', `boot started=${started} source=${mainChapterAutoplayIntent.source} reason=${mainChapterAutoplayIntent.reason}`);
                 syncPlayPauseIcon();
+                return started;
             };
 
             try {
@@ -1038,7 +1059,7 @@
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
 
-                attemptAutoPlay();
+                await attemptAutoPlay();
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -2564,16 +2585,28 @@
             })
             : null;
         let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+        let pendingForceReadingFromFreeze = false;
+        let modeSwitchInitialized = false;
         if (globalVisualDimmer) {
             globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
+                if (frozen) {
+                    pendingForceReadingFromFreeze = true;
+                    if (modeSwitchInitialized) {
+                        setReadingMode(true, 'dimmer-freeze');
+                        pendingForceReadingFromFreeze = false;
+                    }
+                } else {
+                    pendingForceReadingFromFreeze = false;
+                }
                 if (!frozen && gameReady && !document.hidden) {
                     lastTime = 0;
                     startGameLoop();
                 }
             });
             window.visualFreezeActive = globalVisualDimmer.isFrozen();
+            pendingForceReadingFromFreeze = window.visualFreezeActive;
         }
 
         function syncPlayPauseIcon() {
@@ -2958,6 +2991,7 @@
             await waitForContentSwitchIdle('transition:next-chapter');
             await saveCurrentContentState({ reason: 'transition:next-chapter' });
             indexDebugNote('transition', 'to chapter 1b');
+            markChapterAutoplayIntent('liminal_library', 'auto', 'chapter-transition');
             writeStateHandoff('liminal_library');
 
             // Fade out any remaining audio
@@ -3071,7 +3105,10 @@
         }
 
         function setReadingMode(nextMode, reason = 'manual') {
-            const normalized = !!nextMode;
+            let normalized = !!nextMode;
+            if (!normalized && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
+                normalized = true;
+            }
             const now = performance.now();
 
             if (now < modeSwitchLockUntil && normalized === isReadingMode) return;
@@ -3107,6 +3144,11 @@
         }
 
         syncModeToggleButton();
+        modeSwitchInitialized = true;
+        if (pendingForceReadingFromFreeze) {
+            setReadingMode(true, 'dimmer-freeze-init');
+            pendingForceReadingFromFreeze = false;
+        }
 
         modeToggleBtn.addEventListener('click', () => {
             setReadingMode(!isReadingMode, 'ui-mode-toggle');
