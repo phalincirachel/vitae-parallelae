@@ -69,6 +69,21 @@
             width: 22px;
             height: 22px;
         }
+
+        #subtitleRecenterMobileRadius {
+            position: fixed;
+            width: 500px;
+            height: 500px;
+            left: -9999px;
+            top: -9999px;
+            display: none;
+            pointer-events: none;
+            border: 2px solid rgba(255, 64, 64, 0.95);
+            border-radius: 50%;
+            background: rgba(255, 64, 64, 0.08);
+            box-shadow: 0 0 0 1px rgba(255, 64, 64, 0.35);
+            z-index: 2598;
+        }
     </style>
 </head>
 
@@ -2607,9 +2622,17 @@
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
         const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
+        const RECENTER_MOBILE_RADIUS_PX = 250;
         if (subtitleRecenterBtn && subtitleRecenterBtn.parentElement !== document.body) {
             // Keep fixed-position math viewport-based: transformed UI containers skew fixed children.
             document.body.appendChild(subtitleRecenterBtn);
+        }
+        let subtitleRecenterMobileRadius = document.getElementById('subtitleRecenterMobileRadius');
+        if (!subtitleRecenterMobileRadius) {
+            subtitleRecenterMobileRadius = document.createElement('div');
+            subtitleRecenterMobileRadius.id = 'subtitleRecenterMobileRadius';
+            subtitleRecenterMobileRadius.setAttribute('aria-hidden', 'true');
+            document.body.appendChild(subtitleRecenterMobileRadius);
         }
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
@@ -2771,6 +2794,9 @@
             if (!show) {
                 subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
                 subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
+                if (subtitleRecenterMobileRadius) {
+                    subtitleRecenterMobileRadius.style.display = 'none';
+                }
                 return;
             }
 
@@ -2783,6 +2809,52 @@
             const normalized = !!nextLocked;
             subtitleFollowLocked = normalized;
             updateRecenterButtonVisibility(reason);
+        }
+
+        function isMobileRecenterZoneActive() {
+            if (!subtitleRecenterBtn || !subtitleRecenterMobileRadius) return false;
+            if (!window.matchMedia('(max-width: 768px)').matches) return false;
+            const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
+            return btnStyle.display !== 'none' && isReadingMode && subtitleFollowLocked;
+        }
+
+        function updateMobileRecenterRadius(left, top, width, height) {
+            if (!subtitleRecenterMobileRadius) return;
+            if (!isMobileRecenterZoneActive()) {
+                subtitleRecenterMobileRadius.style.display = 'none';
+                return;
+            }
+
+            const diameter = RECENTER_MOBILE_RADIUS_PX * 2;
+            const centerX = left + (width * 0.5);
+            const centerY = top + (height * 0.5);
+            subtitleRecenterMobileRadius.style.width = `${diameter}px`;
+            subtitleRecenterMobileRadius.style.height = `${diameter}px`;
+            subtitleRecenterMobileRadius.style.left = `${centerX - RECENTER_MOBILE_RADIUS_PX}px`;
+            subtitleRecenterMobileRadius.style.top = `${centerY - RECENTER_MOBILE_RADIUS_PX}px`;
+            subtitleRecenterMobileRadius.style.display = 'block';
+        }
+
+        function eventPointInMobileRecenterZone(e) {
+            if (!isMobileRecenterZoneActive()) return false;
+            if (!e) return false;
+
+            const point = Number.isFinite(e.clientX) && Number.isFinite(e.clientY)
+                ? { x: e.clientX, y: e.clientY }
+                : (e.changedTouches && e.changedTouches.length > 0
+                    ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+                    : (e.touches && e.touches.length > 0
+                        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                        : null));
+            if (!point) return false;
+
+            const rect = subtitleRecenterBtn.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return false;
+            const centerX = rect.left + (rect.width * 0.5);
+            const centerY = rect.top + (rect.height * 0.5);
+            const dx = point.x - centerX;
+            const dy = point.y - centerY;
+            return (dx * dx + dy * dy) <= (RECENTER_MOBILE_RADIUS_PX * RECENTER_MOBILE_RADIUS_PX);
         }
 
         function positionRecenterButton(reason = 'unspecified') {
@@ -2815,6 +2887,7 @@
 
             subtitleRecenterBtn.style.left = `${left}px`;
             subtitleRecenterBtn.style.top = `${top}px`;
+            updateMobileRecenterRadius(left, top, btnRect.width, btnRect.height);
         }
 
         function recenterToCurrentTimestamp() {
@@ -2903,6 +2976,10 @@
                         div.title = "Klicken zum Springen";
                         div.style.cursor = "pointer";
                         div.addEventListener('click', async (e) => {
+                            if (eventPointInMobileRecenterZone(e)) {
+                                handleRecenterActivate(e);
+                                return;
+                            }
                             if (subtitleContainer.dataset.wasDragging === 'true') {
                                 console.log("Click ignored due to drag");
                                 return;
