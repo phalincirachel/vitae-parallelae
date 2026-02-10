@@ -2920,6 +2920,7 @@
         }
 
         let lastRecenterActivationAt = 0;
+        let suppressSubtitleClickUntil = 0;
         function handleRecenterActivate(e) {
             if (e) {
                 e.preventDefault();
@@ -2928,6 +2929,10 @@
             const now = Date.now();
             if (now - lastRecenterActivationAt < 260) return;
             lastRecenterActivationAt = now;
+            // Touch devices may emit a delayed "ghost click" after the recenter tap.
+            // Keep subtitle timestamp clicks muted briefly to avoid accidental seeks.
+            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+            suppressSubtitleClickUntil = isMobileLayout ? now + 600 : now;
             recenterToCurrentTimestamp();
         }
 
@@ -2978,6 +2983,11 @@
                         div.addEventListener('click', async (e) => {
                             if (eventPointInMobileRecenterZone(e)) {
                                 handleRecenterActivate(e);
+                                return;
+                            }
+                            if (Date.now() < suppressSubtitleClickUntil) {
+                                e.preventDefault();
+                                e.stopPropagation();
                                 return;
                             }
                             if (subtitleContainer.dataset.wasDragging === 'true') {
