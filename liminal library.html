@@ -860,6 +860,11 @@
                 const modeToggleBtn = document.getElementById('readingModeBtn');
                 const subtitleContainer = document.getElementById('subtitleContainer');
                 const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
+                const RECENTER_MOBILE_RADIUS_PX = 75;
+                if (subtitleRecenterBtn && subtitleRecenterBtn.parentElement !== document.body) {
+                    // Keep fixed-position math viewport-based even when UI containers are transformed.
+                    document.body.appendChild(subtitleRecenterBtn);
+                }
                 const skipBackBtn = document.getElementById('skipBackBtn');
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
                 const globalVisualDimmer = window.GlobalVisualDimmer
@@ -891,12 +896,12 @@
                     if (!subtitleRecenterBtn) return;
                     const show = isReadingMode && subtitleFollowLocked;
                     if (!show) {
-                        subtitleRecenterBtn.style.display = 'none';
+                        subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
                         subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
                         return;
                     }
 
-                    subtitleRecenterBtn.style.display = 'inline-flex';
+                    subtitleRecenterBtn.style.setProperty('display', 'inline-flex', 'important');
                     subtitleRecenterBtn.setAttribute('aria-hidden', 'false');
                     requestAnimationFrame(positionRecenterButton);
                 }
@@ -906,6 +911,35 @@
                     // SharedAudioPlayer checks this flag before auto-scroll.
                     subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     updateRecenterButtonVisibility();
+                }
+
+                function isMobileRecenterZoneActive() {
+                    if (!subtitleRecenterBtn) return false;
+                    if (!window.matchMedia('(max-width: 768px)').matches) return false;
+                    const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
+                    return btnStyle.display !== 'none' && isReadingMode && subtitleFollowLocked;
+                }
+
+                function eventPointInMobileRecenterZone(e) {
+                    if (!isMobileRecenterZoneActive()) return false;
+                    if (!e) return false;
+
+                    const point = Number.isFinite(e.clientX) && Number.isFinite(e.clientY)
+                        ? { x: e.clientX, y: e.clientY }
+                        : (e.changedTouches && e.changedTouches.length > 0
+                            ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+                            : (e.touches && e.touches.length > 0
+                                ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                                : null));
+                    if (!point) return false;
+
+                    const rect = subtitleRecenterBtn.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    const centerX = rect.left + (rect.width * 0.5);
+                    const centerY = rect.top + (rect.height * 0.5);
+                    const dx = point.x - centerX;
+                    const dy = point.y - centerY;
+                    return (dx * dx + dy * dy) <= (RECENTER_MOBILE_RADIUS_PX * RECENTER_MOBILE_RADIUS_PX);
                 }
 
                 function getTopControlButton() {
@@ -988,6 +1022,7 @@
                 }
 
                 let lastRecenterActivationAt = 0;
+                let suppressSubtitleClickUntil = 0;
                 function handleRecenterActivate(e) {
                     if (e) {
                         e.preventDefault();
@@ -996,6 +1031,9 @@
                     const now = Date.now();
                     if (now - lastRecenterActivationAt < 260) return;
                     lastRecenterActivationAt = now;
+                    // Avoid delayed mobile ghost clicks hitting subtitle lines after recenter tap.
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    suppressSubtitleClickUntil = isMobileLayout ? now + 600 : now;
                     recenterToCurrentTimestamp();
                 }
 
@@ -1013,7 +1051,21 @@
                 });
 
                 subtitleContainer.addEventListener('click', (e) => {
-                    if (!e.target.closest('.subtitle-line')) return;
+                    const subtitleLine = e.target && e.target.closest ? e.target.closest('.subtitle-line') : null;
+                    if (!subtitleLine) return;
+                    if (eventPointInMobileRecenterZone(e)) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        handleRecenterActivate(e);
+                        return;
+                    }
+                    if (Date.now() < suppressSubtitleClickUntil) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        return;
+                    }
                     setSubtitleFollowLocked(false);
                 }, true);
 
@@ -1233,12 +1285,13 @@
                 };
 
                 subtitleContainer.addEventListener('mousedown', handleDown);
-                subtitleContainer.addEventListener('touchstart', handleDown);
+                subtitleContainer.addEventListener('touchstart', handleDown, { passive: true });
                 subtitleContainer.addEventListener('mouseleave', handleUp);
                 subtitleContainer.addEventListener('mouseup', handleUp);
                 subtitleContainer.addEventListener('touchend', handleUp);
+                subtitleContainer.addEventListener('touchcancel', handleUp);
                 subtitleContainer.addEventListener('mousemove', handleMove);
-                subtitleContainer.addEventListener('touchmove', handleMove);
+                subtitleContainer.addEventListener('touchmove', handleMove, { passive: false });
 
 
 
