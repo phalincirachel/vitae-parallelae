@@ -2607,6 +2607,10 @@
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
         const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
+        if (subtitleRecenterBtn && subtitleRecenterBtn.parentElement !== document.body) {
+            // Keep fixed-position math viewport-based: transformed UI containers skew fixed children.
+            document.body.appendChild(subtitleRecenterBtn);
+        }
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
                 overlayId: 'sceneDimmerOverlay',
@@ -2760,244 +2764,13 @@
             currentScrollAnimation = requestAnimationFrame(animate);
         }
 
-        const recenterDebug = {
-            enabled: true,
-            seq: 0,
-            activateCount: 0,
-            recenterCount: 0,
-            visibilityCalls: 0,
-            positionCalls: 0,
-            setLockTrue: 0,
-            setLockFalse: 0,
-            relockWithin1s: 0,
-            lastEvent: 'init',
-            lastEventAt: Date.now(),
-            lastRecenterAt: 0,
-            lastActivateAt: 0,
-            lastPositionAt: 0,
-            overlay: null,
-            overlayNodes: null
-        };
-
-        function recenterDebugEnsureOverlay() {
-            if (!recenterDebug.enabled || recenterDebug.overlay) return;
-            const host = document.createElement('div');
-            host.id = 'recenter-debug-overlay';
-            host.style.position = 'fixed';
-            host.style.inset = '0';
-            host.style.pointerEvents = 'none';
-            host.style.zIndex = '2147483646';
-
-            const mkDot = (color) => {
-                const dot = document.createElement('div');
-                dot.style.position = 'fixed';
-                dot.style.width = '10px';
-                dot.style.height = '10px';
-                dot.style.borderRadius = '50%';
-                dot.style.background = color;
-                dot.style.boxShadow = `0 0 0 2px ${color}66`;
-                dot.style.transform = 'translate(-50%, -50%)';
-                dot.style.display = 'none';
-                host.appendChild(dot);
-                return dot;
-            };
-
-            const line = document.createElement('div');
-            line.style.position = 'fixed';
-            line.style.left = '0';
-            line.style.width = '100vw';
-            line.style.height = '1px';
-            line.style.background = '#00b7ff';
-            line.style.opacity = '0.85';
-            line.style.display = 'none';
-            host.appendChild(line);
-
-            const label = document.createElement('div');
-            label.style.position = 'fixed';
-            label.style.left = '8px';
-            label.style.top = '8px';
-            label.style.padding = '6px 8px';
-            label.style.background = 'rgba(0,0,0,0.75)';
-            label.style.color = '#fff';
-            label.style.fontFamily = 'monospace';
-            label.style.fontSize = '11px';
-            label.style.borderRadius = '6px';
-            label.style.whiteSpace = 'pre';
-            label.style.maxWidth = '45vw';
-            host.appendChild(label);
-
-            document.body.appendChild(host);
-            recenterDebug.overlay = host;
-            recenterDebug.overlayNodes = {
-                anchorDot: mkDot('#ff4d4f'),
-                targetDot: mkDot('#3ddc84'),
-                buttonDot: mkDot('#ffd666'),
-                centerLine: line,
-                label
-            };
-        }
-
-        function recenterDebugRenderOverlay(ctx) {
-            if (!recenterDebug.enabled) return;
-            recenterDebugEnsureOverlay();
-            const nodes = recenterDebug.overlayNodes;
-            if (!nodes) return;
-
-            const hideAll = () => {
-                nodes.anchorDot.style.display = 'none';
-                nodes.targetDot.style.display = 'none';
-                nodes.buttonDot.style.display = 'none';
-                nodes.centerLine.style.display = 'none';
-            };
-
-            if (!ctx || !ctx.show) {
-                hideAll();
-                nodes.label.textContent = '[RecenterDebug] hidden';
-                return;
-            }
-
-            const anchorRect = ctx.anchorRect;
-            const btnRect = subtitleRecenterBtn.getBoundingClientRect();
-            const anchorX = anchorRect.left + anchorRect.width * 0.5;
-            const anchorY = anchorRect.top + anchorRect.height * 0.5;
-            const buttonX = btnRect.left + btnRect.width * 0.5;
-            const buttonY = btnRect.top + btnRect.height * 0.5;
-
-            nodes.anchorDot.style.left = `${anchorX}px`;
-            nodes.anchorDot.style.top = `${anchorY}px`;
-            nodes.anchorDot.style.display = 'block';
-
-            nodes.targetDot.style.left = `${ctx.targetX}px`;
-            nodes.targetDot.style.top = `${ctx.targetY}px`;
-            nodes.targetDot.style.display = 'block';
-
-            nodes.buttonDot.style.left = `${buttonX}px`;
-            nodes.buttonDot.style.top = `${buttonY}px`;
-            nodes.buttonDot.style.display = 'block';
-
-            if (ctx.isMobileLayout) {
-                nodes.centerLine.style.top = `${ctx.targetY}px`;
-                nodes.centerLine.style.display = 'block';
-            } else {
-                nodes.centerLine.style.display = 'none';
-            }
-
-            nodes.label.textContent = [
-                `[RecenterDebug] ${ctx.isMobileLayout ? 'MOBILE' : 'DESKTOP'}`,
-                `anchor=${ctx.anchorId || 'none'}`,
-                `target=(${ctx.targetX.toFixed(1)}, ${ctx.targetY.toFixed(1)})`,
-                `button=(${buttonX.toFixed(1)}, ${buttonY.toFixed(1)})`,
-                `lock=${subtitleFollowLocked} drag=${subtitleContainer.dataset.isDragging || 'false'}`
-            ].join('\n');
-        }
-
-        function recenterDebugSnapshot(stage, ctx = {}) {
-            if (!recenterDebug.enabled || !subtitleRecenterBtn) return;
-
-            recenterDebug.seq += 1;
-            recenterDebug.lastEvent = stage;
-            recenterDebug.lastEventAt = Date.now();
-
-            const modeMobile = !!ctx.isMobileLayout;
-            const btnRect = subtitleRecenterBtn.getBoundingClientRect();
-            const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
-            const anchorRect = ctx.anchorRect || { left: NaN, top: NaN, width: NaN, height: NaN };
-            const anchorCenterX = anchorRect.left + anchorRect.width * 0.5;
-            const btnCenterX = btnRect.left + btnRect.width * 0.5;
-            const xDelta = Number.isFinite(anchorCenterX) ? Math.abs(btnCenterX - anchorCenterX) : NaN;
-
-            const desktopChecks = [
-                ['D01_desktop_mode_detected', modeMobile === false],
-                ['D02_anchor_is_skipBackBtn', !modeMobile ? ctx.anchorId === 'skipBackBtn' : true],
-                ['D03_anchor_visible', !modeMobile ? !!ctx.anchorVisible : true],
-                ['D04_anchor_rect_valid', !modeMobile ? !!ctx.anchorRectValid : true],
-                ['D05_button_rect_valid', btnRect.width > 0 && btnRect.height > 0],
-                ['D06_button_x_aligned_to_anchor', !modeMobile ? (Number.isFinite(xDelta) && xDelta <= 12) : true],
-                ['D07_x_not_clamped', !modeMobile ? !ctx.clampedX : true],
-                ['D08_css_not_overriding_position', btnStyle.position === 'fixed' && btnStyle.left !== 'auto'],
-                ['D09_position_call_recent', Date.now() - recenterDebug.lastPositionAt < 1400],
-                ['D10_single_recenter_button', document.querySelectorAll('#subtitleRecenterBtn').length === 1]
-            ];
-
-            const displayPriority = subtitleRecenterBtn.style.getPropertyPriority('display');
-            const mobileChecks = [
-                ['M01_activate_handler_fired', recenterDebug.activateCount > 0],
-                ['M02_recenter_executed', recenterDebug.recenterCount > 0],
-                ['M03_lock_set_false_called', recenterDebug.setLockFalse > 0],
-                ['M04_hide_can_override_css_important', displayPriority === 'important'],
-                ['M05_no_fast_relock_after_recenter', recenterDebug.relockWithin1s === 0],
-                ['M06_suppress_window_blocks_instant_relock', Date.now() >= suppressFollowLockUntil || !subtitleFollowLocked],
-                ['M07_drag_flags_cleared_after_recenter', subtitleContainer.dataset.isDragging !== 'true' && subtitleContainer.dataset.wasDragging !== 'true'],
-                ['M08_visibility_consistent_with_lock', subtitleFollowLocked ? btnStyle.display !== 'none' : btnStyle.display === 'none'],
-                ['M09_no_duplicate_button_listeners_expected', recenterDebug.activateCount <= (recenterDebug.recenterCount + 2)],
-                ['M10_recent_visibility_update', Date.now() - recenterDebug.lastEventAt < 1800]
-            ];
-
-            if (ctx.anchorRect && Number.isFinite(ctx.targetX) && Number.isFinite(ctx.targetY)) {
-                recenterDebugRenderOverlay({
-                    show: true,
-                    isMobileLayout: modeMobile,
-                    anchorRect: ctx.anchorRect,
-                    anchorId: ctx.anchorId,
-                    targetX: ctx.targetX,
-                    targetY: ctx.targetY
-                });
-            } else if (ctx.forceHideOverlay) {
-                recenterDebugRenderOverlay({ show: false });
-            }
-
-            console.groupCollapsed(`[RecenterDebug #${recenterDebug.seq}] ${stage} mode=${modeMobile ? 'mobile' : 'desktop'} lock=${subtitleFollowLocked}`);
-            console.log({
-                anchorId: ctx.anchorId || null,
-                anchorRect: ctx.anchorRect || null,
-                targetX: ctx.targetX,
-                targetY: ctx.targetY,
-                rawLeft: ctx.rawLeft,
-                rawTop: ctx.rawTop,
-                clampedX: !!ctx.clampedX,
-                clampedY: !!ctx.clampedY,
-                buttonRect: btnRect,
-                buttonStyle: {
-                    display: btnStyle.display,
-                    position: btnStyle.position,
-                    left: btnStyle.left,
-                    top: btnStyle.top,
-                    right: btnStyle.right,
-                    transform: btnStyle.transform
-                },
-                debugCounters: {
-                    activateCount: recenterDebug.activateCount,
-                    recenterCount: recenterDebug.recenterCount,
-                    setLockTrue: recenterDebug.setLockTrue,
-                    setLockFalse: recenterDebug.setLockFalse,
-                    relockWithin1s: recenterDebug.relockWithin1s
-                }
-            });
-            console.table(desktopChecks.map(([id, pass]) => ({ hypothesis: id, pass })));
-            console.table(mobileChecks.map(([id, pass]) => ({ hypothesis: id, pass })));
-            console.groupEnd();
-        }
-
-        window.__recenterDebugDump = () => {
-            recenterDebugSnapshot('manual-dump', {
-                isMobileLayout: window.matchMedia('(max-width: 768px)').matches
-            });
-        };
-        window.__recenterDebug = recenterDebug;
-
         function updateRecenterButtonVisibility(reason = 'unspecified') {
             if (!subtitleRecenterBtn) return;
-            recenterDebug.visibilityCalls += 1;
 
             const show = isReadingMode && subtitleFollowLocked;
             if (!show) {
                 subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
                 subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
-                recenterDebugSnapshot('visibility-hide', {
-                    isMobileLayout: window.matchMedia('(max-width: 768px)').matches,
-                    reason,
-                    forceHideOverlay: true
-                });
                 return;
             }
 
@@ -3008,49 +2781,18 @@
 
         function setSubtitleFollowLocked(nextLocked, reason = 'unspecified') {
             const normalized = !!nextLocked;
-            const changed = normalized !== subtitleFollowLocked;
             subtitleFollowLocked = normalized;
-
-            if (changed) {
-                if (normalized) {
-                    recenterDebug.setLockTrue += 1;
-                    if (Date.now() - recenterDebug.lastRecenterAt < 1000) {
-                        recenterDebug.relockWithin1s += 1;
-                    }
-                } else {
-                    recenterDebug.setLockFalse += 1;
-                }
-            }
-
-            recenterDebugSnapshot('set-lock', {
-                isMobileLayout: window.matchMedia('(max-width: 768px)').matches,
-                reason,
-                changed
-            });
             updateRecenterButtonVisibility(reason);
         }
 
         function positionRecenterButton(reason = 'unspecified') {
             if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
 
-            recenterDebug.positionCalls += 1;
-            recenterDebug.lastPositionAt = Date.now();
-
             const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
             const anchorBtn = isMobileLayout ? fullscreenBtn : skipBackBtn;
-            if (!anchorBtn) {
-                recenterDebugSnapshot('position-no-anchor', {
-                    isMobileLayout,
-                    reason
-                });
-                return;
-            }
+            if (!anchorBtn) return;
 
-            const anchorStyle = window.getComputedStyle(anchorBtn);
             const anchorRect = anchorBtn.getBoundingClientRect();
-            const anchorVisible = anchorStyle.display !== 'none' && anchorStyle.visibility !== 'hidden' && anchorRect.width > 0;
-            const anchorRectValid = Number.isFinite(anchorRect.left) && Number.isFinite(anchorRect.top) && anchorRect.width > 0 && anchorRect.height > 0;
-
             const btnRect = subtitleRecenterBtn.getBoundingClientRect();
             const gap = 10;
 
@@ -3073,21 +2815,6 @@
 
             subtitleRecenterBtn.style.left = `${left}px`;
             subtitleRecenterBtn.style.top = `${top}px`;
-
-            recenterDebugSnapshot('position', {
-                isMobileLayout,
-                reason,
-                anchorId: anchorBtn.id,
-                anchorVisible,
-                anchorRectValid,
-                anchorRect,
-                targetX: left + btnRect.width * 0.5,
-                targetY: top + btnRect.height * 0.5,
-                rawLeft,
-                rawTop,
-                clampedX,
-                clampedY
-            });
         }
 
         function recenterToCurrentTimestamp() {
@@ -3107,8 +2834,6 @@
 
             setSubtitleFollowLocked(false, 'recenter');
             suppressFollowLockUntil = Date.now() + 450;
-            recenterDebug.recenterCount += 1;
-            recenterDebug.lastRecenterAt = Date.now();
             isDown = false;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.dataset.wasDragging = 'false';
@@ -3119,11 +2844,6 @@
             if (activeEl) {
                 smoothScrollToElement(subtitleContainer, activeEl);
             }
-
-            recenterDebugSnapshot('recenter-complete', {
-                isMobileLayout: window.matchMedia('(max-width: 768px)').matches,
-                reason: 'recenter'
-            });
         }
 
         let lastRecenterActivationAt = 0;
@@ -3135,12 +2855,6 @@
             const now = Date.now();
             if (now - lastRecenterActivationAt < 260) return;
             lastRecenterActivationAt = now;
-            recenterDebug.activateCount += 1;
-            recenterDebug.lastActivateAt = now;
-            recenterDebugSnapshot('activate', {
-                isMobileLayout: window.matchMedia('(max-width: 768px)').matches,
-                reason: 'button-activate'
-            });
             recenterToCurrentTimestamp();
         }
 
