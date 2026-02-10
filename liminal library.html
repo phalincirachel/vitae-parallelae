@@ -885,6 +885,7 @@
                 });
                 const player = window.audioPlayer;
                 let subtitleFollowLocked = false;
+                let suppressFollowLockUntil = 0;
 
                 function updateRecenterButtonVisibility() {
                     if (!subtitleRecenterBtn) return;
@@ -907,22 +908,32 @@
                     updateRecenterButtonVisibility();
                 }
 
-                function isCompactControlsLayout() {
+                function getTopControlButton() {
                     const controls = document.getElementById('audioControls');
-                    if (!controls) return false;
-                    const controlsStyle = window.getComputedStyle(controls);
-                    if (controlsStyle.position === 'fixed') return true;
+                    if (!controls) return skipBackBtn;
+                    const buttons = Array.from(controls.querySelectorAll('.audio-btn')).filter(btn => {
+                        if (!btn || btn === subtitleRecenterBtn) return false;
+                        const style = window.getComputedStyle(btn);
+                        return style.display !== 'none' && style.visibility !== 'hidden';
+                    });
+                    if (buttons.length === 0) return skipBackBtn;
 
-                    const controlsRow = controls.querySelector('.controls-row');
-                    if (!controlsRow) return false;
-                    return window.getComputedStyle(controlsRow).display === 'contents';
+                    buttons.sort((a, b) => {
+                        const ra = a.getBoundingClientRect();
+                        const rb = b.getBoundingClientRect();
+                        const topDelta = ra.top - rb.top;
+                        if (Math.abs(topDelta) > 1) return topDelta;
+                        return ra.left - rb.left;
+                    });
+
+                    return buttons[0];
                 }
 
                 function positionRecenterButton() {
                     if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
 
-                    const isCompactLayout = isCompactControlsLayout();
-                    const anchorBtn = isCompactLayout ? fullscreenBtn : skipBackBtn;
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    const anchorBtn = isMobileLayout ? fullscreenBtn : getTopControlButton();
                     if (!anchorBtn) return;
 
                     const anchorRect = anchorBtn.getBoundingClientRect();
@@ -932,7 +943,7 @@
                     let left = anchorRect.left + (anchorRect.width - btnRect.width) / 2;
                     let top = anchorRect.top - btnRect.height - gap;
 
-                    if (isCompactLayout) {
+                    if (isMobileLayout) {
                         const subtitleRect = subtitleContainer.getBoundingClientRect();
                         const targetCenterY = subtitleRect.top + subtitleRect.height * 0.5;
                         top = targetCenterY - btnRect.height * 0.5;
@@ -964,6 +975,8 @@
                     );
 
                     setSubtitleFollowLocked(false);
+                    suppressFollowLockUntil = Date.now() + 450;
+                    isDown = false;
                     subtitleContainer.dataset.isDragging = 'false';
                     subtitleContainer.dataset.wasDragging = 'false';
                     player.currentSubtitleIndex = safeIndex;
@@ -1206,7 +1219,7 @@
                     if (Math.abs(walk) > 5) {
                         subtitleContainer.dataset.isDragging = 'true';
                         subtitleContainer.dataset.wasDragging = 'true';
-                        if (isReadingMode) {
+                        if (isReadingMode && Date.now() >= suppressFollowLockUntil) {
                             setSubtitleFollowLocked(true);
                         }
                         subtitleContainer.scrollTop = scrollTop - walk;
