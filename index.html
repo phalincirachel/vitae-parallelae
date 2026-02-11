@@ -2949,12 +2949,24 @@
             positionRecenterButton('orientationchange');
         });
 
+        const TOP_FADE_BYPASS_COUNT = 2;
+        function syncReadingTopFadeMask(activeIndex) {
+            if (!subtitleContainer) return;
+            const shouldDisableTopFade =
+                isReadingMode &&
+                Number.isFinite(activeIndex) &&
+                activeIndex >= 0 &&
+                activeIndex < TOP_FADE_BYPASS_COUNT;
+            subtitleContainer.classList.toggle('no-top-fade', shouldDisableTopFade);
+        }
+
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
             // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
             if (isReadingMode) {
                 // Version Check: Ensure we are rendering the current set of subtitles
                 if (subtitleTracks.length === 0) {
+                    syncReadingTopFadeMask(-1);
                     subtitleContainer.innerHTML = '';
                     const emptyLine = document.createElement('div');
                     emptyLine.className = 'subtitle-line subtitle-current';
@@ -3015,7 +3027,9 @@
                 if (oldActive) oldActive.classList.remove('subtitle-current');
 
                 // Ensure centerIndex is valid
-                const safeIndex = centerIndex < 0 ? 0 : centerIndex;
+                const normalizedIndex = Number.isFinite(centerIndex) ? centerIndex : 0;
+                const safeIndex = Math.max(0, Math.min(subtitleTracks.length - 1, normalizedIndex));
+                syncReadingTopFadeMask(safeIndex);
 
                 if (subtitleContainer.children.length > safeIndex) {
                     const activeEl = subtitleContainer.children[safeIndex];
@@ -3032,6 +3046,7 @@
             }
 
             // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
+            syncReadingTopFadeMask(-1);
             subtitleContainer.innerHTML = '';
 
             if (subtitleTracks.length === 0) {
