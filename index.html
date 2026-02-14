@@ -12,7 +12,7 @@
     <script src="assets/js/PlayerStateManager.js"></script>
     <script src="assets/js/ChapterAutoplayIntent.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
-    <script src="assets/js/SCAudioAdapter.js?v=dbg2"></script> <!-- Adapter AFTER Managers so it can register itself -->
+    <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
     <script src="assets/js/GlobalVisualDimmer.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
     <link rel="stylesheet" href="assets/css/main.css">
@@ -96,24 +96,7 @@
 
 <body>
 
-    <!-- DEBUG: Copy audio debug log to clipboard -->
-    <div id="debugCopyBtn" onclick="
-        const log = (window._audioDebugLog || []).join('\n');
-        if (!log) { this.textContent = '(empty)'; setTimeout(() => this.textContent = '📋 DBG', 1500); return; }
-        navigator.clipboard.writeText(log).then(() => {
-            this.textContent = '✅ Copied!';
-            setTimeout(() => this.textContent = '📋 DBG', 2000);
-        }).catch(() => {
-            const ta = document.createElement('textarea');
-            ta.value = log; document.body.appendChild(ta);
-            ta.select(); document.execCommand('copy');
-            document.body.removeChild(ta);
-            this.textContent = '✅ Copied!';
-            setTimeout(() => this.textContent = '📋 DBG', 2000);
-        });
-    "
-        style="position:fixed;top:8px;left:8px;z-index:999999;background:rgba(0,0,0,0.7);color:#0f0;border:1px solid #0f0;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace;cursor:pointer;user-select:none;-webkit-user-select:none;">
-        📋 DBG</div>
+
 
     <!-- LOADING SCREEN (über ALLEM) -->
     <div id="loading-screen">
@@ -3047,15 +3030,13 @@
                                 return;
                             }
                             setSubtitleFollowLocked(false, 'timestamp-click');
-                            if (typeof _adbg === 'function') _adbg('CLICK', `timestamp click i=${i} time=${track.time}s`, { paused: audioPlayer.paused, scPaused: audioPlayer._scPaused, pendingSeek: audioPlayer._pendingSeek, currentTime: audioPlayer.currentTime });
+                            console.log(`Seek to ${track.time}s`);
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
-                            if (typeof _adbg === 'function') _adbg('CLICK', `seek done, now calling play()`, { paused: audioPlayer.paused, scPaused: audioPlayer._scPaused, pendingSeek: audioPlayer._pendingSeek });
                             try {
                                 await audioPlayer.play();
-                            } catch (playErr) {
-                                if (typeof _adbg === 'function') _adbg('CLICK', `play() FAILED`, { error: playErr?.message || String(playErr) });
+                            } catch (_) {
+                                // ignore autoplay gesture restrictions
                             }
-                            if (typeof _adbg === 'function') _adbg('CLICK', `play() returned`, { paused: audioPlayer.paused, scPaused: audioPlayer._scPaused });
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
                         });
@@ -3958,7 +3939,6 @@
         }
 
         async function seekAndSyncSubtitle(targetTime, reason) {
-            if (typeof _adbg === 'function') _adbg('SEEK-SYNC', `ENTRY reason=${reason} target=${targetTime}`, { paused: audioPlayer.paused, pendingSeek: audioPlayer._pendingSeek });
             const safeTarget = Math.max(0, Number(targetTime) || 0);
             let seekResult = {
                 ok: false,
