@@ -3749,12 +3749,37 @@
         });
 
         // 6. Skip Buttons (±15 Sekunden)
+        async function skipBySecondsGlobal(deltaSec, reason = 'skip') {
+            const delta = Number(deltaSec) || 0;
+            if (!delta) return;
+
+            const wasPausedBeforeSkip = !!audioPlayer.paused;
+            let before = Number(audioPlayer.currentTime);
+            if (!Number.isFinite(before) || before < 0) before = 0;
+            if (!wasPausedBeforeSkip && typeof audioPlayer.getAccurateCurrentTime === 'function') {
+                const measuredBefore = await audioPlayer.getAccurateCurrentTime(900);
+                if (Number.isFinite(measuredBefore) && measuredBefore >= 0) before = measuredBefore;
+            }
+
+            const target = Math.max(0, before + delta);
+            await seekAndSyncSubtitle(target, `${reason}:${delta > 0 ? 'forward' : 'back'}`);
+
+            if (wasPausedBeforeSkip) {
+                audioPlayer.pause();
+                syncPlayPauseIcon();
+            }
+        }
+
         skipBackBtn.addEventListener('click', () => {
-            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 15);
+            skipBySecondsGlobal(-15, 'btn-skip').catch((e) => {
+                console.warn('[Skip] Back failed:', e);
+            });
         });
 
         skipForwardBtn.addEventListener('click', () => {
-            audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 15);
+            skipBySecondsGlobal(15, 'btn-skip').catch((e) => {
+                console.warn('[Skip] Forward failed:', e);
+            });
         });
 
         // 7. Modus-Wechsel mit robuster Animation

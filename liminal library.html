@@ -616,9 +616,15 @@
                     if (!delta) return;
 
                     await waitForContentSwitchIdle(`skip:${delta}`);
-                    const before = (typeof p.audio.getAccurateCurrentTime === 'function')
-                        ? await p.audio.getAccurateCurrentTime(900)
-                        : (p.audio.currentTime || 0);
+                    const wasPausedBeforeSkip = !!p.paused;
+                    let before = Number(p.audio.currentTime);
+                    if (!Number.isFinite(before) || before < 0) before = 0;
+                    if (!wasPausedBeforeSkip && typeof p.audio.getAccurateCurrentTime === 'function') {
+                        const measuredBefore = await p.audio.getAccurateCurrentTime(900);
+                        if (Number.isFinite(measuredBefore) && measuredBefore >= 0) {
+                            before = measuredBefore;
+                        }
+                    }
                     let target = Math.max(0, before + delta);
                     const duration = Number(p.audio.duration);
                     if (Number.isFinite(duration) && duration > 0) {
@@ -633,6 +639,15 @@
                     };
 
                     try {
+                        // SC seeks are significantly more reliable while the stream is playing.
+                        // We preserve original pause state after the seek operation.
+                        if (wasPausedBeforeSkip) {
+                            try {
+                                await p.play();
+                                await wait(140);
+                            } catch (_) { }
+                        }
+
                         if (typeof p.audio.seekAndConfirm === 'function') {
                             seekResult = await p.audio.seekAndConfirm(target, {
                                 maxAttempts: 5,
@@ -656,7 +671,33 @@
                         liminalDebugNote('skip-error', `${delta}: ${e && e.message ? e.message : e}`);
                     }
 
-                    const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : target;
+                    let measuredAfter = Number.isFinite(seekResult.position) ? seekResult.position : NaN;
+                    if (typeof p.audio.getAccurateCurrentTime === 'function') {
+                        const verifyPos = await p.audio.getAccurateCurrentTime(1000);
+                        if (Number.isFinite(verifyPos) && verifyPos >= 0) {
+                            measuredAfter = verifyPos;
+                        }
+                    }
+
+                    // Guard against bad SC seek responses that jump back to the beginning.
+                    if (delta > 0 && Number.isFinite(measuredAfter) && measuredAfter < (before - 0.8)) {
+                        try {
+                            p.audio.currentTime = target;
+                            await wait(240);
+                            if (typeof p.audio.getAccurateCurrentTime === 'function') {
+                                const retryPos = await p.audio.getAccurateCurrentTime(900);
+                                if (Number.isFinite(retryPos) && retryPos >= 0) {
+                                    measuredAfter = retryPos;
+                                }
+                            } else {
+                                measuredAfter = Number(p.audio.currentTime) || target;
+                            }
+                        } catch (_) {
+                            measuredAfter = target;
+                        }
+                    }
+
+                    const effectiveTime = Number.isFinite(measuredAfter) ? measuredAfter : target;
                     p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
                     p.renderLines(p.currentSubtitleIndex);
                     liminalDebugNote(
@@ -665,6 +706,11 @@
                     );
                     if (!seekResult.ok) {
                         liminalCause('C10_SEEK_CONFIRM_FAILED', `skip delta=${delta} target=${target.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
+                    }
+
+                    if (wasPausedBeforeSkip) {
+                        p.pause();
+                        if (typeof updateIcons === 'function') updateIcons();
                     }
                 }
 

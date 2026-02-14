@@ -2905,12 +2905,65 @@
         });
 
         // 6. Skip Buttons (±15 Sekunden)
+        async function skipBySecondsGlobal(deltaSec) {
+            const delta = Number(deltaSec) || 0;
+            if (!delta) return;
+
+            const wasPausedBeforeSkip = !!audioPlayer.paused;
+            let before = Number(audioPlayer.currentTime);
+            if (!Number.isFinite(before) || before < 0) before = 0;
+            if (!wasPausedBeforeSkip && typeof audioPlayer.getAccurateCurrentTime === 'function') {
+                const measuredBefore = await audioPlayer.getAccurateCurrentTime(900);
+                if (Number.isFinite(measuredBefore) && measuredBefore >= 0) before = measuredBefore;
+            }
+
+            const target = Math.max(0, before + delta);
+            let effectiveTime = target;
+
+            try {
+                if (typeof audioPlayer.seekAndConfirm === 'function') {
+                    const seekResult = await audioPlayer.seekAndConfirm(target, {
+                        maxAttempts: 5,
+                        settleMs: 220,
+                        tolerance: 1.0
+                    });
+                    if (Number.isFinite(seekResult.position) && seekResult.position >= 0) {
+                        effectiveTime = seekResult.position;
+                    }
+                } else {
+                    audioPlayer.currentTime = target;
+                }
+            } catch (e) {
+                console.warn('[Skip] seek failed:', e);
+                audioPlayer.currentTime = target;
+            }
+
+            let newIndex = 0;
+            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                if (effectiveTime >= subtitleTracks[i].time) {
+                    newIndex = i;
+                    break;
+                }
+            }
+            updateSubtitleDisplay(newIndex);
+            renderSubtitleLines(Math.max(0, newIndex));
+
+            if (wasPausedBeforeSkip) {
+                audioPlayer.pause();
+                syncPlayPauseIcon();
+            }
+        }
+
         skipBackBtn.addEventListener('click', () => {
-            audioPlayer.currentTime = Math.max(0, audioPlayer.currentTime - 15);
+            skipBySecondsGlobal(-15).catch((e) => {
+                console.warn('[Skip] Back failed:', e);
+            });
         });
 
         skipForwardBtn.addEventListener('click', () => {
-            audioPlayer.currentTime = Math.min(audioPlayer.duration || 0, audioPlayer.currentTime + 15);
+            skipBySecondsGlobal(15).catch((e) => {
+                console.warn('[Skip] Forward failed:', e);
+            });
         });
 
         // 7. Modus-Wechsel mit schneller Animation

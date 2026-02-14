@@ -91,6 +91,11 @@ class SCAudioAdapter {
         if (!url) return;
         this._src = url;
         this._isReady = false;
+        // Reset cached SC transport state when loading a new source.
+        // Prevents stale position carries across chapters/tracks.
+        this._scCurrentTime = 0;
+        this._pendingSeek = undefined;
+        this._scLastProgressAt = 0;
 
         // Detect Type
         const isSoundCloud = url.includes('soundcloud.com');
@@ -107,6 +112,9 @@ class SCAudioAdapter {
         this.mode = 'html5';
         this._scPaused = true;
         this._playIntent = false;
+        this._scCurrentTime = 0;
+        this._pendingSeek = undefined;
+        this._scLastProgressAt = 0;
 
         // Pause Widget if active
         if (this.widget) this.widget.pause();
@@ -127,6 +135,9 @@ class SCAudioAdapter {
         this.mode = 'sc';
         this._scPaused = true;
         this._playIntent = false;
+        this._scCurrentTime = 0;
+        this._pendingSeek = undefined;
+        this._scLastProgressAt = 0;
 
         // Pause HTML5 if active
         this.audioNode.pause();
