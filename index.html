@@ -3030,10 +3030,12 @@
                             setSubtitleFollowLocked(false, 'timestamp-click');
                             console.log(`Seek to ${track.time}s`);
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
-                            try {
-                                await audioPlayer.play();
-                            } catch (_) {
-                                // ignore autoplay gesture restrictions
+                            if (audioPlayer.paused) {
+                                try {
+                                    await audioPlayer.play();
+                                } catch (_) {
+                                    // ignore autoplay gesture restrictions
+                                }
                             }
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);

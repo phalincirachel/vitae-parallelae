@@ -86,10 +86,12 @@ export class SharedAudioPlayer {
         this.renderLines(this.currentSubtitleIndex);
 
         if (autoplay) {
-            try {
-                await this.audio.play();
-            } catch (e) {
-                console.warn('SharedAudioPlayer autoplay after seek failed:', e);
+            if (this.audio.paused) {
+                try {
+                    await this.audio.play();
+                } catch (e) {
+                    console.warn('SharedAudioPlayer autoplay after seek failed:', e);
+                }
             }
         }
         return result;

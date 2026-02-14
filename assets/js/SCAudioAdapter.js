@@ -329,8 +329,9 @@ class SCAudioAdapter {
      */
     async seekAndConfirm(targetSeconds, options = {}) {
         const target = Math.max(0, Number(targetSeconds) || 0);
-        const maxAttempts = Math.max(1, options.maxAttempts || 4);
-        const settleMs = Math.max(80, options.settleMs || 220);
+        const isPlaying = this.isProbablyPlaying();
+        const maxAttempts = Math.max(1, isPlaying ? Math.min(options.maxAttempts || 4, 2) : (options.maxAttempts || 4));
+        const settleMs = Math.max(80, isPlaying ? Math.min(options.settleMs || 220, 150) : (options.settleMs || 220));
         const tolerance = Math.max(0.1, options.tolerance || 0.9);
 
         if (this.mode === 'sc') {
