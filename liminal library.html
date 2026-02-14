@@ -921,81 +921,86 @@
                     onLineRender: (div, track) => {
                         // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
                         div.style.position = 'relative';
+                        div.style.overflow = 'visible';
                         let _bmTimer = null;
                         const BOOKMARK_LABEL = 'Lesezeichen';
                         const BOOKMARK_SAVED_LABEL = 'Gespeichert';
                         const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
                         const clampBookmarkCoord = (value, min, max) => Math.max(min, Math.min(max, value));
+                        const rectOverlapArea = (x, y, width, height, rect) => {
+                            const overlapW = Math.max(0, Math.min(x + width, rect.right) - Math.max(x, rect.left));
+                            const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
+                            return overlapW * overlapH;
+                        };
+                        const collectSubtitleTextRects = () => {
+                            const rects = [];
+                            const containerRect = subtitleContainer.getBoundingClientRect();
+                            subtitleContainer.querySelectorAll('.subtitle-line').forEach((lineEl) => {
+                                for (const node of lineEl.childNodes) {
+                                    if (node.nodeType !== Node.TEXT_NODE) continue;
+                                    if (!(node.textContent || '').trim()) continue;
+                                    const range = document.createRange();
+                                    range.selectNodeContents(node);
+                                    for (const rect of range.getClientRects()) {
+                                        if (rect.width <= 0 || rect.height <= 0) continue;
+                                        if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
+                                        rects.push(rect);
+                                    }
+                                }
+                            });
+                            if (subtitleRecenterBtn && subtitleRecenterBtn.offsetParent !== null) {
+                                const recenterRect = subtitleRecenterBtn.getBoundingClientRect();
+                                if (recenterRect.width > 0 && recenterRect.height > 0) rects.push(recenterRect);
+                            }
+                            return { rects, containerRect };
+                        };
                         const positionBookmarkButton = (btn) => {
                             const lineRect = div.getBoundingClientRect();
-                            if (!lineRect.width || !lineRect.height) return;
-
+                            const { rects: textRects, containerRect } = collectSubtitleTextRects();
+                            if (!lineRect.width || !lineRect.height || !containerRect.width || !containerRect.height) return;
                             const margin = 8;
                             const btnWidth = btn.offsetWidth || 0;
                             const btnHeight = btn.offsetHeight || 0;
-                            const maxX = Math.max(margin, lineRect.width - btnWidth - margin);
-                            const maxY = Math.max(margin, lineRect.height - btnHeight - margin);
-
-                            const textRects = [];
-                            for (const node of div.childNodes) {
-                                if (node.nodeType !== Node.TEXT_NODE) continue;
-                                if (!(node.textContent || '').trim()) continue;
-                                const range = document.createRange();
-                                range.selectNodeContents(node);
-                                for (const rect of range.getClientRects()) {
-                                    if (rect.width > 0 && rect.height > 0) textRects.push(rect);
-                                }
-                            }
-
-                            const fallbackX = maxX;
-                            const fallbackY = clampBookmarkCoord((lineRect.height - btnHeight) / 2, margin, maxY);
-                            if (!textRects.length) {
-                                btn.style.left = `${Math.round(fallbackX)}px`;
-                                btn.style.top = `${Math.round(fallbackY)}px`;
-                                return;
-                            }
-
-                            const textTop = Math.min(...textRects.map((rect) => rect.top - lineRect.top));
-                            const textBottom = Math.max(...textRects.map((rect) => rect.bottom - lineRect.top));
-
-                            const yCandidates = new Set([
+                            const minX = containerRect.left + margin;
+                            const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
+                            const minY = containerRect.top + margin;
+                            const maxY = Math.max(minY, containerRect.bottom - btnHeight - margin);
+                            const fallbackY = clampBookmarkCoord(
+                                lineRect.top + ((lineRect.height - btnHeight) / 2),
+                                minY,
+                                maxY
+                            );
+                            const xCandidates = [
+                                clampBookmarkCoord(lineRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(containerRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(lineRect.left + margin, minX, maxX),
+                                clampBookmarkCoord(containerRect.left + margin, minX, maxX)
+                            ];
+                            const yCandidates = [
                                 fallbackY,
-                                clampBookmarkCoord(textTop - btnHeight - 4, margin, maxY),
-                                clampBookmarkCoord(textBottom + 4, margin, maxY)
-                            ]);
-                            for (const rect of textRects) {
-                                yCandidates.add(
-                                    clampBookmarkCoord(((rect.top + rect.bottom) / 2) - lineRect.top - (btnHeight / 2), margin, maxY)
-                                );
-                            }
+                                clampBookmarkCoord(lineRect.top - btnHeight - margin, minY, maxY),
+                                clampBookmarkCoord(lineRect.bottom + margin, minY, maxY),
+                                clampBookmarkCoord(lineRect.top - (btnHeight * 1.5) - margin, minY, maxY),
+                                clampBookmarkCoord(lineRect.bottom + (btnHeight * 0.5) + margin, minY, maxY)
+                            ];
 
-                            const overlaps = (x, y) => {
-                                const left = lineRect.left + x;
-                                const top = lineRect.top + y;
-                                const right = left + btnWidth;
-                                const bottom = top + btnHeight;
-                                let area = 0;
-                                for (const rect of textRects) {
-                                    const overlapW = Math.max(0, Math.min(right, rect.right) - Math.max(left, rect.left));
-                                    const overlapH = Math.max(0, Math.min(bottom, rect.bottom) - Math.max(top, rect.top));
-                                    area += overlapW * overlapH;
-                                }
-                                return area;
-                            };
-
-                            let best = { score: Number.POSITIVE_INFINITY, x: fallbackX, y: fallbackY };
+                            let best = { score: Number.POSITIVE_INFINITY, x: xCandidates[0], y: yCandidates[0] };
                             for (const y of yCandidates) {
-                                for (const x of [maxX, margin]) {
-                                    const overlapScore = overlaps(x, y);
-                                    const sidePenalty = x === maxX ? 0 : 0.1;
-                                    const centerPenalty = Math.abs(y - fallbackY) / 1000;
-                                    const score = overlapScore + sidePenalty + centerPenalty;
+                                for (const x of xCandidates) {
+                                    let overlapScore = 0;
+                                    for (const rect of textRects) {
+                                        overlapScore += rectOverlapArea(x, y, btnWidth, btnHeight, rect);
+                                    }
+                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (lineRect.top + (lineRect.height / 2))) * 0.02;
+                                    const rightEdgeTarget = containerRect.right - (btnWidth / 2);
+                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - rightEdgeTarget) * 0.01;
+                                    const score = overlapScore + centerPenalty + sidePenalty;
                                     if (score < best.score) best = { score, x, y };
                                 }
                             }
 
-                            btn.style.left = `${Math.round(best.x)}px`;
-                            btn.style.top = `${Math.round(best.y)}px`;
+                            btn.style.left = `${Math.round(best.x - lineRect.left)}px`;
+                            btn.style.top = `${Math.round(best.y - lineRect.top)}px`;
                         };
 
                         const showBookmarkButton = () => {
@@ -1036,6 +1041,9 @@
                                 });
                                 div.appendChild(btn);
                             }
+                            subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
+                                if (otherBtn !== btn) otherBtn.classList.remove('visible');
+                            });
                             positionBookmarkButton(btn);
                             btn.classList.add('visible');
                             // Auto-hide after 4 seconds
