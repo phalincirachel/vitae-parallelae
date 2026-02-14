@@ -508,6 +508,8 @@ body.scene-dimmer-light-mode .subtitle-current {
 
 /* Reading mode: stronger text shadow for readability */
 #audioPlayerUI.reading-mode .subtitle-line {
+    position: relative;
+    padding-right: clamp(96px, 14vw, 148px);
     text-shadow:
         0 0 5px rgba(0, 0, 0, 1),
         0 0 10px rgba(0, 0, 0, 1),
@@ -943,10 +945,13 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
    ARCHIVE TABS (Kapitel | Lore | Lesezeichen)
    ========================================== */
 .archive-tabs {
-    display: flex;
-    gap: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    width: 100%;
+    gap: 8px;
     margin-bottom: 20px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    border-bottom: none;
 }
 
 .archive-tab {
@@ -957,15 +962,25 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
     font-size: 13px;
     letter-spacing: 1px;
     text-transform: uppercase;
-    padding: 8px 16px;
+    padding: 8px 10px;
     cursor: pointer;
-    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    transition: color 0.22s ease, transform 0.14s ease;
     border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
+    margin-bottom: 0;
 }
 
 .archive-tab:hover {
     color: rgba(255, 255, 255, 0.8);
+    transform: scale(1.02);
+}
+
+.archive-tab:active,
+.archive-tab.pressed {
+    transform: scale(1.045);
 }
 
 .archive-tab.active {
@@ -1055,38 +1070,75 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
    ========================================== */
 .bookmark-btn {
     position: absolute;
-    right: 4px;
+    right: 10px;
     top: 50%;
-    transform: translateY(-50%);
-    background: rgba(255, 215, 0, 0.15);
-    border: 1px solid rgba(255, 215, 0, 0.4);
-    color: #ffd700;
+    transform: translateY(-50%) translateX(6px);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.2) 18%, rgba(255, 255, 255, 0.2) 82%, rgba(255, 255, 255, 0) 100%);
+    border: none;
+    color: rgba(255, 255, 255, 0.96);
     font-size: 11px;
     font-family: "Georgia", serif;
-    padding: 3px 10px;
+    letter-spacing: 0.2px;
+    padding: 4px 12px;
     cursor: pointer;
-    border-radius: 3px;
+    border-radius: 999px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease, background 0.2s ease;
+    transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
     white-space: nowrap;
     z-index: 10;
+    text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(10px) saturate(118%);
+    -webkit-backdrop-filter: blur(10px) saturate(118%);
 }
 
 .bookmark-btn.visible {
     opacity: 1;
     pointer-events: auto;
+    transform: translateY(-50%) translateX(0);
 }
 
 .bookmark-btn:hover {
-    background: rgba(255, 215, 0, 0.3);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.28) 18%, rgba(255, 255, 255, 0.28) 82%, rgba(255, 255, 255, 0) 100%);
 }
 
 .bookmark-btn.saved {
-    background: rgba(50, 205, 50, 0.2);
-    border-color: rgba(50, 205, 50, 0.5);
-    color: #32cd32;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.34) 18%, rgba(255, 255, 255, 0.34) 82%, rgba(255, 255, 255, 0) 100%);
+    color: rgba(255, 255, 255, 0.98);
     pointer-events: none;
+}
+
+.bookmark-btn.pop {
+    animation: bookmarkBtnPop 0.2s ease-out;
+}
+
+body.scene-dimmer-light-mode .bookmark-btn {
+    color: rgba(0, 0, 0, 0.88);
+    text-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.58) 18%, rgba(255, 255, 255, 0.58) 82%, rgba(255, 255, 255, 0) 100%);
+}
+
+body.scene-dimmer-light-mode .bookmark-btn:hover {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.68) 18%, rgba(255, 255, 255, 0.68) 82%, rgba(255, 255, 255, 0) 100%);
+}
+
+body.scene-dimmer-light-mode .bookmark-btn.saved {
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.74) 18%, rgba(255, 255, 255, 0.74) 82%, rgba(255, 255, 255, 0) 100%);
+    color: rgba(0, 0, 0, 0.9);
+}
+
+@keyframes bookmarkBtnPop {
+    0% {
+        transform: translateY(-50%) translateX(0) scale(1);
+    }
+
+    45% {
+        transform: translateY(-50%) translateX(0) scale(1.08);
+    }
+
+    100% {
+        transform: translateY(-50%) translateX(0) scale(1);
+    }
 }
 
 @keyframes fadeIn {
@@ -1224,6 +1276,10 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
         text-align: left;
         font-size: 16px;
         width: 100%;
+    }
+
+    #audioPlayerUI.reading-mode .subtitle-line {
+        padding-right: 92px;
     }
 
     /* READING MODE - Text uses upper screen */

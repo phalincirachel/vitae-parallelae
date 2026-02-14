@@ -544,12 +544,23 @@
             }
         }
 
+        function triggerUiHaptic(pattern = 8) {
+            if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+            navigator.vibrate(pattern);
+        }
+
         // --- ARCHIVE TAB SWITCHING ---
         function initArchiveTabs() {
             const tabs = document.querySelectorAll('.archive-tab');
             const panels = document.querySelectorAll('.archive-tab-content');
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
+                    triggerUiHaptic(7);
+                    tab.classList.remove('pressed');
+                    // Force reflow so the press animation retriggers on repeated clicks.
+                    void tab.offsetWidth;
+                    tab.classList.add('pressed');
+                    setTimeout(() => tab.classList.remove('pressed'), 170);
                     tabs.forEach(t => t.classList.remove('active'));
                     panels.forEach(p => p.classList.remove('active'));
                     tab.classList.add('active');
@@ -3167,60 +3178,83 @@
                         // --- LONG-PRESS BOOKMARK ---
                         div.style.position = 'relative';
                         let _bmTimer = null;
+                        const isDesktopContextBookmark = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+                        const BOOKMARK_LABEL = 'Lesezeichen';
+                        const BOOKMARK_SAVED_LABEL = 'Gespeichert';
+                        const ensureBookmarkButton = () => {
+                            let btn = div.querySelector('.bookmark-btn');
+                            if (btn) return btn;
+                            btn = document.createElement('button');
+                            btn.className = 'bookmark-btn';
+                            btn.innerText = BOOKMARK_LABEL;
+                            btn.addEventListener('click', async (ev) => {
+                                ev.stopPropagation();
+                                ev.preventDefault();
+                                btn.classList.remove('pop');
+                                void btn.offsetWidth;
+                                btn.classList.add('pop');
+                                setTimeout(() => btn.classList.remove('pop'), 220);
+                                const bm = {
+                                    id: Date.now(),
+                                    chapter: CURRENT_CHAPTER,
+                                    chapterTitle: CURRENT_CHAPTER_TITLE,
+                                    page: CURRENT_PAGE,
+                                    time: track.time,
+                                    textPreview: (track.text || '').substring(0, 60),
+                                    createdAt: Date.now()
+                                };
+                                const added = await window.GameState.addBookmark(bm);
+                                if (added) {
+                                    btn.classList.add('saved');
+                                    btn.innerText = BOOKMARK_SAVED_LABEL;
+                                    setTimeout(() => {
+                                        btn.classList.remove('visible', 'saved');
+                                        btn.innerText = BOOKMARK_LABEL;
+                                    }, 1200);
+                                } else {
+                                    btn.classList.remove('visible');
+                                    btn.innerText = BOOKMARK_LABEL;
+                                }
+                            });
+                            div.appendChild(btn);
+                            return btn;
+                        };
+                        const showBookmarkButton = () => {
+                            const btn = ensureBookmarkButton();
+                            btn.classList.add('visible');
+                            if (btn._hideTimer) clearTimeout(btn._hideTimer);
+                            btn._hideTimer = setTimeout(() => {
+                                if (!btn.classList.contains('saved')) {
+                                    btn.classList.remove('visible');
+                                }
+                            }, 3600);
+                        };
                         const startLongPress = (e) => {
+                            if (isDesktopContextBookmark) return;
                             if (_bmTimer) clearTimeout(_bmTimer);
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
-                                // Show bookmark button
-                                let btn = div.querySelector('.bookmark-btn');
-                                if (!btn) {
-                                    btn = document.createElement('button');
-                                    btn.className = 'bookmark-btn';
-                                    btn.innerText = '🔖 Lesezeichen';
-                                    btn.addEventListener('click', async (ev) => {
-                                        ev.stopPropagation();
-                                        ev.preventDefault();
-                                        const bm = {
-                                            id: Date.now(),
-                                            chapter: CURRENT_CHAPTER,
-                                            chapterTitle: CURRENT_CHAPTER_TITLE,
-                                            page: CURRENT_PAGE,
-                                            time: track.time,
-                                            textPreview: (track.text || '').substring(0, 60),
-                                            createdAt: Date.now()
-                                        };
-                                        const added = await window.GameState.addBookmark(bm);
-                                        if (added) {
-                                            btn.classList.add('saved');
-                                            btn.innerText = '✓ Gespeichert';
-                                            setTimeout(() => {
-                                                btn.classList.remove('visible', 'saved');
-                                                btn.innerText = '🔖 Lesezeichen';
-                                            }, 1200);
-                                        } else {
-                                            btn.classList.remove('visible');
-                                        }
-                                    });
-                                    div.appendChild(btn);
-                                }
-                                btn.classList.add('visible');
-                                // Auto-hide after 4 seconds
-                                setTimeout(() => {
-                                    if (!btn.classList.contains('saved')) {
-                                        btn.classList.remove('visible');
-                                    }
-                                }, 4000);
-                            }, 600);
+                                showBookmarkButton();
+                            }, 560);
                         };
                         const cancelLongPress = () => {
                             if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
                         };
-                        div.addEventListener('mousedown', startLongPress);
+                        div.addEventListener('mousedown', (ev) => {
+                            if (isDesktopContextBookmark && ev.button === 2) return;
+                            startLongPress(ev);
+                        });
                         div.addEventListener('touchstart', startLongPress, { passive: true });
                         div.addEventListener('mouseup', cancelLongPress);
                         div.addEventListener('mouseleave', cancelLongPress);
                         div.addEventListener('touchend', cancelLongPress);
                         div.addEventListener('touchcancel', cancelLongPress);
+                        div.addEventListener('contextmenu', (ev) => {
+                            if (!isDesktopContextBookmark) return;
+                            ev.preventDefault();
+                            ev.stopPropagation();
+                            showBookmarkButton();
+                        });
 
                         subtitleContainer.appendChild(div);
                     });
