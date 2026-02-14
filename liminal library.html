@@ -1319,8 +1319,8 @@
 
                     // Start momentum animation if velocity is significant
                     const velocityPxPerMs = swipeVelocity;
-                    let velocityPxPerSec = -velocityPxPerMs * 1000 * 2.5; // Amplify for dramatic momentum
-                    const MAX_VELOCITY = 6000;
+                    let velocityPxPerSec = -velocityPxPerMs * 1000 * 1.2; // Moderate amplify
+                    const MAX_VELOCITY = 5000;
                     const MIN_VELOCITY = 15;
                     velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
 
@@ -2195,9 +2195,9 @@
                     globalVisualDimmer.onChange(({ level, frozen }) => {
                         manualBackgroundDimLevel = level;
                         applyVisualFreezeState(frozen);
-                        // Gray out glasses button when dimmer is off or half (not frozen)
+                        // Gray out glasses button in frozen modes (toggle doesn't work there)
                         if (modeToggleBtn) {
-                            modeToggleBtn.classList.toggle('btn-inactive', !frozen);
+                            modeToggleBtn.classList.toggle('btn-inactive', frozen);
                         }
                         if (frozen && !isReadingMode) {
                             isReadingMode = true;
@@ -2210,9 +2210,9 @@
                     isReadingMode = true;
                     updateReadingModeUI();
                 }
-                // Initial sync: gray out glasses if dimmer is not frozen
+                // Initial sync: gray out glasses if dimmer is frozen
                 if (modeToggleBtn && globalVisualDimmer) {
-                    modeToggleBtn.classList.toggle('btn-inactive', !globalVisualDimmer.isFrozen());
+                    modeToggleBtn.classList.toggle('btn-inactive', globalVisualDimmer.isFrozen());
                 }
 
                 // Click-to-Move State
