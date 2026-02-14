@@ -911,11 +911,6 @@
                 let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
                 window.visualFreezeActive = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
 
-                function triggerUiHaptic(pattern = 10) {
-                    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-                    navigator.vibrate(pattern);
-                }
-
                 // --- GLOBAL GAME STATE ---
                 // Locals aliasing globals
                 // SharedAudioPlayer imported at top
@@ -927,9 +922,7 @@
                         // --- LONG-PRESS BOOKMARK (Injected per page) ---
                         div.style.position = 'relative';
                         let _bmTimer = null;
-                        const BOOKMARK_LABEL = 'Lesezeichen';
-                        const BOOKMARK_SAVED_LABEL = 'Gespeichert';
-                        const startLongPress = () => {
+                        const startLongPress = (e) => {
                             if (_bmTimer) clearTimeout(_bmTimer);
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
@@ -939,8 +932,6 @@
                                     btn = document.createElement('button');
                                     btn.className = 'bookmark-btn';
                                     btn.innerText = '🔖 Lesezeichen';
-                                    btn.innerText = BOOKMARK_LABEL;
-                                    btn.setAttribute('aria-label', 'Lesezeichen speichern');
                                     btn.addEventListener('click', async (ev) => {
                                         ev.stopPropagation();
                                         ev.preventDefault();
@@ -956,17 +947,6 @@
                                         if (window.GameState && window.GameState.addBookmark) {
                                             const added = await window.GameState.addBookmark(bm);
                                             if (added) {
-                                                triggerUiHaptic([14, 40, 14]);
-                                                btn.classList.add('saved');
-                                                btn.innerText = BOOKMARK_SAVED_LABEL;
-                                                if (btn._hideTimer) clearTimeout(btn._hideTimer);
-                                                btn._hideTimer = setTimeout(() => {
-                                                    btn.classList.remove('visible', 'saved');
-                                                    btn.innerText = BOOKMARK_LABEL;
-                                                }, 1100);
-                                                return;
-                                            }
-                                            if (added) {
                                                 btn.classList.add('saved');
                                                 btn.innerText = '✓ Gespeichert';
                                                 setTimeout(() => {
@@ -974,21 +954,18 @@
                                                     btn.innerText = '🔖 Lesezeichen';
                                                 }, 1200);
                                             }
-                                            btn.classList.remove('visible');
-                                            btn.innerText = BOOKMARK_LABEL;
                                         }
                                     });
                                     div.appendChild(btn);
                                 }
-                                triggerUiHaptic(14);
                                 btn.classList.add('visible');
-                                if (btn._hideTimer) clearTimeout(btn._hideTimer);
-                                btn._hideTimer = setTimeout(() => {
+                                // Auto-hide after 4 seconds
+                                setTimeout(() => {
                                     if (!btn.classList.contains('saved')) {
                                         btn.classList.remove('visible');
                                     }
-                                }, 3200);
-                            }, 520);
+                                }, 4000);
+                            }, 600);
                         };
                         const cancelLongPress = () => {
                             if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
@@ -3361,20 +3338,17 @@
 
                 if (bookBtn) {
                     bookBtn.addEventListener('click', () => {
-                        triggerUiHaptic(10);
                         if (typeof renderArchive === 'function') renderArchive();
                         archiveModal.classList.add('visible');
                     });
                 }
                 if (closeArchiveBtn) {
                     closeArchiveBtn.addEventListener('click', () => {
-                        triggerUiHaptic(8);
                         archiveModal.classList.remove('visible');
                     });
                 }
                 if (chapter1Btn) {
                     chapter1Btn.addEventListener('click', async () => {
-                        triggerUiHaptic(10);
                         console.log("Returning to Chapter 1...");
                         await waitForContentSwitchIdle('chapter-menu:to-1');
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
@@ -3391,7 +3365,6 @@
                     chapter1bBtn.classList.remove('locked');
 
                     chapter1bBtn.addEventListener('click', () => {
-                        triggerUiHaptic(10);
                         document.getElementById('archiveModal').classList.remove('visible');
                         if (isLoreMode) {
                             window.restoreMainAudio();
@@ -3408,7 +3381,6 @@
                 const chapter1cBtn = document.getElementById('chapter1cBtn');
                 if (chapter1cBtn) {
                     chapter1cBtn.addEventListener('click', async () => {
-                        triggerUiHaptic(10);
                         console.log("Going to Chapter 1c...");
                         await waitForContentSwitchIdle('chapter-menu:to-1c');
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
@@ -3423,7 +3395,6 @@
                     const panels = document.querySelectorAll('.archive-tab-content');
                     tabs.forEach(tab => {
                         tab.addEventListener('click', () => {
-                            triggerUiHaptic(8);
                             tabs.forEach(t => t.classList.remove('active'));
                             panels.forEach(p => p.classList.remove('active'));
                             tab.classList.add('active');
@@ -3475,7 +3446,6 @@
                         delBtn.innerHTML = '&times;';
                         delBtn.addEventListener('click', async (e) => {
                             e.stopPropagation();
-                            triggerUiHaptic(8);
                             await window.GameState.removeBookmark(bm.id);
                             renderBookmarks();
                         });
@@ -3485,7 +3455,6 @@
                         item.appendChild(delBtn);
 
                         item.addEventListener('click', async () => {
-                            triggerUiHaptic(10);
                             document.getElementById('archiveModal').classList.remove('visible');
                             if (bm.page === CURRENT_PAGE) {
                                 if (window.audioPlayer && window.audioPlayer.seekToTime) {
@@ -3552,7 +3521,6 @@
                             item.appendChild(subText);
 
                             item.addEventListener('click', () => {
-                                triggerUiHaptic(10);
                                 document.getElementById('archiveModal').classList.remove('visible');
                                 startLoreMode(id);
                             });
