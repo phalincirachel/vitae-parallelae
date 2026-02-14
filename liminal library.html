@@ -58,6 +58,24 @@
 </head>
 
 <body>
+    <!-- DEBUG: Copy audio debug log to clipboard -->
+    <div id="debugCopyBtn" onclick="
+        const log = (window._audioDebugLog || []).join('\n');
+        if (!log) { this.textContent = '(empty)'; setTimeout(() => this.textContent = '📋 DBG', 1500); return; }
+        navigator.clipboard.writeText(log).then(() => {
+            this.textContent = '✅ Copied!';
+            setTimeout(() => this.textContent = '📋 DBG', 2000);
+        }).catch(() => {
+            const ta = document.createElement('textarea');
+            ta.value = log; document.body.appendChild(ta);
+            ta.select(); document.execCommand('copy');
+            document.body.removeChild(ta);
+            this.textContent = '✅ Copied!';
+            setTimeout(() => this.textContent = '📋 DBG', 2000);
+        });
+    "
+        style="position:fixed;top:8px;left:8px;z-index:999999;background:rgba(0,0,0,0.7);color:#0f0;border:1px solid #0f0;border-radius:6px;padding:4px 10px;font-size:12px;font-family:monospace;cursor:pointer;user-select:none;-webkit-user-select:none;">
+        📋 DBG</div>
     <div id="loading">
         <h1>ARCHIVE_ERROR_LOG_2025</h1>
         <p>[KLICKEN ZUM STARTEN]</p>

@@ -4,6 +4,19 @@
  * Supports dynamic Iframe creation for SoundCloud and fallback to HTML5 Audio for local files.
  * Provides a unified API: play(), pause(), currentTime, volume, src, and event listeners.
  */
+
+// ============== DEBUG SYSTEM ==============
+window._audioDebugLog = window._audioDebugLog || [];
+window._audioDebugLogMax = 200;
+function _adbg(tag, msg, extra) {
+    const now = performance.now().toFixed(1);
+    const entry = `[${now}ms] [${tag}] ${msg}` + (extra ? ' | ' + JSON.stringify(extra) : '');
+    window._audioDebugLog.push(entry);
+    if (window._audioDebugLog.length > window._audioDebugLogMax) window._audioDebugLog.shift();
+    console.log(entry);
+}
+// ==========================================
+
 class SCAudioAdapter {
     constructor(iframeIdOrOptions = {}) {
         let iframeId = (typeof iframeIdOrOptions === 'string') ? iframeIdOrOptions : null;
@@ -175,6 +188,7 @@ class SCAudioAdapter {
 
         this.widget.bind(SC.Widget.Events.PLAY, () => {
             if (this.mode !== 'sc') return;
+            _adbg('SC-EVENT', 'PLAY fired', { pendingSeek: this._pendingSeek, scPaused: this._scPaused, scCurrentTime: this._scCurrentTime });
             this._scPaused = false;
             this._playIntent = true;
             this._scLastProgressAt = Date.now();
@@ -185,6 +199,7 @@ class SCAudioAdapter {
 
         this.widget.bind(SC.Widget.Events.PAUSE, () => {
             if (this.mode !== 'sc') return;
+            _adbg('SC-EVENT', 'PAUSE fired', { scCurrentTime: this._scCurrentTime });
             this._scPaused = true;
             this._playIntent = false;
             this._dispatch('pause');
@@ -192,6 +207,7 @@ class SCAudioAdapter {
 
         this.widget.bind(SC.Widget.Events.FINISH, () => {
             if (this.mode !== 'sc') return;
+            _adbg('SC-EVENT', 'FINISH fired');
             this._scPaused = true;
             this._playIntent = false;
             this._dispatch('ended');
@@ -218,24 +234,27 @@ class SCAudioAdapter {
     play() {
         this._playIntent = true;
         if (this.mode === 'html5') {
+            _adbg('PLAY', 'html5 play()', { paused: this.audioNode.paused, currentTime: this.audioNode.currentTime });
             return this.audioNode.play();
         } else if (this.mode === 'sc' && this.widget && this._isReady) {
             // Skip if already playing to prevent double-play stutter
-            if (!this._scPaused && (Date.now() - this._scLastProgressAt < 1500)) {
+            const progressAge = Date.now() - this._scLastProgressAt;
+            if (!this._scPaused && progressAge < 1500) {
+                _adbg('PLAY', 'SKIPPED — already playing', { scPaused: this._scPaused, progressAge, pendingSeek: this._pendingSeek });
                 return Promise.resolve();
             }
+            _adbg('PLAY', 'widget.play() called', { scPaused: this._scPaused, progressAge, pendingSeek: this._pendingSeek, scCurrentTime: this._scCurrentTime });
             this.widget.play();
             return Promise.resolve();
         } else {
+            _adbg('PLAY', 'deferred — widget not ready', { mode: this.mode, isReady: this._isReady });
             this._pendingPlay = true;
             return Promise.resolve();
         }
     }
 
     pause() {
-        // DEBUG: Trace who causes pause
-        console.log('[SCAudioAdapter] pause() called. Trace:', new Error().stack);
-
+        _adbg('PAUSE', 'pause() called', { mode: this.mode, caller: new Error().stack.split('\n')[2]?.trim() });
         this._playIntent = false;
         this._pendingPlay = false;
         if (this.mode === 'html5') {
@@ -279,7 +298,7 @@ class SCAudioAdapter {
             this._pendingSeek = safeVal;
             // Try to seek immediately
             this.widget.seekTo(safeVal * 1000);
-            console.log(`[SCAudioAdapter] Seeking to ${safeVal}s (pending: ${this._pendingSeek})`);
+            _adbg('SET-TIME', `currentTime=${safeVal}s → _pendingSeek SET`, { caller: new Error().stack.split('\n')[2]?.trim() });
         }
     }
 
@@ -288,11 +307,14 @@ class SCAudioAdapter {
         if (this.mode === 'sc' && this.widget && this._pendingSeek !== undefined) {
             const seekVal = this._pendingSeek;
             this._pendingSeek = undefined;
-            console.log(`[SCAudioAdapter] Applying pending seek to ${seekVal}s`);
+            _adbg('PENDING-SEEK', `_applyPendingSeek FIRED → seekTo(${seekVal}s) in 500ms`, { scCurrentTime: this._scCurrentTime });
             this._scCurrentTime = seekVal;
             setTimeout(() => {
+                _adbg('PENDING-SEEK', `setTimeout EXECUTING seekTo(${seekVal}s) NOW`);
                 this.widget.seekTo(seekVal * 1000);
             }, 500); // Small delay to ensure widget is ready
+        } else {
+            _adbg('PENDING-SEEK', '_applyPendingSeek — nothing pending', { pendingSeek: this._pendingSeek });
         }
     }
 
@@ -346,10 +368,12 @@ class SCAudioAdapter {
         // Issue one seekTo and store position. Do NOT set _pendingSeek — we don't
         // want _applyPendingSeek to fire a second seekTo when play starts.
         if (this.mode === 'sc' && !isPlaying) {
+            _adbg('SEEK-CONFIRM', `PAUSED early return — target=${target}s, pendingSeek before=${this._pendingSeek}`);
             this._scCurrentTime = target;
             if (this.widget) {
                 try { this.widget.seekTo(target * 1000); } catch (_) { }
             }
+            _adbg('SEEK-CONFIRM', `PAUSED early return done — pendingSeek after=${this._pendingSeek}`);
             return { ok: true, target, position: target, attempts: 0 };
         }
 
