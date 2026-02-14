@@ -3175,86 +3175,160 @@
                             smoothScrollToElement(subtitleContainer, div);
                         });
 
-                        // --- LONG-PRESS BOOKMARK ---
+                        // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
                         div.style.position = 'relative';
                         let _bmTimer = null;
-                        const isDesktopContextBookmark = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
                         const BOOKMARK_LABEL = 'Lesezeichen';
                         const BOOKMARK_SAVED_LABEL = 'Gespeichert';
-                        const ensureBookmarkButton = () => {
-                            let btn = div.querySelector('.bookmark-btn');
-                            if (btn) return btn;
-                            btn = document.createElement('button');
-                            btn.className = 'bookmark-btn';
-                            btn.innerText = BOOKMARK_LABEL;
-                            btn.addEventListener('click', async (ev) => {
-                                ev.stopPropagation();
-                                ev.preventDefault();
-                                btn.classList.remove('pop');
-                                void btn.offsetWidth;
-                                btn.classList.add('pop');
-                                setTimeout(() => btn.classList.remove('pop'), 220);
-                                const bm = {
-                                    id: Date.now(),
-                                    chapter: CURRENT_CHAPTER,
-                                    chapterTitle: CURRENT_CHAPTER_TITLE,
-                                    page: CURRENT_PAGE,
-                                    time: track.time,
-                                    textPreview: (track.text || '').substring(0, 60),
-                                    createdAt: Date.now()
-                                };
-                                const added = await window.GameState.addBookmark(bm);
-                                if (added) {
-                                    btn.classList.add('saved');
-                                    btn.innerText = BOOKMARK_SAVED_LABEL;
-                                    setTimeout(() => {
-                                        btn.classList.remove('visible', 'saved');
-                                        btn.innerText = BOOKMARK_LABEL;
-                                    }, 1200);
-                                } else {
-                                    btn.classList.remove('visible');
-                                    btn.innerText = BOOKMARK_LABEL;
+                        const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+                        const clampBookmarkCoord = (value, min, max) => Math.max(min, Math.min(max, value));
+                        const positionBookmarkButton = (btn) => {
+                            const lineRect = div.getBoundingClientRect();
+                            if (!lineRect.width || !lineRect.height) return;
+
+                            const margin = 8;
+                            const btnWidth = btn.offsetWidth || 0;
+                            const btnHeight = btn.offsetHeight || 0;
+                            const maxX = Math.max(margin, lineRect.width - btnWidth - margin);
+                            const maxY = Math.max(margin, lineRect.height - btnHeight - margin);
+
+                            const textRects = [];
+                            for (const node of div.childNodes) {
+                                if (node.nodeType !== Node.TEXT_NODE) continue;
+                                if (!(node.textContent || '').trim()) continue;
+                                const range = document.createRange();
+                                range.selectNodeContents(node);
+                                for (const rect of range.getClientRects()) {
+                                    if (rect.width > 0 && rect.height > 0) textRects.push(rect);
                                 }
-                            });
-                            div.appendChild(btn);
-                            return btn;
+                            }
+
+                            const fallbackX = maxX;
+                            const fallbackY = clampBookmarkCoord((lineRect.height - btnHeight) / 2, margin, maxY);
+                            if (!textRects.length) {
+                                btn.style.left = `${Math.round(fallbackX)}px`;
+                                btn.style.top = `${Math.round(fallbackY)}px`;
+                                return;
+                            }
+
+                            const textTop = Math.min(...textRects.map((rect) => rect.top - lineRect.top));
+                            const textBottom = Math.max(...textRects.map((rect) => rect.bottom - lineRect.top));
+
+                            const yCandidates = new Set([
+                                fallbackY,
+                                clampBookmarkCoord(textTop - btnHeight - 4, margin, maxY),
+                                clampBookmarkCoord(textBottom + 4, margin, maxY)
+                            ]);
+                            for (const rect of textRects) {
+                                yCandidates.add(
+                                    clampBookmarkCoord(((rect.top + rect.bottom) / 2) - lineRect.top - (btnHeight / 2), margin, maxY)
+                                );
+                            }
+
+                            const overlaps = (x, y) => {
+                                const left = lineRect.left + x;
+                                const top = lineRect.top + y;
+                                const right = left + btnWidth;
+                                const bottom = top + btnHeight;
+                                let area = 0;
+                                for (const rect of textRects) {
+                                    const overlapW = Math.max(0, Math.min(right, rect.right) - Math.max(left, rect.left));
+                                    const overlapH = Math.max(0, Math.min(bottom, rect.bottom) - Math.max(top, rect.top));
+                                    area += overlapW * overlapH;
+                                }
+                                return area;
+                            };
+
+                            let best = { score: Number.POSITIVE_INFINITY, x: fallbackX, y: fallbackY };
+                            for (const y of yCandidates) {
+                                for (const x of [maxX, margin]) {
+                                    const overlapScore = overlaps(x, y);
+                                    const sidePenalty = x === maxX ? 0 : 0.1;
+                                    const centerPenalty = Math.abs(y - fallbackY) / 1000;
+                                    const score = overlapScore + sidePenalty + centerPenalty;
+                                    if (score < best.score) best = { score, x, y };
+                                }
+                            }
+
+                            btn.style.left = `${Math.round(best.x)}px`;
+                            btn.style.top = `${Math.round(best.y)}px`;
                         };
+
                         const showBookmarkButton = () => {
-                            const btn = ensureBookmarkButton();
+                            let btn = div.querySelector('.bookmark-btn');
+                            if (!btn) {
+                                btn = document.createElement('button');
+                                btn.className = 'bookmark-btn';
+                                btn.innerText = BOOKMARK_LABEL;
+                                btn.addEventListener('click', async (ev) => {
+                                    ev.stopPropagation();
+                                    ev.preventDefault();
+                                    btn.classList.remove('pop');
+                                    void btn.offsetWidth;
+                                    btn.classList.add('pop');
+                                    setTimeout(() => btn.classList.remove('pop'), 220);
+                                    const bm = {
+                                        id: Date.now(),
+                                        chapter: CURRENT_CHAPTER,
+                                        chapterTitle: CURRENT_CHAPTER_TITLE,
+                                        page: CURRENT_PAGE,
+                                        time: track.time,
+                                        textPreview: (track.text || '').substring(0, 60),
+                                        createdAt: Date.now()
+                                    };
+                                    const added = await window.GameState.addBookmark(bm);
+                                    if (added) {
+                                        btn.classList.add('saved');
+                                        btn.innerText = BOOKMARK_SAVED_LABEL;
+                                        positionBookmarkButton(btn);
+                                        setTimeout(() => {
+                                            btn.classList.remove('visible', 'saved');
+                                            btn.innerText = BOOKMARK_LABEL;
+                                            positionBookmarkButton(btn);
+                                        }, 1200);
+                                    } else {
+                                        btn.classList.remove('visible');
+                                    }
+                                });
+                                div.appendChild(btn);
+                            }
+                            positionBookmarkButton(btn);
                             btn.classList.add('visible');
-                            if (btn._hideTimer) clearTimeout(btn._hideTimer);
-                            btn._hideTimer = setTimeout(() => {
+                            // Auto-hide after 4 seconds
+                            setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
                                     btn.classList.remove('visible');
                                 }
-                            }, 3600);
+                            }, 4000);
                         };
-                        const startLongPress = (e) => {
-                            if (isDesktopContextBookmark) return;
+
+                        const startLongPress = () => {
+                            if (isDesktopPointer()) return;
                             if (_bmTimer) clearTimeout(_bmTimer);
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
                                 showBookmarkButton();
-                            }, 560);
+                            }, 600);
                         };
                         const cancelLongPress = () => {
                             if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
                         };
-                        div.addEventListener('mousedown', (ev) => {
-                            if (isDesktopContextBookmark && ev.button === 2) return;
-                            startLongPress(ev);
+                        div.addEventListener('mousedown', (e) => {
+                            if (e.button !== 0) return;
+                            startLongPress();
+                        });
+                        div.addEventListener('contextmenu', (e) => {
+                            if (!isDesktopPointer()) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cancelLongPress();
+                            showBookmarkButton();
                         });
                         div.addEventListener('touchstart', startLongPress, { passive: true });
                         div.addEventListener('mouseup', cancelLongPress);
                         div.addEventListener('mouseleave', cancelLongPress);
                         div.addEventListener('touchend', cancelLongPress);
                         div.addEventListener('touchcancel', cancelLongPress);
-                        div.addEventListener('contextmenu', (ev) => {
-                            if (!isDesktopContextBookmark) return;
-                            ev.preventDefault();
-                            ev.stopPropagation();
-                            showBookmarkButton();
-                        });
 
                         subtitleContainer.appendChild(div);
                     });

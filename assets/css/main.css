@@ -1068,164 +1068,56 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
    ========================================== */
 .bookmark-btn {
     position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%) translateX(6px);
-    background: transparent;
-    border: none;
+    left: 8px;
+    top: 8px;
+    transform: scale(1);
+    transform-origin: center;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.42);
     color: rgba(255, 255, 255, 0.96);
-    font-size: 11px;
+    font-size: 12.65px;
     font-family: "Georgia", serif;
-    letter-spacing: 0.2px;
-    padding: 4px 12px;
+    padding: 3.45px 11.5px;
     cursor: pointer;
-    border-radius: 999px;
+    border-radius: 3px;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.18s ease, background 0.18s ease;
+    transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     white-space: nowrap;
     z-index: 10;
-    text-shadow: 0 0 8px rgba(0, 0, 0, 0.55);
-    isolation: isolate;
-}
-
-.bookmark-btn::before {
-    content: "";
-    position: absolute;
-    inset: -6px -12px;
-    border-radius: 999px;
-    pointer-events: none;
-    z-index: -1;
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.46) 20%,
-            rgba(0, 0, 0, 0.46) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.58) 34%,
-            rgba(0, 0, 0, 0.58) 66%,
-            rgba(0, 0, 0, 0) 100%);
-    backdrop-filter: blur(10px) saturate(118%) brightness(0.6);
-    -webkit-backdrop-filter: blur(10px) saturate(118%) brightness(0.6);
 }
 
 .bookmark-btn.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateY(-50%) translateX(0);
 }
 
 .bookmark-btn:hover {
-    background: transparent;
-}
-
-.bookmark-btn:hover::before {
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.52) 20%,
-            rgba(0, 0, 0, 0.52) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.62) 34%,
-            rgba(0, 0, 0, 0.62) 66%,
-            rgba(0, 0, 0, 0) 100%);
+    background: rgba(255, 255, 255, 0.24);
 }
 
 .bookmark-btn.saved {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.48);
     color: rgba(255, 255, 255, 0.98);
     pointer-events: none;
-}
-
-.bookmark-btn.saved::before {
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.56) 20%,
-            rgba(0, 0, 0, 0.56) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.66) 34%,
-            rgba(0, 0, 0, 0.66) 66%,
-            rgba(0, 0, 0, 0) 100%);
 }
 
 .bookmark-btn.pop {
     animation: bookmarkBtnPop 0.2s ease-out;
 }
 
-body.scene-dimmer-light-mode .bookmark-btn {
-    color: rgba(255, 255, 255, 0.96);
-    text-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
-}
-
-body.scene-dimmer-light-mode .bookmark-btn::before {
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.34) 20%,
-            rgba(0, 0, 0, 0.34) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.48) 34%,
-            rgba(0, 0, 0, 0.48) 66%,
-            rgba(0, 0, 0, 0) 100%);
-    backdrop-filter: blur(10px) saturate(112%) brightness(0.72);
-    -webkit-backdrop-filter: blur(10px) saturate(112%) brightness(0.72);
-}
-
-body.scene-dimmer-light-mode .bookmark-btn:hover {
-    background: transparent;
-}
-
-body.scene-dimmer-light-mode .bookmark-btn:hover::before {
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.4) 20%,
-            rgba(0, 0, 0, 0.4) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.54) 34%,
-            rgba(0, 0, 0, 0.54) 66%,
-            rgba(0, 0, 0, 0) 100%);
-}
-
-body.scene-dimmer-light-mode .bookmark-btn.saved {
-    color: rgba(255, 255, 255, 0.98);
-}
-
-body.scene-dimmer-light-mode .bookmark-btn.saved::before {
-    background:
-        linear-gradient(to right,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.44) 20%,
-            rgba(0, 0, 0, 0.44) 80%,
-            rgba(0, 0, 0, 0) 100%),
-        linear-gradient(to bottom,
-            rgba(0, 0, 0, 0) 0%,
-            rgba(0, 0, 0, 0.58) 34%,
-            rgba(0, 0, 0, 0.58) 66%,
-            rgba(0, 0, 0, 0) 100%);
-}
-
 @keyframes bookmarkBtnPop {
     0% {
-        transform: translateY(-50%) translateX(0) scale(1);
+        transform: scale(1);
     }
 
     45% {
-        transform: translateY(-50%) translateX(0) scale(1.08);
+        transform: scale(1.08);
     }
 
     100% {
-        transform: translateY(-50%) translateX(0) scale(1);
+        transform: scale(1);
     }
 }
 
