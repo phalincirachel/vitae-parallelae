@@ -218,7 +218,8 @@ class SCAudioAdapter {
             if (data && Number.isFinite(data.currentPosition)) {
                 this._scCurrentTime = data.currentPosition / 1000;
             }
-            this._scPaused = false;
+            // Do NOT set _scPaused here — late PLAY_PROGRESS events after PAUSE
+            // would overwrite the pause state. Only PLAY event controls _scPaused.
             this._scLastProgressAt = Date.now();
             this._dispatch('timeupdate');
         });
@@ -294,11 +295,14 @@ class SCAudioAdapter {
         if (this.mode === 'html5') {
             this.audioNode.currentTime = safeVal;
         } else if (this.mode === 'sc' && this.widget) {
-            // Store pending seek - SC widget may not be ready
-            this._pendingSeek = safeVal;
+            // Only store as pending seek if widget isn't ready yet.
+            // When ready, the direct seekTo() call is sufficient.
+            if (!this._isReady) {
+                this._pendingSeek = safeVal;
+            }
             // Try to seek immediately
             this.widget.seekTo(safeVal * 1000);
-            _adbg('SET-TIME', `currentTime=${safeVal}s → _pendingSeek SET`, { caller: new Error().stack.split('\n')[2]?.trim() });
+            _adbg('SET-TIME', `currentTime=${safeVal}s → pendingSeek=${this._pendingSeek}`, { isReady: this._isReady, caller: new Error().stack.split('\n')[2]?.trim() });
         }
     }
 
