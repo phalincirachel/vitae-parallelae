@@ -544,12 +544,18 @@
             }
         }
 
+        function triggerUiHaptic(pattern = 10) {
+            if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+            navigator.vibrate(pattern);
+        }
+
         // --- ARCHIVE TAB SWITCHING ---
         function initArchiveTabs() {
             const tabs = document.querySelectorAll('.archive-tab');
             const panels = document.querySelectorAll('.archive-tab-content');
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
+                    triggerUiHaptic(8);
                     tabs.forEach(t => t.classList.remove('active'));
                     panels.forEach(p => p.classList.remove('active'));
                     tab.classList.add('active');
@@ -601,6 +607,7 @@
                 delBtn.innerHTML = '&times;';
                 delBtn.addEventListener('click', async (e) => {
                     e.stopPropagation();
+                    triggerUiHaptic(8);
                     await window.GameState.removeBookmark(bm.id);
                     renderBookmarks();
                 });
@@ -610,6 +617,7 @@
                 item.appendChild(delBtn);
 
                 item.addEventListener('click', async () => {
+                    triggerUiHaptic(10);
                     document.getElementById('archiveModal').classList.remove('visible');
                     if (bm.page === CURRENT_PAGE) {
                         await seekAndSyncSubtitle(bm.time, `bookmark:${bm.id}`);
@@ -677,6 +685,7 @@
                     item.appendChild(subText);
 
                     item.addEventListener('click', () => {
+                        triggerUiHaptic(10);
                         document.getElementById('archiveModal').classList.remove('visible');
                         startLoreMode(id, true);
                     });
@@ -692,6 +701,7 @@
                 ch1.parentNode.replaceChild(newCh1, ch1);
 
                 newCh1.addEventListener('click', () => {
+                    triggerUiHaptic(10);
                     console.log("Loading Chapter 1...");
                     document.getElementById('archiveModal').classList.remove('visible');
 
@@ -722,6 +732,7 @@
                 ch1b.parentNode.replaceChild(newCh1b, ch1b);
 
                 newCh1b.addEventListener('click', async () => {
+                    triggerUiHaptic(10);
                     console.log("Loading Chapter 1b...");
                     await waitForContentSwitchIdle('chapter-menu:to-1b');
                     await saveCurrentContentState({ reason: 'chapter-menu:to-1b' });
@@ -738,6 +749,7 @@
                 ch1c.parentNode.replaceChild(newCh1c, ch1c);
 
                 newCh1c.addEventListener('click', async () => {
+                    triggerUiHaptic(10);
                     console.log("Loading Chapter 1c...");
                     await waitForContentSwitchIdle('chapter-menu:to-1c');
                     await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
@@ -753,11 +765,13 @@
 
         // EVENT LISTENERS FOR ARCHIVE
         document.getElementById('bookBtn').addEventListener('click', () => {
+            triggerUiHaptic(10);
             renderArchive();
             document.getElementById('archiveModal').classList.add('visible');
         });
 
         document.getElementById('closeArchiveBtn').addEventListener('click', () => {
+            triggerUiHaptic(8);
             document.getElementById('archiveModal').classList.remove('visible');
         });
 
@@ -3167,7 +3181,9 @@
                         // --- LONG-PRESS BOOKMARK ---
                         div.style.position = 'relative';
                         let _bmTimer = null;
-                        const startLongPress = (e) => {
+                        const BOOKMARK_LABEL = 'Lesezeichen';
+                        const BOOKMARK_SAVED_LABEL = 'Gespeichert';
+                        const startLongPress = () => {
                             if (_bmTimer) clearTimeout(_bmTimer);
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
@@ -3177,6 +3193,8 @@
                                     btn = document.createElement('button');
                                     btn.className = 'bookmark-btn';
                                     btn.innerText = '🔖 Lesezeichen';
+                                    btn.innerText = BOOKMARK_LABEL;
+                                    btn.setAttribute('aria-label', 'Lesezeichen speichern');
                                     btn.addEventListener('click', async (ev) => {
                                         ev.stopPropagation();
                                         ev.preventDefault();
@@ -3191,6 +3209,17 @@
                                         };
                                         const added = await window.GameState.addBookmark(bm);
                                         if (added) {
+                                            triggerUiHaptic([14, 40, 14]);
+                                            btn.classList.add('saved');
+                                            btn.innerText = BOOKMARK_SAVED_LABEL;
+                                            if (btn._hideTimer) clearTimeout(btn._hideTimer);
+                                            btn._hideTimer = setTimeout(() => {
+                                                btn.classList.remove('visible', 'saved');
+                                                btn.innerText = BOOKMARK_LABEL;
+                                            }, 1100);
+                                            return;
+                                        }
+                                        if (added) {
                                             btn.classList.add('saved');
                                             btn.innerText = '✓ Gespeichert';
                                             setTimeout(() => {
@@ -3199,18 +3228,20 @@
                                             }, 1200);
                                         } else {
                                             btn.classList.remove('visible');
+                                            btn.innerText = BOOKMARK_LABEL;
                                         }
                                     });
                                     div.appendChild(btn);
                                 }
+                                triggerUiHaptic(14);
                                 btn.classList.add('visible');
-                                // Auto-hide after 4 seconds
-                                setTimeout(() => {
+                                if (btn._hideTimer) clearTimeout(btn._hideTimer);
+                                btn._hideTimer = setTimeout(() => {
                                     if (!btn.classList.contains('saved')) {
                                         btn.classList.remove('visible');
                                     }
-                                }, 4000);
-                            }, 600);
+                                }, 3200);
+                            }, 520);
                         };
                         const cancelLongPress = () => {
                             if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
