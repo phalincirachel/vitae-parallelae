@@ -892,10 +892,6 @@
                 const subtitleContainer = document.getElementById('subtitleContainer');
                 const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
                 const RECENTER_MOBILE_RADIUS_PX = 75;
-                if (subtitleRecenterBtn && subtitleRecenterBtn.parentElement !== document.body) {
-                    // Keep fixed-position math viewport-based even when UI containers are transformed.
-                    document.body.appendChild(subtitleRecenterBtn);
-                }
                 const skipBackBtn = document.getElementById('skipBackBtn');
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
                 const globalVisualDimmer = window.GlobalVisualDimmer
@@ -932,21 +928,27 @@
                             const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
                             return overlapW * overlapH;
                         };
+                        const collectLineTextRects = (lineEl, containerRect) => {
+                            const rects = [];
+                            if (!lineEl) return rects;
+                            for (const node of lineEl.childNodes) {
+                                if (node.nodeType !== Node.TEXT_NODE) continue;
+                                if (!(node.textContent || '').trim()) continue;
+                                const range = document.createRange();
+                                range.selectNodeContents(node);
+                                for (const rect of range.getClientRects()) {
+                                    if (rect.width <= 0 || rect.height <= 0) continue;
+                                    if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
+                                    rects.push(rect);
+                                }
+                            }
+                            return rects;
+                        };
                         const collectSubtitleTextRects = () => {
                             const rects = [];
                             const containerRect = subtitleContainer.getBoundingClientRect();
                             subtitleContainer.querySelectorAll('.subtitle-line').forEach((lineEl) => {
-                                for (const node of lineEl.childNodes) {
-                                    if (node.nodeType !== Node.TEXT_NODE) continue;
-                                    if (!(node.textContent || '').trim()) continue;
-                                    const range = document.createRange();
-                                    range.selectNodeContents(node);
-                                    for (const rect of range.getClientRects()) {
-                                        if (rect.width <= 0 || rect.height <= 0) continue;
-                                        if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
-                                        rects.push(rect);
-                                    }
-                                }
+                                rects.push(...collectLineTextRects(lineEl, containerRect));
                             });
                             if (subtitleRecenterBtn && subtitleRecenterBtn.offsetParent !== null) {
                                 const recenterRect = subtitleRecenterBtn.getBoundingClientRect();
@@ -965,23 +967,25 @@
                             const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
                             const minY = containerRect.top + margin;
                             const maxY = Math.max(minY, containerRect.bottom - btnHeight - margin);
+                            const lineTextRects = collectLineTextRects(div, containerRect);
+                            const anchorRect = lineTextRects.length > 0 ? lineTextRects[lineTextRects.length - 1] : lineRect;
                             const fallbackY = clampBookmarkCoord(
-                                lineRect.top + ((lineRect.height - btnHeight) / 2),
+                                anchorRect.top + ((anchorRect.height - btnHeight) / 2),
                                 minY,
                                 maxY
                             );
                             const xCandidates = [
-                                clampBookmarkCoord(lineRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(anchorRect.right + margin, minX, maxX),
+                                clampBookmarkCoord(anchorRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(anchorRect.left - btnWidth - margin, minX, maxX),
                                 clampBookmarkCoord(containerRect.right - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(lineRect.left + margin, minX, maxX),
                                 clampBookmarkCoord(containerRect.left + margin, minX, maxX)
                             ];
                             const yCandidates = [
                                 fallbackY,
-                                clampBookmarkCoord(lineRect.top - btnHeight - margin, minY, maxY),
-                                clampBookmarkCoord(lineRect.bottom + margin, minY, maxY),
-                                clampBookmarkCoord(lineRect.top - (btnHeight * 1.5) - margin, minY, maxY),
-                                clampBookmarkCoord(lineRect.bottom + (btnHeight * 0.5) + margin, minY, maxY)
+                                clampBookmarkCoord(anchorRect.top - btnHeight - margin, minY, maxY),
+                                clampBookmarkCoord(anchorRect.bottom + margin, minY, maxY),
+                                clampBookmarkCoord(lineRect.top + ((lineRect.height - btnHeight) / 2), minY, maxY)
                             ];
 
                             let best = { score: Number.POSITIVE_INFINITY, x: xCandidates[0], y: yCandidates[0] };
@@ -991,9 +995,13 @@
                                     for (const rect of textRects) {
                                         overlapScore += rectOverlapArea(x, y, btnWidth, btnHeight, rect);
                                     }
-                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (lineRect.top + (lineRect.height / 2))) * 0.02;
-                                    const rightEdgeTarget = containerRect.right - (btnWidth / 2);
-                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - rightEdgeTarget) * 0.01;
+                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (anchorRect.top + (anchorRect.height / 2))) * 0.08;
+                                    const idealCenterX = clampBookmarkCoord(
+                                        anchorRect.right + margin + (btnWidth / 2),
+                                        minX + (btnWidth / 2),
+                                        maxX + (btnWidth / 2)
+                                    );
+                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - idealCenterX) * 0.03;
                                     const score = overlapScore + centerPenalty + sidePenalty;
                                     if (score < best.score) best = { score, x, y };
                                 }
@@ -1115,6 +1123,8 @@
 
                 function updateRecenterButtonVisibility() {
                     if (!subtitleRecenterBtn) return;
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    syncRecenterButtonMount(isMobileLayout);
                     const show = isReadingMode && subtitleFollowLocked;
                     if (!show) {
                         subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
@@ -1132,6 +1142,32 @@
                     // SharedAudioPlayer checks this flag before auto-scroll.
                     subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     updateRecenterButtonVisibility();
+                }
+
+                function syncRecenterButtonMount(isMobileLayout = window.matchMedia('(max-width: 768px)').matches) {
+                    if (!subtitleRecenterBtn) return;
+
+                    if (isMobileLayout) {
+                        if (subtitleRecenterBtn.parentElement !== document.body) {
+                            // Mobile keeps viewport-fixed placement.
+                            document.body.appendChild(subtitleRecenterBtn);
+                        }
+                        subtitleRecenterBtn.style.position = 'fixed';
+                        return;
+                    }
+
+                    const desktopHost = document.getElementById('audioControls');
+                    if (desktopHost) {
+                        if (subtitleRecenterBtn.parentElement !== desktopHost) {
+                            // Desktop: reuse the same flex flow as the existing control icons.
+                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
+                        } else if (desktopHost.firstElementChild !== subtitleRecenterBtn) {
+                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
+                        }
+                    }
+                    subtitleRecenterBtn.style.position = 'static';
+                    subtitleRecenterBtn.style.left = '';
+                    subtitleRecenterBtn.style.top = '';
                 }
 
                 function isMobileRecenterZoneActive() {
@@ -1163,35 +1199,16 @@
                     return (dx * dx + dy * dy) <= (RECENTER_MOBILE_RADIUS_PX * RECENTER_MOBILE_RADIUS_PX);
                 }
 
-                function getTopControlButton() {
-                    const controls = document.getElementById('audioControls');
-                    if (!controls) return skipBackBtn;
-                    const buttons = Array.from(controls.querySelectorAll('.audio-btn')).filter(btn => {
-                        if (!btn || btn === subtitleRecenterBtn) return false;
-                        const style = window.getComputedStyle(btn);
-                        return style.display !== 'none' && style.visibility !== 'hidden';
-                    });
-                    if (buttons.length === 0) return skipBackBtn;
-
-                    buttons.sort((a, b) => {
-                        const ra = a.getBoundingClientRect();
-                        const rb = b.getBoundingClientRect();
-                        const topDelta = ra.top - rb.top;
-                        if (Math.abs(topDelta) > 1) return topDelta;
-                        return ra.left - rb.left;
-                    });
-
-                    return buttons[0];
-                }
-
                 function positionRecenterButton() {
                     if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
 
                     const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
-                    const anchorBtn = isMobileLayout ? fullscreenBtn : getTopControlButton();
-                    if (!anchorBtn) return;
+                    syncRecenterButtonMount(isMobileLayout);
+                    if (!isMobileLayout) return;
 
-                    const anchorRect = anchorBtn.getBoundingClientRect();
+                    const anchorRect = fullscreenBtn ? fullscreenBtn.getBoundingClientRect() : null;
+                    if (!anchorRect) return;
+
                     const btnRect = subtitleRecenterBtn.getBoundingClientRect();
                     const gap = 10;
 
@@ -3608,7 +3625,7 @@
 
                     if (collectedIds.length === 0) {
                         const empty = document.createElement('div');
-                        empty.className = 'menu-item locked';
+                        empty.className = 'bookmark-empty-msg';
                         empty.innerText = 'Keine Lore gefunden';
                         list.appendChild(empty);
                     } else {
