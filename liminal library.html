@@ -21,6 +21,13 @@
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/liminal.css">
     <style>
+        html,
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
         .subtitle-current {
             font-weight: 500 !important;
         }
@@ -131,7 +138,8 @@
                     </svg>
                     <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
+                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white">
+                        </path>
                     </svg>
                     <svg id="sceneDimmerIconSun" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="display:none;">
@@ -1251,14 +1259,29 @@
                 let isDown = false;
                 let startY;
                 let scrollTop;
+                let lastMoveY = 0;
+                let lastMoveTime = 0;
+                let swipeVelocity = 0;
+                let momentumAnimId = null;
+
+                function cancelMomentum() {
+                    if (momentumAnimId) {
+                        cancelAnimationFrame(momentumAnimId);
+                        momentumAnimId = null;
+                    }
+                }
 
                 const handleDown = (e) => {
+                    cancelMomentum();
                     isDown = true;
                     subtitleContainer.dataset.isDragging = 'false';
                     subtitleContainer.dataset.wasDragging = 'false';
                     const pageY = e.pageY || e.touches[0].pageY;
                     startY = pageY - subtitleContainer.offsetTop;
                     scrollTop = subtitleContainer.scrollTop;
+                    lastMoveY = pageY;
+                    lastMoveTime = performance.now();
+                    swipeVelocity = 0;
                     subtitleContainer.style.cursor = 'grabbing';
                 };
 
@@ -1268,6 +1291,17 @@
                     const pageY = e.pageY || e.touches[0].pageY;
                     const y = pageY - subtitleContainer.offsetTop;
                     const walk = (y - startY) * 1.0;
+
+                    // Track velocity for momentum
+                    const now = performance.now();
+                    const elapsed = now - lastMoveTime;
+                    if (elapsed > 0) {
+                        const instantVelocity = (pageY - lastMoveY) / elapsed;
+                        swipeVelocity = swipeVelocity * 0.6 + instantVelocity * 0.4;
+                    }
+                    lastMoveY = pageY;
+                    lastMoveTime = now;
+
                     if (Math.abs(walk) > 5) {
                         subtitleContainer.dataset.isDragging = 'true';
                         subtitleContainer.dataset.wasDragging = 'true';
@@ -1282,6 +1316,32 @@
                     isDown = false;
                     subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     subtitleContainer.style.cursor = 'auto';
+
+                    // Start momentum animation if velocity is significant
+                    const velocityPxPerMs = swipeVelocity;
+                    let velocityPxPerSec = -velocityPxPerMs * 1000;
+                    const MAX_VELOCITY = 3000;
+                    const MIN_VELOCITY = 10;
+                    velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
+
+                    if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
+                        let lastFrame = performance.now();
+                        const animateMomentum = (now) => {
+                            const dt = (now - lastFrame) / 1000;
+                            lastFrame = now;
+
+                            subtitleContainer.scrollTop += velocityPxPerSec * dt;
+                            velocityPxPerSec *= Math.pow(0.92, dt * 60);
+
+                            if (Math.abs(velocityPxPerSec) < 0.5) {
+                                momentumAnimId = null;
+                                return;
+                            }
+
+                            momentumAnimId = requestAnimationFrame(animateMomentum);
+                        };
+                        momentumAnimId = requestAnimationFrame(animateMomentum);
+                    }
                 };
 
                 subtitleContainer.addEventListener('mousedown', handleDown);
@@ -2135,6 +2195,10 @@
                     globalVisualDimmer.onChange(({ level, frozen }) => {
                         manualBackgroundDimLevel = level;
                         applyVisualFreezeState(frozen);
+                        // Gray out glasses button when dimmer is off or half (not frozen)
+                        if (modeToggleBtn) {
+                            modeToggleBtn.classList.toggle('btn-inactive', !frozen);
+                        }
                         if (frozen && !isReadingMode) {
                             isReadingMode = true;
                             updateReadingModeUI();
@@ -2145,6 +2209,10 @@
                 if (globalVisualDimmer && globalVisualDimmer.isFrozen() && !isReadingMode) {
                     isReadingMode = true;
                     updateReadingModeUI();
+                }
+                // Initial sync: gray out glasses if dimmer is not frozen
+                if (modeToggleBtn && globalVisualDimmer) {
+                    modeToggleBtn.classList.toggle('btn-inactive', !globalVisualDimmer.isFrozen());
                 }
 
                 // Click-to-Move State
@@ -3287,4 +3355,3 @@
 </body>
 
 </html>
-

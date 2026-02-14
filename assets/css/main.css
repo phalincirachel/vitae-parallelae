@@ -602,6 +602,13 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     opacity: 1;
 }
 
+.audio-btn.btn-inactive {
+    opacity: 0.25;
+    pointer-events: none;
+    filter: grayscale(1);
+    transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
 .audio-btn svg {
     filter: drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
     width: 24px;

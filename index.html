@@ -18,6 +18,13 @@
     <link rel="stylesheet" href="assets/css/main.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
     <style>
+        html,
+        body {
+            background-color: #000;
+            margin: 0;
+            padding: 0;
+        }
+
         #loading-screen {
             position: fixed;
             top: 0;
@@ -204,7 +211,8 @@
                     </svg>
                     <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
+                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white">
+                        </path>
                     </svg>
                     <svg id="sceneDimmerIconSun" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" style="display:none;">
@@ -2038,6 +2046,13 @@
             nearbyLights = [];
             for (const p of particles) p.update(dt); // Ensure particle update accepts dt (or add it)
             for (const c of clouds) c.update(dt);
+
+            // Screen-Shake Decay (frame-rate independent)
+            if (screenShake > 0.01) {
+                screenShake *= Math.pow(0.8, dt * 60);
+            } else {
+                screenShake = 0;
+            }
         }
 
         // ============================================
@@ -2113,7 +2128,7 @@
             // SMOOTH CAMERA: Use sub-pixel values (remove Math.floor)
             ctx.translate(-camX + shakeX, -camY + shakeY);
 
-            screenShake *= 0.8; // Schnell abklingen
+            // screenShake decay moved to update(dt) for frame-rate independence
 
             // Hintergrund
             if (bgImage) ctx.drawImage(bgImage, 0, 0);
@@ -2651,6 +2666,10 @@
             globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
+                // Gray out glasses button when dimmer is off or half (not frozen)
+                if (modeToggleBtn) {
+                    modeToggleBtn.classList.toggle('btn-inactive', !frozen);
+                }
                 if (frozen) {
                     pendingForceReadingFromFreeze = true;
                     if (modeSwitchInitialized) {
@@ -2667,6 +2686,10 @@
             });
             window.visualFreezeActive = globalVisualDimmer.isFrozen();
             pendingForceReadingFromFreeze = window.visualFreezeActive;
+            // Initial sync: gray out glasses if dimmer is not frozen
+            if (modeToggleBtn) {
+                modeToggleBtn.classList.toggle('btn-inactive', !globalVisualDimmer.isFrozen());
+            }
         }
 
         function syncPlayPauseIcon() {
@@ -3259,18 +3282,33 @@
         }
 
 
-        // 11. Custom Drag-to-Scroll Logic for Subtitle Container
+        // 11. Custom Drag-to-Scroll Logic for Subtitle Container (with Momentum)
         let isDown = false;
         let startY;
         let scrollTop;
+        let lastMoveY = 0;
+        let lastMoveTime = 0;
+        let swipeVelocity = 0;
+        let momentumAnimId = null;
+
+        function cancelMomentum() {
+            if (momentumAnimId) {
+                cancelAnimationFrame(momentumAnimId);
+                momentumAnimId = null;
+            }
+        }
 
         const handleDown = (e) => {
+            cancelMomentum();
             isDown = true;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.dataset.wasDragging = 'false'; // Reset for next click check
             const pageY = e.pageY || e.touches[0].pageY;
             startY = pageY - subtitleContainer.offsetTop;
             scrollTop = subtitleContainer.scrollTop;
+            lastMoveY = pageY;
+            lastMoveTime = performance.now();
+            swipeVelocity = 0;
             // Optional: Cursor style
             subtitleContainer.style.cursor = 'grabbing';
         };
@@ -3281,6 +3319,17 @@
             const pageY = e.pageY || e.touches[0].pageY;
             const y = pageY - subtitleContainer.offsetTop;
             const walk = (y - startY) * 1.0; // Scroll speed
+
+            // Track velocity for momentum
+            const now = performance.now();
+            const elapsed = now - lastMoveTime;
+            if (elapsed > 0) {
+                // velocity in px/ms, smoothed
+                const instantVelocity = (pageY - lastMoveY) / elapsed;
+                swipeVelocity = swipeVelocity * 0.6 + instantVelocity * 0.4;
+            }
+            lastMoveY = pageY;
+            lastMoveTime = now;
 
             // Threshold check
             if (Math.abs(walk) > 5) {
@@ -3297,17 +3346,47 @@
             isDown = false;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.style.cursor = 'auto';
+
+            // Start momentum animation if velocity is significant
+            const velocityPxPerMs = swipeVelocity;
+            let velocityPxPerSec = -velocityPxPerMs * 1000; // Negate: drag down = scroll up
+            const MAX_VELOCITY = 3000;
+            const MIN_VELOCITY = 10;
+            velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
+
+            if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
+                let lastFrame = performance.now();
+                const animateMomentum = (now) => {
+                    const dt = (now - lastFrame) / 1000;
+                    lastFrame = now;
+
+                    // Apply velocity
+                    subtitleContainer.scrollTop += velocityPxPerSec * dt;
+
+                    // Decay (frame-rate independent)
+                    velocityPxPerSec *= Math.pow(0.92, dt * 60);
+
+                    // Stop conditions
+                    if (Math.abs(velocityPxPerSec) < 0.5) {
+                        momentumAnimId = null;
+                        return;
+                    }
+
+                    momentumAnimId = requestAnimationFrame(animateMomentum);
+                };
+                momentumAnimId = requestAnimationFrame(animateMomentum);
+            }
         };
 
         subtitleContainer.addEventListener('mousedown', handleDown);
-        subtitleContainer.addEventListener('touchstart', handleDown);
+        subtitleContainer.addEventListener('touchstart', handleDown, { passive: true });
 
         subtitleContainer.addEventListener('mouseleave', handleUp);
         subtitleContainer.addEventListener('mouseup', handleUp);
         subtitleContainer.addEventListener('touchend', handleUp);
 
         subtitleContainer.addEventListener('mousemove', handleMove);
-        subtitleContainer.addEventListener('touchmove', handleMove);
+        subtitleContainer.addEventListener('touchmove', handleMove, { passive: false });
 
         // 10. Scrollbar Auto-Hide Logic
         let scrollTimeout;
@@ -4105,4 +4184,3 @@
 </body>
 
 </html>
-

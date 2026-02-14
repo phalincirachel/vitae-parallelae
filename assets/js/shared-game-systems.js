@@ -150,8 +150,9 @@ class Cloud {
 
         // Debug Log only once per session/type load to avoid spam, but here acceptable on init
     }
-    update() {
-        this.x -= this.speed;
+    update(dt) {
+        if (!dt) dt = 0.016;
+        this.x -= this.speed * 60 * dt;
         // Wrap: links raus -> rechts wieder rein
         if (this.x < -this.size * 2) {
             this.x = mapW + this.size;
