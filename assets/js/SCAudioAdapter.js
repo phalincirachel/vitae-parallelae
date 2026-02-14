@@ -338,6 +338,17 @@ class SCAudioAdapter {
             await this._waitForScReady(options.readyTimeoutMs || 2500);
         }
 
+        // When SoundCloud is paused, seeking doesn't stick reliably.
+        // Just store as pending seek — _applyPendingSeek will handle it when play starts.
+        if (this.mode === 'sc' && !isPlaying) {
+            this._scCurrentTime = target;
+            this._pendingSeek = target;
+            if (this.widget) {
+                try { this.widget.seekTo(target * 1000); } catch (_) { }
+            }
+            return { ok: true, target, position: target, attempts: 0 };
+        }
+
         this.currentTime = target;
 
         let lastPos = this.currentTime || 0;
