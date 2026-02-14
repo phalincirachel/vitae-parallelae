@@ -16,6 +16,7 @@ export class SharedAudioPlayer {
         this.currentScrollAnimation = null;
         this.container = options.container || document.getElementById('subtitleContainer');
         this.isReadingMode = options.isReadingMode || false;
+        this.onLineRender = options.onLineRender || null;
 
         // Default volumes
         this.audio.volume = options.volume || 1.0;
@@ -190,9 +191,17 @@ export class SharedAudioPlayer {
                     div.title = 'Springe zu dieser Stelle';
                     div.addEventListener('click', async () => {
                         if (this.container.dataset.wasDragging === 'true') return;
+                        // Skip seek if bookmark button was clicked
+                        if (window.event && window.event.target.classList.contains('bookmark-btn')) return;
+
                         await this.seekToTime(this.subtitleTracks[i].time, { autoplay: true });
                         this.smoothScrollTo(div);
                     });
+
+                    // Custom Hook for Bookmarks etc.
+                    if (this.onLineRender) {
+                        this.onLineRender(div, this.subtitleTracks[i], i);
+                    }
 
                     this.container.appendChild(div);
                 }

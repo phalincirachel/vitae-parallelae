@@ -939,6 +939,156 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
     display: none;
 }
 
+/* ==========================================
+   ARCHIVE TABS (Kapitel | Lore | Lesezeichen)
+   ========================================== */
+.archive-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.archive-tab {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: "Georgia", serif;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 8px 16px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+.archive-tab:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.archive-tab.active {
+    color: #ffd700;
+    border-bottom-color: #ffd700;
+}
+
+body.scene-dimmer-light-mode .archive-tab {
+    color: rgba(0, 0, 0, 0.4);
+}
+
+body.scene-dimmer-light-mode .archive-tab.active {
+    color: #7b5a00;
+    border-bottom-color: #7b5a00;
+}
+
+/* Tab content panels */
+.archive-tab-content {
+    display: none;
+    flex: 1;
+    overflow: hidden;
+}
+
+.archive-tab-content.active {
+    display: flex;
+    gap: 40px;
+}
+
+/* Bookmark tab is single-column, scrollable */
+.archive-tab-content[data-tab="lesezeichen"] {
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.archive-tab-content[data-tab="lesezeichen"]::-webkit-scrollbar {
+    display: none;
+}
+
+/* Bookmark items */
+.bookmark-item {
+    position: relative;
+    padding-right: 32px !important;
+}
+
+.bookmark-delete-btn {
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px 8px;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.bookmark-delete-btn:hover {
+    color: rgba(255, 100, 100, 0.9);
+}
+
+body.scene-dimmer-light-mode .bookmark-delete-btn {
+    color: rgba(0, 0, 0, 0.25);
+}
+
+body.scene-dimmer-light-mode .bookmark-delete-btn:hover {
+    color: rgba(200, 50, 50, 0.8);
+}
+
+.bookmark-empty-msg {
+    color: rgba(255, 255, 255, 0.35);
+    font-style: italic;
+    font-size: 13px;
+    padding: 20px 0;
+}
+
+body.scene-dimmer-light-mode .bookmark-empty-msg {
+    color: rgba(0, 0, 0, 0.35);
+}
+
+/* ==========================================
+   BOOKMARK BUTTON (Long-press on timestamp)
+   ========================================== */
+.bookmark-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255, 215, 0, 0.15);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    color: #ffd700;
+    font-size: 11px;
+    font-family: "Georgia", serif;
+    padding: 3px 10px;
+    cursor: pointer;
+    border-radius: 3px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, background 0.2s ease;
+    white-space: nowrap;
+    z-index: 10;
+}
+
+.bookmark-btn.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.bookmark-btn:hover {
+    background: rgba(255, 215, 0, 0.3);
+}
+
+.bookmark-btn.saved {
+    background: rgba(50, 205, 50, 0.2);
+    border-color: rgba(50, 205, 50, 0.5);
+    color: #32cd32;
+    pointer-events: none;
+}
+
 @keyframes fadeIn {
     from {
         opacity: 0;

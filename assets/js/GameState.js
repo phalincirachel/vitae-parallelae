@@ -24,7 +24,8 @@ export const GameState = {
     // STATE
     state: {
         collectedLore: [], // Array of Content IDs
-        collectedLights: {} // Map: { "sceneName": [lightId, ...] }
+        collectedLights: {}, // Map: { "sceneName": [lightId, ...] }
+        bookmarks: [] // Array of { id, chapter, chapterTitle, page, time, textPreview, createdAt }
     },
 
     // METHODS
@@ -59,7 +60,8 @@ export const GameState = {
                     // Force Empty State
                     this.state = {
                         collectedLore: [],
-                        collectedLights: {}
+                        collectedLights: {},
+                        bookmarks: []
                     };
                     await window.electronAPI.saveGame(this.state);
                 } else {
@@ -73,6 +75,7 @@ export const GameState = {
                 // Compatibility: Ensure proper structure
                 if (!this.state.collectedLights) this.state.collectedLights = {};
                 if (!this.state.collectedLore) this.state.collectedLore = [];
+                if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
 
                 // Audio Persistence
                 if (window.PlayerStateManager && this.state.audioPositions) {
@@ -85,6 +88,10 @@ export const GameState = {
                 console.warn("[GameState] Load Error:", e);
             }
         }
+
+        // Ensure bookmarks array exists after any load path
+        if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
+
         // NOTE: Auto-unlock removed as per new design.
     },
 
@@ -160,7 +167,8 @@ export const GameState = {
         console.log("[GameState] Resetting all saved data...");
         this.state = {
             collectedLore: [],
-            collectedLights: {}
+            collectedLights: {},
+            bookmarks: []
         };
         await this.save();
         console.log("[GameState] State Reset Complete!");
@@ -198,6 +206,7 @@ export const GameState = {
                 this.state = data;
                 // Ensure defaults
                 if (!this.state.collectedLights) this.state.collectedLights = {};
+                if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
 
                 // Audio Persistence
                 if (window.PlayerStateManager && this.state.audioPositions) {
@@ -214,5 +223,51 @@ export const GameState = {
             console.error("[GameState] Import Error:", e);
         }
         return false;
+    },
+
+    // --- Bookmark Helpers ---
+    getBookmarks() {
+        if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
+        return this.state.bookmarks;
+    },
+
+    async addBookmark(bm) {
+        if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
+        // Prevent duplicates (same page + time within 1s)
+        const exists = this.state.bookmarks.some(
+            b => b.page === bm.page && Math.abs(b.time - bm.time) < 1
+        );
+        if (exists) {
+            console.log('[GameState] Bookmark already exists, skipping.');
+            return false;
+        }
+        this.state.bookmarks.unshift(bm); // newest first
+        await this.save();
+        console.log('[GameState] Bookmark added:', bm);
+        return true;
+    },
+
+    async removeBookmark(id) {
+        if (!Array.isArray(this.state.bookmarks)) return false;
+        const before = this.state.bookmarks.length;
+        this.state.bookmarks = this.state.bookmarks.filter(b => b.id !== id);
+        if (this.state.bookmarks.length < before) {
+            await this.save();
+            console.log('[GameState] Bookmark removed:', id);
+            return true;
+        }
+        return false;
+    },
+
+    /**
+     * Format a time in seconds to a precise display string.
+     * E.g. 49.50 → "0:49.50", 125.33 → "2:05.33"
+     */
+    formatBookmarkTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        const whole = Math.floor(secs);
+        const frac = Math.round((secs - whole) * 100);
+        return `${mins}:${whole.toString().padStart(2, '0')}.${frac.toString().padStart(2, '0')}`;
     }
 };

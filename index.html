@@ -271,10 +271,15 @@
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
 
-            <div class="archive-content">
-                <!-- LINKS: KAPITEL -->
-                <div class="col-left" id="chapterList">
-                    <div class="col-header">Kapitel</div>
+            <div class="archive-tabs">
+                <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
+                <button class="archive-tab" data-tab="lore">Lore</button>
+                <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
+            </div>
+
+            <div class="archive-tab-content active" data-tab="kapitel">
+                <!-- KAPITEL -->
+                <div class="col-left" id="chapterList" style="flex:1;">
                     <!-- Hardcoded Chapter 1 -->
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
@@ -293,10 +298,18 @@
                         <div class="item-sub-text">Steingasse</div>
                     </div>
                 </div>
+            </div>
 
-                <!-- RECHTS: LORE -->
-                <div class="col-right" id="loreList">
-                    <div class="col-header">Lore</div>
+            <div class="archive-tab-content" data-tab="lore">
+                <!-- LORE -->
+                <div class="col-left" id="loreList" style="flex:1;">
+                    <!-- Dynamisch gefüllt -->
+                </div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="lesezeichen">
+                <!-- LESEZEICHEN -->
+                <div id="bookmarkList" style="width:100%;">
                     <!-- Dynamisch gefüllt -->
                 </div>
             </div>
@@ -531,17 +544,104 @@
             }
         }
 
+        // --- ARCHIVE TAB SWITCHING ---
+        function initArchiveTabs() {
+            const tabs = document.querySelectorAll('.archive-tab');
+            const panels = document.querySelectorAll('.archive-tab-content');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    panels.forEach(p => p.classList.remove('active'));
+                    tab.classList.add('active');
+                    const target = tab.getAttribute('data-tab');
+                    const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
+                    if (panel) panel.classList.add('active');
+                    if (target === 'lesezeichen') renderBookmarks();
+                });
+            });
+        }
+        initArchiveTabs();
+
+        // --- BOOKMARK RENDERING ---
+        const CURRENT_PAGE = 'index.html';
+        const CURRENT_CHAPTER = '1a';
+        const CURRENT_CHAPTER_TITLE = 'Der Marktplatz';
+
+        function renderBookmarks() {
+            const list = document.getElementById('bookmarkList');
+            if (!list) return;
+            list.innerHTML = '';
+
+            if (!window.GameState) return;
+            const bookmarks = window.GameState.getBookmarks();
+
+            if (bookmarks.length === 0) {
+                const empty = document.createElement('div');
+                empty.className = 'bookmark-empty-msg';
+                empty.innerText = 'Keine Lesezeichen gesetzt';
+                list.appendChild(empty);
+                return;
+            }
+
+            bookmarks.forEach(bm => {
+                const item = document.createElement('div');
+                item.className = 'menu-item bookmark-item';
+
+                const mainText = document.createElement('div');
+                mainText.className = 'item-main-text';
+                const timeStr = window.GameState.formatBookmarkTime(bm.time);
+                mainText.innerText = `${bm.chapterTitle} · ${timeStr}`;
+
+                const subText = document.createElement('div');
+                subText.className = 'item-sub-text';
+                subText.innerText = bm.textPreview || '';
+
+                const delBtn = document.createElement('button');
+                delBtn.className = 'bookmark-delete-btn';
+                delBtn.innerHTML = '&times;';
+                delBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await window.GameState.removeBookmark(bm.id);
+                    renderBookmarks();
+                });
+
+                item.appendChild(mainText);
+                item.appendChild(subText);
+                item.appendChild(delBtn);
+
+                item.addEventListener('click', async () => {
+                    document.getElementById('archiveModal').classList.remove('visible');
+                    if (bm.page === CURRENT_PAGE) {
+                        await seekAndSyncSubtitle(bm.time, `bookmark:${bm.id}`);
+                        if (audioPlayer.paused) {
+                            try { await audioPlayer.play(); } catch (_) { }
+                        }
+                    } else {
+                        await waitForContentSwitchIdle('bookmark:cross-page');
+                        await saveCurrentContentState({ reason: 'bookmark:navigate' });
+                        sessionStorage.setItem('bookmark_seek_target', JSON.stringify({
+                            time: bm.time, id: bm.id
+                        }));
+                        const keyMap = {
+                            'index.html': 'kapitel1',
+                            'liminal library.html': 'liminal_library',
+                            'index3.html': 'kapitel1c'
+                        };
+                        const key = keyMap[bm.page] || 'kapitel1';
+                        markChapterAutoplayIntent(key, 'manual', 'bookmark');
+                        writeStateHandoff(key);
+                        window.location.href = bm.page;
+                    }
+                });
+
+                list.appendChild(item);
+            });
+        }
+
         // --- MENU LOGIC ---
         function renderArchive() {
             const list = document.getElementById('loreList');
-            // Keep Header
-            const header = list.querySelector('.col-header') || document.createElement('div');
-            if (!list.querySelector('.col-header')) {
-                header.className = 'col-header';
-                header.innerText = 'Lore';
-            }
             list.innerHTML = '';
-            list.appendChild(header);
 
             if (!window.GameState) return;
 
@@ -1119,6 +1219,27 @@
                 // debugLog('Chapter 1 Loaded OK');
 
                 await attemptAutoPlay();
+
+                // --- BOOKMARK SEEK ON LOAD ---
+                const bmTarget = sessionStorage.getItem('bookmark_seek_target');
+                if (bmTarget) {
+                    sessionStorage.removeItem('bookmark_seek_target');
+                    try {
+                        const { time } = JSON.parse(bmTarget);
+                        if (typeof time === 'number' && time > 0) {
+                            console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
+                            setTimeout(async () => {
+                                await seekAndSyncSubtitle(time, 'bookmark:on-load');
+                                if (audioPlayer.paused) {
+                                    try { await audioPlayer.play(); } catch (_) { }
+                                }
+                                syncPlayPauseIcon();
+                            }, 800);
+                        }
+                    } catch (e) {
+                        console.warn('[Bookmark] Failed to parse seek target:', e);
+                    }
+                }
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -3029,6 +3150,8 @@
                                 console.log("Click ignored due to drag");
                                 return;
                             }
+                            // If a bookmark button is visible and was the click target, skip seek
+                            if (e.target.classList.contains('bookmark-btn')) return;
                             setSubtitleFollowLocked(false, 'timestamp-click');
                             console.log(`Seek to ${track.time}s`);
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
@@ -3040,6 +3163,64 @@
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
                         });
+
+                        // --- LONG-PRESS BOOKMARK ---
+                        div.style.position = 'relative';
+                        let _bmTimer = null;
+                        const startLongPress = (e) => {
+                            if (_bmTimer) clearTimeout(_bmTimer);
+                            _bmTimer = setTimeout(() => {
+                                _bmTimer = null;
+                                // Show bookmark button
+                                let btn = div.querySelector('.bookmark-btn');
+                                if (!btn) {
+                                    btn = document.createElement('button');
+                                    btn.className = 'bookmark-btn';
+                                    btn.innerText = '🔖 Lesezeichen';
+                                    btn.addEventListener('click', async (ev) => {
+                                        ev.stopPropagation();
+                                        ev.preventDefault();
+                                        const bm = {
+                                            id: Date.now(),
+                                            chapter: CURRENT_CHAPTER,
+                                            chapterTitle: CURRENT_CHAPTER_TITLE,
+                                            page: CURRENT_PAGE,
+                                            time: track.time,
+                                            textPreview: (track.text || '').substring(0, 60),
+                                            createdAt: Date.now()
+                                        };
+                                        const added = await window.GameState.addBookmark(bm);
+                                        if (added) {
+                                            btn.classList.add('saved');
+                                            btn.innerText = '✓ Gespeichert';
+                                            setTimeout(() => {
+                                                btn.classList.remove('visible', 'saved');
+                                                btn.innerText = '🔖 Lesezeichen';
+                                            }, 1200);
+                                        } else {
+                                            btn.classList.remove('visible');
+                                        }
+                                    });
+                                    div.appendChild(btn);
+                                }
+                                btn.classList.add('visible');
+                                // Auto-hide after 4 seconds
+                                setTimeout(() => {
+                                    if (!btn.classList.contains('saved')) {
+                                        btn.classList.remove('visible');
+                                    }
+                                }, 4000);
+                            }, 600);
+                        };
+                        const cancelLongPress = () => {
+                            if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
+                        };
+                        div.addEventListener('mousedown', startLongPress);
+                        div.addEventListener('touchstart', startLongPress, { passive: true });
+                        div.addEventListener('mouseup', cancelLongPress);
+                        div.addEventListener('mouseleave', cancelLongPress);
+                        div.addEventListener('touchend', cancelLongPress);
+                        div.addEventListener('touchcancel', cancelLongPress);
 
                         subtitleContainer.appendChild(div);
                     });

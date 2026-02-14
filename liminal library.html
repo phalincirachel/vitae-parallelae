@@ -188,10 +188,14 @@
                 <div class="archive-title">Inhalt</div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
-            <div class="archive-content">
-                <!-- LINKS: KAPITEL -->
-                <div class="col-left" id="chapterList">
-                    <div class="col-header">Kapitel</div>
+            <div class="archive-tabs">
+                <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
+                <button class="archive-tab" data-tab="lore">Lore</button>
+                <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
+            </div>
+
+            <div class="archive-tab-content active" data-tab="kapitel">
+                <div class="col-left" id="chapterList" style="flex:1;">
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
                         <div class="item-sub-text">Der Marktplatz</div>
@@ -200,16 +204,21 @@
                         <div class="item-main-text">Kapitel 1b</div>
                         <div class="item-sub-text">Liminal Library (Hier)</div>
                     </div>
-
-                    <!-- Chapter 1c -->
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
                         <div class="item-sub-text">Steingasse</div>
                     </div>
                 </div>
-                <!-- RECHTS: LORE -->
-                <div class="col-right" id="loreList">
-                    <div class="col-header">Lore</div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="lore">
+                <div class="col-left" id="loreList" style="flex:1;">
+                    <!-- Dynamisch gefüllt -->
+                </div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="lesezeichen">
+                <div id="bookmarkList" style="width:100%;">
                     <!-- Dynamisch gefüllt -->
                 </div>
             </div>
@@ -908,8 +917,86 @@
                 window.audioPlayer = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
                     container: document.getElementById('subtitleContainer'),
                     volume: 1.0,
-                    isReadingMode: isReadingMode // Pass initial state
+                    isReadingMode: isReadingMode, // Pass initial state
+                    onLineRender: (div, track) => {
+                        // --- LONG-PRESS BOOKMARK (Injected per page) ---
+                        div.style.position = 'relative';
+                        let _bmTimer = null;
+                        const startLongPress = (e) => {
+                            if (_bmTimer) clearTimeout(_bmTimer);
+                            _bmTimer = setTimeout(() => {
+                                _bmTimer = null;
+                                // Show bookmark button
+                                let btn = div.querySelector('.bookmark-btn');
+                                if (!btn) {
+                                    btn = document.createElement('button');
+                                    btn.className = 'bookmark-btn';
+                                    btn.innerText = '🔖 Lesezeichen';
+                                    btn.addEventListener('click', async (ev) => {
+                                        ev.stopPropagation();
+                                        ev.preventDefault();
+                                        const bm = {
+                                            id: Date.now(),
+                                            chapter: '1b',
+                                            chapterTitle: 'Liminal Library',
+                                            page: 'liminal library.html',
+                                            time: track.time,
+                                            textPreview: (track.text || '').substring(0, 60),
+                                            createdAt: Date.now()
+                                        };
+                                        if (window.GameState && window.GameState.addBookmark) {
+                                            const added = await window.GameState.addBookmark(bm);
+                                            if (added) {
+                                                btn.classList.add('saved');
+                                                btn.innerText = '✓ Gespeichert';
+                                                setTimeout(() => {
+                                                    btn.classList.remove('visible', 'saved');
+                                                    btn.innerText = '🔖 Lesezeichen';
+                                                }, 1200);
+                                            }
+                                        }
+                                    });
+                                    div.appendChild(btn);
+                                }
+                                btn.classList.add('visible');
+                                // Auto-hide after 4 seconds
+                                setTimeout(() => {
+                                    if (!btn.classList.contains('saved')) {
+                                        btn.classList.remove('visible');
+                                    }
+                                }, 4000);
+                            }, 600);
+                        };
+                        const cancelLongPress = () => {
+                            if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
+                        };
+                        div.addEventListener('mousedown', startLongPress);
+                        div.addEventListener('touchstart', startLongPress, { passive: true });
+                        div.addEventListener('mouseup', cancelLongPress);
+                        div.addEventListener('mouseleave', cancelLongPress);
+                        div.addEventListener('touchend', cancelLongPress);
+                        div.addEventListener('touchcancel', cancelLongPress);
+                    }
                 });
+
+                // --- BOOKMARK SEEK ON LOAD ---
+                const bmTarget = sessionStorage.getItem('bookmark_seek_target');
+                if (bmTarget) {
+                    sessionStorage.removeItem('bookmark_seek_target');
+                    try {
+                        const { time } = JSON.parse(bmTarget);
+                        if (typeof time === 'number' && time > 0) {
+                            console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
+                            setTimeout(async () => {
+                                if (window.audioPlayer && window.audioPlayer.seekToTime) {
+                                    await window.audioPlayer.seekToTime(time, { autoplay: true });
+                                }
+                            }, 1500); // Slightly longer delay for SharedAudioPlayer init
+                        }
+                    } catch (e) {
+                        console.warn('[Bookmark] Failed to parse seek target:', e);
+                    }
+                }
                 const player = window.audioPlayer;
 
                 // Hook into SharedAudioPlayer's renderLines to sync the top fade mask
@@ -3251,7 +3338,7 @@
 
                 if (bookBtn) {
                     bookBtn.addEventListener('click', () => {
-                        renderLoreList();
+                        if (typeof renderArchive === 'function') renderArchive();
                         archiveModal.classList.add('visible');
                     });
                 }
@@ -3302,16 +3389,102 @@
                         window.location.href = 'index3.html';
                     });
                 }
-                function renderLoreList() {
-                    const list = document.getElementById('loreList');
-                    // Keep Header
-                    const header = list.querySelector('.col-header') || document.createElement('div');
-                    if (!list.querySelector('.col-header')) {
-                        header.className = 'col-header';
-                        header.innerText = 'Lore';
-                    }
+                // --- ARCHIVE TAB SWITCHING ---
+                function initArchiveTabs() {
+                    const tabs = document.querySelectorAll('.archive-tab');
+                    const panels = document.querySelectorAll('.archive-tab-content');
+                    tabs.forEach(tab => {
+                        tab.addEventListener('click', () => {
+                            tabs.forEach(t => t.classList.remove('active'));
+                            panels.forEach(p => p.classList.remove('active'));
+                            tab.classList.add('active');
+                            const target = tab.getAttribute('data-tab');
+                            const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
+                            if (panel) panel.classList.add('active');
+                            if (target === 'lesezeichen') renderBookmarks();
+                        });
+                    });
+                }
+                initArchiveTabs();
+
+                // --- BOOKMARK RENDERING ---
+                const CURRENT_PAGE = 'liminal library.html';
+                const CURRENT_CHAPTER = '1b';
+                const CURRENT_CHAPTER_TITLE = 'Liminal Library';
+
+                function renderBookmarks() {
+                    const list = document.getElementById('bookmarkList');
+                    if (!list) return;
                     list.innerHTML = '';
-                    list.appendChild(header);
+
+                    if (!window.GameState) return;
+                    const bookmarks = window.GameState.getBookmarks();
+
+                    if (bookmarks.length === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'bookmark-empty-msg';
+                        empty.innerText = 'Keine Lesezeichen gesetzt';
+                        list.appendChild(empty);
+                        return;
+                    }
+
+                    bookmarks.forEach(bm => {
+                        const item = document.createElement('div');
+                        item.className = 'menu-item bookmark-item';
+
+                        const mainText = document.createElement('div');
+                        mainText.className = 'item-main-text';
+                        const timeStr = window.GameState.formatBookmarkTime(bm.time);
+                        mainText.innerText = `${bm.chapterTitle} · ${timeStr}`;
+
+                        const subText = document.createElement('div');
+                        subText.className = 'item-sub-text';
+                        subText.innerText = bm.textPreview || '';
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'bookmark-delete-btn';
+                        delBtn.innerHTML = '&times;';
+                        delBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            await window.GameState.removeBookmark(bm.id);
+                            renderBookmarks();
+                        });
+
+                        item.appendChild(mainText);
+                        item.appendChild(subText);
+                        item.appendChild(delBtn);
+
+                        item.addEventListener('click', async () => {
+                            document.getElementById('archiveModal').classList.remove('visible');
+                            if (bm.page === CURRENT_PAGE) {
+                                if (window.audioPlayer && window.audioPlayer.seekToTime) {
+                                    await window.audioPlayer.seekToTime(bm.time, { autoplay: true });
+                                }
+                            } else {
+                                await waitForContentSwitchIdle('bookmark:cross-page');
+                                await saveCurrentContentState({ reason: 'bookmark:navigate' });
+                                sessionStorage.setItem('bookmark_seek_target', JSON.stringify({
+                                    time: bm.time, id: bm.id
+                                }));
+                                const keyMap = {
+                                    'index.html': 'kapitel1',
+                                    'liminal library.html': 'liminal_library',
+                                    'index3.html': 'kapitel1c'
+                                };
+                                const key = keyMap[bm.page] || 'kapitel1';
+                                markChapterAutoplayIntent(key, 'manual', 'bookmark');
+                                writeStateHandoff(key);
+                                window.location.href = bm.page;
+                            }
+                        });
+
+                        list.appendChild(item);
+                    });
+                }
+
+                function renderArchive() {
+                    const list = document.getElementById('loreList');
+                    list.innerHTML = '';
 
                     if (!window.GameState) return;
 
