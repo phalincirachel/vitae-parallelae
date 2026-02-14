@@ -667,6 +667,17 @@
                     return 0;
                 }
 
+                const TOP_FADE_BYPASS_COUNT = 2;
+                function syncReadingTopFadeMask(activeIndex) {
+                    if (!subtitleContainer) return;
+                    const shouldDisableTopFade =
+                        isReadingMode &&
+                        Number.isFinite(activeIndex) &&
+                        activeIndex >= 0 &&
+                        activeIndex < TOP_FADE_BYPASS_COUNT;
+                    subtitleContainer.classList.toggle('no-top-fade', shouldDisableTopFade);
+                }
+
                 // Helper: Restore Main Audio
                 window.restoreMainAudio = async function (options = {}) {
                     const {
@@ -717,7 +728,8 @@
                             p.volume = 0;
                             const started = await verifyPlaybackStarted(2, 320);
                             if (started) {
-                                await seekAndSyncSubtitle(p, resumeTime, 'restore-main:post-play');
+                                p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                                p.renderLines(p.currentSubtitleIndex);
                                 p.volume = 1.0;
                             } else {
                                 p.volume = 1.0;
@@ -780,7 +792,8 @@
                         p.volume = 0;
                         const started = await verifyPlaybackStarted(3, 320);
                         if (started) {
-                            await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:post-play`);
+                            p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                            p.renderLines(p.currentSubtitleIndex);
                             p.volume = 1.0;
                         } else {
                             p.volume = 1.0;
@@ -897,6 +910,13 @@
                     isReadingMode: isReadingMode // Pass initial state
                 });
                 const player = window.audioPlayer;
+
+                // Hook into SharedAudioPlayer's renderLines to sync the top fade mask
+                const originalRenderLines = player.renderLines.bind(player);
+                player.renderLines = function (centerIndex) {
+                    originalRenderLines(centerIndex);
+                    syncReadingTopFadeMask(centerIndex);
+                };
                 let subtitleFollowLocked = false;
                 let suppressFollowLockUntil = 0;
 
@@ -1224,6 +1244,11 @@
                     if (overlay) overlay.classList.add('active');
                     await waitForContentSwitchIdle('transition:next-chapter');
                     await saveCurrentContentState({ reason: 'transition:next-chapter' });
+
+                    // Mark autoplay intent so the next chapter auto-plays in reading mode
+                    const targetPageKey = 'steingasse';
+                    markChapterAutoplayIntent(targetPageKey, 'auto', 'reading-mode-transition');
+                    writeStateHandoff(targetPageKey);
 
                     // Fade Audio
                     const fade = setInterval(() => {

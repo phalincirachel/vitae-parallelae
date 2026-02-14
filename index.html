@@ -744,6 +744,10 @@
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
         shimmerSound.volume = 0.4;
+        // One-shot SFX should not auto-resume after visibility changes.
+        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+            window.AudioVisibilityManager.unregister(shimmerSound);
+        }
         let lastShimmerLightId = null;
         let footstepPlaying = false;
 
@@ -4058,7 +4062,9 @@
                     audioPlayer.volume = 0;
                     const started = await verifyPlaybackStarted(2, 320);
                     if (started) {
-                        await seekAndSyncSubtitle(resumeTime, 'restore-main:post-play');
+                        // Re-render subtitles at the already-seeked position without re-seeking
+                        currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                        renderSubtitleLines(currentSubtitleIndex);
                         fadeAudio(audioPlayer, 1.0, 700);
                         iconPlay.style.display = 'none';
                         iconPause.style.display = 'block';
@@ -4134,7 +4140,9 @@
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
-                    await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:post-play`);
+                    // Re-render subtitles at the already-seeked position without re-seeking
+                    currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                    renderSubtitleLines(currentSubtitleIndex);
                     fadeAudio(audioPlayer, 1.0, 900);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
