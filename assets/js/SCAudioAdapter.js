@@ -220,6 +220,10 @@ class SCAudioAdapter {
         if (this.mode === 'html5') {
             return this.audioNode.play();
         } else if (this.mode === 'sc' && this.widget && this._isReady) {
+            // Skip if already playing to prevent double-play stutter
+            if (!this._scPaused && (Date.now() - this._scLastProgressAt < 1500)) {
+                return Promise.resolve();
+            }
             this.widget.play();
             return Promise.resolve();
         } else {
@@ -338,11 +342,11 @@ class SCAudioAdapter {
             await this._waitForScReady(options.readyTimeoutMs || 2500);
         }
 
-        // When SoundCloud is paused, seeking doesn't stick reliably.
-        // Just store as pending seek — _applyPendingSeek will handle it when play starts.
+        // When SoundCloud is paused, seeking via retry loop doesn't work reliably.
+        // Issue one seekTo and store position. Do NOT set _pendingSeek — we don't
+        // want _applyPendingSeek to fire a second seekTo when play starts.
         if (this.mode === 'sc' && !isPlaying) {
             this._scCurrentTime = target;
-            this._pendingSeek = target;
             if (this.widget) {
                 try { this.widget.seekTo(target * 1000); } catch (_) { }
             }
