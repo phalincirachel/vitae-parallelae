@@ -3349,9 +3349,9 @@
 
             // Start momentum animation if velocity is significant
             const velocityPxPerMs = swipeVelocity;
-            let velocityPxPerSec = -velocityPxPerMs * 1000; // Negate: drag down = scroll up
-            const MAX_VELOCITY = 3000;
-            const MIN_VELOCITY = 10;
+            let velocityPxPerSec = -velocityPxPerMs * 1000 * 2.5; // Negate + amplify for dramatic momentum
+            const MAX_VELOCITY = 6000;
+            const MIN_VELOCITY = 15;
             velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
 
             if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
@@ -3363,10 +3363,10 @@
                     // Apply velocity
                     subtitleContainer.scrollTop += velocityPxPerSec * dt;
 
-                    // Decay (frame-rate independent)
-                    velocityPxPerSec *= Math.pow(0.92, dt * 60);
+                    // Decay — 0.96 is much gentler than 0.92, so hard swipes coast far
+                    velocityPxPerSec *= Math.pow(0.96, dt * 60);
 
-                    // Stop conditions
+                    // Stop when effectively still
                     if (Math.abs(velocityPxPerSec) < 0.5) {
                         momentumAnimId = null;
                         return;

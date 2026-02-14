@@ -636,6 +636,12 @@ body.scene-dimmer-light-mode .audio-btn svg {
     transition: opacity 0.3s ease;
 }
 
+#readingModeBtn.btn-inactive {
+    opacity: 0.25;
+    pointer-events: none;
+    filter: grayscale(1);
+}
+
 .mode-btn-wrapper {
     position: relative;
     display: grid;

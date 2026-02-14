@@ -1319,9 +1319,9 @@
 
                     // Start momentum animation if velocity is significant
                     const velocityPxPerMs = swipeVelocity;
-                    let velocityPxPerSec = -velocityPxPerMs * 1000;
-                    const MAX_VELOCITY = 3000;
-                    const MIN_VELOCITY = 10;
+                    let velocityPxPerSec = -velocityPxPerMs * 1000 * 2.5; // Amplify for dramatic momentum
+                    const MAX_VELOCITY = 6000;
+                    const MIN_VELOCITY = 15;
                     velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
 
                     if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
@@ -1331,7 +1331,7 @@
                             lastFrame = now;
 
                             subtitleContainer.scrollTop += velocityPxPerSec * dt;
-                            velocityPxPerSec *= Math.pow(0.92, dt * 60);
+                            velocityPxPerSec *= Math.pow(0.96, dt * 60); // Gentler friction for longer coast
 
                             if (Math.abs(velocityPxPerSec) < 0.5) {
                                 momentumAnimId = null;
