@@ -55,6 +55,7 @@ export class SharedAudioPlayer {
     async seekToTime(targetSec, options = {}) {
         const target = Math.max(0, Number(targetSec) || 0);
         const autoplay = options.autoplay !== false;
+        const wasPaused = this.audio.paused;
         let result = { ok: false, target, position: this.audio.currentTime || 0, attempts: 0 };
 
         try {
@@ -86,7 +87,7 @@ export class SharedAudioPlayer {
         this.renderLines(this.currentSubtitleIndex);
 
         if (autoplay) {
-            if (this.audio.paused) {
+            if (wasPaused) {
                 try {
                     await this.audio.play();
                 } catch (e) {
