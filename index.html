@@ -2666,10 +2666,7 @@
             globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
-                // Gray out glasses button in frozen modes (toggle doesn't work there)
-                if (modeToggleBtn) {
-                    modeToggleBtn.classList.toggle('btn-inactive', frozen);
-                }
+
                 if (frozen) {
                     pendingForceReadingFromFreeze = true;
                     if (modeSwitchInitialized) {
@@ -2686,10 +2683,7 @@
             });
             window.visualFreezeActive = globalVisualDimmer.isFrozen();
             pendingForceReadingFromFreeze = window.visualFreezeActive;
-            // Initial sync: gray out glasses if dimmer is frozen
-            if (modeToggleBtn) {
-                modeToggleBtn.classList.toggle('btn-inactive', globalVisualDimmer.isFrozen());
-            }
+
         }
 
         function syncPlayPauseIcon() {
@@ -3483,7 +3477,13 @@
         }
 
         modeToggleBtn.addEventListener('click', () => {
-            setReadingMode(!isReadingMode, 'ui-mode-toggle');
+            // In frozen mode: reset dimmer to off + switch to game mode
+            if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
+                globalVisualDimmer.setLevel(0, { forceEmit: true });
+                setReadingMode(false, 'ui-mode-toggle-unfreeze');
+            } else {
+                setReadingMode(!isReadingMode, 'ui-mode-toggle');
+            }
         });
 
         // HELPER: Sync AutoWalk Index to current Player Position

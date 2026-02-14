@@ -1165,8 +1165,10 @@
                 });
 
                 modeToggleBtn.addEventListener('click', () => {
+                    // In frozen mode: reset dimmer to off + switch to game mode
                     if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
-                        isReadingMode = true;
+                        globalVisualDimmer.setLevel(0, { forceEmit: true });
+                        isReadingMode = false;
                     } else {
                         isReadingMode = !isReadingMode;
                     }
@@ -2195,10 +2197,7 @@
                     globalVisualDimmer.onChange(({ level, frozen }) => {
                         manualBackgroundDimLevel = level;
                         applyVisualFreezeState(frozen);
-                        // Gray out glasses button in frozen modes (toggle doesn't work there)
-                        if (modeToggleBtn) {
-                            modeToggleBtn.classList.toggle('btn-inactive', frozen);
-                        }
+
                         if (frozen && !isReadingMode) {
                             isReadingMode = true;
                             updateReadingModeUI();
@@ -2210,10 +2209,7 @@
                     isReadingMode = true;
                     updateReadingModeUI();
                 }
-                // Initial sync: gray out glasses if dimmer is frozen
-                if (modeToggleBtn && globalVisualDimmer) {
-                    modeToggleBtn.classList.toggle('btn-inactive', globalVisualDimmer.isFrozen());
-                }
+
 
                 // Click-to-Move State
                 let moveTarget = null;
