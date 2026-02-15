@@ -357,15 +357,14 @@ class SCAudioAdapter {
         }
 
         // When SoundCloud is paused, seeking via retry loop doesn't work reliably.
-        // Keep the target as pending seek so it is guaranteed on PLAY even if the
-        // stream/widget wasn't ready at seek time (common on slower mobile devices).
+        // Issue one seekTo and store position. Do NOT set _pendingSeek - we don't
+        // want _applyPendingSeek to fire a second seekTo when play starts.
         if (this.mode === 'sc' && !isPlaying) {
             this._scCurrentTime = target;
-            this._pendingSeek = target;
-            if (this.widget && this._isReady) {
+            if (this.widget) {
                 try { this.widget.seekTo(target * 1000); } catch (_) { }
             }
-            return { ok: !!this._isReady, target, position: target, attempts: 0 };
+            return { ok: true, target, position: target, attempts: 0 };
         }
 
         this.currentTime = target;

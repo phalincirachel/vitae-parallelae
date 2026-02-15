@@ -3674,7 +3674,7 @@
         audioPlayer.addEventListener('ended', () => {
             if (isLoreMode) {
                 if (window.restoreMainAudio) {
-                    window.restoreMainAudio({ saveCurrent: false, forcePlay: true });
+                    window.restoreMainAudio({ saveCurrent: false });
                 }
                 return;
             } else {
@@ -4328,7 +4328,10 @@
                 }
 
             }
-            // Lore intentionally keeps playing even after leaving the trigger area.
+            // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
+            else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {
+                endLoreMode();
+            }
         } // End updateLoreSystem
 
         // NEW: Restore Main Audio Function (Replaces basic endLoreMode logic)
@@ -4540,36 +4543,6 @@
             });
         }
 
-        async function waitForPlaybackEvent(timeoutMs = 2600) {
-            if (!audioPlayer) return false;
-            if (!audioPlayer.paused) return true;
-
-            return new Promise(resolve => {
-                let settled = false;
-                let timer = null;
-                const cleanup = () => {
-                    if (timer) {
-                        clearTimeout(timer);
-                        timer = null;
-                    }
-                    audioPlayer.removeEventListener('play', onPlay);
-                };
-                const finish = (ok) => {
-                    if (settled) return;
-                    settled = true;
-                    cleanup();
-                    resolve(!!ok);
-                };
-                const onPlay = () => finish(true);
-
-                timer = setTimeout(() => {
-                    finish(!audioPlayer.paused);
-                }, Math.max(300, timeoutMs || 0));
-
-                audioPlayer.addEventListener('play', onPlay);
-            });
-        }
-
         async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
@@ -4587,75 +4560,12 @@
                     return true;
                 }
             }
-
-            // SC streams on slower mobile networks can start after a delayed READY/PLAY event.
-            if (audioPlayer && audioPlayer.mode === 'sc') {
-                const deferredStarted = await waitForPlaybackEvent(2600);
-                if (deferredStarted) {
-                    const currentPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
-                        ? await audioPlayer.getAccurateCurrentTime(900)
-                        : (audioPlayer.currentTime || 0);
-                    indexDebugNote('play-check', `deferred paused=${audioPlayer.paused} t=${currentPos.toFixed(2)}`);
-                    return true;
-                }
-            }
             return false;
-        }
-
-        async function waitForAudioSeekReady(reason = 'unspecified', timeoutMs = 5200) {
-            if (!audioPlayer) return false;
-
-            // For SoundCloud mode we cannot rely on HTML5 readiness events here.
-            if (audioPlayer.mode !== 'html5' || !audioPlayer.audioNode) {
-                return true;
-            }
-
-            const node = audioPlayer.audioNode;
-            const isSeekReady = () => {
-                const rs = Number(node.readyState) || 0;
-                return rs >= 1;
-            };
-
-            if (isSeekReady()) return true;
-
-            return new Promise(resolve => {
-                let settled = false;
-                let timer = null;
-                const cleanup = () => {
-                    if (timer) {
-                        clearTimeout(timer);
-                        timer = null;
-                    }
-                    node.removeEventListener('loadedmetadata', onReady);
-                    node.removeEventListener('canplay', onReady);
-                    node.removeEventListener('canplaythrough', onReady);
-                    node.removeEventListener('error', onError);
-                };
-                const finish = (ok) => {
-                    if (settled) return;
-                    settled = true;
-                    cleanup();
-                    indexDebugNote('audio-ready', `${reason} ok=${ok} rs=${node.readyState}`);
-                    resolve(!!ok);
-                };
-                const onReady = () => finish(true);
-                const onError = () => finish(false);
-
-                timer = setTimeout(() => {
-                    finish(isSeekReady());
-                }, Math.max(600, timeoutMs || 0));
-
-                node.addEventListener('loadedmetadata', onReady, { once: true });
-                node.addEventListener('canplay', onReady, { once: true });
-                node.addEventListener('canplaythrough', onReady, { once: true });
-                node.addEventListener('error', onError, { once: true });
-            });
         }
 
         async function restoreMainAudio(options = {}) {
             const {
-                saveCurrent = true,
-                forcePlay = false
+                saveCurrent = true
             } = options;
 
             if (!isLoreMode && !contentSwitchInProgress) {
@@ -4689,38 +4599,26 @@
 
                 uiContainer.classList.add('mode-switching');
 
-                await pauseWithFade(320);
+                await pauseWithFade(700);
                 if (switchToken !== contentSwitchToken) return;
 
                 audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
-                const mainTextPromise = ensureMainTextLoaded();
-                const mainAudioReadyPromise = waitForAudioSeekReady('restore-main');
 
-                const mainText = await mainTextPromise;
+                const mainText = await ensureMainTextLoaded();
                 if (switchToken !== contentSwitchToken) return;
                 parseSubtitles(mainText);
 
                 const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
-                const exactMainTime = Math.max(0, Number(mainAudioState.time) || 0);
-                const savedMainTime = savedMain && savedMain.sentenceTime !== undefined
-                    ? Math.max(0, Number(savedMain.sentenceTime) || 0)
-                    : 0;
-                const resumeTime = exactMainTime > 0 ? exactMainTime : savedMainTime;
+                const resumeTime = savedMain && savedMain.sentenceTime !== undefined
+                    ? savedMain.sentenceTime
+                    : Math.max(0, mainAudioState.time || 0);
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
-                const ready = await mainAudioReadyPromise;
-                if (!ready) {
-                    indexDebugNote('audio-ready-timeout', 'restore-main');
-                }
-                if (switchToken !== contentSwitchToken) return;
                 await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
-                const shouldResumePlayback =
-                    !!forcePlay ||
-                    !!mainAudioState.wasPlaying ||
-                    !!(savedMain && savedMain.wasPlaying);
+                const shouldResumePlayback = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
                 if (shouldResumePlayback) {
                     audioPlayer.volume = 0;
-                    const started = await verifyPlaybackStarted(5, 260);
+                    const started = await verifyPlaybackStarted(2, 320);
                     if (started) {
                         // Re-render subtitles at the already-seeked position without re-seeking
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -4779,34 +4677,25 @@
                 }
                 uiContainer.classList.add('mode-switching');
 
-                await pauseWithFade(320);
+                await pauseWithFade(800);
+                if (switchToken !== contentSwitchToken) return;
+
+                const loreText = await ensureLoreTextLoaded(id);
                 if (switchToken !== contentSwitchToken) return;
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
-                const loreTextPromise = ensureLoreTextLoaded(id);
-                const loreAudioReadyPromise = waitForAudioSeekReady(`start-lore:${id}`);
-
-                const loreText = await loreTextPromise;
-                if (switchToken !== contentSwitchToken) return;
 
                 parseSubtitles(loreText);
                 const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
-                const exactLoreTime = Math.max(0, Number(loreData.resumeTimes[id]) || 0);
-                const savedLoreTime = savedLore && savedLore.sentenceTime !== undefined
-                    ? Math.max(0, Number(savedLore.sentenceTime) || 0)
-                    : 0;
-                const resumeTime = exactLoreTime > 0 ? exactLoreTime : savedLoreTime;
+                const resumeTime = savedLore && savedLore.sentenceTime !== undefined
+                    ? savedLore.sentenceTime
+                    : Math.max(0, loreData.resumeTimes[id] || 0);
                 indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
-                const ready = await loreAudioReadyPromise;
-                if (!ready) {
-                    indexDebugNote('audio-ready-timeout', `start-lore:${id}`);
-                }
-                if (switchToken !== contentSwitchToken) return;
                 await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
                 audioPlayer.volume = 0;
-                const started = await verifyPlaybackStarted(5, 260);
+                const started = await verifyPlaybackStarted(3, 320);
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
