@@ -17,6 +17,7 @@ export class SharedAudioPlayer {
         this.container = options.container || document.getElementById('subtitleContainer');
         this.isReadingMode = options.isReadingMode || false;
         this.onLineRender = options.onLineRender || null;
+        this.canSeek = (typeof options.canSeek === 'function') ? options.canSeek : null;
 
         // Default volumes
         this.audio.volume = options.volume || 1.0;
@@ -54,6 +55,15 @@ export class SharedAudioPlayer {
     }
 
     async seekToTime(targetSec, options = {}) {
+        if (this.canSeek && !this.canSeek()) {
+            return {
+                ok: false,
+                blocked: true,
+                target: Math.max(0, Number(targetSec) || 0),
+                position: this.audio.currentTime || 0,
+                attempts: 0
+            };
+        }
         const target = Math.max(0, Number(targetSec) || 0);
         const autoplay = options.autoplay !== false;
         let result = { ok: false, target, position: this.audio.currentTime || 0, attempts: 0 };
@@ -190,6 +200,7 @@ export class SharedAudioPlayer {
                     div.style.cursor = 'pointer';
                     div.title = 'Springe zu dieser Stelle';
                     div.addEventListener('click', async () => {
+                        if (this.canSeek && !this.canSeek()) return;
                         if (this.container.dataset.wasDragging === 'true') return;
                         // Skip seek if bookmark button was clicked
                         if (window.event && window.event.target.classList.contains('bookmark-btn')) return;
@@ -294,6 +305,7 @@ export class SharedAudioPlayer {
     }
 
     async _skipBySeconds(sec) {
+        if (this.canSeek && !this.canSeek()) return;
         const delta = Number(sec) || 0;
         if (!delta) return;
 

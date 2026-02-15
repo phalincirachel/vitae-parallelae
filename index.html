@@ -347,6 +347,14 @@
         console.log("Applying Visual Fixes..."); // DEBUG
         gameWrapper.classList.add('effect-pal');
         gameWrapper.classList.add('effect-crt');
+        const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const AUDIO_PROFILE = isIOSDevice
+            ? { ambient: 0.012, footsteps: 0.014 }
+            : { ambient: 0.02, footsteps: 0.024 };
+        if (isIOSDevice) {
+            // SVG PAL filter is expensive on iOS WebKit and causes visible stutter.
+            gameWrapper.classList.remove('effect-pal');
+        }
 
         // Turbulenz für Glitch laufend aktualisieren für "Randomness"
         // const turb = document.querySelector('#glitch-filter feTurbulence');
@@ -852,7 +860,11 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = 0.024; // +20% from 0.02
+        footstepSound.volume = AUDIO_PROFILE.footsteps;
+        // Index uses its own lifecycle handler below; avoid double pause/resume races.
+        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+            window.AudioVisibilityManager.unregister(footstepSound);
+        }
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
@@ -1112,14 +1124,29 @@
         // GLOBAL ERROR HANDLER (DEBUG)
         // ============================================
         window.onerror = function (msg, url, line, col, error) {
+            const rawMessage = String(msg || (error && error.message) || '');
+            const lowered = rawMessage.toLowerCase();
+            const isFullscreenNoise =
+                lowered.includes('fullscreen') ||
+                lowered.includes('requestfullscreen') ||
+                lowered.includes('webkitfullscreen');
+
+            if (isFullscreenNoise) {
+                console.warn('[NonFatal][Fullscreen]', rawMessage, error || '');
+                return true;
+            }
+
             const pi = document.getElementById('processingInfo');
-            if (pi) {
+            if (pi && !gameReady) {
                 pi.style.display = 'block';
                 pi.style.color = '#ff5555';
                 pi.style.background = 'rgba(0,0,0,0.9)';
-                pi.innerText += "\nERROR: " + msg + "\nLine: " + line;
+                pi.innerText = 'Ein Fehler ist beim Laden aufgetreten.';
+                if (line) {
+                    pi.innerText += "\nLine: " + line;
+                }
             }
-            console.error(msg, error);
+            console.error(rawMessage, error);
             return false;
         };
 
@@ -1714,10 +1741,12 @@
         // ============================================
         let wasAmbientPlaying = false;
         let wasPlayerPlaying = false;
+        let visibilityResumeToken = 0;
         window.gamePaused = false; // Flag for Game Loop
         window.visualFreezeActive = !!window.visualFreezeActive;
 
         document.addEventListener('visibilitychange', () => {
+            const token = ++visibilityResumeToken;
             if (document.hidden) {
                 // APP BACKGROUNDED -> PAUSE ALL
                 window.gamePaused = true; // Stop loop logic
@@ -1757,6 +1786,12 @@
                 indexDebugNote('visibility', 'visible');
 
                 setTimeout(() => {
+                    if (token !== visibilityResumeToken || document.hidden) return;
+                    if (contentSwitchInProgress) {
+                        indexDebugNote('visibility', 'resume skipped (content switch active)');
+                        return;
+                    }
+                    applySceneAudioMix('visibility:resume');
                     if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                         ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
                         wasAmbientPlaying = false;
@@ -1772,6 +1807,7 @@
         });
 
         window.addEventListener('pagehide', () => {
+            visibilityResumeToken += 1;
             saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
             if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
             if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
@@ -1907,6 +1943,20 @@
 
         // Global vars for timing
         let lastTime = 0;
+        let autoWalkFacingLockTimer = 0;
+
+        function chooseAutoWalkDirection(dx, dy, fallbackDir) {
+            const ax = Math.abs(dx);
+            const ay = Math.abs(dy);
+            if (ax < 0.001 && ay < 0.001) return fallbackDir;
+
+            // Keep current facing near diagonals to avoid rapid direction flicker.
+            const dominance = Math.abs(ax - ay);
+            if (dominance < 0.35) return fallbackDir;
+
+            if (ax > ay) return dx > 0 ? 3 : 2;
+            return dy > 0 ? 0 : 1;
+        }
 
         function gameLoop(timestamp) {
             if (window.visualFreezeActive) {
@@ -1946,6 +1996,9 @@
         function update(dt) {
             if (!dt) dt = 0.016;
             if (!gameReady) return;
+            if (autoWalkFacingLockTimer > 0) {
+                autoWalkFacingLockTimer = Math.max(0, autoWalkFacingLockTimer - dt);
+            }
 
             // --- DYNAMIC SCALING (Depth Effect) ---
             if (mapH > 0) {
@@ -2043,11 +2096,17 @@
                         player.y += dy;
                         player.isMoving = true;
 
-                        // Direction
-                        if (Math.abs(nextTdx) > Math.abs(nextTdy)) {
-                            player.dir = nextTdx > 0 ? 3 : 2;
-                        } else {
-                            player.dir = nextTdy > 0 ? 0 : 1;
+                        // Direction: use a short look-ahead + hysteresis to avoid point-to-point flicker.
+                        const lookAheadIndex = Math.min(autoWalkPath.length - 1, autoWalkIndex + 8);
+                        const lookAheadTarget = autoWalkPath[lookAheadIndex];
+                        const lookAheadDx = lookAheadTarget.x - footX;
+                        const lookAheadDy = lookAheadTarget.y - footY;
+                        const blendedDx = nextTdx * 0.35 + lookAheadDx * 0.65;
+                        const blendedDy = nextTdy * 0.35 + lookAheadDy * 0.65;
+                        const nextDir = chooseAutoWalkDirection(blendedDx, blendedDy, player.dir);
+                        if (nextDir !== player.dir && autoWalkFacingLockTimer <= 0) {
+                            player.dir = nextDir;
+                            autoWalkFacingLockTimer = 0.14;
                         }
 
                         // Animation
@@ -2248,6 +2307,14 @@
         // ============================================
         // DRAWING
         // ============================================
+        let playerLightCanvas = null;
+        let playerLightCtx = null;
+        let playerMaskCanvas = null;
+        let playerMaskCtx = null;
+        let graySpriteCacheCanvas = null;
+        let graySpriteCacheCtx = null;
+        let graySpriteCacheKey = '';
+
         function draw() {
             // LCD Ghosting: Vorherigen Frame mit Transparenz beibehalten
             // Disable Ghosting
@@ -2414,10 +2481,18 @@
                     const ndy = avgDy / dirLen;
 
                     // OffScreen-Canvas für Gradient-Beleuchtung
-                    const lightCanvas = document.createElement('canvas');
-                    lightCanvas.width = spriteW;
-                    lightCanvas.height = spriteH;
-                    const lightCtx = lightCanvas.getContext('2d');
+                    if (!playerLightCanvas) {
+                        playerLightCanvas = document.createElement('canvas');
+                        playerLightCtx = playerLightCanvas.getContext('2d');
+                    }
+                    if (playerLightCanvas.width !== spriteW || playerLightCanvas.height !== spriteH) {
+                        playerLightCanvas.width = spriteW;
+                        playerLightCanvas.height = spriteH;
+                    }
+                    const lightCanvas = playerLightCanvas;
+                    const lightCtx = playerLightCtx;
+                    lightCtx.globalCompositeOperation = 'source-over';
+                    lightCtx.clearRect(0, 0, spriteW, spriteH);
 
                     // Zeichne Sprite exakt so wie es auf dem Hauptcanvas erscheint, aber relativ zu (0,0)
                     lightCtx.save();
@@ -2482,10 +2557,20 @@
                 const dh = coords.h;
 
                 // OffScreen-Canvas für Masking
-                const maskCanvas = document.createElement('canvas');
-                maskCanvas.width = dw + 4;
-                maskCanvas.height = dh + 4;
-                const maskCtx = maskCanvas.getContext('2d');
+                const maskW = dw + 4;
+                const maskH = dh + 4;
+                if (!playerMaskCanvas) {
+                    playerMaskCanvas = document.createElement('canvas');
+                    playerMaskCtx = playerMaskCanvas.getContext('2d');
+                }
+                if (playerMaskCanvas.width !== maskW || playerMaskCanvas.height !== maskH) {
+                    playerMaskCanvas.width = maskW;
+                    playerMaskCanvas.height = maskH;
+                }
+                const maskCanvas = playerMaskCanvas;
+                const maskCtx = playerMaskCtx;
+                maskCtx.globalCompositeOperation = 'source-over';
+                maskCtx.clearRect(0, 0, maskW, maskH);
 
                 // 1. Zeichne den Foreground-Ausschnitt über dem Spieler
                 maskCtx.drawImage(foregroundImage,
@@ -2686,20 +2771,46 @@
             else if (player.dir === 1) sprite = spriteBack || spriteFront;
             else sprite = spriteSide || spriteFront;
 
-            const c = document.createElement('canvas');
-            c.width = coords.w;
-            c.height = coords.h;
-            const gc = c.getContext('2d');
+            const cacheKey = [
+                player.dir,
+                player.frame,
+                coords.w,
+                coords.h,
+                coords.sx,
+                coords.sw,
+                coords.sh,
+                coords.flipX ? 1 : 0
+            ].join(':');
+            if (graySpriteCacheCanvas && graySpriteCacheKey === cacheKey) {
+                return graySpriteCacheCanvas;
+            }
+
+            if (!graySpriteCacheCanvas) {
+                graySpriteCacheCanvas = document.createElement('canvas');
+                graySpriteCacheCtx = graySpriteCacheCanvas.getContext('2d');
+            }
+            if (graySpriteCacheCanvas.width !== coords.w || graySpriteCacheCanvas.height !== coords.h) {
+                graySpriteCacheCanvas.width = coords.w;
+                graySpriteCacheCanvas.height = coords.h;
+            }
+            const c = graySpriteCacheCanvas;
+            const gc = graySpriteCacheCtx;
+            gc.clearRect(0, 0, c.width, c.height);
 
             if (coords.isSide && flipX) {
                 gc.translate(coords.w, 0);
                 gc.scale(-1, 1);
             }
             gc.drawImage(sprite, coords.sx, 0, coords.sw, coords.sh, 0, 0, coords.w, coords.h);
+            if (coords.isSide && flipX) {
+                gc.setTransform(1, 0, 0, 1, 0, 0);
+            }
 
             gc.globalCompositeOperation = 'source-in';
             gc.fillStyle = 'rgb(180, 180, 180)';
             gc.fillRect(0, 0, coords.w, coords.h);
+            gc.globalCompositeOperation = 'source-over';
+            graySpriteCacheKey = cacheKey;
 
             return c;
         }
@@ -2755,6 +2866,10 @@
 
         // SoundCloud Audio Player via Widget API
         const audioPlayer = new SCAudioAdapter();
+        // Index uses a dedicated visibility handler; avoid duplicate manager decisions.
+        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+            window.AudioVisibilityManager.unregister(audioPlayer);
+        }
         console.log('[Audio] Created SCAudioAdapter for main audio');
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
@@ -2855,7 +2970,25 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = 0.02;
+        ambientAudio.volume = AUDIO_PROFILE.ambient;
+        // Index uses a dedicated visibility handler; avoid duplicate manager decisions.
+        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+            window.AudioVisibilityManager.unregister(ambientAudio);
+        }
+
+        function applySceneAudioMix(reason = 'unspecified') {
+            let ambientTarget = AUDIO_PROFILE.ambient;
+            let footstepTarget = AUDIO_PROFILE.footsteps;
+
+            if (isLoreMode) ambientTarget *= 0.68;
+            if (isReadingMode) footstepTarget *= 0.65;
+            if (isLoreMode) footstepTarget *= 0.45;
+
+            ambientAudio.volume = Math.max(0, Math.min(1, ambientTarget));
+            footstepSound.volume = Math.max(0, Math.min(1, footstepTarget));
+            indexDebugNote('audio-mix', `${reason} ambient=${ambientAudio.volume.toFixed(3)} foot=${footstepSound.volume.toFixed(3)} ios=${isIOSDevice}`);
+        }
+        applySceneAudioMix('init');
 
         // Audio unlock on first interaction (required for mobile autoplay policies)
         function unlockAudio() {
@@ -3173,6 +3306,11 @@
                         div.title = "Klicken zum Springen";
                         div.style.cursor = "pointer";
                         div.addEventListener('click', async (e) => {
+                            if (contentSwitchInProgress) {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                return;
+                            }
                             if (eventPointInMobileRecenterZone(e)) {
                                 handleRecenterActivate(e);
                                 return;
@@ -3734,6 +3872,7 @@
 
         // 5. Play/Pause Steuerung
         playBtn.addEventListener('click', () => {
+            if (contentSwitchInProgress) return;
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
             if (audioPlayer.paused) {
                 audioPlayer.play()
@@ -3750,6 +3889,7 @@
 
         // 6. Skip Buttons (±15 Sekunden)
         async function skipBySecondsGlobal(deltaSec, reason = 'skip') {
+            if (contentSwitchInProgress) return;
             const delta = Number(deltaSec) || 0;
             if (!delta) return;
 
@@ -3831,6 +3971,7 @@
                 'mode-switch',
                 `${reason} reading=${isReadingMode} tracks=${subtitleTracks.length} switching=${contentSwitchInProgress}`
             );
+            applySceneAudioMix(`mode-switch:${reason}`);
             updateRecenterButtonVisibility();
         }
 
@@ -3913,20 +4054,35 @@
         });
 
         // 10. Fullscreen Logic
-        fullscreenBtn.addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.warn(`Error attempting to enable fullscreen: ${err.message}`);
-                });
-            } else {
-                if (document.exitFullscreen) {
-                    document.exitFullscreen();
-                }
-            }
-        });
+        function getFullscreenElementSafe() {
+            return document.fullscreenElement || document.webkitFullscreenElement || null;
+        }
 
-        document.addEventListener('fullscreenchange', () => {
-            if (document.fullscreenElement) {
+        function isFullscreenSupported() {
+            const root = document.documentElement;
+            return !!(
+                document.fullscreenEnabled ||
+                document.webkitFullscreenEnabled ||
+                root.requestFullscreen ||
+                root.webkitRequestFullscreen
+            );
+        }
+
+        function requestFullscreenSafe() {
+            const root = document.documentElement;
+            if (root.requestFullscreen) return root.requestFullscreen();
+            if (root.webkitRequestFullscreen) return Promise.resolve(root.webkitRequestFullscreen());
+            return Promise.reject(new Error('Fullscreen API not supported'));
+        }
+
+        function exitFullscreenSafe() {
+            if (document.exitFullscreen) return document.exitFullscreen();
+            if (document.webkitExitFullscreen) return Promise.resolve(document.webkitExitFullscreen());
+            return Promise.resolve();
+        }
+
+        function syncFullscreenUi() {
+            if (getFullscreenElementSafe()) {
                 iconFsEnter.style.display = 'none';
                 iconFsExit.style.display = 'block';
             } else {
@@ -3934,6 +4090,38 @@
                 iconFsExit.style.display = 'none';
             }
             positionRecenterButton();
+        }
+
+        fullscreenBtn.addEventListener('click', async () => {
+            if (!isFullscreenSupported()) {
+                showNotification('Vollbild wird auf diesem Geraet nicht unterstuetzt.');
+                syncFullscreenUi();
+                return;
+            }
+
+            try {
+                if (!getFullscreenElementSafe()) {
+                    await requestFullscreenSafe();
+                } else {
+                    await exitFullscreenSafe();
+                }
+            } catch (err) {
+                console.warn(`Error attempting to toggle fullscreen: ${err && err.message ? err.message : err}`);
+                showNotification('Vollbild konnte nicht aktiviert werden.');
+            } finally {
+                syncFullscreenUi();
+            }
+        });
+
+        document.addEventListener('fullscreenchange', syncFullscreenUi);
+        document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+        document.addEventListener('fullscreenerror', () => {
+            syncFullscreenUi();
+            showNotification('Vollbild ist auf diesem Geraet nicht verfuegbar.');
+        });
+        document.addEventListener('webkitfullscreenerror', () => {
+            syncFullscreenUi();
+            showNotification('Vollbild ist auf diesem Geraet nicht verfuegbar.');
         });
 
         // 11. Custom Fullscreen Button (siehe oben)
@@ -3941,29 +4129,37 @@
 
 
         let lastBrightnessCheck = 0;
+        let backgroundBrightnessTimer = null;
+
+        function scheduleBackgroundBrightnessCheck(delayMs = 600) {
+            if (backgroundBrightnessTimer) clearTimeout(backgroundBrightnessTimer);
+            backgroundBrightnessTimer = setTimeout(() => {
+                requestAnimationFrame(checkBackgroundBrightness);
+            }, Math.max(120, delayMs || 0));
+        }
         function checkBackgroundBrightness(timestamp) {
             if (manualBackgroundDimLevel > 0) {
                 subtitleContainer.style.background = 'rgba(0, 0, 0, 0)';
                 audioControlsEl.style.background = 'rgba(0, 0, 0, 0)';
-                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
+                scheduleBackgroundBrightnessCheck(700);
                 return;
             }
 
             // Im Lesemodus immer dunkler Hintergrund
             if (isReadingMode) {
-                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
+                scheduleBackgroundBrightnessCheck(700);
                 return;
             }
 
             if (!gameReady || uiContainer.style.display === 'none') {
-                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
+                scheduleBackgroundBrightnessCheck(700);
                 return;
             }
 
             // Throttle: Nur alle 1000ms prüfen (Performance!)
             if (!timestamp) timestamp = performance.now();
             if (timestamp - lastBrightnessCheck < 1000) {
-                requestAnimationFrame(checkBackgroundBrightness);
+                scheduleBackgroundBrightnessCheck(260);
                 return;
             }
             lastBrightnessCheck = timestamp;
@@ -4021,11 +4217,11 @@
                 // Canvas-Zugriff kann bei bestimmten Bedingungen fehlschlagen
             }
 
-            requestAnimationFrame(checkBackgroundBrightness);
+            scheduleBackgroundBrightnessCheck(700);
         }
 
         // Starte die Hintergrund-Prüfung
-        requestAnimationFrame(checkBackgroundBrightness);
+        scheduleBackgroundBrightnessCheck(350);
 
         // Global Start Time for Grace Period
         const GAME_START_TIME = Date.now();
@@ -4394,6 +4590,7 @@
                 isMenuTriggeredLore = false;
                 activeLoreId = null;
                 activeLightSourceId = null;
+                applySceneAudioMix('restore-main:mode');
 
                 if (loreResumeTimeout) {
                     clearTimeout(loreResumeTimeout);
@@ -4471,6 +4668,7 @@
                 activeLoreId = id;
                 isMenuTriggeredLore = !!fromMenu;
                 moveTarget = null;
+                applySceneAudioMix('start-lore:mode');
 
                 if (isReadingMode) {
                     uiContainer.classList.add('reading-mode');

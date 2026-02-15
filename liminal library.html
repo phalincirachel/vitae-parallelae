@@ -611,6 +611,7 @@
                 async function skipBySecondsInLiminal(deltaSec) {
                     const p = window.audioPlayer;
                     if (!p || !p.audio) return;
+                    if (contentSwitchInProgress) return;
 
                     const delta = Number(deltaSec) || 0;
                     if (!delta) return;
@@ -960,6 +961,7 @@
                     container: document.getElementById('subtitleContainer'),
                     volume: 1.0,
                     isReadingMode: isReadingMode, // Pass initial state
+                    canSeek: () => !contentSwitchInProgress,
                     onLineRender: (div, track) => {
                         // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
                         div.style.position = 'relative';
@@ -1337,6 +1339,12 @@
                 subtitleContainer.addEventListener('click', (e) => {
                     const subtitleLine = e.target && e.target.closest ? e.target.closest('.subtitle-line') : null;
                     if (!subtitleLine) return;
+                    if (contentSwitchInProgress) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        return;
+                    }
                     if (eventPointInMobileRecenterZone(e)) {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1410,6 +1418,7 @@
 
                 // --- EVENT LISTENERS ---
                 async function handleAudioToggleClick() {
+                    if (contentSwitchInProgress) return;
                     // Use visible icon state instead of paused getter to avoid stale SC paused state.
                     const wantsPlay = iconPlay.style.display !== 'none';
                     if (wantsPlay) {
@@ -1432,10 +1441,12 @@
                 });
 
                 document.getElementById('skipBackBtn').addEventListener('click', () => {
+                    if (contentSwitchInProgress) return;
                     markUiInteraction('btn:skip-back');
                     skipBySecondsInLiminal(-15);
                 });
                 document.getElementById('skipForwardBtn').addEventListener('click', () => {
+                    if (contentSwitchInProgress) return;
                     markUiInteraction('btn:skip-forward');
                     skipBySecondsInLiminal(15);
                 });
@@ -1654,21 +1665,35 @@
                 // --- FULLSCREEN LOGIC ---
                 const iconFsEnter = document.getElementById('iconFsEnter');
                 const iconFsExit = document.getElementById('iconFsExit');
+                function getFullscreenElementSafe() {
+                    return document.fullscreenElement || document.webkitFullscreenElement || null;
+                }
 
-                fullscreenBtn.addEventListener('click', () => {
-                    if (!document.fullscreenElement) {
-                        document.documentElement.requestFullscreen().catch(err => {
-                            console.warn(`Error attempting to enable fullscreen: ${err.message}`);
-                        });
-                    } else {
-                        if (document.exitFullscreen) {
-                            document.exitFullscreen();
-                        }
-                    }
-                });
+                function isFullscreenSupported() {
+                    const root = document.documentElement;
+                    return !!(
+                        document.fullscreenEnabled ||
+                        document.webkitFullscreenEnabled ||
+                        root.requestFullscreen ||
+                        root.webkitRequestFullscreen
+                    );
+                }
 
-                document.addEventListener('fullscreenchange', () => {
-                    if (document.fullscreenElement) {
+                function requestFullscreenSafe() {
+                    const root = document.documentElement;
+                    if (root.requestFullscreen) return root.requestFullscreen();
+                    if (root.webkitRequestFullscreen) return Promise.resolve(root.webkitRequestFullscreen());
+                    return Promise.reject(new Error('Fullscreen API not supported'));
+                }
+
+                function exitFullscreenSafe() {
+                    if (document.exitFullscreen) return document.exitFullscreen();
+                    if (document.webkitExitFullscreen) return Promise.resolve(document.webkitExitFullscreen());
+                    return Promise.resolve();
+                }
+
+                function syncFullscreenUi() {
+                    if (getFullscreenElementSafe()) {
                         iconFsEnter.style.display = 'none';
                         iconFsExit.style.display = 'block';
                     } else {
@@ -1676,7 +1701,32 @@
                         iconFsExit.style.display = 'none';
                     }
                     positionRecenterButton();
+                }
+
+                fullscreenBtn.addEventListener('click', async () => {
+                    if (!isFullscreenSupported()) {
+                        console.warn('[Fullscreen] Not supported on this device.');
+                        syncFullscreenUi();
+                        return;
+                    }
+
+                    try {
+                        if (!getFullscreenElementSafe()) {
+                            await requestFullscreenSafe();
+                        } else {
+                            await exitFullscreenSafe();
+                        }
+                    } catch (err) {
+                        console.warn(`Error attempting to toggle fullscreen: ${err && err.message ? err.message : err}`);
+                    } finally {
+                        syncFullscreenUi();
+                    }
                 });
+
+                document.addEventListener('fullscreenchange', syncFullscreenUi);
+                document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+                document.addEventListener('fullscreenerror', syncFullscreenUi);
+                document.addEventListener('webkitfullscreenerror', syncFullscreenUi);
 
                 // --- FREE LOOK CONTROLS ---
                 const mouse = { x: 0, y: 0 };
@@ -3007,9 +3057,11 @@
                     // ============================================
                     let wasAmbientPlaying = false;
                     let wasPlayerPlaying = false;
+                    let visibilityResumeToken = 0;
                     window.gamePaused = false; // Flag for Game Loop
 
                     document.addEventListener('visibilitychange', () => {
+                        const token = ++visibilityResumeToken;
                         if (document.hidden) {
                             // APP BACKGROUNDED -> PAUSE ALL
                             window.gamePaused = true;
@@ -3047,6 +3099,11 @@
                             if (typeof clock !== 'undefined') clock.getDelta();
 
                             setTimeout(() => {
+                                if (token !== visibilityResumeToken || document.hidden) return;
+                                if (contentSwitchInProgress) {
+                                    liminalDebugNote('visibility', 'resume skipped (content switch active)');
+                                    return;
+                                }
                                 if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                                     ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
                                     wasAmbientPlaying = false;
@@ -3062,6 +3119,7 @@
                     });
 
                     window.addEventListener('pagehide', () => {
+                        visibilityResumeToken += 1;
                         saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
                         if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
                         if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
