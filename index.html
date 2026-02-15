@@ -695,9 +695,10 @@
                     item.appendChild(mainText);
                     item.appendChild(subText);
 
-                    item.addEventListener('click', () => {
+                    item.addEventListener('click', async () => {
                         document.getElementById('archiveModal').classList.remove('visible');
-                        startLoreMode(id, true);
+                        await waitForContentSwitchIdle(`menu:lore:${id}`);
+                        await startLoreMode(id, true);
                     });
                     list.appendChild(item);
                 });
@@ -721,7 +722,7 @@
                     // 2. Audio Logic
                     if (isLoreMode) {
                         // If listening to Lore, switch back to Chapter
-                        restoreMainAudio();
+                        restoreMainAudio({ forceResume: true });
                     } else {
                         // If already in Chapter mode, maybe just unpause?
                         if (audioPlayer.paused) {
@@ -2910,13 +2911,22 @@
             : null;
         let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
         let pendingForceReadingFromFreeze = false;
+        let shouldResumePlaybackAfterDimmerUnfreeze = false;
+        let dimmerResumeToken = 0;
         let modeSwitchInitialized = false;
         if (globalVisualDimmer) {
             globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
+                dimmerResumeToken += 1;
+                const changeToken = dimmerResumeToken;
+
+                const currentlyPlaying = (typeof audioPlayer?.isProbablyPlaying === 'function')
+                    ? audioPlayer.isProbablyPlaying()
+                    : !!audioPlayer && !audioPlayer.paused;
 
                 if (frozen) {
+                    shouldResumePlaybackAfterDimmerUnfreeze = shouldResumePlaybackAfterDimmerUnfreeze || currentlyPlaying;
                     pendingForceReadingFromFreeze = true;
                     if (modeSwitchInitialized) {
                         setReadingMode(true, 'dimmer-freeze');
@@ -2924,6 +2934,27 @@
                     }
                 } else {
                     pendingForceReadingFromFreeze = false;
+                    if (shouldResumePlaybackAfterDimmerUnfreeze && !contentSwitchInProgress && !document.hidden) {
+                        setTimeout(async () => {
+                            try {
+                                if (changeToken !== dimmerResumeToken) return;
+                                if (document.hidden || contentSwitchInProgress) return;
+
+                                const likelyPlaying = (typeof audioPlayer?.isProbablyPlaying === 'function')
+                                    ? audioPlayer.isProbablyPlaying()
+                                    : !!audioPlayer && !audioPlayer.paused;
+
+                                if (!likelyPlaying || audioPlayer.paused) {
+                                    const started = await verifyPlaybackStarted(3, 260);
+                                    indexDebugNote('dimmer-resume', `started=${started} lore=${isLoreMode}`);
+                                }
+                                syncPlayPauseIcon();
+                            } catch (e) {
+                                indexDebugNote('dimmer-resume-error', e && e.message ? e.message : String(e));
+                            }
+                        }, 80);
+                    }
+                    shouldResumePlaybackAfterDimmerUnfreeze = false;
                 }
                 if (!frozen && gameReady && !document.hidden) {
                     lastTime = 0;
@@ -3674,7 +3705,7 @@
         audioPlayer.addEventListener('ended', () => {
             if (isLoreMode) {
                 if (window.restoreMainAudio) {
-                    window.restoreMainAudio({ saveCurrent: false });
+                    window.restoreMainAudio({ saveCurrent: false, forceResume: true });
                 }
                 return;
             } else {
@@ -4544,6 +4575,10 @@
         }
 
         async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
+            let previousPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
+                ? await audioPlayer.getAccurateCurrentTime(600)
+                : (audioPlayer.currentTime || 0);
+
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
                     await audioPlayer.play();
@@ -4555,17 +4590,28 @@
                 const currentPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
                     ? await audioPlayer.getAccurateCurrentTime(700)
                     : (audioPlayer.currentTime || 0);
-                indexDebugNote('play-check', `attempt=${attempt + 1} paused=${audioPlayer.paused} t=${currentPos.toFixed(2)}`);
-                if (!audioPlayer.paused) {
+                const advanced = Number.isFinite(currentPos) && Number.isFinite(previousPos)
+                    ? (currentPos - previousPos) >= 0.08
+                    : false;
+                const probablyPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
+                    ? audioPlayer.isProbablyPlaying()
+                    : !audioPlayer.paused;
+                indexDebugNote(
+                    'play-check',
+                    `attempt=${attempt + 1} paused=${audioPlayer.paused} playing=${probablyPlaying} adv=${advanced} t=${currentPos.toFixed(2)}`
+                );
+                if (probablyPlaying && advanced) {
                     return true;
                 }
+                previousPos = Number.isFinite(currentPos) ? currentPos : previousPos;
             }
             return false;
         }
 
         async function restoreMainAudio(options = {}) {
             const {
-                saveCurrent = true
+                saveCurrent = true,
+                forceResume = false
             } = options;
 
             if (!isLoreMode && !contentSwitchInProgress) {
@@ -4615,10 +4661,10 @@
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
                 await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
-                const shouldResumePlayback = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
+                const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
                 if (shouldResumePlayback) {
                     audioPlayer.volume = 0;
-                    const started = await verifyPlaybackStarted(2, 320);
+                    const started = await verifyPlaybackStarted(4, 320);
                     if (started) {
                         // Re-render subtitles at the already-seeked position without re-seeking
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -4651,7 +4697,10 @@
 
         async function startLoreMode(id, fromMenu = false) {
             if (isLoreMode && activeLoreId === id) return;
-            if (contentSwitchInProgress) return;
+            if (contentSwitchInProgress) {
+                await waitForContentSwitchIdle(`start-lore:${id}`);
+                if (contentSwitchInProgress) return;
+            }
 
             const content = window.GameState?.getLore(id) || {
                 audio: loreData.audio[id] || `assets/lore${id}.mp3`,
