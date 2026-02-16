@@ -503,6 +503,27 @@
                     } catch (e) {
                         console.warn('[State] saveCurrentContentState failed', e);
                         liminalDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
+                        try {
+                            const p = window.audioPlayer;
+                            const fallbackTime = (p && p.audio) ? (p.audio.currentTime || 0) : 0;
+                            const wasPlaying = p ? !p.paused : false;
+                            if (window.PlayerStateManager && key) {
+                                const tracks = getActiveSubtitleTracks();
+                                const idx = findSubtitleIndexForTime(fallbackTime);
+                                const sentenceTime = (tracks[idx] && tracks[idx].time) || fallbackTime;
+                                window.PlayerStateManager.saveStateAt(key, {
+                                    sentenceIndex: idx,
+                                    sentenceTime: sentenceTime,
+                                    wasPlaying
+                                });
+                            }
+                            if (key === MAIN_CONTENT_KEY) {
+                                mainAudioState.wasPlaying = wasPlaying;
+                                mainAudioState.time = fallbackTime;
+                            }
+                        } catch (e2) {
+                            console.warn('[State] Fallback save also failed:', e2);
+                        }
                     }
                 }
 
@@ -766,7 +787,9 @@
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
                         p.volume = 1.0;
+                        p._suppressAutoRender = true;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
+                        p._suppressAutoRender = false;
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
 
                         const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
@@ -778,6 +801,8 @@
                             liminalCause('C09_RESTORE_WITHOUT_STATE', 'main restore fallback at 0');
                         }
 
+                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                        p.renderLines(p.currentSubtitleIndex);
                         await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
                         const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
@@ -832,7 +857,9 @@
 
                         p.audio.src = getSCUrl(content.audio);
                         const textPath = content.text || `assets/lore${id}.txt`;
+                        p._suppressAutoRender = true;
                         const textLoaded = await p.loadText(textPath);
+                        p._suppressAutoRender = false;
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
 
                         const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
@@ -844,6 +871,8 @@
                             liminalCause('C09_RESTORE_WITHOUT_STATE', `lore${id} restore fallback at 0`);
                         }
 
+                        p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                        p.renderLines(p.currentSubtitleIndex);
                         await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:pre-play`);
 
                         p.volume = 0;
@@ -1661,6 +1690,7 @@
                 player.audio.addEventListener('ended', updateIcons);
                 player.audio.addEventListener('loadedmetadata', updateIcons);
                 updateIcons();
+                setInterval(updateIcons, 2000);
 
                 // --- FULLSCREEN LOGIC ---
                 const iconFsEnter = document.getElementById('iconFsEnter');

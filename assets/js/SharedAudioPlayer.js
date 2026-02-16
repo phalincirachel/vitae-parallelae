@@ -153,7 +153,9 @@ export class SharedAudioPlayer {
 
         this.subtitleTracks.sort((a, b) => a.time - b.time);
         this.renderVersion += 1;
-        this.renderLines(0);
+        if (!this._suppressAutoRender) {
+            this.renderLines(0);
+        }
         console.log(`SharedAudioPlayer: Parsed ${this.subtitleTracks.length} lines.`);
     }
 

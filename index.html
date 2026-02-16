@@ -2977,6 +2977,7 @@
         audioPlayer.addEventListener('ended', syncPlayPauseIcon);
         audioPlayer.addEventListener('canplay', syncPlayPauseIcon);
         syncPlayPauseIcon();
+        setInterval(syncPlayPauseIcon, 2000);
 
         // FORCE REMOVE FOCUS FROM BUTTONS
         // This prevents the "Orange Box" from appearing when using arrow keys after clicking a button
@@ -3982,9 +3983,6 @@
                 uiContainer.classList.add('reading-mode');
             } else {
                 setSubtitleFollowLocked(false, 'mode-off');
-                if (isLoreMode && !isMenuTriggeredLore) {
-                    endLoreMode();
-                }
                 uiContainer.classList.remove('reading-mode');
             }
 
@@ -4359,10 +4357,6 @@
                 }
 
             }
-            // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
-            else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {
-                endLoreMode();
-            }
         } // End updateLoreSystem
 
         // NEW: Restore Main Audio Function (Replaces basic endLoreMode logic)
@@ -4472,6 +4466,31 @@
             } catch (e) {
                 console.warn('[State] saveCurrentContentState failed:', e);
                 indexDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
+                try {
+                    const fallbackTime = audioPlayer.currentTime || 0;
+                    const wasPlaying = !audioPlayer.paused;
+                    if (window.PlayerStateManager && key) {
+                        const idx = findSubtitleIndexForTime(fallbackTime);
+                        const sentenceTime = (subtitleTracks[idx] && subtitleTracks[idx].time) || fallbackTime;
+                        window.PlayerStateManager.saveStateAt(key, {
+                            sentenceIndex: idx,
+                            sentenceTime: sentenceTime,
+                            wasPlaying
+                        });
+                    }
+                    if (key === MAIN_CONTENT_KEY) {
+                        mainAudioState.wasPlaying = wasPlaying;
+                        mainAudioState.time = fallbackTime;
+                        mainAudioState.tracks = [...subtitleTracks];
+                    } else if (key.startsWith('lore')) {
+                        const loreId = parseInt(key.replace('lore', ''), 10);
+                        if (Number.isFinite(loreId)) {
+                            loreData.resumeTimes[loreId] = fallbackTime;
+                        }
+                    }
+                } catch (e2) {
+                    console.warn('[State] Fallback save also failed:', e2);
+                }
             }
         }
 
@@ -4659,6 +4678,8 @@
                     ? savedMain.sentenceTime
                     : Math.max(0, mainAudioState.time || 0);
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
+                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                renderSubtitleLines(currentSubtitleIndex);
                 await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
                 const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
@@ -4670,23 +4691,17 @@
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         renderSubtitleLines(currentSubtitleIndex);
                         fadeAudio(audioPlayer, 1.0, 700);
-                        iconPlay.style.display = 'none';
-                        iconPause.style.display = 'block';
                     } else {
                         audioPlayer.volume = 1.0;
-                        iconPlay.style.display = 'block';
-                        iconPause.style.display = 'none';
                     }
                 } else {
                     audioPlayer.volume = 1.0;
-                    iconPlay.style.display = 'block';
-                    iconPause.style.display = 'none';
                 }
+                syncPlayPauseIcon();
             } catch (e) {
                 console.error('[Switch] Failed to restore main audio:', e);
                 indexDebugNote('restore-main-error', e && e.message ? e.message : String(e));
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
+                syncPlayPauseIcon();
             } finally {
                 if (switchToken === contentSwitchToken) {
                     contentSwitchInProgress = false;
@@ -4741,6 +4756,8 @@
                     ? savedLore.sentenceTime
                     : Math.max(0, loreData.resumeTimes[id] || 0);
                 indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
+                currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                renderSubtitleLines(currentSubtitleIndex);
                 await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
                 audioPlayer.volume = 0;
@@ -4752,18 +4769,14 @@
                     currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                     renderSubtitleLines(currentSubtitleIndex);
                     fadeAudio(audioPlayer, 1.0, 900);
-                    iconPlay.style.display = 'none';
-                    iconPause.style.display = 'block';
                 } else {
                     audioPlayer.volume = 1.0;
                     console.warn(`[Switch] Lore ${id} loaded but playback did not start.`);
-                    iconPlay.style.display = 'block';
-                    iconPause.style.display = 'none';
                 }
+                syncPlayPauseIcon();
             } catch (e) {
                 console.error(`[Switch] Failed to start lore ${id}:`, e);
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
+                syncPlayPauseIcon();
             } finally {
                 if (switchToken === contentSwitchToken) {
                     contentSwitchInProgress = false;
