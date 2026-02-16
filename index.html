@@ -1703,8 +1703,10 @@
                     initParticles();
                     initClouds();
 
-                    // Start Audio
-                    if (typeof ambientAudio !== 'undefined') ambientAudio.play().catch(() => { });
+                    // Start Audio (aux tracks are gated to avoid SC widget pause races)
+                    if (typeof ambientAudio !== 'undefined') {
+                        syncAuxScPlayback('game-ready');
+                    }
 
                     startGameLoop();
                     console.log("Map Processed & Ready.");
@@ -1732,7 +1734,7 @@
 
         // Fallback: Audio starten bei erster Interaktion, falls Autoplay blockiert wurde
         document.addEventListener('click', () => {
-            if (gameReady && ambientAudio.paused) {
+            if (gameReady && ambientAudio.paused && allowAuxScPlayback()) {
                 ambientAudio.play().catch(e => console.warn("Ambient play failed:", e));
             }
         }, { once: true }); // Nur einmal ausführen
@@ -1793,7 +1795,7 @@
                         return;
                     }
                     applySceneAudioMix('visibility:resume');
-                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
+                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined' && allowAuxScPlayback()) {
                         ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
                         wasAmbientPlaying = false;
                         indexDebugNote('ambient', 'resume on visible');
@@ -2179,9 +2181,13 @@
             // Handle Animation & Sound for Movement
             if (player.isMoving) {
                 // Initial Footstep
-                if (audioUnlocked && !footstepPlaying) {
+                if (audioUnlocked && !footstepPlaying && allowAuxScPlayback()) {
                     footstepSound.play().catch(() => { });
                     footstepPlaying = true;
+                }
+                if (!allowAuxScPlayback() && footstepPlaying) {
+                    footstepSound.pause();
+                    footstepPlaying = false;
                 }
 
                 // Dust Particles
@@ -3007,6 +3013,36 @@
             window.AudioVisibilityManager.unregister(ambientAudio);
         }
 
+        function isPrimaryNarrationPlaying() {
+            if (!audioPlayer) return false;
+            return (typeof audioPlayer.isProbablyPlaying === 'function')
+                ? audioPlayer.isProbablyPlaying()
+                : !audioPlayer.paused;
+        }
+
+        function allowAuxScPlayback() {
+            return !isPrimaryNarrationPlaying() && !contentSwitchInProgress && !document.hidden;
+        }
+
+        function syncAuxScPlayback(reason = 'unspecified') {
+            if (!allowAuxScPlayback()) {
+                if (footstepPlaying) {
+                    footstepSound.pause();
+                    footstepPlaying = false;
+                }
+                if (!ambientAudio.paused) {
+                    ambientAudio.pause();
+                }
+                indexDebugNote('aux-audio', `${reason} blocked`);
+                return;
+            }
+
+            if (audioUnlocked && gameReady && ambientAudio.paused) {
+                ambientAudio.play().catch(() => { });
+            }
+            indexDebugNote('aux-audio', `${reason} allowed`);
+        }
+
         function applySceneAudioMix(reason = 'unspecified') {
             let ambientTarget = AUDIO_PROFILE.ambient;
             let footstepTarget = AUDIO_PROFILE.footsteps;
@@ -3017,6 +3053,7 @@
 
             ambientAudio.volume = Math.max(0, Math.min(1, ambientTarget));
             footstepSound.volume = Math.max(0, Math.min(1, footstepTarget));
+            syncAuxScPlayback(`mix:${reason}`);
             indexDebugNote('audio-mix', `${reason} ambient=${ambientAudio.volume.toFixed(3)} foot=${footstepSound.volume.toFixed(3)} ios=${isIOSDevice}`);
         }
         applySceneAudioMix('init');
@@ -3025,13 +3062,15 @@
         function unlockAudio() {
             if (audioUnlocked) return;
             audioUnlocked = true;
-            if (ambientAudio.paused) {
-                ambientAudio.play().catch(() => { });
-            }
+            syncAuxScPlayback('unlock');
         }
         document.addEventListener('click', unlockAudio, { once: true });
         document.addEventListener('keydown', unlockAudio, { once: true });
         document.addEventListener('touchstart', unlockAudio, { once: true });
+
+        audioPlayer.addEventListener('play', () => syncAuxScPlayback('main-play'));
+        audioPlayer.addEventListener('pause', () => syncAuxScPlayback('main-pause'));
+        audioPlayer.addEventListener('ended', () => syncAuxScPlayback('main-ended'));
 
         console.log('[Audio] Created SCAudioAdapters for main/ambient/footsteps');
 
@@ -4307,7 +4346,9 @@
                 if (!alreadyCollected) {
                     if (lastShimmerLightId !== nearestId) {
                         shimmerSound.currentTime = 0;
-                        shimmerSound.play().catch(() => { });
+                        if (allowAuxScPlayback()) {
+                            shimmerSound.play().catch(() => { });
+                        }
                         lastShimmerLightId = nearestId;
                     }
                 }

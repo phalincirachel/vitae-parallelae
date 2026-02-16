@@ -1995,6 +1995,15 @@
                     window.AudioVisibilityManager.unregister(shimmerSound);
                 }
 
+                function allowAuxSfxPlaybackLiminal() {
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return true;
+                    const primaryPlaying = (typeof p.audio.isProbablyPlaying === 'function')
+                        ? p.audio.isProbablyPlaying()
+                        : !p.paused;
+                    return !primaryPlaying && !contentSwitchInProgress && !document.hidden;
+                }
+
                 // Helper function to get global collected lore count
                 function getGlobalCollectedLoreCount() {
                     if (window.GameState && window.GameState.state && window.GameState.state.collectedLore) {
@@ -3453,7 +3462,9 @@
                                                         lastShimmerAt = now;
                                                         shimmerSound.pause();
                                                         shimmerSound.currentTime = 0;
-                                                        shimmerSound.play().catch(() => { });
+                                                        if (allowAuxSfxPlaybackLiminal()) {
+                                                            shimmerSound.play().catch(() => { });
+                                                        }
                                                     }
                                                     console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
                                                     // Refresh archive menu so new lore appears immediately
