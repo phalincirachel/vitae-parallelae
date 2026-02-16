@@ -4359,10 +4359,7 @@
                 }
 
             }
-            // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
-            else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {
-                endLoreMode();
-            }
+            // Lore intentionally keeps playing even after leaving the trigger area.
         } // End updateLoreSystem
 
         // NEW: Restore Main Audio Function (Replaces basic endLoreMode logic)
