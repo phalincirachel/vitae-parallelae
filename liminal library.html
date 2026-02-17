@@ -786,11 +786,22 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
+                        // Wait for SC widget to be ready before proceeding
+                        if (typeof p.audio.whenReady === 'function') {
+                            await p.audio.whenReady(6000);
+                            if (switchToken !== contentSwitchToken) return;
+                        }
                         p.volume = 1.0;
+                        // Suppress SharedAudioPlayer's onTimeUpdate during switch
+                        // to prevent it from overwriting our manually-set subtitle index
+                        p._suppressTimeUpdate = true;
                         p._suppressAutoRender = true;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
                         p._suppressAutoRender = false;
-                        if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        if (!textLoaded || switchToken !== contentSwitchToken) {
+                            p._suppressTimeUpdate = false;
+                            return;
+                        }
 
                         const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
                         const resumeTime = savedMain && savedMain.sentenceTime !== undefined
@@ -836,10 +847,12 @@
                             }
                         }
 
+                        p._suppressTimeUpdate = false;
                         updateIcons();
                     } catch (e) {
                         console.warn('Restore failed', e);
                         liminalDebugNote('restore-main-error', e && e.message ? e.message : String(e));
+                        if (p) p._suppressTimeUpdate = false;
                         updateIcons();
                     } finally {
                         if (switchToken === contentSwitchToken) {
@@ -874,11 +887,21 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl(content.audio);
+                        // Wait for SC widget to be ready before proceeding
+                        if (typeof p.audio.whenReady === 'function') {
+                            await p.audio.whenReady(6000);
+                            if (switchToken !== contentSwitchToken) return;
+                        }
                         const textPath = content.text || `assets/lore${id}.txt`;
+                        // Suppress SharedAudioPlayer's onTimeUpdate during switch
+                        p._suppressTimeUpdate = true;
                         p._suppressAutoRender = true;
                         const textLoaded = await p.loadText(textPath);
                         p._suppressAutoRender = false;
-                        if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        if (!textLoaded || switchToken !== contentSwitchToken) {
+                            p._suppressTimeUpdate = false;
+                            return;
+                        }
 
                         const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
                         const resumeTime = savedLore && savedLore.sentenceTime !== undefined
@@ -922,9 +945,11 @@
                             }, 2000);
                         }
 
+                        p._suppressTimeUpdate = false;
                         updateIcons();
                     } catch (e) {
                         console.warn('Lore switch failed', e);
+                        if (p) p._suppressTimeUpdate = false;
                         updateIcons();
                     } finally {
                         if (switchToken === contentSwitchToken) {

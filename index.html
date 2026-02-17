@@ -4666,6 +4666,11 @@
                 if (switchToken !== contentSwitchToken) return;
 
                 audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
+                // Wait for SC widget to be ready before proceeding
+                if (typeof audioPlayer.whenReady === 'function') {
+                    await audioPlayer.whenReady(6000);
+                    if (switchToken !== contentSwitchToken) return;
+                }
 
                 const mainText = await ensureMainTextLoaded();
                 if (switchToken !== contentSwitchToken) return;
@@ -4766,6 +4771,11 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
+                // Wait for SC widget to be ready before proceeding
+                if (typeof audioPlayer.whenReady === 'function') {
+                    await audioPlayer.whenReady(6000);
+                    if (switchToken !== contentSwitchToken) return;
+                }
 
                 parseSubtitles(loreText);
                 const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;

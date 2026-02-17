@@ -339,6 +339,17 @@ class SCAudioAdapter {
     }
 
     /**
+     * Public alias for _waitForScReady. Returns a Promise that resolves to
+     * true when the adapter is ready for playback commands, or false on timeout.
+     * For HTML5 mode this resolves immediately (always ready).
+     * @param {number} timeoutMs - Max wait time (default 6000ms for SC widget load)
+     */
+    whenReady(timeoutMs = 6000) {
+        if (this._isReady || this.mode === 'html5') return Promise.resolve(true);
+        return this._waitForScReady(timeoutMs);
+    }
+
+    /**
      * Force-seek and verify the resulting position, useful for streamed SC tracks.
      *
      * @param {number} targetSeconds

@@ -160,6 +160,7 @@ export class SharedAudioPlayer {
     }
 
     onTimeUpdate() {
+        if (this._suppressTimeUpdate) return;
         const t = this.audio.currentTime;
         let newIndex = -1;
         // Find current line
