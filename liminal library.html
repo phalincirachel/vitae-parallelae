@@ -815,6 +815,24 @@
                                 p.volume = 1.0;
                             } else {
                                 p.volume = 1.0;
+                                const retryToken = switchToken;
+                                setTimeout(async () => {
+                                    if (retryToken !== contentSwitchToken) return;
+                                    if (p.paused) {
+                                        try {
+                                            p.volume = 0;
+                                            const retryOk = await verifyPlaybackStarted(3, 500);
+                                            if (retryOk && retryToken === contentSwitchToken) {
+                                                p.volume = 1.0;
+                                            } else {
+                                                p.volume = 1.0;
+                                            }
+                                        } catch (e2) {
+                                            p.volume = 1.0;
+                                        }
+                                        updateIcons();
+                                    }
+                                }, 2000);
                             }
                         }
 
@@ -883,7 +901,25 @@
                             p.volume = 1.0;
                         } else {
                             p.volume = 1.0;
-                            console.warn(`Lore ${id} loaded but still paused.`);
+                            console.warn(`Lore ${id} loaded but still paused. Scheduling delayed retry.`);
+                            const retryToken = switchToken;
+                            setTimeout(async () => {
+                                if (retryToken !== contentSwitchToken) return;
+                                if (p.paused) {
+                                    try {
+                                        p.volume = 0;
+                                        const retryOk = await verifyPlaybackStarted(3, 500);
+                                        if (retryOk && retryToken === contentSwitchToken) {
+                                            p.volume = 1.0;
+                                        } else {
+                                            p.volume = 1.0;
+                                        }
+                                    } catch (e2) {
+                                        p.volume = 1.0;
+                                    }
+                                    updateIcons();
+                                }
+                            }, 2000);
                         }
 
                         updateIcons();
@@ -1410,6 +1446,13 @@
 
                         // 3. Init Visibility Manage - DISABLED (Bug suspected)
                         // AudioVisibilityManager.init(player.audio);
+                        // Unregister the SCAudioAdapter from AudioVisibilityManager
+                        // to prevent its blur handler from pausing audio when the
+                        // SoundCloud iframe receives focus. Liminal library uses its
+                        // own inline visibilitychange handler instead.
+                        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+                            window.AudioVisibilityManager.unregister(player.audio);
+                        }
 
                     } catch (e) {
                         console.error("Game Init Error:", e);

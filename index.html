@@ -727,8 +727,7 @@
                         // If already in Chapter mode, maybe just unpause?
                         if (audioPlayer.paused) {
                             audioPlayer.play();
-                            iconPlay.style.display = 'none';
-                            iconPause.style.display = 'block';
+                            syncPlayPauseIcon();
                         }
                     }
                 });
@@ -3742,8 +3741,7 @@
                         // User can read remaining text, then manual action needed? 
                         // Or maybe we don't need to do anything, just let it stop.
                         audioPlayer.pause();
-                        iconPlay.style.display = 'block';
-                        iconPause.style.display = 'none';
+                        syncPlayPauseIcon();
                     }
                 } else {
                     // Game Mode: Show Button
@@ -4056,7 +4054,7 @@
         // 8. Wenn Audio zu Ende ist
         audioPlayer.addEventListener('ended', () => {
             if (isLoreMode || contentSwitchInProgress) return;
-            iconPlay.style.display = 'block';
+            syncPlayPauseIcon();
             renderSubtitleLines(subtitleTracks.length - 1);
         });
 
@@ -4693,6 +4691,25 @@
                         fadeAudio(audioPlayer, 1.0, 700);
                     } else {
                         audioPlayer.volume = 1.0;
+                        // Delayed retry: SC widget may need more time
+                        const retryToken = switchToken;
+                        setTimeout(async () => {
+                            if (retryToken !== contentSwitchToken) return;
+                            if (audioPlayer.paused) {
+                                try {
+                                    audioPlayer.volume = 0;
+                                    const retryOk = await verifyPlaybackStarted(3, 500);
+                                    if (retryOk && retryToken === contentSwitchToken) {
+                                        fadeAudio(audioPlayer, 1.0, 700);
+                                    } else {
+                                        audioPlayer.volume = 1.0;
+                                    }
+                                } catch (e2) {
+                                    audioPlayer.volume = 1.0;
+                                }
+                                syncPlayPauseIcon();
+                            }
+                        }, 2000);
                     }
                 } else {
                     audioPlayer.volume = 1.0;
@@ -4771,7 +4788,27 @@
                     fadeAudio(audioPlayer, 1.0, 900);
                 } else {
                     audioPlayer.volume = 1.0;
-                    console.warn(`[Switch] Lore ${id} loaded but playback did not start.`);
+                    console.warn(`[Switch] Lore ${id} loaded but playback did not start. Scheduling delayed retry.`);
+                    // Delayed retry: SC widget may need more time to become ready
+                    const retryToken = switchToken;
+                    setTimeout(async () => {
+                        if (retryToken !== contentSwitchToken) return;
+                        if (audioPlayer.paused) {
+                            try {
+                                audioPlayer.volume = 0;
+                                const retryOk = await verifyPlaybackStarted(3, 500);
+                                if (retryOk && retryToken === contentSwitchToken) {
+                                    fadeAudio(audioPlayer, 1.0, 700);
+                                } else {
+                                    audioPlayer.volume = 1.0;
+                                }
+                            } catch (e2) {
+                                audioPlayer.volume = 1.0;
+                                console.warn('[Switch] Delayed retry also failed:', e2);
+                            }
+                            syncPlayPauseIcon();
+                        }
+                    }, 2000);
                 }
                 syncPlayPauseIcon();
             } catch (e) {
