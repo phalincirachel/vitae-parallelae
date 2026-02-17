@@ -786,11 +786,9 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
-                        // Set play intent IMMEDIATELY after src — captures _pendingPlay
-                        p.volume = 0;
-                        p.play().catch(() => {});
 
                         // Parse and render text IMMEDIATELY (don't wait for widget)
+                        p.volume = 1.0;
                         p._suppressTimeUpdate = true;
                         p._suppressAutoRender = true;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
@@ -854,10 +852,6 @@
                                     }
                                 }, 2000);
                             }
-                        } else {
-                            // Cancel the early play() — chapter was paused before switch
-                            p.pause();
-                            p.volume = 1.0;
                         }
 
                         p._suppressTimeUpdate = false;
@@ -900,9 +894,6 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl(content.audio);
-                        // Set play intent IMMEDIATELY after src — captures _pendingPlay
-                        p.volume = 0;
-                        p.play().catch(() => {});
 
                         // Parse and render text IMMEDIATELY (don't wait for widget)
                         const textPath = content.text || `assets/lore${id}.txt`;
@@ -1540,17 +1531,21 @@
                 // --- EVENT LISTENERS ---
                 async function handleAudioToggleClick() {
                     if (contentSwitchInProgress) return;
-                    // Use actual audio transport state, not icon visibility
-                    if (player.paused) {
+                    // Use visible icon state instead of paused getter to avoid stale SC paused state.
+                    const wantsPlay = iconPlay.style.display !== 'none';
+                    if (wantsPlay) {
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
                         try {
                             await player.play();
                         } catch (e) {
                             liminalDebugNote('toggle-error', e && e.message ? e.message : String(e));
                         }
+                        setTimeout(updateIcons, 120);
                     } else {
                         player.pause();
+                        updateIcons();
                     }
-                    updateIcons();
                 }
 
                 document.getElementById('audioToggleBtn').addEventListener('click', () => {
