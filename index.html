@@ -4670,6 +4670,10 @@
                 if (switchToken !== contentSwitchToken) return;
 
                 audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
+                // Set play intent IMMEDIATELY after src — captures _pendingPlay
+                // so READY callback auto-starts playback. Volume is 0 during switch.
+                audioPlayer.volume = 0;
+                audioPlayer.play().catch(() => {});
 
                 // Parse and render text IMMEDIATELY (don't wait for widget)
                 const mainText = await ensureMainTextLoaded();
@@ -4729,6 +4733,8 @@
                         }, 2000);
                     }
                 } else {
+                    // Cancel the early play() — chapter was paused before switch
+                    audioPlayer.pause();
                     audioPlayer.volume = 1.0;
                 }
                 syncPlayPauseIcon();
@@ -4783,6 +4789,10 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
+                // Set play intent IMMEDIATELY after src — captures _pendingPlay
+                // so READY callback auto-starts playback. Volume is 0 during switch.
+                audioPlayer.volume = 0;
+                audioPlayer.play().catch(() => {});
 
                 // Parse and render text IMMEDIATELY (don't wait for widget)
                 parseSubtitles(loreText);
