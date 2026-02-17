@@ -1228,7 +1228,7 @@
             // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
             // WRAPPED IN TRY-CATCH TO PREVENT CRASHING THE LOADING SCREEN
             try {
-                const mainAudioSrc = 'assets/kapitel1.mp3';
+                const mainAudioSrc = LEVEL.audioUrl;
                 window.mainAudioUrl = mainAudioSrc;
                 if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
                     const scUrl = getSCUrl(mainAudioSrc);
@@ -4851,7 +4851,7 @@
                 await pauseWithFade(700);
                 if (switchToken !== contentSwitchToken) return;
 
-                audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
+                audioPlayer.src = getSCUrl(window.mainAudioUrl || LEVEL.audioUrl);
                 indexTrace('switch:restore-main:src-set', { switchToken, src: audioPlayer.src });
 
                 const mainText = await ensureMainTextLoaded();
