@@ -322,6 +322,7 @@
                 function liminalDebugNote() { }
 
                 function liminalCause() { }
+                function liminalTrace() { }
 
                 function writeStateHandoff(targetPageKey) {
                     try {
@@ -547,6 +548,11 @@
 
                 async function seekAndSyncSubtitle(p, targetTime, reason) {
                     const safeTarget = Math.max(0, Number(targetTime) || 0);
+                    liminalTrace('seek:start', {
+                        reason,
+                        target: Number(safeTarget.toFixed(3)),
+                        before: Number(((p && p.audio && p.audio.currentTime) || 0).toFixed(3))
+                    });
                     let seekResult = {
                         ok: false,
                         target: safeTarget,
@@ -585,26 +591,74 @@
                     if (!seekResult.ok) {
                         liminalCause('C10_SEEK_CONFIRM_FAILED', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
                     }
+                    liminalTrace('seek:end', {
+                        reason,
+                        ok: !!seekResult.ok,
+                        attempts: seekResult.attempts || 0,
+                        target: Number(safeTarget.toFixed(3)),
+                        position: Number((effectiveTime || 0).toFixed(3)),
+                        subtitleIndex: p.currentSubtitleIndex
+                    });
                     return seekResult;
                 }
 
                 async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
                     const p = window.audioPlayer;
                     if (!p) return false;
+                    const isTransportPaused = () => {
+                        if (!p || !p.audio) return true;
+                        if (typeof p.audio.isTransportPaused === 'function') {
+                            return p.audio.isTransportPaused();
+                        }
+                        return !!p.paused;
+                    };
+                    let sawRecentProgress = (p.audio && typeof p.audio.hasRecentProgress === 'function')
+                        ? p.audio.hasRecentProgress(1800)
+                        : false;
+                    liminalTrace('verify-play:start', {
+                        retries,
+                        delayMs,
+                        paused: !!p.paused,
+                        transportPaused: isTransportPaused(),
+                        sawRecentProgress
+                    });
 
                     for (let attempt = 0; attempt <= retries; attempt++) {
                         try {
                             await p.play();
                         } catch (e) {
                             console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
+                            liminalTrace('verify-play:play-error', { attempt: attempt + 1, message: e && e.message ? e.message : String(e) });
                         }
                         await wait(delayMs);
                         const currentPos = (typeof p.audio.getAccurateCurrentTime === 'function')
                             ? await p.audio.getAccurateCurrentTime(700)
                             : (p.audio.currentTime || 0);
+                        const transportPaused = isTransportPaused();
+                        const hasRecentProgress = (p.audio && typeof p.audio.hasRecentProgress === 'function')
+                            ? p.audio.hasRecentProgress(1800)
+                            : false;
+                        sawRecentProgress = sawRecentProgress || hasRecentProgress;
+                        const started = !transportPaused && hasRecentProgress;
                         liminalDebugNote('play-check', `attempt=${attempt + 1} paused=${p.paused} t=${currentPos.toFixed(2)}`);
-                        if (!p.paused) return true;
+                        liminalTrace('verify-play:attempt', {
+                            attempt: attempt + 1,
+                            paused: !!p.paused,
+                            transportPaused,
+                            hasRecentProgress,
+                            currentPos: Number((currentPos || 0).toFixed(3)),
+                            started
+                        });
+                        if (started) {
+                            liminalTrace('verify-play:success', { attempt: attempt + 1, currentPos: Number((currentPos || 0).toFixed(3)) });
+                            return true;
+                        }
                     }
+                    if (!isTransportPaused() && sawRecentProgress) {
+                        liminalTrace('verify-play:success-fallback', { sawRecentProgress: true });
+                        return true;
+                    }
+                    liminalTrace('verify-play:failed', { retries, delayMs });
                     return false;
                 }
 
@@ -740,15 +794,20 @@
                     const {
                         saveCurrent = true
                     } = options;
+                    liminalTrace('switch:restore-main:enter', { saveCurrent: !!saveCurrent });
 
                     if (!isLoreMode && !contentSwitchInProgress) return;
-                    if (contentSwitchInProgress) return;
+                    if (contentSwitchInProgress) {
+                        liminalTrace('switch:restore-main:blocked', { reason: 'contentSwitchInProgress' });
+                        return;
+                    }
 
                     const p = window.audioPlayer;
                     if (!p || !p.audio) return;
 
                     contentSwitchInProgress = true;
                     const switchToken = ++contentSwitchToken;
+                    liminalTrace('switch:restore-main:lock', { switchToken });
 
                     try {
                         const loreIdBeforeSwitch = activeLoreId;
@@ -765,14 +824,24 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
+                        liminalTrace('switch:restore-main:src-set', { switchToken, src: p.audio.src });
                         p.volume = 1.0;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        liminalTrace('switch:restore-main:text-parsed', {
+                            switchToken,
+                            tracks: Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : -1
+                        });
 
                         const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
                         const resumeTime = savedMain && savedMain.sentenceTime !== undefined
                             ? savedMain.sentenceTime
                             : Math.max(0, mainAudioState.time || 0);
+                        liminalTrace('switch:restore-main:resume-time', {
+                            switchToken,
+                            resumeTime: Number((resumeTime || 0).toFixed(3)),
+                            hasSavedMain: !!savedMain
+                        });
                         liminalDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
                         if (!savedMain && (mainAudioState.time || 0) <= 0.01) {
                             liminalCause('C09_RESTORE_WITHOUT_STATE', 'main restore fallback at 0');
@@ -781,9 +850,11 @@
                         await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
                         const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
+                        liminalTrace('switch:restore-main:resume-decision', { switchToken, shouldResume: !!shouldResume });
                         if (shouldResume) {
                             p.volume = 0;
                             const started = await verifyPlaybackStarted(2, 320);
+                            liminalTrace('switch:restore-main:verify-result', { switchToken, started: !!started });
                             if (started) {
                                 p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                                 p.renderLines(p.currentSubtitleIndex);
@@ -796,19 +867,25 @@
                         updateIcons();
                     } catch (e) {
                         console.warn('Restore failed', e);
+                        liminalTrace('switch:restore-main:error', { message: e && e.message ? e.message : String(e) });
                         liminalDebugNote('restore-main-error', e && e.message ? e.message : String(e));
                         updateIcons();
                     } finally {
                         if (switchToken === contentSwitchToken) {
                             contentSwitchInProgress = false;
+                            liminalTrace('switch:restore-main:unlock', { switchToken });
                         }
                     }
                 };
 
                 // Real startLoreMode implementation
                 window.startLoreMode = async function (id) {
+                    liminalTrace('switch:start-lore:enter', { id });
                     if (isLoreMode && activeLoreId === id) return;
-                    if (contentSwitchInProgress) return;
+                    if (contentSwitchInProgress) {
+                        liminalTrace('switch:start-lore:blocked', { id, reason: 'contentSwitchInProgress' });
+                        return;
+                    }
 
                     const content = window.GameState?.getLore(id) || {
                         audio: `assets/lore${id}.mp3`,
@@ -820,6 +897,7 @@
 
                     contentSwitchInProgress = true;
                     const switchToken = ++contentSwitchToken;
+                    liminalTrace('switch:start-lore:lock', { id, switchToken });
 
                     try {
                         await saveCurrentContentState({ reason: `start-lore:${id}` });
@@ -831,14 +909,26 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl(content.audio);
+                        liminalTrace('switch:start-lore:src-set', { id, switchToken, src: p.audio.src });
                         const textPath = content.text || `assets/lore${id}.txt`;
                         const textLoaded = await p.loadText(textPath);
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        liminalTrace('switch:start-lore:text-parsed', {
+                            id,
+                            switchToken,
+                            tracks: Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : -1
+                        });
 
                         const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
                         const resumeTime = savedLore && savedLore.sentenceTime !== undefined
                             ? savedLore.sentenceTime
                             : 0;
+                        liminalTrace('switch:start-lore:resume-time', {
+                            id,
+                            switchToken,
+                            resumeTime: Number((resumeTime || 0).toFixed(3)),
+                            hasSavedLore: !!savedLore
+                        });
                         liminalDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore}`);
                         if (!savedLore && resumeTime <= 0.01) {
                             liminalCause('C09_RESTORE_WITHOUT_STATE', `lore${id} restore fallback at 0`);
@@ -848,6 +938,7 @@
 
                         p.volume = 0;
                         const started = await verifyPlaybackStarted(3, 320);
+                        liminalTrace('switch:start-lore:verify-result', { id, switchToken, started: !!started });
                         if (started) {
                             p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                             p.renderLines(p.currentSubtitleIndex);
@@ -860,10 +951,12 @@
                         updateIcons();
                     } catch (e) {
                         console.warn('Lore switch failed', e);
+                        liminalTrace('switch:start-lore:error', { id, message: e && e.message ? e.message : String(e) });
                         updateIcons();
                     } finally {
                         if (switchToken === contentSwitchToken) {
                             contentSwitchInProgress = false;
+                            liminalTrace('switch:start-lore:unlock', { id, switchToken });
                         }
                     }
                 };
@@ -1340,12 +1433,14 @@
                     const subtitleLine = e.target && e.target.closest ? e.target.closest('.subtitle-line') : null;
                     if (!subtitleLine) return;
                     if (contentSwitchInProgress) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'contentSwitchInProgress' });
                         e.preventDefault();
                         e.stopPropagation();
                         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
                         return;
                     }
                     if (eventPointInMobileRecenterZone(e)) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'mobileRecenterZone' });
                         e.preventDefault();
                         e.stopPropagation();
                         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
@@ -1353,11 +1448,13 @@
                         return;
                     }
                     if (Date.now() < suppressSubtitleClickUntil) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'suppressSubtitleClickUntil' });
                         e.preventDefault();
                         e.stopPropagation();
                         if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
                         return;
                     }
+                    liminalTrace('ui:subtitle-click:ok');
                     setSubtitleFollowLocked(false);
                 }, true);
 
@@ -1416,22 +1513,42 @@
                     updateRecenterButtonVisibility();
                 }
 
+                function isPlayerTransportPaused() {
+                    if (!player || !player.audio) return true;
+                    if (typeof player.audio.isTransportPaused === 'function') {
+                        return player.audio.isTransportPaused();
+                    }
+                    return !!player.paused;
+                }
+
                 // --- EVENT LISTENERS ---
                 async function handleAudioToggleClick() {
-                    if (contentSwitchInProgress) return;
-                    // Use visible icon state instead of paused getter to avoid stale SC paused state.
-                    const wantsPlay = iconPlay.style.display !== 'none';
+                    if (contentSwitchInProgress) {
+                        liminalTrace('ui:play-toggle:blocked', { reason: 'contentSwitchInProgress' });
+                        return;
+                    }
+                    const wantsPlay = isPlayerTransportPaused();
+                    liminalTrace('ui:play-toggle:click', {
+                        wantsPlay,
+                        paused: !!player.paused,
+                        transportPaused: isPlayerTransportPaused(),
+                        iconPlay: iconPlay.style.display,
+                        iconPause: iconPause.style.display
+                    });
                     if (wantsPlay) {
                         iconPlay.style.display = 'none';
                         iconPause.style.display = 'block';
                         try {
                             await player.play();
+                            liminalTrace('ui:play-toggle:play-called');
                         } catch (e) {
                             liminalDebugNote('toggle-error', e && e.message ? e.message : String(e));
+                            liminalTrace('ui:play-toggle:play-error', { message: e && e.message ? e.message : String(e) });
                         }
                         setTimeout(updateIcons, 120);
                     } else {
                         player.pause();
+                        liminalTrace('ui:play-toggle:pause-called');
                         updateIcons();
                     }
                 }
@@ -1478,12 +1595,19 @@
                 player.audio.addEventListener('ended', () => {
                     if (isLoreMode) {
                         liminalDebugNote('audio-ended', 'lore -> restore main');
+                        liminalTrace('audio:ended:lore');
                         window.restoreMainAudio({ saveCurrent: false });
                         return;
                     } else {
                         // MAIN CHAPTER ENDED
                         const textFinished = isCurrentContentCompleted();
                         liminalDebugNote('audio-ended', `main idx=${getActiveSubtitleIndex()}/${getActiveSubtitleTracks().length} textFinished=${textFinished} reading=${isReadingMode}`);
+                        liminalTrace('audio:ended:main', {
+                            textFinished: !!textFinished,
+                            subtitleIndex: getActiveSubtitleIndex(),
+                            subtitleCount: getActiveSubtitleTracks().length,
+                            readingMode: !!isReadingMode
+                        });
 
                         const shouldClearMainState = !isReadingMode || textFinished;
                         if (shouldClearMainState) {
@@ -1650,11 +1774,19 @@
 
 
                 function updateIcons() {
-                    if (player.paused) {
+                    const transportPaused = isPlayerTransportPaused();
+                    if (transportPaused) {
                         iconPlay.style.display = 'block'; iconPause.style.display = 'none';
                     } else {
                         iconPlay.style.display = 'none'; iconPause.style.display = 'block';
                     }
+                    liminalTrace('icon:sync', {
+                        paused: !!player.paused,
+                        transportPaused,
+                        iconPlay: iconPlay.style.display,
+                        iconPause: iconPause.style.display,
+                        currentTime: Number(((player && player.currentTime) || 0).toFixed(3))
+                    });
                 }
                 player.audio.addEventListener('play', updateIcons);
                 player.audio.addEventListener('pause', updateIcons);

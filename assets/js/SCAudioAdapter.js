@@ -52,6 +52,8 @@ class SCAudioAdapter {
         }
     }
 
+    _trace() { }
+
     _bindHtml5Events() {
         const events = ['timeupdate', 'ended', 'play', 'pause', 'loadedmetadata', 'canplay'];
         events.forEach(ev => {
@@ -99,6 +101,7 @@ class SCAudioAdapter {
 
         // Detect Type
         const isSoundCloud = url.includes('soundcloud.com');
+        this._trace('src:set', { url, isSoundCloud });
 
         if (isSoundCloud) {
             this._switchToSC(url);
@@ -109,6 +112,7 @@ class SCAudioAdapter {
 
     _switchToHtml5(url) {
         console.log('[SCAudioAdapter] Switching to HTML5 Audio for:', url);
+        this._trace('switch:html5', { url });
         this.mode = 'html5';
         this._scPaused = true;
         this._playIntent = false;
@@ -132,6 +136,7 @@ class SCAudioAdapter {
 
     _switchToSC(url) {
         console.log('[SCAudioAdapter] Switching to SoundCloud for:', url);
+        this._trace('switch:sc', { url });
         this.mode = 'sc';
         this._scPaused = true;
         this._playIntent = false;
@@ -179,6 +184,7 @@ class SCAudioAdapter {
         this.widget.bind(SC.Widget.Events.READY, () => {
             this._isReady = true;
             console.log('[SCAudioAdapter] SC Widget READY');
+            this._trace('sc:event:ready');
             this.widget.setVolume(this._volume * 100);
             if (this._pendingPlay) {
                 this._pendingPlay = false;
@@ -188,31 +194,34 @@ class SCAudioAdapter {
         });
 
         this.widget.bind(SC.Widget.Events.PLAY, () => {
-            if (this.mode !== 'sc') return;
+            if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = false;
             this._playIntent = true;
             this._scLastProgressAt = Date.now();
+            this._trace('sc:event:play');
             this._dispatch('play');
             // Apply pending seek after playback starts
             this._applyPendingSeek();
         });
 
         this.widget.bind(SC.Widget.Events.PAUSE, () => {
-            if (this.mode !== 'sc') return;
+            if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = true;
             this._playIntent = false;
+            this._trace('sc:event:pause');
             this._dispatch('pause');
         });
 
         this.widget.bind(SC.Widget.Events.FINISH, () => {
-            if (this.mode !== 'sc') return;
+            if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = true;
             this._playIntent = false;
+            this._trace('sc:event:finish');
             this._dispatch('ended');
         });
 
         this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
-            if (this.mode !== 'sc') return;
+            if (this.mode !== 'sc' || !this._isReady) return;
             if (data && Number.isFinite(data.currentPosition)) {
                 this._scCurrentTime = data.currentPosition / 1000;
             }
@@ -231,32 +240,61 @@ class SCAudioAdapter {
     // --- Controls ---
 
     play() {
+        this._trace('control:play:requested');
         this._playIntent = true;
         if (this.mode === 'html5') {
+            this._trace('control:play:html5');
             return this.audioNode.play();
         } else if (this.mode === 'sc' && this.widget && this._isReady) {
             // Skip if already playing to prevent double-play stutter
             const progressAge = Date.now() - this._scLastProgressAt;
             if (!this._scPaused && progressAge < 1500) {
+                this._trace('control:play:skip-already-playing', { progressAge });
                 return Promise.resolve();
             }
+            this._trace('control:play:sc-dispatch');
             this.widget.play();
             return Promise.resolve();
         } else {
             this._pendingPlay = true;
+            this._trace('control:play:queued');
             return Promise.resolve();
         }
     }
 
     pause() {
+        this._trace('control:pause:requested');
         this._playIntent = false;
         this._pendingPlay = false;
         if (this.mode === 'html5') {
+            this._trace('control:pause:html5');
             this.audioNode.pause();
         } else if (this.mode === 'sc' && this.widget) {
             this._scPaused = true;
+            this._trace('control:pause:sc-dispatch');
             this.widget.pause();
         }
+    }
+
+    /**
+     * Returns transport pause state without intent-based heuristics.
+     * Useful for UI state decisions to avoid icon drift.
+     */
+    isTransportPaused() {
+        if (this.mode === 'html5') return this.audioNode.paused;
+        if (this.mode === 'sc') return this._scPaused !== false;
+        return true;
+    }
+
+    /**
+     * Returns true when genuine playback progress arrived recently.
+     * For SC this is based on PLAY/PLAY_PROGRESS timestamps.
+     */
+    hasRecentProgress(maxAgeMs = 1400) {
+        if (this.mode === 'html5') return !this.audioNode.paused;
+        if (this.mode !== 'sc') return false;
+        const age = Date.now() - this._scLastProgressAt;
+        return (this._scPaused === false) && age >= 0 && age <= Math.max(100, Number(maxAgeMs) || 0);
     }
 
     toggle() {
@@ -347,14 +385,29 @@ class SCAudioAdapter {
      */
     async seekAndConfirm(targetSeconds, options = {}) {
         const target = Math.max(0, Number(targetSeconds) || 0);
-        const isPlaying = this.isProbablyPlaying();
-        const maxAttempts = Math.max(1, isPlaying ? Math.min(options.maxAttempts || 4, 2) : (options.maxAttempts || 4));
-        const settleMs = Math.max(80, isPlaying ? Math.min(options.settleMs || 220, 150) : (options.settleMs || 220));
+        let isPlaying = this.isProbablyPlaying();
+        let maxAttempts = Math.max(1, isPlaying ? Math.min(options.maxAttempts || 4, 2) : (options.maxAttempts || 4));
+        let settleMs = Math.max(80, isPlaying ? Math.min(options.settleMs || 220, 150) : (options.settleMs || 220));
         const tolerance = Math.max(0.1, options.tolerance || 0.9);
+        this._trace('seek:start', { target, isPlaying, maxAttempts, settleMs, tolerance });
 
+        let scReady = true;
         if (this.mode === 'sc') {
-            await this._waitForScReady(options.readyTimeoutMs || 2500);
+            scReady = await this._waitForScReady(options.readyTimeoutMs || 2500);
+            if (!scReady || !this.widget) {
+                // Stream not ready yet: queue seek for PLAY event and report non-confirmed status.
+                this._pendingSeek = target;
+                this._scCurrentTime = target;
+                this._trace('seek:not-ready-queued', { target, scReady });
+                return { ok: false, target, position: target, attempts: 0 };
+            }
         }
+
+        // Re-evaluate after ready wait because SC events can arrive during load.
+        isPlaying = this.isProbablyPlaying();
+        maxAttempts = Math.max(1, isPlaying ? Math.min(options.maxAttempts || 4, 2) : (options.maxAttempts || 4));
+        settleMs = Math.max(80, isPlaying ? Math.min(options.settleMs || 220, 150) : (options.settleMs || 220));
+        this._trace('seek:post-ready-state', { target, isPlaying, maxAttempts, settleMs });
 
         // When SoundCloud is paused, seeking via retry loop doesn't work reliably.
         // Issue one seekTo and store position. Do NOT set _pendingSeek - we don't
@@ -364,6 +417,7 @@ class SCAudioAdapter {
             if (this.widget) {
                 try { this.widget.seekTo(target * 1000); } catch (_) { }
             }
+            this._trace('seek:paused-fast-path', { target });
             return { ok: true, target, position: target, attempts: 0 };
         }
 
@@ -386,10 +440,12 @@ class SCAudioAdapter {
 
             const ok = Math.abs(lastPos - target) <= tolerance || lastPos >= (target - tolerance);
             if (ok) {
+                this._trace('seek:ok', { target, lastPos, attempts: attempt });
                 return { ok: true, target, position: lastPos, attempts: attempt };
             }
         }
 
+        this._trace('seek:failed', { target, lastPos, attempts: maxAttempts });
         return { ok: false, target, position: lastPos, attempts: maxAttempts };
     }
 
@@ -432,7 +488,6 @@ class SCAudioAdapter {
                     settled = true;
                     clearTimeout(timer);
                     this._scCurrentTime = (ms || 0) / 1000;
-                    this._scLastProgressAt = Date.now();
                     resolve(this._scCurrentTime);
                 });
             } catch (e) {

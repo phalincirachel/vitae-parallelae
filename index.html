@@ -437,6 +437,7 @@
         };
 
         function indexDebugNote() { }
+        function indexTrace() { }
 
         function writeStateHandoff(targetPageKey) {
             try {
@@ -2972,10 +2973,24 @@
 
         }
 
+        function isAudioTransportPaused() {
+            if (!audioPlayer) return true;
+            if (typeof audioPlayer.isTransportPaused === 'function') {
+                return audioPlayer.isTransportPaused();
+            }
+            return !!audioPlayer.paused;
+        }
+
         function syncPlayPauseIcon() {
-            const isPaused = !audioPlayer || audioPlayer.paused;
+            const isPaused = isAudioTransportPaused();
             iconPlay.style.display = isPaused ? 'block' : 'none';
             iconPause.style.display = isPaused ? 'none' : 'block';
+            indexTrace('icon:sync', {
+                paused: isPaused,
+                iconPlay: iconPlay.style.display,
+                iconPause: iconPause.style.display,
+                currentTime: Number(((audioPlayer && audioPlayer.currentTime) || 0).toFixed(3))
+            });
         }
 
         audioPlayer.addEventListener('play', syncPlayPauseIcon);
@@ -3377,32 +3392,42 @@
                         div.style.cursor = "pointer";
                         div.addEventListener('click', async (e) => {
                             if (contentSwitchInProgress) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'contentSwitchInProgress', index: i, targetTime: track.time });
                                 e.preventDefault();
                                 e.stopPropagation();
                                 return;
                             }
                             if (eventPointInMobileRecenterZone(e)) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'mobileRecenterZone', index: i, targetTime: track.time });
                                 handleRecenterActivate(e);
                                 return;
                             }
                             if (Date.now() < suppressSubtitleClickUntil) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'suppressSubtitleClickUntil', index: i, targetTime: track.time });
                                 e.preventDefault();
                                 e.stopPropagation();
                                 return;
                             }
                             if (subtitleContainer.dataset.wasDragging === 'true') {
                                 console.log("Click ignored due to drag");
+                                indexTrace('ui:timestamp:blocked', { reason: 'wasDragging', index: i, targetTime: track.time });
                                 return;
                             }
                             // If a bookmark button is visible and was the click target, skip seek
-                            if (e.target.classList.contains('bookmark-btn')) return;
+                            if (e.target.classList.contains('bookmark-btn')) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'bookmark-btn', index: i, targetTime: track.time });
+                                return;
+                            }
                             setSubtitleFollowLocked(false, 'timestamp-click');
                             console.log(`Seek to ${track.time}s`);
+                            indexTrace('ui:timestamp:seek', { index: i, targetTime: track.time });
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
                             try {
                                 await audioPlayer.play();
+                                indexTrace('ui:timestamp:autoplay-ok', { index: i, targetTime: track.time });
                             } catch (_) {
                                 // ignore autoplay gesture restrictions
+                                indexTrace('ui:timestamp:autoplay-failed', { index: i, targetTime: track.time });
                             }
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
@@ -3743,6 +3768,7 @@
         // 4b. Chapter Transition Logic (Main Audio Ended)
         audioPlayer.addEventListener('ended', () => {
             if (isLoreMode) {
+                indexTrace('audio:ended:lore', { activeLoreId: activeLoreId || null });
                 if (window.restoreMainAudio) {
                     window.restoreMainAudio({ saveCurrent: false, forceResume: true });
                 }
@@ -3766,6 +3792,12 @@
                 // Debug Decision
                 console.log(`[DEBUG_SYS] Audio Ended. SubtitleIndex=${currentSubtitleIndex}/${subtitleTracks.length}. TextFinished=${textFinished}`);
                 indexDebugNote('audio-ended', `idx=${currentSubtitleIndex}/${subtitleTracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
+                indexTrace('audio:ended:main', {
+                    subtitleIndex: currentSubtitleIndex,
+                    subtitleCount: subtitleTracks.length,
+                    textFinished: !!textFinished,
+                    readingMode: !!isReadingMode
+                });
                 const shouldClearMainState = !isReadingMode || textFinished;
                 if (shouldClearMainState) {
                     clearContentState(MAIN_CONTENT_KEY);
@@ -3942,9 +3974,20 @@
 
         // 5. Play/Pause Steuerung
         playBtn.addEventListener('click', () => {
-            if (contentSwitchInProgress) return;
+            if (contentSwitchInProgress) {
+                indexTrace('ui:play-toggle:blocked', { reason: 'contentSwitchInProgress' });
+                return;
+            }
+            const transportPaused = isAudioTransportPaused();
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
-            if (audioPlayer.paused) {
+            indexTrace('ui:play-toggle:click', {
+                src: audioPlayer.src,
+                paused: audioPlayer.paused,
+                transportPaused,
+                iconPlay: iconPlay.style.display,
+                iconPause: iconPause.style.display
+            });
+            if (transportPaused) {
                 audioPlayer.play()
                     .then(() => syncPlayPauseIcon())
                     .catch(e => {
@@ -4564,6 +4607,11 @@
 
         async function seekAndSyncSubtitle(targetTime, reason) {
             const safeTarget = Math.max(0, Number(targetTime) || 0);
+            indexTrace('seek:start', {
+                reason,
+                target: Number(safeTarget.toFixed(3)),
+                before: Number(((audioPlayer && audioPlayer.currentTime) || 0).toFixed(3))
+            });
             let seekResult = {
                 ok: false,
                 target: safeTarget,
@@ -4599,6 +4647,14 @@
             currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
             renderSubtitleLines(currentSubtitleIndex);
             indexDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
+            indexTrace('seek:end', {
+                reason,
+                ok: !!seekResult.ok,
+                attempts: seekResult.attempts || 0,
+                target: Number(safeTarget.toFixed(3)),
+                position: Number((effectiveTime || 0).toFixed(3)),
+                subtitleIndex: currentSubtitleIndex
+            });
             return seekResult;
         }
 
@@ -4616,12 +4672,24 @@
             let previousPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
                 ? await audioPlayer.getAccurateCurrentTime(600)
                 : (audioPlayer.currentTime || 0);
+            let sawRecentProgress = (typeof audioPlayer.hasRecentProgress === 'function')
+                ? audioPlayer.hasRecentProgress(1800)
+                : false;
+            indexTrace('verify-play:start', {
+                retries,
+                delayMs,
+                startPos: Number((previousPos || 0).toFixed(3)),
+                paused: !!audioPlayer.paused,
+                transportPaused: isAudioTransportPaused(),
+                sawRecentProgress
+            });
 
             for (let attempt = 0; attempt <= retries; attempt++) {
                 try {
                     await audioPlayer.play();
                 } catch (e) {
                     console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
+                    indexTrace('verify-play:play-error', { attempt: attempt + 1, message: e && e.message ? e.message : String(e) });
                 }
 
                 await wait(delayMs);
@@ -4634,15 +4702,41 @@
                 const probablyPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
                     ? audioPlayer.isProbablyPlaying()
                     : !audioPlayer.paused;
+                const transportPaused = isAudioTransportPaused();
+                const hasRecentProgress = (typeof audioPlayer.hasRecentProgress === 'function')
+                    ? audioPlayer.hasRecentProgress(1800)
+                    : false;
+                sawRecentProgress = sawRecentProgress || hasRecentProgress;
+                const started = !transportPaused && (advanced || hasRecentProgress);
                 indexDebugNote(
                     'play-check',
                     `attempt=${attempt + 1} paused=${audioPlayer.paused} playing=${probablyPlaying} adv=${advanced} t=${currentPos.toFixed(2)}`
                 );
-                if (probablyPlaying && advanced) {
+                indexTrace('verify-play:attempt', {
+                    attempt: attempt + 1,
+                    paused: !!audioPlayer.paused,
+                    transportPaused,
+                    probablyPlaying: !!probablyPlaying,
+                    advanced: !!advanced,
+                    hasRecentProgress,
+                    previousPos: Number((previousPos || 0).toFixed(3)),
+                    currentPos: Number((currentPos || 0).toFixed(3)),
+                    started
+                });
+                if (started) {
+                    indexTrace('verify-play:success', { attempt: attempt + 1, currentPos: Number((currentPos || 0).toFixed(3)) });
                     return true;
                 }
                 previousPos = Number.isFinite(currentPos) ? currentPos : previousPos;
             }
+            // Last fallback: if transport isn't paused and we observed recent progress,
+            // treat playback as started even when sampling delta was too small.
+            const finalTransportPaused = isAudioTransportPaused();
+            if (!finalTransportPaused && sawRecentProgress) {
+                indexTrace('verify-play:success-fallback', { sawRecentProgress: true });
+                return true;
+            }
+            indexTrace('verify-play:failed', { retries, delayMs });
             return false;
         }
 
@@ -4651,16 +4745,19 @@
                 saveCurrent = true,
                 forceResume = false
             } = options;
+            indexTrace('switch:restore-main:enter', { saveCurrent: !!saveCurrent, forceResume: !!forceResume });
 
             if (!isLoreMode && !contentSwitchInProgress) {
                 return;
             }
 
             if (contentSwitchInProgress) {
+                indexTrace('switch:restore-main:blocked', { reason: 'contentSwitchInProgress' });
                 return;
             }
             contentSwitchInProgress = true;
             const switchToken = ++contentSwitchToken;
+            indexTrace('switch:restore-main:lock', { switchToken });
 
             try {
                 const loreIdBeforeSwitch = activeLoreId;
@@ -4682,27 +4779,37 @@
                 }
 
                 uiContainer.classList.add('mode-switching');
+                indexTrace('switch:restore-main:ui-mode-switching-on', { switchToken });
 
                 await pauseWithFade(700);
                 if (switchToken !== contentSwitchToken) return;
 
                 audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
+                indexTrace('switch:restore-main:src-set', { switchToken, src: audioPlayer.src });
 
                 const mainText = await ensureMainTextLoaded();
                 if (switchToken !== contentSwitchToken) return;
                 parseSubtitles(mainText);
+                indexTrace('switch:restore-main:text-parsed', { switchToken, tracks: subtitleTracks.length });
 
                 const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
                 const resumeTime = savedMain && savedMain.sentenceTime !== undefined
                     ? savedMain.sentenceTime
                     : Math.max(0, mainAudioState.time || 0);
+                indexTrace('switch:restore-main:resume-time', {
+                    switchToken,
+                    resumeTime: Number((resumeTime || 0).toFixed(3)),
+                    hasSavedMain: !!savedMain
+                });
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
                 await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
                 const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
+                indexTrace('switch:restore-main:resume-decision', { switchToken, shouldResumePlayback: !!shouldResumePlayback });
                 if (shouldResumePlayback) {
                     audioPlayer.volume = 0;
                     const started = await verifyPlaybackStarted(4, 320);
+                    indexTrace('switch:restore-main:verify-result', { switchToken, started: !!started });
                     if (started) {
                         // Re-render subtitles at the already-seeked position without re-seeking
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
@@ -4722,6 +4829,7 @@
                 }
             } catch (e) {
                 console.error('[Switch] Failed to restore main audio:', e);
+                indexTrace('switch:restore-main:error', { message: e && e.message ? e.message : String(e) });
                 indexDebugNote('restore-main-error', e && e.message ? e.message : String(e));
                 iconPlay.style.display = 'block';
                 iconPause.style.display = 'none';
@@ -4729,15 +4837,20 @@
                 if (switchToken === contentSwitchToken) {
                     contentSwitchInProgress = false;
                     uiContainer.classList.remove('mode-switching');
+                    indexTrace('switch:restore-main:unlock', { switchToken });
                 }
             }
         }
 
         async function startLoreMode(id, fromMenu = false) {
+            indexTrace('switch:start-lore:enter', { id, fromMenu: !!fromMenu });
             if (isLoreMode && activeLoreId === id) return;
             if (contentSwitchInProgress) {
                 await waitForContentSwitchIdle(`start-lore:${id}`);
-                if (contentSwitchInProgress) return;
+                if (contentSwitchInProgress) {
+                    indexTrace('switch:start-lore:blocked-after-wait', { id });
+                    return;
+                }
             }
 
             const content = window.GameState?.getLore(id) || {
@@ -4747,6 +4860,7 @@
 
             contentSwitchInProgress = true;
             const switchToken = ++contentSwitchToken;
+            indexTrace('switch:start-lore:lock', { id, switchToken });
 
             try {
                 await saveCurrentContentState({ reason: `start-lore:${id}` });
@@ -4763,6 +4877,7 @@
                     uiContainer.classList.remove('reading-mode');
                 }
                 uiContainer.classList.add('mode-switching');
+                indexTrace('switch:start-lore:ui-mode-switching-on', { id, switchToken });
 
                 await pauseWithFade(800);
                 if (switchToken !== contentSwitchToken) return;
@@ -4772,17 +4887,26 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
+                indexTrace('switch:start-lore:src-set', { id, switchToken, src: loreAudioSrc });
 
                 parseSubtitles(loreText);
+                indexTrace('switch:start-lore:text-parsed', { id, switchToken, tracks: subtitleTracks.length });
                 const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
                 const resumeTime = savedLore && savedLore.sentenceTime !== undefined
                     ? savedLore.sentenceTime
                     : Math.max(0, loreData.resumeTimes[id] || 0);
+                indexTrace('switch:start-lore:resume-time', {
+                    id,
+                    switchToken,
+                    resumeTime: Number((resumeTime || 0).toFixed(3)),
+                    hasSavedLore: !!savedLore
+                });
                 indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
                 await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
                 audioPlayer.volume = 0;
                 const started = await verifyPlaybackStarted(3, 320);
+                indexTrace('switch:start-lore:verify-result', { id, switchToken, started: !!started });
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
@@ -4800,17 +4924,20 @@
                 }
             } catch (e) {
                 console.error(`[Switch] Failed to start lore ${id}:`, e);
+                indexTrace('switch:start-lore:error', { id, message: e && e.message ? e.message : String(e) });
                 iconPlay.style.display = 'block';
                 iconPause.style.display = 'none';
             } finally {
                 if (switchToken === contentSwitchToken) {
                     contentSwitchInProgress = false;
                     uiContainer.classList.remove('mode-switching');
+                    indexTrace('switch:start-lore:unlock', { id, switchToken });
                 }
             }
         }
 
         function endLoreMode() {
+            indexTrace('switch:end-lore', { activeLoreId: activeLoreId || null });
             restoreMainAudio({ saveCurrent: true });
         }
 
