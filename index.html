@@ -3688,6 +3688,10 @@
 
         // 4. Synchronisation (läuft bei jedem Audio-Update)
         audioPlayer.addEventListener('timeupdate', () => {
+            // Skip subtitle updates during content switches to prevent
+            // stale timeupdate events from rendering wrong text
+            if (contentSwitchInProgress) return;
+
             const t = audioPlayer.currentTime;
 
             let newIndex = -1;
@@ -4666,12 +4670,8 @@
                 if (switchToken !== contentSwitchToken) return;
 
                 audioPlayer.src = getSCUrl(window.mainAudioUrl || 'assets/kapitel1.mp3');
-                // Wait for SC widget to be ready before proceeding
-                if (typeof audioPlayer.whenReady === 'function') {
-                    await audioPlayer.whenReady(6000);
-                    if (switchToken !== contentSwitchToken) return;
-                }
 
+                // Parse and render text IMMEDIATELY (don't wait for widget)
                 const mainText = await ensureMainTextLoaded();
                 if (switchToken !== contentSwitchToken) return;
                 parseSubtitles(mainText);
@@ -4683,6 +4683,12 @@
                 indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                 renderSubtitleLines(currentSubtitleIndex);
+
+                // NOW wait for SC widget to be ready before seeking/playing
+                if (typeof audioPlayer.whenReady === 'function') {
+                    await audioPlayer.whenReady(6000);
+                    if (switchToken !== contentSwitchToken) return;
+                }
                 await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
 
                 const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
@@ -4771,12 +4777,8 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
-                // Wait for SC widget to be ready before proceeding
-                if (typeof audioPlayer.whenReady === 'function') {
-                    await audioPlayer.whenReady(6000);
-                    if (switchToken !== contentSwitchToken) return;
-                }
 
+                // Parse and render text IMMEDIATELY (don't wait for widget)
                 parseSubtitles(loreText);
                 const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
                 const resumeTime = savedLore && savedLore.sentenceTime !== undefined
@@ -4785,6 +4787,12 @@
                 indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                 renderSubtitleLines(currentSubtitleIndex);
+
+                // NOW wait for SC widget to be ready before seeking/playing
+                if (typeof audioPlayer.whenReady === 'function') {
+                    await audioPlayer.whenReady(6000);
+                    if (switchToken !== contentSwitchToken) return;
+                }
                 await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
                 audioPlayer.volume = 0;

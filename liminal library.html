@@ -786,14 +786,9 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
-                        // Wait for SC widget to be ready before proceeding
-                        if (typeof p.audio.whenReady === 'function') {
-                            await p.audio.whenReady(6000);
-                            if (switchToken !== contentSwitchToken) return;
-                        }
+
+                        // Parse and render text IMMEDIATELY (don't wait for widget)
                         p.volume = 1.0;
-                        // Suppress SharedAudioPlayer's onTimeUpdate during switch
-                        // to prevent it from overwriting our manually-set subtitle index
                         p._suppressTimeUpdate = true;
                         p._suppressAutoRender = true;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
@@ -814,6 +809,12 @@
 
                         p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         p.renderLines(p.currentSubtitleIndex);
+
+                        // NOW wait for SC widget to be ready before seeking/playing
+                        if (typeof p.audio.whenReady === 'function') {
+                            await p.audio.whenReady(6000);
+                            if (switchToken !== contentSwitchToken) return;
+                        }
                         await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
                         const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
@@ -887,13 +888,9 @@
                         if (switchToken !== contentSwitchToken) return;
 
                         p.audio.src = getSCUrl(content.audio);
-                        // Wait for SC widget to be ready before proceeding
-                        if (typeof p.audio.whenReady === 'function') {
-                            await p.audio.whenReady(6000);
-                            if (switchToken !== contentSwitchToken) return;
-                        }
+
+                        // Parse and render text IMMEDIATELY (don't wait for widget)
                         const textPath = content.text || `assets/lore${id}.txt`;
-                        // Suppress SharedAudioPlayer's onTimeUpdate during switch
                         p._suppressTimeUpdate = true;
                         p._suppressAutoRender = true;
                         const textLoaded = await p.loadText(textPath);
@@ -914,6 +911,12 @@
 
                         p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         p.renderLines(p.currentSubtitleIndex);
+
+                        // NOW wait for SC widget to be ready before seeking/playing
+                        if (typeof p.audio.whenReady === 'function') {
+                            await p.audio.whenReady(6000);
+                            if (switchToken !== contentSwitchToken) return;
+                        }
                         await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:pre-play`);
 
                         p.volume = 0;
