@@ -373,7 +373,41 @@
         // }, 500);
 
         let gameReady = false;
-        const SCENE_NAME = 'marktplatz'; // Added SCENE_NAME
+
+        // ============================================
+        // MULTI-LEVEL CONFIG (URL-Parameter: ?chapter=kapitel1c)
+        // ============================================
+        const _urlParams = new URLSearchParams(window.location.search);
+        const _chapterParam = _urlParams.get('chapter');
+        const LEVEL_CONFIGS = {
+            kapitel1: {
+                sceneName:        'marktplatz',
+                contentKey:       'kapitel1',
+                mapFile:          'assets/platz3.png',
+                audioUrl:         'assets/kapitel1.mp3',
+                subtitleFile:     'assets/kapitel1.txt',
+                activeChapterBtn: 'chapter1Btn',
+                nextChapterTarget: 'liminal library.html',
+                page:             'index.html',
+                chapterLabel:     '1a',
+                chapterTitle:     'Der Marktplatz',
+            },
+            kapitel1c: {
+                sceneName:        'steingasse',
+                contentKey:       'kapitel1c',
+                mapFile:          'assets/kapitel1c.png',
+                audioUrl:         'assets/kapitel1c.mp3',
+                subtitleFile:     'assets/kapitel1c.txt',
+                activeChapterBtn: 'chapter1cBtn',
+                nextChapterTarget: null,
+                page:             'index.html?chapter=kapitel1c',
+                chapterLabel:     '1c',
+                chapterTitle:     'Steingasse',
+            }
+        };
+        const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
+
+        const SCENE_NAME = LEVEL.sceneName;
         let bgImage = null;
         let foregroundImage = null;
         let spriteReady = false;
@@ -407,7 +441,7 @@
         let isLoreMode = false;
         let isMenuTriggeredLore = false;
         let loreResumeTimeout = null;
-        const MAIN_CONTENT_KEY = 'kapitel1';
+        const MAIN_CONTENT_KEY = LEVEL.contentKey;
         let contentSwitchInProgress = false;
         let contentSwitchToken = 0;
         const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
@@ -531,8 +565,8 @@
             }
         })();
 
-        // kapitel1.mp3 als Haupt-Audio
-        window.mainAudioUrl = 'assets/kapitel1.mp3';
+        // Haupt-Audio je nach aktivem Level
+        window.mainAudioUrl = LEVEL.audioUrl;
 
         // Unlock Logic Wrapper
         async function unlockLoreItem(id) {
@@ -583,9 +617,9 @@
         initArchiveTabs();
 
         // --- BOOKMARK RENDERING ---
-        const CURRENT_PAGE = 'index.html';
-        const CURRENT_CHAPTER = '1a';
-        const CURRENT_CHAPTER_TITLE = 'Der Marktplatz';
+        const CURRENT_PAGE = LEVEL.page;
+        const CURRENT_CHAPTER = LEVEL.chapterLabel;
+        const CURRENT_CHAPTER_TITLE = LEVEL.chapterTitle;
 
         function renderBookmarks() {
             const list = document.getElementById('bookmarkList');
@@ -645,12 +679,14 @@
                         const keyMap = {
                             'index.html': 'kapitel1',
                             'liminal library.html': 'liminal_library',
-                            'index3.html': 'kapitel1c'
+                            'index.html?chapter=kapitel1c': 'kapitel1c',
+                            'index3.html': 'kapitel1c' // Altdaten-Kompatibilität
                         };
+                        const bmPage = bm.page === 'index3.html' ? 'index.html?chapter=kapitel1c' : bm.page;
                         const key = keyMap[bm.page] || 'kapitel1';
                         markChapterAutoplayIntent(key, 'manual', 'bookmark');
                         writeStateHandoff(key);
-                        window.location.href = bm.page;
+                        window.location.href = bmPage;
                     }
                 });
 
@@ -706,18 +742,32 @@
             }
             // (Chapter Logic continues inside renderArchive)
 
+            // Aktiven Kapitel-Button markieren
+            document.querySelectorAll('#chapterList .menu-item').forEach(btn => btn.classList.remove('active'));
+            const _activeCh = document.getElementById(LEVEL.activeChapterBtn);
+            if (_activeCh) _activeCh.classList.add('active');
+
             // Chapter Logic (Left Column)
             const ch1 = document.getElementById('chapter1Btn');
             if (ch1) {
                 const newCh1 = ch1.cloneNode(true);
                 ch1.parentNode.replaceChild(newCh1, ch1);
 
-                newCh1.addEventListener('click', () => {
+                newCh1.addEventListener('click', async () => {
                     console.log("Loading Chapter 1...");
+                    if (LEVEL.contentKey !== 'kapitel1') {
+                        // Wir sind auf einem anderen Level – navigiere zu Marktplatz
+                        await waitForContentSwitchIdle('chapter-menu:to-1');
+                        await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
+                        markChapterAutoplayIntent('kapitel1', 'manual', 'chapter-menu');
+                        writeStateHandoff('kapitel1');
+                        window.location.href = 'index.html';
+                        return;
+                    }
                     document.getElementById('archiveModal').classList.remove('visible');
 
-                    // 1. RE-LOAD MAP 'platz3.png' (Only if needed)
-                    // If we are already here, do not reload map! 
+                    // 1. RE-LOAD MAP (Only if needed)
+                    // If we are already here, do not reload map!
                     // processMap(mapImg); // REMOVED to prevent reload
 
                     // 2. Audio Logic
@@ -760,11 +810,25 @@
 
                 newCh1c.addEventListener('click', async () => {
                     console.log("Loading Chapter 1c...");
+                    if (LEVEL.contentKey === 'kapitel1c') {
+                        // Bereits auf Steingasse – Audio fortsetzen
+                        document.getElementById('archiveModal').classList.remove('visible');
+                        if (isLoreMode) {
+                            restoreMainAudio({ forceResume: true });
+                        } else {
+                            if (audioPlayer.paused) {
+                                audioPlayer.play();
+                                iconPlay.style.display = 'none';
+                                iconPause.style.display = 'block';
+                            }
+                        }
+                        return;
+                    }
                     await waitForContentSwitchIdle('chapter-menu:to-1c');
                     await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
                     markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
                     writeStateHandoff('kapitel1c');
-                    window.location.href = 'index3.html';
+                    window.location.href = 'index.html?chapter=kapitel1c';
                 });
             }
         }
@@ -1229,7 +1293,7 @@
                 }
                 if (loadingScreen) loadingScreen.style.display = 'flex';
             };
-            mapImg.src = 'assets/platz3.png';
+            mapImg.src = LEVEL.mapFile;
 
             // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
             // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
@@ -1247,8 +1311,8 @@
             };
 
             try {
-                // debugLog('Fetching kapitel1.txt...');
-                const response = await fetch('assets/kapitel1.txt');
+                // debugLog('Fetching subtitle file...');
+                const response = await fetch(LEVEL.subtitleFile);
                 // debugLog('Fetch response: ' + response.status);
                 const text = await response.text();
                 // debugLog('Text length: ' + text.length);
@@ -3815,8 +3879,8 @@
                         iconPlay.style.display = 'block';
                         iconPause.style.display = 'none';
                     }
-                } else {
-                    // Game Mode: Show Button
+                } else if (LEVEL.nextChapterTarget) {
+                    // Game Mode: Show Button (nur wenn Folgekapitel vorhanden)
                     const btn = document.getElementById('nextChapterBtn');
                     if (btn) btn.classList.add('visible');
 
@@ -3833,9 +3897,12 @@
             const overlay = document.getElementById('transitionOverlay');
             if (overlay) overlay.classList.add('active');
 
+            const nextTarget = LEVEL.nextChapterTarget;
+            if (!nextTarget) return; // Kein Folgekapitel für dieses Level
+
             await waitForContentSwitchIdle('transition:next-chapter');
             await saveCurrentContentState({ reason: 'transition:next-chapter' });
-            indexDebugNote('transition', 'to chapter 1b');
+            indexDebugNote('transition', `to ${nextTarget}`);
             markChapterAutoplayIntent('liminal_library', 'auto', 'chapter-transition');
             writeStateHandoff('liminal_library');
 
@@ -3843,7 +3910,7 @@
             fadeAudio(audioPlayer, 0, 1500);
 
             setTimeout(() => {
-                window.location.href = 'liminal library.html';
+                window.location.href = nextTarget;
             }, 2000); // 2s Fade Time
         };
 

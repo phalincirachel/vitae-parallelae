@@ -1649,7 +1649,7 @@
 
                     setTimeout(() => {
                         // Transition to Chapter 1c (Steingasse)
-                        window.location.href = 'index3.html';
+                        window.location.href = 'index.html?chapter=kapitel1c';
                     }, 2000);
                 };
 
@@ -3755,7 +3755,7 @@
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
                         markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
                         writeStateHandoff('kapitel1c');
-                        window.location.href = 'index3.html';
+                        window.location.href = 'index.html?chapter=kapitel1c';
                     });
                 }
                 function triggerUiHaptic(pattern = 8) {
@@ -3848,12 +3848,14 @@
                                 const keyMap = {
                                     'index.html': 'kapitel1',
                                     'liminal library.html': 'liminal_library',
-                                    'index3.html': 'kapitel1c'
+                                    'index.html?chapter=kapitel1c': 'kapitel1c',
+                                    'index3.html': 'kapitel1c' // Altdaten-Kompatibilität
                                 };
+                                const bmPage = bm.page === 'index3.html' ? 'index.html?chapter=kapitel1c' : bm.page;
                                 const key = keyMap[bm.page] || 'kapitel1';
                                 markChapterAutoplayIntent(key, 'manual', 'bookmark');
                                 writeStateHandoff(key);
-                                window.location.href = bm.page;
+                                window.location.href = bmPage;
                             }
                         });
 
