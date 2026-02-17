@@ -443,8 +443,7 @@ class SCAudioAdapter {
                     settled = true;
                     clearTimeout(timer);
                     this._scCurrentTime = (ms || 0) / 1000;
-                    // Don't update _scLastProgressAt here — only real PLAY_PROGRESS
-                    // events should update it, otherwise paused getter gets confused
+                    this._scLastProgressAt = Date.now();
                     resolve(this._scCurrentTime);
                 });
             } catch (e) {

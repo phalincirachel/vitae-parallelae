@@ -799,8 +799,7 @@
                 // Helper: Restore Main Audio
                 window.restoreMainAudio = async function (options = {}) {
                     const {
-                        saveCurrent = true,
-                        forceResume = false
+                        saveCurrent = true
                     } = options;
 
                     if (!isLoreMode && !contentSwitchInProgress) return;
@@ -822,10 +821,6 @@
 
                         isLoreMode = false;
                         activeLoreId = null;
-
-                        // Clear old subtitle text immediately to prevent flash of wrong text
-                        const sc = document.getElementById('subtitleContainer');
-                        if (sc) sc.innerHTML = '';
 
                         await pauseWithFade(320);
                         if (switchToken !== contentSwitchToken) return;
@@ -862,7 +857,7 @@
                         }
                         await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
 
-                        const shouldResume = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
+                        const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
                         if (shouldResume) {
                             // Set _pendingSeek so _applyPendingSeek re-seeks after PLAY event fires
                             if (resumeTime > 0.5 && p.audio._pendingSeek === undefined) {
@@ -936,10 +931,6 @@
 
                         isLoreMode = true;
                         activeLoreId = id;
-
-                        // Clear old subtitle text immediately to prevent flash of wrong text
-                        const sc = document.getElementById('subtitleContainer');
-                        if (sc) sc.innerHTML = '';
 
                         await pauseWithFade(320);
                         if (switchToken !== contentSwitchToken) return;
@@ -1584,14 +1575,17 @@
                 // --- EVENT LISTENERS ---
                 async function handleAudioToggleClick() {
                     if (contentSwitchInProgress) return;
-                    // Use actual player state to decide play/pause (like index.html)
-                    if (player.paused) {
+                    // Use visible icon state instead of paused getter to avoid stale SC paused state.
+                    const wantsPlay = iconPlay.style.display !== 'none';
+                    if (wantsPlay) {
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
                         try {
                             await player.play();
                         } catch (e) {
                             liminalDebugNote('toggle-error', e && e.message ? e.message : String(e));
                         }
-                        updateIcons();
+                        setTimeout(updateIcons, 120);
                     } else {
                         player.pause();
                         updateIcons();
@@ -1640,7 +1634,7 @@
                 player.audio.addEventListener('ended', () => {
                     if (isLoreMode) {
                         liminalDebugNote('audio-ended', 'lore -> restore main');
-                        window.restoreMainAudio({ saveCurrent: false, forceResume: true });
+                        window.restoreMainAudio({ saveCurrent: false });
                         return;
                     } else {
                         // MAIN CHAPTER ENDED
@@ -3756,7 +3750,7 @@
                     chapter1bBtn.addEventListener('click', () => {
                         document.getElementById('archiveModal').classList.remove('visible');
                         if (isLoreMode) {
-                            window.restoreMainAudio({ forceResume: true });
+                            window.restoreMainAudio();
                         } else {
                             // Unpause if needed
                             if (player && player.audio && player.audio.paused) {

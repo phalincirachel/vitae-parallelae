@@ -4704,9 +4704,6 @@
 
                 uiContainer.classList.add('mode-switching');
 
-                // Clear old subtitle text immediately to prevent flash of wrong text
-                subtitleContainer.innerHTML = '';
-
                 await pauseWithFade(700);
                 if (switchToken !== contentSwitchToken) return;
 
@@ -4821,9 +4818,6 @@
                 }
                 uiContainer.classList.add('mode-switching');
 
-                // Clear old subtitle text immediately to prevent flash of wrong text
-                subtitleContainer.innerHTML = '';
-
                 await pauseWithFade(800);
                 if (switchToken !== contentSwitchToken) return;
 
@@ -4907,7 +4901,7 @@
         }
 
         function endLoreMode() {
-            restoreMainAudio({ saveCurrent: true, forceResume: true });
+            restoreMainAudio({ saveCurrent: true });
         }
 
         function fadeAudio(audio, targetVolume, duration, callback) {
