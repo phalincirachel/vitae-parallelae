@@ -4696,11 +4696,14 @@
                     audioPlayer.volume = 0;
                     const started = await verifyPlaybackStarted(4, 320);
                     if (started) {
-                        // Re-render subtitles at the already-seeked position without re-seeking
+                        // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
+                        await seekAndSyncSubtitle(resumeTime, 'restore-main:post-play-resync');
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         renderSubtitleLines(currentSubtitleIndex);
                         fadeAudio(audioPlayer, 1.0, 700);
                     } else {
+                        // Reset intent flags so paused getter returns true and icon is correct
+                        audioPlayer.pause();
                         audioPlayer.volume = 1.0;
                         // Delayed retry: SC widget may need more time
                         const retryToken = switchToken;
@@ -4711,11 +4714,14 @@
                                     audioPlayer.volume = 0;
                                     const retryOk = await verifyPlaybackStarted(3, 500);
                                     if (retryOk && retryToken === contentSwitchToken) {
+                                        await seekAndSyncSubtitle(resumeTime, 'restore-main:retry-resync');
                                         fadeAudio(audioPlayer, 1.0, 700);
                                     } else {
+                                        audioPlayer.pause();
                                         audioPlayer.volume = 1.0;
                                     }
                                 } catch (e2) {
+                                    audioPlayer.pause();
                                     audioPlayer.volume = 1.0;
                                 }
                                 syncPlayPauseIcon();
@@ -4800,11 +4806,14 @@
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
-                    // Re-render subtitles at the already-seeked position without re-seeking
+                    // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
+                    await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:post-play-resync`);
                     currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                     renderSubtitleLines(currentSubtitleIndex);
                     fadeAudio(audioPlayer, 1.0, 900);
                 } else {
+                    // Reset intent flags so paused getter returns true and icon is correct
+                    audioPlayer.pause();
                     audioPlayer.volume = 1.0;
                     console.warn(`[Switch] Lore ${id} loaded but playback did not start. Scheduling delayed retry.`);
                     // Delayed retry: SC widget may need more time to become ready
@@ -4816,11 +4825,14 @@
                                 audioPlayer.volume = 0;
                                 const retryOk = await verifyPlaybackStarted(3, 500);
                                 if (retryOk && retryToken === contentSwitchToken) {
+                                    await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:retry-resync`);
                                     fadeAudio(audioPlayer, 1.0, 700);
                                 } else {
+                                    audioPlayer.pause();
                                     audioPlayer.volume = 1.0;
                                 }
                             } catch (e2) {
+                                audioPlayer.pause();
                                 audioPlayer.volume = 1.0;
                                 console.warn('[Switch] Delayed retry also failed:', e2);
                             }

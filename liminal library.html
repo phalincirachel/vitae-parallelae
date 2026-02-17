@@ -822,10 +822,13 @@
                             p.volume = 0;
                             const started = await verifyPlaybackStarted(2, 320);
                             if (started) {
+                                // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
+                                await seekAndSyncSubtitle(p, resumeTime, 'restore-main:post-play-resync');
                                 p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                                 p.renderLines(p.currentSubtitleIndex);
                                 p.volume = 1.0;
                             } else {
+                                p.pause();
                                 p.volume = 1.0;
                                 const retryToken = switchToken;
                                 setTimeout(async () => {
@@ -835,11 +838,14 @@
                                             p.volume = 0;
                                             const retryOk = await verifyPlaybackStarted(3, 500);
                                             if (retryOk && retryToken === contentSwitchToken) {
+                                                await seekAndSyncSubtitle(p, resumeTime, 'restore-main:retry-resync');
                                                 p.volume = 1.0;
                                             } else {
+                                                p.pause();
                                                 p.volume = 1.0;
                                             }
                                         } catch (e2) {
+                                            p.pause();
                                             p.volume = 1.0;
                                         }
                                         updateIcons();
@@ -922,10 +928,13 @@
                         p.volume = 0;
                         const started = await verifyPlaybackStarted(3, 320);
                         if (started) {
+                            // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
+                            await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:post-play-resync`);
                             p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                             p.renderLines(p.currentSubtitleIndex);
                             p.volume = 1.0;
                         } else {
+                            p.pause();
                             p.volume = 1.0;
                             console.warn(`Lore ${id} loaded but still paused. Scheduling delayed retry.`);
                             const retryToken = switchToken;
@@ -936,11 +945,14 @@
                                         p.volume = 0;
                                         const retryOk = await verifyPlaybackStarted(3, 500);
                                         if (retryOk && retryToken === contentSwitchToken) {
+                                            await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:retry-resync`);
                                             p.volume = 1.0;
                                         } else {
+                                            p.pause();
                                             p.volume = 1.0;
                                         }
                                     } catch (e2) {
+                                        p.pause();
                                         p.volume = 1.0;
                                     }
                                     updateIcons();
