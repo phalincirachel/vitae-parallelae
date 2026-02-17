@@ -1588,45 +1588,48 @@
                 });
 
                 // Auto-Resume when Lore ends or Transition
-                // Auto-Resume when Lore ends or Transition
-                // SharedAudioPlayer wraps the audio, so we add listener to audio property
-                // Or if we added addEventListener method to SharedAudioPlayer we could use that.
-                // For now, access the audio element directly.
-                player.audio.addEventListener('ended', () => {
+                // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
+                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                let _endedHandled = false;
+                function handleAudioEnded() {
+                    if (_endedHandled) return;
+                    _endedHandled = true;
+                    setTimeout(() => { _endedHandled = false; }, 500);
+
                     if (isLoreMode) {
                         liminalDebugNote('audio-ended', 'lore -> restore main');
                         liminalTrace('audio:ended:lore');
                         window.restoreMainAudio({ saveCurrent: false });
                         return;
-                    } else {
-                        // MAIN CHAPTER ENDED
-                        // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
-                        // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
-                        // Stattdessen nur Subtitle-Index prüfen.
-                        const tracks = getActiveSubtitleTracks();
-                        const subtitleIdx = getActiveSubtitleIndex();
-                        const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
-                        liminalDebugNote('audio-ended', `main idx=${subtitleIdx}/${tracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
-                        liminalTrace('audio:ended:main', {
-                            textFinished: !!textFinished,
-                            subtitleIndex: subtitleIdx,
-                            subtitleCount: tracks.length,
-                            readingMode: !!isReadingMode
-                        });
-
-                        // Audio ist vorbei → Kapitel abgeschlossen → State löschen
-                        clearContentState(MAIN_CONTENT_KEY);
-
-                        if (isReadingMode) {
-                            // Reading Mode: Audio fertig = Kapitel fertig = automatisch weiter
-                            transitionToNextChapter();
-                        } else {
-                            // Game Mode: Weiter-Button anzeigen
-                            const btn = document.getElementById('nextChapterBtn');
-                            if (btn) btn.classList.add('visible');
-                        }
                     }
-                });
+
+                    // MAIN CHAPTER ENDED
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                    const tracks = getActiveSubtitleTracks();
+                    const subtitleIdx = getActiveSubtitleIndex();
+                    const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
+                    liminalDebugNote('audio-ended', `main idx=${subtitleIdx}/${tracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
+                    liminalTrace('audio:ended:main', {
+                        textFinished: !!textFinished,
+                        subtitleIndex: subtitleIdx,
+                        subtitleCount: tracks.length,
+                        readingMode: !!isReadingMode
+                    });
+
+                    clearContentState(MAIN_CONTENT_KEY);
+
+                    if (isReadingMode) {
+                        transitionToNextChapter();
+                    } else {
+                        const btn = document.getElementById('nextChapterBtn');
+                        if (btn) btn.classList.add('visible');
+                    }
+                }
+                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                player.onEnded = handleAudioEnded;
+                // Fallback: DOM-Event auf dem Audio-Element
+                player.audio.addEventListener('ended', handleAudioEnded);
 
                 // Global Transition Logic
                 window.transitionToNextChapter = async function () {
