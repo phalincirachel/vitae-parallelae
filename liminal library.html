@@ -1588,46 +1588,48 @@
                 });
 
                 // Auto-Resume when Lore ends or Transition
-                // Auto-Resume when Lore ends or Transition
-                // SharedAudioPlayer wraps the audio, so we add listener to audio property
-                // Or if we added addEventListener method to SharedAudioPlayer we could use that.
-                // For now, access the audio element directly.
-                player.audio.addEventListener('ended', () => {
+                // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
+                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                let _endedHandled = false;
+                function handleAudioEnded() {
+                    if (_endedHandled) return;
+                    _endedHandled = true;
+                    setTimeout(() => { _endedHandled = false; }, 500);
+
                     if (isLoreMode) {
                         liminalDebugNote('audio-ended', 'lore -> restore main');
                         liminalTrace('audio:ended:lore');
                         window.restoreMainAudio({ saveCurrent: false });
                         return;
-                    } else {
-                        // MAIN CHAPTER ENDED
-                        const textFinished = isCurrentContentCompleted();
-                        liminalDebugNote('audio-ended', `main idx=${getActiveSubtitleIndex()}/${getActiveSubtitleTracks().length} textFinished=${textFinished} reading=${isReadingMode}`);
-                        liminalTrace('audio:ended:main', {
-                            textFinished: !!textFinished,
-                            subtitleIndex: getActiveSubtitleIndex(),
-                            subtitleCount: getActiveSubtitleTracks().length,
-                            readingMode: !!isReadingMode
-                        });
-
-                        const shouldClearMainState = !isReadingMode || textFinished;
-                        if (shouldClearMainState) {
-                            clearContentState(MAIN_CONTENT_KEY);
-                        }
-
-                        if (isReadingMode) {
-                            if (textFinished) {
-                                transitionToNextChapter();
-                            } else {
-                                player.pause();
-                                updateIcons();
-                            }
-                        } else {
-                            // Game Mode: Show Button
-                            const btn = document.getElementById('nextChapterBtn');
-                            if (btn) btn.classList.add('visible');
-                        }
                     }
-                });
+
+                    // MAIN CHAPTER ENDED
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                    const tracks = getActiveSubtitleTracks();
+                    const subtitleIdx = getActiveSubtitleIndex();
+                    const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
+                    liminalDebugNote('audio-ended', `main idx=${subtitleIdx}/${tracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
+                    liminalTrace('audio:ended:main', {
+                        textFinished: !!textFinished,
+                        subtitleIndex: subtitleIdx,
+                        subtitleCount: tracks.length,
+                        readingMode: !!isReadingMode
+                    });
+
+                    clearContentState(MAIN_CONTENT_KEY);
+
+                    if (isReadingMode) {
+                        transitionToNextChapter();
+                    } else {
+                        const btn = document.getElementById('nextChapterBtn');
+                        if (btn) btn.classList.add('visible');
+                    }
+                }
+                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                player.onEnded = handleAudioEnded;
+                // Fallback: DOM-Event auf dem Audio-Element
+                player.audio.addEventListener('ended', handleAudioEnded);
 
                 // Global Transition Logic
                 window.transitionToNextChapter = async function () {
@@ -1637,8 +1639,8 @@
                     await saveCurrentContentState({ reason: 'transition:next-chapter' });
 
                     // Mark autoplay intent so the next chapter auto-plays in reading mode
-                    const targetPageKey = 'steingasse';
-                    markChapterAutoplayIntent(targetPageKey, 'auto', 'reading-mode-transition');
+                    const targetPageKey = 'kapitel1c';
+                    markChapterAutoplayIntent(targetPageKey, 'auto', 'chapter-transition');
                     writeStateHandoff(targetPageKey);
 
                     // Fade Audio
@@ -1649,7 +1651,7 @@
 
                     setTimeout(() => {
                         // Transition to Chapter 1c (Steingasse)
-                        window.location.href = 'index3.html';
+                        window.location.href = 'index.html?chapter=kapitel1c';
                     }, 2000);
                 };
 
@@ -3755,7 +3757,7 @@
                         await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
                         markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
                         writeStateHandoff('kapitel1c');
-                        window.location.href = 'index3.html';
+                        window.location.href = 'index.html?chapter=kapitel1c';
                     });
                 }
                 function triggerUiHaptic(pattern = 8) {
@@ -3848,12 +3850,14 @@
                                 const keyMap = {
                                     'index.html': 'kapitel1',
                                     'liminal library.html': 'liminal_library',
-                                    'index3.html': 'kapitel1c'
+                                    'index.html?chapter=kapitel1c': 'kapitel1c',
+                                    'index3.html': 'kapitel1c' // Altdaten-Kompatibilität
                                 };
+                                const bmPage = bm.page === 'index3.html' ? 'index.html?chapter=kapitel1c' : bm.page;
                                 const key = keyMap[bm.page] || 'kapitel1';
                                 markChapterAutoplayIntent(key, 'manual', 'bookmark');
                                 writeStateHandoff(key);
-                                window.location.href = bm.page;
+                                window.location.href = bmPage;
                             }
                         });
 
