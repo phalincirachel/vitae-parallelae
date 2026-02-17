@@ -4596,18 +4596,45 @@
         }
 
         async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
+            // Event-driven: resolve as soon as SC PLAY event fires
+            let playEventFired = false;
+            let playResolve = null;
+            const playPromise = new Promise(resolve => { playResolve = resolve; });
+            const onPlay = () => { playEventFired = true; playResolve(true); };
+            if (audioPlayer.widget) {
+                try { audioPlayer.widget.bind(SC.Widget.Events.PLAY, onPlay); } catch (_) {}
+            }
+            if (audioPlayer.audioNode) {
+                audioPlayer.audioNode.addEventListener('play', onPlay, { once: true });
+            }
+
             let previousPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
                 ? await audioPlayer.getAccurateCurrentTime(600)
                 : (audioPlayer.currentTime || 0);
 
             for (let attempt = 0; attempt <= retries; attempt++) {
+                // If play event already fired, we're done
+                if (playEventFired) {
+                    indexDebugNote('play-check', `play event fired before attempt ${attempt + 1}`);
+                    cleanup();
+                    return true;
+                }
+
                 try {
                     await audioPlayer.play();
                 } catch (e) {
                     console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
                 }
 
-                await wait(delayMs);
+                // Race: either wait for delay OR play event
+                await Promise.race([wait(delayMs), playPromise]);
+
+                if (playEventFired) {
+                    indexDebugNote('play-check', `play event fired during attempt ${attempt + 1}`);
+                    cleanup();
+                    return true;
+                }
+
                 const currentPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
                     ? await audioPlayer.getAccurateCurrentTime(700)
                     : (audioPlayer.currentTime || 0);
@@ -4622,11 +4649,22 @@
                     `attempt=${attempt + 1} paused=${audioPlayer.paused} playing=${probablyPlaying} adv=${advanced} t=${currentPos.toFixed(2)}`
                 );
                 if (probablyPlaying && advanced) {
+                    cleanup();
                     return true;
                 }
                 previousPos = Number.isFinite(currentPos) ? currentPos : previousPos;
             }
+            cleanup();
             return false;
+
+            function cleanup() {
+                if (audioPlayer.widget) {
+                    try { audioPlayer.widget.unbind(SC.Widget.Events.PLAY, onPlay); } catch (_) {}
+                }
+                if (audioPlayer.audioNode) {
+                    audioPlayer.audioNode.removeEventListener('play', onPlay);
+                }
+            }
         }
 
         async function restoreMainAudio(options = {}) {
@@ -4684,6 +4722,9 @@
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                 renderSubtitleLines(currentSubtitleIndex);
 
+                // Unblock controls as soon as correct text is displayed
+                uiContainer.classList.remove('mode-switching');
+
                 // NOW wait for SC widget to be ready before seeking/playing
                 if (typeof audioPlayer.whenReady === 'function') {
                     await audioPlayer.whenReady(6000);
@@ -4693,11 +4734,13 @@
 
                 const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
                 if (shouldResumePlayback) {
+                    // Set _pendingSeek so _applyPendingSeek re-seeks after PLAY event fires
+                    if (resumeTime > 0.5 && audioPlayer._pendingSeek === undefined) {
+                        audioPlayer._pendingSeek = resumeTime;
+                    }
                     audioPlayer.volume = 0;
                     const started = await verifyPlaybackStarted(4, 320);
                     if (started) {
-                        // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
-                        await seekAndSyncSubtitle(resumeTime, 'restore-main:post-play-resync');
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         renderSubtitleLines(currentSubtitleIndex);
                         fadeAudio(audioPlayer, 1.0, 700);
@@ -4794,6 +4837,9 @@
                 currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                 renderSubtitleLines(currentSubtitleIndex);
 
+                // Unblock controls as soon as correct text is displayed
+                uiContainer.classList.remove('mode-switching');
+
                 // NOW wait for SC widget to be ready before seeking/playing
                 if (typeof audioPlayer.whenReady === 'function') {
                     await audioPlayer.whenReady(6000);
@@ -4801,13 +4847,15 @@
                 }
                 await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
 
+                // Set _pendingSeek so _applyPendingSeek re-seeks after PLAY event fires
+                if (resumeTime > 0.5 && audioPlayer._pendingSeek === undefined) {
+                    audioPlayer._pendingSeek = resumeTime;
+                }
                 audioPlayer.volume = 0;
                 const started = await verifyPlaybackStarted(3, 320);
                 if (switchToken !== contentSwitchToken) return;
 
                 if (started) {
-                    // Re-seek AFTER play confirmed — SC widget ignores seekTo on freshly loaded tracks
-                    await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:post-play-resync`);
                     currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                     renderSubtitleLines(currentSubtitleIndex);
                     fadeAudio(audioPlayer, 1.0, 900);
