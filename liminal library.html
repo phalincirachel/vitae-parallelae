@@ -1600,29 +1600,28 @@
                         return;
                     } else {
                         // MAIN CHAPTER ENDED
-                        const textFinished = isCurrentContentCompleted();
-                        liminalDebugNote('audio-ended', `main idx=${getActiveSubtitleIndex()}/${getActiveSubtitleTracks().length} textFinished=${textFinished} reading=${isReadingMode}`);
+                        // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
+                        // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                        // Stattdessen nur Subtitle-Index prüfen.
+                        const tracks = getActiveSubtitleTracks();
+                        const subtitleIdx = getActiveSubtitleIndex();
+                        const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
+                        liminalDebugNote('audio-ended', `main idx=${subtitleIdx}/${tracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
                         liminalTrace('audio:ended:main', {
                             textFinished: !!textFinished,
-                            subtitleIndex: getActiveSubtitleIndex(),
-                            subtitleCount: getActiveSubtitleTracks().length,
+                            subtitleIndex: subtitleIdx,
+                            subtitleCount: tracks.length,
                             readingMode: !!isReadingMode
                         });
 
-                        const shouldClearMainState = !isReadingMode || textFinished;
-                        if (shouldClearMainState) {
-                            clearContentState(MAIN_CONTENT_KEY);
-                        }
+                        // Audio ist vorbei → Kapitel abgeschlossen → State löschen
+                        clearContentState(MAIN_CONTENT_KEY);
 
                         if (isReadingMode) {
-                            if (textFinished) {
-                                transitionToNextChapter();
-                            } else {
-                                player.pause();
-                                updateIcons();
-                            }
+                            // Reading Mode: Audio fertig = Kapitel fertig = automatisch weiter
+                            transitionToNextChapter();
                         } else {
-                            // Game Mode: Show Button
+                            // Game Mode: Weiter-Button anzeigen
                             const btn = document.getElementById('nextChapterBtn');
                             if (btn) btn.classList.add('visible');
                         }
@@ -1637,8 +1636,8 @@
                     await saveCurrentContentState({ reason: 'transition:next-chapter' });
 
                     // Mark autoplay intent so the next chapter auto-plays in reading mode
-                    const targetPageKey = 'steingasse';
-                    markChapterAutoplayIntent(targetPageKey, 'auto', 'reading-mode-transition');
+                    const targetPageKey = 'kapitel1c';
+                    markChapterAutoplayIntent(targetPageKey, 'auto', 'chapter-transition');
                     writeStateHandoff(targetPageKey);
 
                     // Fade Audio
