@@ -10,21 +10,12 @@
     <script src="assets/js/SoundCloudURLs.js"></script>
     <script src="assets/js/shared-game-systems.js"></script>
     <script src="assets/js/PlayerStateManager.js"></script>
-    <script src="assets/js/ChapterAutoplayIntent.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
-    <script src="assets/js/GlobalVisualDimmer.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
     <link rel="stylesheet" href="assets/css/main.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
     <style>
-        html,
-        body {
-            background-color: #000;
-            margin: 0;
-            padding: 0;
-        }
-
         #loading-screen {
             position: fixed;
             top: 0;
@@ -57,46 +48,10 @@
                 transform: rotate(360deg);
             }
         }
-
-        .subtitle-current {
-            font-weight: 500 !important;
-        }
-
-        #subtitleRecenterBtn {
-            position: fixed;
-            top: -9999px;
-            left: -9999px;
-            display: none;
-            pointer-events: auto;
-            opacity: 0.92;
-            z-index: 2600;
-        }
-
-        #subtitleRecenterBtn svg {
-            width: 22px;
-            height: 22px;
-        }
-
-        #subtitleRecenterMobileRadius {
-            position: fixed;
-            width: 500px;
-            height: 500px;
-            left: -9999px;
-            top: -9999px;
-            display: none;
-            pointer-events: none;
-            border: none;
-            border-radius: 50%;
-            background: transparent;
-            box-shadow: none;
-            z-index: 2598;
-        }
     </style>
 </head>
 
 <body>
-
-
 
     <!-- LOADING SCREEN (über ALLEM) -->
     <div id="loading-screen">
@@ -191,42 +146,18 @@
                     </svg>
                 </button>
 
-                <button id="readingModeBtn" class="audio-btn" title="Lesemodus aktivieren" tabindex="-1"
-                    aria-label="Lesemodus aktivieren">
+                <button id="readingModeBtn" class="audio-btn" title="Lesemodus" tabindex="-1">
                     <svg viewBox="0 0 24 24" fill="white">
                         <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
                         <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
                         <path d="M10 12h4" stroke="white" stroke-width="2" />
                     </svg>
                 </button>
-                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" tabindex="-1"
-                    aria-label="Hintergrunddimmer aus">
-                    <svg id="sceneDimmerIconFull" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="8"></circle>
-                        <circle cx="12" cy="12" r="6" fill="white" stroke="none"></circle>
-                    </svg>
-                    <svg id="sceneDimmerIconHalf" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <circle cx="12" cy="12" r="8"></circle>
-                        <path d="M12 4a8 8 0 0 0 0 16z" fill="white" stroke="none"></path>
-                    </svg>
-                    <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white">
-                        </path>
-                    </svg>
-                    <svg id="sceneDimmerIconSun" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                        <circle cx="12" cy="12" r="4" fill="white" stroke="none"></circle>
-                        <path d="M12 2v3"></path>
-                        <path d="M12 19v3"></path>
-                        <path d="M2 12h3"></path>
-                        <path d="M19 12h3"></path>
-                        <path d="M4.9 4.9l2.1 2.1"></path>
-                        <path d="M17 17l2.1 2.1"></path>
-                        <path d="M19.1 4.9L17 7"></path>
-                        <path d="M7 17l-2.1 2.1"></path>
+                <button id="gameModeBtn" class="audio-btn" title="Spielmodus" tabindex="-1">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <circle cx="6" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <circle cx="18" cy="12" r="4" fill="none" stroke="white" stroke-width="2" />
+                        <path d="M10 12h4" stroke="white" stroke-width="2" />
                     </svg>
                 </button>
                 <button id="fullscreenBtn" class="audio-btn" title="Vollbild" tabindex="-1">
@@ -247,21 +178,35 @@
                         <path d="M4 10h6V4" />
                     </svg>
                 </button>
-                <button id="subtitleRecenterBtn" class="audio-btn" title="Text auf aktuelle Stelle zentrieren"
-                    aria-label="Text auf aktuelle Stelle zentrieren" tabindex="-1" type="button">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round">
-                        <path d="M3 7h10" />
-                        <path d="M3 12h10" />
-                        <path d="M3 17h10" />
-                        <path d="M14 12h7" />
-                        <path d="M18 9l3 3-3 3" />
-                    </svg>
-                </button>
             </div>
         </div>
     </div>
-    <div id="sceneDimmerOverlay" aria-hidden="true"></div>
+
+    <!-- DEBUG PANEL: Press 'D' to toggle -->
+    <div id="debugPanel"
+        style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.9); color: #0f0; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; z-index: 99999; display: none; min-width: 280px;">
+        <div style="font-weight: bold; margin-bottom: 10px; color: #ff0;">🔧 DEBUG PANEL (D = Toggle)</div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Main Audio: <span id="dbgMainVol">100%</span></label><br>
+            <input type="range" id="sliderMainVol" min="0" max="100" value="100" style="width: 100%;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Ambient: <span id="dbgAmbientVol">30%</span></label><br>
+            <input type="range" id="sliderAmbientVol" min="0" max="100" value="30" style="width: 100%;">
+        </div>
+
+        <div style="margin-bottom: 8px;">
+            <label>Footsteps: <span id="dbgFootstepsVol">40%</span></label><br>
+            <input type="range" id="sliderFootstepsVol" min="0" max="100" value="40" style="width: 100%;">
+        </div>
+
+        <div id="dbgStatus"
+            style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #333; color: #888; font-size: 10px;">
+            Status: Loading...
+        </div>
+    </div>
 
     <!-- ARCHIVE MODAL (INHALT) -->
     <div id="archiveModal">
@@ -271,15 +216,10 @@
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
 
-            <div class="archive-tabs">
-                <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
-                <button class="archive-tab" data-tab="lore">Lore</button>
-                <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
-            </div>
-
-            <div class="archive-tab-content active" data-tab="kapitel">
-                <!-- KAPITEL -->
-                <div class="col-left" id="chapterList" style="flex:1;">
+            <div class="archive-content">
+                <!-- LINKS: KAPITEL -->
+                <div class="col-left" id="chapterList">
+                    <div class="col-header">Kapitel</div>
                     <!-- Hardcoded Chapter 1 -->
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
@@ -293,23 +233,15 @@
                     </div>
 
                     <!-- Chapter 1c -->
-                    <div class="menu-item" id="chapter1cBtn">
+                    <div class="menu-item active" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
-                        <div class="item-sub-text">Steingasse</div>
+                        <div class="item-sub-text">Steingasse (Hier)</div>
                     </div>
                 </div>
-            </div>
 
-            <div class="archive-tab-content" data-tab="lore">
-                <!-- LORE -->
-                <div class="col-left" id="loreList" style="flex:1;">
-                    <!-- Dynamisch gefüllt -->
-                </div>
-            </div>
-
-            <div class="archive-tab-content" data-tab="lesezeichen">
-                <!-- LESEZEICHEN -->
-                <div id="bookmarkList" style="width:100%;">
+                <!-- RECHTS: LORE -->
+                <div class="col-right" id="loreList">
+                    <div class="col-header">Lore</div>
                     <!-- Dynamisch gefüllt -->
                 </div>
             </div>
@@ -347,14 +279,6 @@
         console.log("Applying Visual Fixes..."); // DEBUG
         gameWrapper.classList.add('effect-pal');
         gameWrapper.classList.add('effect-crt');
-        const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const AUDIO_PROFILE = isIOSDevice
-            ? { ambient: 0.012, footsteps: 0.014 }
-            : { ambient: 0.02, footsteps: 0.024 };
-        if (isIOSDevice) {
-            // SVG PAL filter is expensive on iOS WebKit and causes visible stutter.
-            gameWrapper.classList.remove('effect-pal');
-        }
 
         // Turbulenz für Glitch laufend aktualisieren für "Randomness"
         // const turb = document.querySelector('#glitch-filter feTurbulence');
@@ -373,41 +297,7 @@
         // }, 500);
 
         let gameReady = false;
-
-        // ============================================
-        // MULTI-LEVEL CONFIG (URL-Parameter: ?chapter=kapitel1c)
-        // ============================================
-        const _urlParams = new URLSearchParams(window.location.search);
-        const _chapterParam = _urlParams.get('chapter');
-        const LEVEL_CONFIGS = {
-            kapitel1: {
-                sceneName:        'marktplatz',
-                contentKey:       'kapitel1',
-                mapFile:          'assets/platz3.png',
-                audioUrl:         'assets/kapitel1.mp3',
-                subtitleFile:     'assets/kapitel1.txt',
-                activeChapterBtn: 'chapter1Btn',
-                nextChapterTarget: 'liminal library.html',
-                page:             'index.html',
-                chapterLabel:     '1a',
-                chapterTitle:     'Der Marktplatz',
-            },
-            kapitel1c: {
-                sceneName:        'steingasse',
-                contentKey:       'kapitel1c',
-                mapFile:          'assets/kapitel1c.png',
-                audioUrl:         'assets/kapitel1c.mp3',
-                subtitleFile:     'assets/kapitel1c.txt',
-                activeChapterBtn: 'chapter1cBtn',
-                nextChapterTarget: null,
-                page:             'index.html?chapter=kapitel1c',
-                chapterLabel:     '1c',
-                chapterTitle:     'Steingasse',
-            }
-        };
-        const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
-
-        const SCENE_NAME = LEVEL.sceneName;
+        const SCENE_NAME = 'steingasse';
         let bgImage = null;
         let foregroundImage = null;
         let spriteReady = false;
@@ -441,100 +331,12 @@
         let isLoreMode = false;
         let isMenuTriggeredLore = false;
         let loreResumeTimeout = null;
-        const MAIN_CONTENT_KEY = LEVEL.contentKey;
-        let contentSwitchInProgress = false;
-        let contentSwitchToken = 0;
-        const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
-            ? window.ChapterAutoplayIntent.consume(MAIN_CONTENT_KEY, { defaultPolicy: 'auto' })
-            : { policy: 'auto', shouldAutoplay: true, source: 'fallback', reason: 'intent-missing' };
-
-        function markChapterAutoplayIntent(targetPageKey, policy = 'auto', reason = '') {
-            if (!window.ChapterAutoplayIntent || !targetPageKey) return;
-            if (policy === 'manual') {
-                window.ChapterAutoplayIntent.markManual(targetPageKey, MAIN_CONTENT_KEY, reason || 'chapter-menu');
-                return;
-            }
-            window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
-        }
 
         const loreData = {
             audio: {},
             text: {},
             resumeTimes: {}
         };
-
-        // ============================================
-        // DEBUG (disabled in production UI)
-        // ============================================
-        const indexDebug = {
-            lastSave: null
-        };
-
-        function indexDebugNote() { }
-        function indexTrace() { }
-
-        function writeStateHandoff(targetPageKey) {
-            try {
-                if (!window.PlayerStateManager || typeof window.PlayerStateManager.exportStates !== 'function') return;
-                const states = window.PlayerStateManager.exportStates();
-                const payload = {
-                    from: MAIN_CONTENT_KEY,
-                    to: targetPageKey,
-                    at: Date.now(),
-                    states
-                };
-                sessionStorage.setItem('gb_state_handoff', JSON.stringify(payload));
-                sessionStorage.setItem('gb_handoff_expect', String(targetPageKey || ''));
-                indexDebugNote('handoff-out', `to=${targetPageKey} states=${Object.keys(states).length}`);
-            } catch (e) {
-                indexDebugNote('handoff-out-error', e && e.message ? e.message : String(e));
-            }
-        }
-
-        function mergeIncomingStateHandoff(expectedTargetKey) {
-            try {
-                const raw = sessionStorage.getItem('gb_state_handoff');
-                const expected = sessionStorage.getItem('gb_handoff_expect');
-                if (!raw || !window.PlayerStateManager) {
-                    if (expected && expected === expectedTargetKey) {
-                        indexDebugNote('handoff-in-missing', `expected=${expectedTargetKey}`);
-                        sessionStorage.removeItem('gb_handoff_expect');
-                    }
-                    return;
-                }
-
-                const payload = JSON.parse(raw);
-                if (!payload || payload.to !== expectedTargetKey || !payload.states || typeof payload.states !== 'object') {
-                    return;
-                }
-
-                let merged = 0;
-                for (const [key, incoming] of Object.entries(payload.states)) {
-                    if (!incoming || typeof incoming !== 'object') continue;
-                    const current = window.PlayerStateManager.getState(key);
-                    const incomingStamp = Number(incoming.lastUpdate || 0);
-                    const currentStamp = Number((current && current.lastUpdate) || 0);
-                    if (current && currentStamp > incomingStamp) continue;
-
-                    if (typeof window.PlayerStateManager.saveStateAt === 'function') {
-                        window.PlayerStateManager.saveStateAt(key, {
-                            sentenceIndex: Number.isFinite(incoming.sentenceIndex) ? incoming.sentenceIndex : 0,
-                            sentenceTime: Number.isFinite(incoming.sentenceTime) ? incoming.sentenceTime : 0,
-                            wasPlaying: !!incoming.wasPlaying
-                        });
-                        merged++;
-                    }
-                }
-
-                sessionStorage.removeItem('gb_state_handoff');
-                sessionStorage.removeItem('gb_handoff_expect');
-                indexDebugNote('handoff-in', `from=${payload.from || '-'} merged=${merged}`);
-            } catch (e) {
-                indexDebugNote('handoff-in-error', e && e.message ? e.message : String(e));
-            }
-        }
-
-        mergeIncomingStateHandoff(MAIN_CONTENT_KEY);
 
         // Initialize GameState
         (async function initGameState() {
@@ -565,8 +367,8 @@
             }
         })();
 
-        // Haupt-Audio je nach aktivem Level
-        window.mainAudioUrl = LEVEL.audioUrl;
+        // kapitel1c.mp3 als Haupt-Audio
+        window.mainAudioUrl = 'assets/kapitel1c.mp3';
 
         // Unlock Logic Wrapper
         async function unlockLoreItem(id) {
@@ -587,117 +389,17 @@
             }
         }
 
-        function triggerUiHaptic(pattern = 8) {
-            if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
-            navigator.vibrate(pattern);
-        }
-
-        // --- ARCHIVE TAB SWITCHING ---
-        function initArchiveTabs() {
-            const tabs = document.querySelectorAll('.archive-tab');
-            const panels = document.querySelectorAll('.archive-tab-content');
-            tabs.forEach(tab => {
-                tab.addEventListener('click', () => {
-                    triggerUiHaptic(7);
-                    tab.classList.remove('pressed');
-                    // Force reflow so the press animation retriggers on repeated clicks.
-                    void tab.offsetWidth;
-                    tab.classList.add('pressed');
-                    setTimeout(() => tab.classList.remove('pressed'), 170);
-                    tabs.forEach(t => t.classList.remove('active'));
-                    panels.forEach(p => p.classList.remove('active'));
-                    tab.classList.add('active');
-                    const target = tab.getAttribute('data-tab');
-                    const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
-                    if (panel) panel.classList.add('active');
-                    if (target === 'lesezeichen') renderBookmarks();
-                });
-            });
-        }
-        initArchiveTabs();
-
-        // --- BOOKMARK RENDERING ---
-        const CURRENT_PAGE = LEVEL.page;
-        const CURRENT_CHAPTER = LEVEL.chapterLabel;
-        const CURRENT_CHAPTER_TITLE = LEVEL.chapterTitle;
-
-        function renderBookmarks() {
-            const list = document.getElementById('bookmarkList');
-            if (!list) return;
-            list.innerHTML = '';
-
-            if (!window.GameState) return;
-            const bookmarks = window.GameState.getBookmarks();
-
-            if (bookmarks.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'bookmark-empty-msg';
-                empty.innerText = 'Keine Lesezeichen gesetzt';
-                list.appendChild(empty);
-                return;
-            }
-
-            bookmarks.forEach(bm => {
-                const item = document.createElement('div');
-                item.className = 'menu-item bookmark-item';
-
-                const mainText = document.createElement('div');
-                mainText.className = 'item-main-text';
-                const timeStr = window.GameState.formatBookmarkTime(bm.time);
-                mainText.innerText = `${bm.chapterTitle} · ${timeStr}`;
-
-                const subText = document.createElement('div');
-                subText.className = 'item-sub-text';
-                subText.innerText = bm.textPreview || '';
-
-                const delBtn = document.createElement('button');
-                delBtn.className = 'bookmark-delete-btn';
-                delBtn.innerHTML = '&times;';
-                delBtn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    await window.GameState.removeBookmark(bm.id);
-                    renderBookmarks();
-                });
-
-                item.appendChild(mainText);
-                item.appendChild(subText);
-                item.appendChild(delBtn);
-
-                item.addEventListener('click', async () => {
-                    document.getElementById('archiveModal').classList.remove('visible');
-                    if (bm.page === CURRENT_PAGE) {
-                        await seekAndSyncSubtitle(bm.time, `bookmark:${bm.id}`);
-                        if (audioPlayer.paused) {
-                            try { await audioPlayer.play(); } catch (_) { }
-                        }
-                    } else {
-                        await waitForContentSwitchIdle('bookmark:cross-page');
-                        await saveCurrentContentState({ reason: 'bookmark:navigate' });
-                        sessionStorage.setItem('bookmark_seek_target', JSON.stringify({
-                            time: bm.time, id: bm.id
-                        }));
-                        const keyMap = {
-                            'index.html': 'kapitel1',
-                            'liminal library.html': 'liminal_library',
-                            'index.html?chapter=kapitel1c': 'kapitel1c',
-                            'index3.html': 'kapitel1c' // Altdaten-Kompatibilität
-                        };
-                        const bmPage = bm.page === 'index3.html' ? 'index.html?chapter=kapitel1c' : bm.page;
-                        const key = keyMap[bm.page] || 'kapitel1';
-                        markChapterAutoplayIntent(key, 'manual', 'bookmark');
-                        writeStateHandoff(key);
-                        window.location.href = bmPage;
-                    }
-                });
-
-                list.appendChild(item);
-            });
-        }
-
         // --- MENU LOGIC ---
         function renderArchive() {
             const list = document.getElementById('loreList');
+            // Keep Header
+            const header = list.querySelector('.col-header') || document.createElement('div');
+            if (!list.querySelector('.col-header')) {
+                header.className = 'col-header';
+                header.innerText = 'Lore';
+            }
             list.innerHTML = '';
+            list.appendChild(header);
 
             if (!window.GameState) return;
 
@@ -732,20 +434,14 @@
                     item.appendChild(mainText);
                     item.appendChild(subText);
 
-                    item.addEventListener('click', async () => {
+                    item.addEventListener('click', () => {
                         document.getElementById('archiveModal').classList.remove('visible');
-                        await waitForContentSwitchIdle(`menu:lore:${id}`);
-                        await startLoreMode(id, true);
+                        startLoreMode(id, true);
                     });
                     list.appendChild(item);
                 });
             }
             // (Chapter Logic continues inside renderArchive)
-
-            // Aktiven Kapitel-Button markieren
-            document.querySelectorAll('#chapterList .menu-item').forEach(btn => btn.classList.remove('active'));
-            const _activeCh = document.getElementById(LEVEL.activeChapterBtn);
-            if (_activeCh) _activeCh.classList.add('active');
 
             // Chapter Logic (Left Column)
             const ch1 = document.getElementById('chapter1Btn');
@@ -753,35 +449,9 @@
                 const newCh1 = ch1.cloneNode(true);
                 ch1.parentNode.replaceChild(newCh1, ch1);
 
-                newCh1.addEventListener('click', async () => {
-                    console.log("Loading Chapter 1...");
-                    if (LEVEL.contentKey !== 'kapitel1') {
-                        // Wir sind auf einem anderen Level – navigiere zu Marktplatz
-                        await waitForContentSwitchIdle('chapter-menu:to-1');
-                        await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
-                        markChapterAutoplayIntent('kapitel1', 'manual', 'chapter-menu');
-                        writeStateHandoff('kapitel1');
-                        window.location.href = 'index.html';
-                        return;
-                    }
-                    document.getElementById('archiveModal').classList.remove('visible');
-
-                    // 1. RE-LOAD MAP (Only if needed)
-                    // If we are already here, do not reload map!
-                    // processMap(mapImg); // REMOVED to prevent reload
-
-                    // 2. Audio Logic
-                    if (isLoreMode) {
-                        // If listening to Lore, switch back to Chapter
-                        restoreMainAudio({ forceResume: true });
-                    } else {
-                        // If already in Chapter mode, maybe just unpause?
-                        if (audioPlayer.paused) {
-                            audioPlayer.play();
-                            iconPlay.style.display = 'none';
-                            iconPause.style.display = 'block';
-                        }
-                    }
+                newCh1.addEventListener('click', () => {
+                    console.log("Navigating to Chapter 1...");
+                    window.location.href = 'index.html';
                 });
             }
 
@@ -792,12 +462,8 @@
                 const newCh1b = ch1b.cloneNode(true);
                 ch1b.parentNode.replaceChild(newCh1b, ch1b);
 
-                newCh1b.addEventListener('click', async () => {
+                newCh1b.addEventListener('click', () => {
                     console.log("Loading Chapter 1b...");
-                    await waitForContentSwitchIdle('chapter-menu:to-1b');
-                    await saveCurrentContentState({ reason: 'chapter-menu:to-1b' });
-                    markChapterAutoplayIntent('liminal_library', 'manual', 'chapter-menu');
-                    writeStateHandoff('liminal_library');
                     window.location.href = 'liminal library.html';
                 });
             }
@@ -808,27 +474,16 @@
                 const newCh1c = ch1c.cloneNode(true);
                 ch1c.parentNode.replaceChild(newCh1c, ch1c);
 
-                newCh1c.addEventListener('click', async () => {
-                    console.log("Loading Chapter 1c...");
-                    if (LEVEL.contentKey === 'kapitel1c') {
-                        // Bereits auf Steingasse – Audio fortsetzen
-                        document.getElementById('archiveModal').classList.remove('visible');
-                        if (isLoreMode) {
-                            restoreMainAudio({ forceResume: true });
-                        } else {
-                            if (audioPlayer.paused) {
-                                audioPlayer.play();
-                                iconPlay.style.display = 'none';
-                                iconPause.style.display = 'block';
-                            }
-                        }
-                        return;
+                newCh1c.addEventListener('click', () => {
+                    console.log("Already in Chapter 1c, closing modal...");
+                    document.getElementById('archiveModal').classList.remove('visible');
+                    if (isLoreMode) {
+                        restoreMainAudio();
+                    } else if (audioPlayer.paused) {
+                        audioPlayer.play();
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
                     }
-                    await waitForContentSwitchIdle('chapter-menu:to-1c');
-                    await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
-                    markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
-                    writeStateHandoff('kapitel1c');
-                    window.location.href = 'index.html?chapter=kapitel1c';
                 });
             }
         }
@@ -926,23 +581,38 @@
         // ============================================
         const footstepSound = new SCAudioAdapter();
         footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = AUDIO_PROFILE.footsteps;
-        // Index uses its own lifecycle handler below; avoid double pause/resume races.
-        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
-            window.AudioVisibilityManager.unregister(footstepSound);
-        }
+        footstepSound.volume = 0.024; // +20% from 0.02
 
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
         shimmerSound.volume = 0.4;
-        // One-shot SFX should not auto-resume after visibility changes.
-        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
-            window.AudioVisibilityManager.unregister(shimmerSound);
-        }
         let lastShimmerLightId = null;
         let footstepPlaying = false;
 
         let audioUnlocked = false;
+
+        // Ambient-Sound (permanent)
+        const ambientSound = new SCAudioAdapter();
+        ambientSound.src = getSCUrl('assets/medieval_town.mp3');
+        ambientSound.volume = 0.024; // +20% from 0.02
+
+        // Audio entsperren bei erstem User-Input
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            audioUnlocked = true;
+            // Starte Ambient-Sound
+            ambientSound.play().catch(() => { });
+        }
+        document.addEventListener('click', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
+        document.addEventListener('touchstart', unlockAudio, { once: true });
+
+        // Periodisch Ambient neu starten falls gestoppt
+        setInterval(() => {
+            if (audioUnlocked && ambientSound.paused) {
+                ambientSound.play().catch(() => { });
+            }
+        }, 3000);
 
         // createGlowSprite(), Particle class, and initParticles()
         // now loaded from assets/js/shared-game-systems.js
@@ -1190,29 +860,14 @@
         // GLOBAL ERROR HANDLER (DEBUG)
         // ============================================
         window.onerror = function (msg, url, line, col, error) {
-            const rawMessage = String(msg || (error && error.message) || '');
-            const lowered = rawMessage.toLowerCase();
-            const isFullscreenNoise =
-                lowered.includes('fullscreen') ||
-                lowered.includes('requestfullscreen') ||
-                lowered.includes('webkitfullscreen');
-
-            if (isFullscreenNoise) {
-                console.warn('[NonFatal][Fullscreen]', rawMessage, error || '');
-                return true;
-            }
-
             const pi = document.getElementById('processingInfo');
-            if (pi && !gameReady) {
+            if (pi) {
                 pi.style.display = 'block';
                 pi.style.color = '#ff5555';
                 pi.style.background = 'rgba(0,0,0,0.9)';
-                pi.innerText = 'Ein Fehler ist beim Laden aufgetreten.';
-                if (line) {
-                    pi.innerText += "\nLine: " + line;
-                }
+                pi.innerText += "\nERROR: " + msg + "\nLine: " + line;
             }
-            console.error(rawMessage, error);
+            console.error(msg, error);
             return false;
         };
 
@@ -1228,7 +883,7 @@
             // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
             // WRAPPED IN TRY-CATCH TO PREVENT CRASHING THE LOADING SCREEN
             try {
-                const mainAudioSrc = window.mainAudioUrl || LEVEL.audioUrl;
+                const mainAudioSrc = 'assets/kapitel1c.mp3';
                 window.mainAudioUrl = mainAudioSrc;
                 if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
                     const scUrl = getSCUrl(mainAudioSrc);
@@ -1252,29 +907,39 @@
                 const ui = document.getElementById('audioPlayerUI');
                 if (ui) ui.classList.add('reading-mode');
             }
-            // Load watchdog: never start the game loop without a loaded map.
-            const loadingScreen = document.getElementById('loading-screen');
-            const processingInfo = document.getElementById('processingInfo');
-            const dropZone = document.getElementById('dropZone');
 
+            // FALLBACK: Hide DropZone after 3 seconds if map fails
+            // FALLBACK: Hide DropZone after 10 seconds if map fails (User Request: 10s Buffer limit)
             setTimeout(() => {
-                if (gameReady) return;
-
-                console.warn("Map still not ready after 10s. Waiting for map load instead of force-start.");
-                if (dropZone && !dropZone.classList.contains('hidden')) dropZone.classList.add('hidden');
-
-                if (processingInfo) {
-                    processingInfo.style.display = 'block';
-                    processingInfo.style.color = '#ffd54a';
-                    processingInfo.style.background = 'rgba(0,0,0,0.75)';
-                    processingInfo.innerText = 'Map is still loading... please wait.';
+                const dz = document.getElementById('dropZone');
+                const pi = document.getElementById('processingInfo');
+                if (dz && !dz.classList.contains('hidden')) {
+                    console.warn("Force hiding DropZone due to timeout (10s)!");
+                    dz.classList.add('hidden');
                 }
+                if (pi) pi.style.display = 'none';
 
-                if (loadingScreen) loadingScreen.style.display = 'flex';
+                // Force Hide Loading Screen
+                const ls = document.getElementById('loading-screen');
+                if (ls) ls.style.display = 'none';
+
+                // Force Start Loop if not ready
+                if (!gameReady) {
+                    console.warn("Force starting game loop!");
+                    gameReady = true;
+                    // Ensure Canvas Size
+                    const c = document.getElementById('gameCanvas');
+                    if (c) {
+                        c.width = window.innerWidth;
+                        c.height = window.innerHeight;
+                    }
+                    if (typeof startGameLoop === 'function') startGameLoop();
+                }
             }, 10000);
 
             // 1. Load Map (Default)
             const mapImg = new Image();
+            mapImg.src = 'assets/kapitel1c.png';
             mapImg.onload = () => {
                 console.log("Map Loaded, processing...");
                 try {
@@ -1285,34 +950,21 @@
             };
             mapImg.onerror = (e) => {
                 console.error("Map Load Error", e);
-                if (processingInfo) {
-                    processingInfo.style.display = 'block';
-                    processingInfo.style.color = '#ff5555';
-                    processingInfo.style.background = 'rgba(0,0,0,0.85)';
-                    processingInfo.innerText = 'Map failed to load. Please reload the page.';
-                }
-                if (loadingScreen) loadingScreen.style.display = 'flex';
+                // Try alternate path for debugging
             };
-            mapImg.src = LEVEL.mapFile;
 
-            // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
-            // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
+            // 2. Load Audio & Text (Chapter 1c) -> Audio already preloaded above!
+            // const mainAudioSrc = 'assets/kapitel1c.mp3'; // Removed redundant def
 
-            const attemptAutoPlay = async () => {
-                if (!mainChapterAutoplayIntent.shouldAutoplay) {
-                    indexDebugNote('autoplay', `suppressed policy=${mainChapterAutoplayIntent.policy} reason=${mainChapterAutoplayIntent.reason}`);
-                    syncPlayPauseIcon();
-                    return false;
-                }
-                const started = await verifyPlaybackStarted(3, 320);
-                indexDebugNote('autoplay', `boot started=${started} source=${mainChapterAutoplayIntent.source} reason=${mainChapterAutoplayIntent.reason}`);
+            // Keep initial state deterministic: do not auto-play chapter audio on startup.
+            // The user starts playback explicitly via play button.
+            const attemptAutoPlay = () => {
                 syncPlayPauseIcon();
-                return started;
             };
 
             try {
-                // debugLog('Fetching subtitle file...');
-                const response = await fetch(LEVEL.subtitleFile);
+                // debugLog('Fetching kapitel1c.txt...');
+                const response = await fetch('assets/kapitel1c.txt');
                 // debugLog('Fetch response: ' + response.status);
                 const text = await response.text();
                 // debugLog('Text length: ' + text.length);
@@ -1322,28 +974,7 @@
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
 
-                await attemptAutoPlay();
-
-                // --- BOOKMARK SEEK ON LOAD ---
-                const bmTarget = sessionStorage.getItem('bookmark_seek_target');
-                if (bmTarget) {
-                    sessionStorage.removeItem('bookmark_seek_target');
-                    try {
-                        const { time } = JSON.parse(bmTarget);
-                        if (typeof time === 'number' && time > 0) {
-                            console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
-                            setTimeout(async () => {
-                                await seekAndSyncSubtitle(time, 'bookmark:on-load');
-                                if (audioPlayer.paused) {
-                                    try { await audioPlayer.play(); } catch (_) { }
-                                }
-                                syncPlayPauseIcon();
-                            }, 800);
-                        }
-                    } catch (e) {
-                        console.warn('[Bookmark] Failed to parse seek target:', e);
-                    }
-                }
+                attemptAutoPlay();
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -1727,7 +1358,10 @@
                 fgCanvas.getContext('2d').putImageData(new ImageData(fgData, mapW, mapH), 0, 0);
 
                 bgImage = new Image();
+                bgImage.src = bgCanvas.toDataURL();
+
                 foregroundImage = new Image();
+                foregroundImage.src = fgCanvas.toDataURL();
 
                 bgImage.onload = () => {
                     gameReady = true;
@@ -1768,22 +1402,12 @@
                     initParticles();
                     initClouds();
 
-                    // Start Audio (aux tracks are gated to avoid SC widget pause races)
-                    if (typeof ambientAudio !== 'undefined') {
-                        syncAuxScPlayback('game-ready');
-                    }
+                    // Start Audio
+                    if (typeof ambientAudio !== 'undefined') ambientAudio.play().catch(() => { });
 
                     startGameLoop();
                     console.log("Map Processed & Ready.");
                 };
-                bgImage.onerror = (e) => {
-                    console.error("Processed background image failed to load", e);
-                };
-                foregroundImage.onerror = (e) => {
-                    console.error("Processed foreground image failed to load", e);
-                };
-                bgImage.src = bgCanvas.toDataURL();
-                foregroundImage.src = fgCanvas.toDataURL();
 
 
             } catch (e) {
@@ -1799,7 +1423,7 @@
 
         // Fallback: Audio starten bei erster Interaktion, falls Autoplay blockiert wurde
         document.addEventListener('click', () => {
-            if (gameReady && ambientAudio.paused && allowAuxScPlayback()) {
+            if (gameReady && ambientAudio.paused) {
                 ambientAudio.play().catch(e => console.warn("Ambient play failed:", e));
             }
         }, { once: true }); // Nur einmal ausführen
@@ -1809,34 +1433,23 @@
         // ============================================
         let wasAmbientPlaying = false;
         let wasPlayerPlaying = false;
-        let visibilityResumeToken = 0;
         window.gamePaused = false; // Flag for Game Loop
-        window.visualFreezeActive = !!window.visualFreezeActive;
 
         document.addEventListener('visibilitychange', () => {
-            const token = ++visibilityResumeToken;
             if (document.hidden) {
                 // APP BACKGROUNDED -> PAUSE ALL
                 window.gamePaused = true; // Stop loop logic
-                saveCurrentContentState({ preferCachedTime: true, reason: 'visibility:hidden' });
-                indexDebugNote('visibility', 'hidden');
 
-                if (typeof ambientAudio !== 'undefined') {
-                    wasAmbientPlaying = (typeof ambientAudio.isProbablyPlaying === 'function')
-                        ? ambientAudio.isProbablyPlaying()
-                        : !ambientAudio.paused;
+                if (typeof ambientAudio !== 'undefined' && !ambientAudio.paused) {
+                    wasAmbientPlaying = true;
                     ambientAudio.pause();
-                    indexDebugNote('ambient', `pause hidden (wasPlaying=${wasAmbientPlaying})`);
                 } else {
                     wasAmbientPlaying = false;
                 }
 
-                if (typeof audioPlayer !== 'undefined') {
-                    wasPlayerPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
-                        ? audioPlayer.isProbablyPlaying()
-                        : !audioPlayer.paused;
+                if (typeof audioPlayer !== 'undefined' && !audioPlayer.paused) {
+                    wasPlayerPlaying = true;
                     audioPlayer.pause();
-                    indexDebugNote('player', `pause hidden (wasPlaying=${wasPlayerPlaying})`);
                 } else {
                     wasPlayerPlaying = false;
                 }
@@ -1848,38 +1461,16 @@
                 // Reset time to prevent delta spikes
                 lastTime = 0;
                 window.gamePaused = false;
-                if (!window.visualFreezeActive) {
-                    startGameLoop();
-                }
-                indexDebugNote('visibility', 'visible');
 
                 setTimeout(() => {
-                    if (token !== visibilityResumeToken || document.hidden) return;
-                    if (contentSwitchInProgress) {
-                        indexDebugNote('visibility', 'resume skipped (content switch active)');
-                        return;
-                    }
-                    applySceneAudioMix('visibility:resume');
-                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined' && allowAuxScPlayback()) {
+                    if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
                         ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
-                        wasAmbientPlaying = false;
-                        indexDebugNote('ambient', 'resume on visible');
                     }
                     if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
                         audioPlayer.play().catch(e => console.warn("Resume player failed", e));
-                        wasPlayerPlaying = false;
-                        indexDebugNote('player', 'resume on visible');
                     }
                 }, 100);
             }
-        });
-
-        window.addEventListener('pagehide', () => {
-            visibilityResumeToken += 1;
-            saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
-            if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
-            if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
-            indexDebugNote('lifecycle', 'pagehide');
         });
 
         function findSafeStart() {
@@ -2002,7 +1593,6 @@
         // ============================================
         function startGameLoop() {
             if (window.gameLoopRunning) return;
-            if (window.visualFreezeActive) return;
             window.gameLoopRunning = true;
             lastTime = 0;
             console.log("startGameLoop");
@@ -2011,27 +1601,8 @@
 
         // Global vars for timing
         let lastTime = 0;
-        let autoWalkFacingLockTimer = 0;
-
-        function chooseAutoWalkDirection(dx, dy, fallbackDir) {
-            const ax = Math.abs(dx);
-            const ay = Math.abs(dy);
-            if (ax < 0.001 && ay < 0.001) return fallbackDir;
-
-            // Keep current facing near diagonals to avoid rapid direction flicker.
-            const dominance = Math.abs(ax - ay);
-            if (dominance < 0.35) return fallbackDir;
-
-            if (ax > ay) return dx > 0 ? 3 : 2;
-            return dy > 0 ? 0 : 1;
-        }
 
         function gameLoop(timestamp) {
-            if (window.visualFreezeActive) {
-                window.gameLoopRunning = false;
-                return;
-            }
-
             if (window.gamePaused) {
                 requestAnimationFrame(gameLoop);
                 return;
@@ -2064,9 +1635,6 @@
         function update(dt) {
             if (!dt) dt = 0.016;
             if (!gameReady) return;
-            if (autoWalkFacingLockTimer > 0) {
-                autoWalkFacingLockTimer = Math.max(0, autoWalkFacingLockTimer - dt);
-            }
 
             // --- DYNAMIC SCALING (Depth Effect) ---
             if (mapH > 0) {
@@ -2164,17 +1732,11 @@
                         player.y += dy;
                         player.isMoving = true;
 
-                        // Direction: use a short look-ahead + hysteresis to avoid point-to-point flicker.
-                        const lookAheadIndex = Math.min(autoWalkPath.length - 1, autoWalkIndex + 8);
-                        const lookAheadTarget = autoWalkPath[lookAheadIndex];
-                        const lookAheadDx = lookAheadTarget.x - footX;
-                        const lookAheadDy = lookAheadTarget.y - footY;
-                        const blendedDx = nextTdx * 0.35 + lookAheadDx * 0.65;
-                        const blendedDy = nextTdy * 0.35 + lookAheadDy * 0.65;
-                        const nextDir = chooseAutoWalkDirection(blendedDx, blendedDy, player.dir);
-                        if (nextDir !== player.dir && autoWalkFacingLockTimer <= 0) {
-                            player.dir = nextDir;
-                            autoWalkFacingLockTimer = 0.14;
+                        // Direction
+                        if (Math.abs(nextTdx) > Math.abs(nextTdy)) {
+                            player.dir = nextTdx > 0 ? 3 : 2;
+                        } else {
+                            player.dir = nextTdy > 0 ? 0 : 1;
                         }
 
                         // Animation
@@ -2246,13 +1808,9 @@
             // Handle Animation & Sound for Movement
             if (player.isMoving) {
                 // Initial Footstep
-                if (audioUnlocked && !footstepPlaying && allowAuxScPlayback()) {
+                if (audioUnlocked && !footstepPlaying) {
                     footstepSound.play().catch(() => { });
                     footstepPlaying = true;
-                }
-                if (!allowAuxScPlayback() && footstepPlaying) {
-                    footstepSound.pause();
-                    footstepPlaying = false;
                 }
 
                 // Dust Particles
@@ -2315,13 +1873,6 @@
             nearbyLights = [];
             for (const p of particles) p.update(dt); // Ensure particle update accepts dt (or add it)
             for (const c of clouds) c.update(dt);
-
-            // Screen-Shake Decay (frame-rate independent)
-            if (screenShake > 0.01) {
-                screenShake *= Math.pow(0.8, dt * 60);
-            } else {
-                screenShake = 0;
-            }
         }
 
         // ============================================
@@ -2379,14 +1930,6 @@
         // ============================================
         // DRAWING
         // ============================================
-        let playerLightCanvas = null;
-        let playerLightCtx = null;
-        let playerMaskCanvas = null;
-        let playerMaskCtx = null;
-        let graySpriteCacheCanvas = null;
-        let graySpriteCacheCtx = null;
-        let graySpriteCacheKey = '';
-
         function draw() {
             // LCD Ghosting: Vorherigen Frame mit Transparenz beibehalten
             // Disable Ghosting
@@ -2405,7 +1948,7 @@
             // SMOOTH CAMERA: Use sub-pixel values (remove Math.floor)
             ctx.translate(-camX + shakeX, -camY + shakeY);
 
-            // screenShake decay moved to update(dt) for frame-rate independence
+            screenShake *= 0.8; // Schnell abklingen
 
             // Hintergrund
             if (bgImage) ctx.drawImage(bgImage, 0, 0);
@@ -2553,18 +2096,10 @@
                     const ndy = avgDy / dirLen;
 
                     // OffScreen-Canvas für Gradient-Beleuchtung
-                    if (!playerLightCanvas) {
-                        playerLightCanvas = document.createElement('canvas');
-                        playerLightCtx = playerLightCanvas.getContext('2d');
-                    }
-                    if (playerLightCanvas.width !== spriteW || playerLightCanvas.height !== spriteH) {
-                        playerLightCanvas.width = spriteW;
-                        playerLightCanvas.height = spriteH;
-                    }
-                    const lightCanvas = playerLightCanvas;
-                    const lightCtx = playerLightCtx;
-                    lightCtx.globalCompositeOperation = 'source-over';
-                    lightCtx.clearRect(0, 0, spriteW, spriteH);
+                    const lightCanvas = document.createElement('canvas');
+                    lightCanvas.width = spriteW;
+                    lightCanvas.height = spriteH;
+                    const lightCtx = lightCanvas.getContext('2d');
 
                     // Zeichne Sprite exakt so wie es auf dem Hauptcanvas erscheint, aber relativ zu (0,0)
                     lightCtx.save();
@@ -2629,20 +2164,10 @@
                 const dh = coords.h;
 
                 // OffScreen-Canvas für Masking
-                const maskW = dw + 4;
-                const maskH = dh + 4;
-                if (!playerMaskCanvas) {
-                    playerMaskCanvas = document.createElement('canvas');
-                    playerMaskCtx = playerMaskCanvas.getContext('2d');
-                }
-                if (playerMaskCanvas.width !== maskW || playerMaskCanvas.height !== maskH) {
-                    playerMaskCanvas.width = maskW;
-                    playerMaskCanvas.height = maskH;
-                }
-                const maskCanvas = playerMaskCanvas;
-                const maskCtx = playerMaskCtx;
-                maskCtx.globalCompositeOperation = 'source-over';
-                maskCtx.clearRect(0, 0, maskW, maskH);
+                const maskCanvas = document.createElement('canvas');
+                maskCanvas.width = dw + 4;
+                maskCanvas.height = dh + 4;
+                const maskCtx = maskCanvas.getContext('2d');
 
                 // 1. Zeichne den Foreground-Ausschnitt über dem Spieler
                 maskCtx.drawImage(foregroundImage,
@@ -2843,46 +2368,20 @@
             else if (player.dir === 1) sprite = spriteBack || spriteFront;
             else sprite = spriteSide || spriteFront;
 
-            const cacheKey = [
-                player.dir,
-                player.frame,
-                coords.w,
-                coords.h,
-                coords.sx,
-                coords.sw,
-                coords.sh,
-                coords.flipX ? 1 : 0
-            ].join(':');
-            if (graySpriteCacheCanvas && graySpriteCacheKey === cacheKey) {
-                return graySpriteCacheCanvas;
-            }
-
-            if (!graySpriteCacheCanvas) {
-                graySpriteCacheCanvas = document.createElement('canvas');
-                graySpriteCacheCtx = graySpriteCacheCanvas.getContext('2d');
-            }
-            if (graySpriteCacheCanvas.width !== coords.w || graySpriteCacheCanvas.height !== coords.h) {
-                graySpriteCacheCanvas.width = coords.w;
-                graySpriteCacheCanvas.height = coords.h;
-            }
-            const c = graySpriteCacheCanvas;
-            const gc = graySpriteCacheCtx;
-            gc.clearRect(0, 0, c.width, c.height);
+            const c = document.createElement('canvas');
+            c.width = coords.w;
+            c.height = coords.h;
+            const gc = c.getContext('2d');
 
             if (coords.isSide && flipX) {
                 gc.translate(coords.w, 0);
                 gc.scale(-1, 1);
             }
             gc.drawImage(sprite, coords.sx, 0, coords.sw, coords.sh, 0, 0, coords.w, coords.h);
-            if (coords.isSide && flipX) {
-                gc.setTransform(1, 0, 0, 1, 0, 0);
-            }
 
             gc.globalCompositeOperation = 'source-in';
             gc.fillStyle = 'rgb(180, 180, 180)';
             gc.fillRect(0, 0, coords.w, coords.h);
-            gc.globalCompositeOperation = 'source-over';
-            graySpriteCacheKey = cacheKey;
 
             return c;
         }
@@ -2938,16 +2437,10 @@
 
         // SoundCloud Audio Player via Widget API
         const audioPlayer = new SCAudioAdapter();
-        // Index uses a dedicated visibility handler; avoid duplicate manager decisions.
-        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
-            window.AudioVisibilityManager.unregister(audioPlayer);
-        }
         console.log('[Audio] Created SCAudioAdapter for main audio');
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
-        let subtitleFollowLocked = false;
-        let suppressFollowLockUntil = 0;
 
         const uiContainer = document.getElementById('audioPlayerUI');
         const subtitleContainer = document.getElementById('subtitleContainer');
@@ -2955,106 +2448,18 @@
         const playBtn = document.getElementById('audioToggleBtn');
         const skipBackBtn = document.getElementById('skipBackBtn');
         const skipForwardBtn = document.getElementById('skipForwardBtn');
-        const modeToggleBtn = document.getElementById('readingModeBtn');
+        const readingModeBtn = document.getElementById('readingModeBtn');
+        const gameModeBtn = document.getElementById('gameModeBtn');
         const iconPlay = document.getElementById('iconPlay');
         const iconPause = document.getElementById('iconPause');
         const fullscreenBtn = document.getElementById('fullscreenBtn');
         const iconFsEnter = document.getElementById('iconFsEnter');
         const iconFsExit = document.getElementById('iconFsExit');
-        const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
-        const RECENTER_MOBILE_RADIUS_PX = 75;
-        let subtitleRecenterMobileRadius = document.getElementById('subtitleRecenterMobileRadius');
-        if (!subtitleRecenterMobileRadius) {
-            subtitleRecenterMobileRadius = document.createElement('div');
-            subtitleRecenterMobileRadius.id = 'subtitleRecenterMobileRadius';
-            subtitleRecenterMobileRadius.setAttribute('aria-hidden', 'true');
-            document.body.appendChild(subtitleRecenterMobileRadius);
-        }
-        const globalVisualDimmer = window.GlobalVisualDimmer
-            ? window.GlobalVisualDimmer.init({
-                overlayId: 'sceneDimmerOverlay',
-                toggleButtonId: 'sceneDimmerToggleBtn',
-                iconFullId: 'sceneDimmerIconFull',
-                iconHalfId: 'sceneDimmerIconHalf',
-                iconCrescentId: 'sceneDimmerIconCrescent',
-                iconSunId: 'sceneDimmerIconSun'
-            })
-            : null;
-        let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
-        let pendingForceReadingFromFreeze = false;
-        let shouldResumePlaybackAfterDimmerUnfreeze = false;
-        let dimmerResumeToken = 0;
-        let modeSwitchInitialized = false;
-        if (globalVisualDimmer) {
-            globalVisualDimmer.onChange(({ level, frozen }) => {
-                manualBackgroundDimLevel = level;
-                window.visualFreezeActive = frozen;
-                dimmerResumeToken += 1;
-                const changeToken = dimmerResumeToken;
-
-                const currentlyPlaying = (typeof audioPlayer?.isProbablyPlaying === 'function')
-                    ? audioPlayer.isProbablyPlaying()
-                    : !!audioPlayer && !audioPlayer.paused;
-
-                if (frozen) {
-                    shouldResumePlaybackAfterDimmerUnfreeze = shouldResumePlaybackAfterDimmerUnfreeze || currentlyPlaying;
-                    pendingForceReadingFromFreeze = true;
-                    if (modeSwitchInitialized) {
-                        setReadingMode(true, 'dimmer-freeze');
-                        pendingForceReadingFromFreeze = false;
-                    }
-                } else {
-                    pendingForceReadingFromFreeze = false;
-                    if (shouldResumePlaybackAfterDimmerUnfreeze && !contentSwitchInProgress && !document.hidden) {
-                        setTimeout(async () => {
-                            try {
-                                if (changeToken !== dimmerResumeToken) return;
-                                if (document.hidden || contentSwitchInProgress) return;
-
-                                const likelyPlaying = (typeof audioPlayer?.isProbablyPlaying === 'function')
-                                    ? audioPlayer.isProbablyPlaying()
-                                    : !!audioPlayer && !audioPlayer.paused;
-
-                                if (!likelyPlaying || audioPlayer.paused) {
-                                    const started = await verifyPlaybackStarted(3, 260);
-                                    indexDebugNote('dimmer-resume', `started=${started} lore=${isLoreMode}`);
-                                }
-                                syncPlayPauseIcon();
-                            } catch (e) {
-                                indexDebugNote('dimmer-resume-error', e && e.message ? e.message : String(e));
-                            }
-                        }, 80);
-                    }
-                    shouldResumePlaybackAfterDimmerUnfreeze = false;
-                }
-                if (!frozen && gameReady && !document.hidden) {
-                    lastTime = 0;
-                    startGameLoop();
-                }
-            });
-            window.visualFreezeActive = globalVisualDimmer.isFrozen();
-            pendingForceReadingFromFreeze = window.visualFreezeActive;
-
-        }
-
-        function isAudioTransportPaused() {
-            if (!audioPlayer) return true;
-            if (typeof audioPlayer.isTransportPaused === 'function') {
-                return audioPlayer.isTransportPaused();
-            }
-            return !!audioPlayer.paused;
-        }
 
         function syncPlayPauseIcon() {
-            const isPaused = isAudioTransportPaused();
+            const isPaused = !audioPlayer || audioPlayer.paused;
             iconPlay.style.display = isPaused ? 'block' : 'none';
             iconPause.style.display = isPaused ? 'none' : 'block';
-            indexTrace('icon:sync', {
-                paused: isPaused,
-                iconPlay: iconPlay.style.display,
-                iconPause: iconPause.style.display,
-                currentTime: Number(((audioPlayer && audioPlayer.currentTime) || 0).toFixed(3))
-            });
         }
 
         audioPlayer.addEventListener('play', syncPlayPauseIcon);
@@ -3086,72 +2491,12 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = AUDIO_PROFILE.ambient;
-        // Index uses a dedicated visibility handler; avoid duplicate manager decisions.
-        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
-            window.AudioVisibilityManager.unregister(ambientAudio);
-        }
+        ambientAudio.volume = 0.02;
 
-        function isPrimaryNarrationPlaying() {
-            if (!audioPlayer) return false;
-            return (typeof audioPlayer.isProbablyPlaying === 'function')
-                ? audioPlayer.isProbablyPlaying()
-                : !audioPlayer.paused;
-        }
-
-        function allowAuxScPlayback() {
-            return !isPrimaryNarrationPlaying() && !contentSwitchInProgress && !document.hidden;
-        }
-
-        function syncAuxScPlayback(reason = 'unspecified') {
-            if (!allowAuxScPlayback()) {
-                if (footstepPlaying) {
-                    footstepSound.pause();
-                    footstepPlaying = false;
-                }
-                if (!ambientAudio.paused) {
-                    ambientAudio.pause();
-                }
-                indexDebugNote('aux-audio', `${reason} blocked`);
-                return;
-            }
-
-            if (audioUnlocked && gameReady && ambientAudio.paused) {
-                ambientAudio.play().catch(() => { });
-            }
-            indexDebugNote('aux-audio', `${reason} allowed`);
-        }
-
-        function applySceneAudioMix(reason = 'unspecified') {
-            let ambientTarget = AUDIO_PROFILE.ambient;
-            let footstepTarget = AUDIO_PROFILE.footsteps;
-
-            if (isLoreMode) ambientTarget *= 0.68;
-            if (isReadingMode) footstepTarget *= 0.65;
-            if (isLoreMode) footstepTarget *= 0.45;
-
-            ambientAudio.volume = Math.max(0, Math.min(1, ambientTarget));
-            footstepSound.volume = Math.max(0, Math.min(1, footstepTarget));
-            syncAuxScPlayback(`mix:${reason}`);
-            indexDebugNote('audio-mix', `${reason} ambient=${ambientAudio.volume.toFixed(3)} foot=${footstepSound.volume.toFixed(3)} ios=${isIOSDevice}`);
-        }
-        applySceneAudioMix('init');
-
-        // Audio unlock on first interaction (required for mobile autoplay policies)
-        function unlockAudio() {
-            if (audioUnlocked) return;
-            audioUnlocked = true;
-            syncAuxScPlayback('unlock');
-        }
-        document.addEventListener('click', unlockAudio, { once: true });
-        document.addEventListener('keydown', unlockAudio, { once: true });
-        document.addEventListener('touchstart', unlockAudio, { once: true });
-
-        audioPlayer.addEventListener('play', () => syncAuxScPlayback('main-play'));
-        audioPlayer.addEventListener('pause', () => syncAuxScPlayback('main-pause'));
-        audioPlayer.addEventListener('ended', () => syncAuxScPlayback('main-ended'));
-
-        console.log('[Audio] Created SCAudioAdapters for main/ambient/footsteps');
+        const footstepsAudio = new SCAudioAdapter();
+        footstepsAudio.src = getSCUrl('assets/footsteps.mp3');
+        footstepsAudio.volume = 0.02;
+        console.log('[Audio] Created SCAudioAdapters for ambient and footsteps');
 
         // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
         function getMaxVisibleLines() {
@@ -3220,223 +2565,11 @@
             currentScrollAnimation = requestAnimationFrame(animate);
         }
 
-        function updateRecenterButtonVisibility(reason = 'unspecified') {
-            if (!subtitleRecenterBtn) return;
-            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
-            syncRecenterButtonMount(isMobileLayout);
-
-            const show = isReadingMode && subtitleFollowLocked;
-            if (!show) {
-                subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
-                subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
-                if (subtitleRecenterMobileRadius) {
-                    subtitleRecenterMobileRadius.style.display = 'none';
-                }
-                return;
-            }
-
-            subtitleRecenterBtn.style.setProperty('display', 'inline-flex', 'important');
-            subtitleRecenterBtn.setAttribute('aria-hidden', 'false');
-            requestAnimationFrame(() => positionRecenterButton(`visibility-show:${reason}`));
-        }
-
-        function setSubtitleFollowLocked(nextLocked, reason = 'unspecified') {
-            const normalized = !!nextLocked;
-            subtitleFollowLocked = normalized;
-            updateRecenterButtonVisibility(reason);
-        }
-
-        function syncRecenterButtonMount(isMobileLayout = window.matchMedia('(max-width: 768px)').matches) {
-            if (!subtitleRecenterBtn) return;
-
-            if (isMobileLayout) {
-                if (subtitleRecenterBtn.parentElement !== document.body) {
-                    // Mobile uses a viewport-fixed overlay placement.
-                    document.body.appendChild(subtitleRecenterBtn);
-                }
-                subtitleRecenterBtn.style.position = 'fixed';
-                return;
-            }
-
-            const desktopHost = audioControlsEl || document.getElementById('audioControls');
-            if (desktopHost) {
-                if (subtitleRecenterBtn.parentElement !== desktopHost) {
-                    // Desktop: use the same flex layout flow as the other control icons.
-                    desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
-                } else if (desktopHost.firstElementChild !== subtitleRecenterBtn) {
-                    desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
-                }
-            }
-            subtitleRecenterBtn.style.position = 'static';
-            subtitleRecenterBtn.style.left = '';
-            subtitleRecenterBtn.style.top = '';
-        }
-
-        function isMobileRecenterZoneActive() {
-            if (!subtitleRecenterBtn || !subtitleRecenterMobileRadius) return false;
-            if (!window.matchMedia('(max-width: 768px)').matches) return false;
-            const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
-            return btnStyle.display !== 'none' && isReadingMode && subtitleFollowLocked;
-        }
-
-        function updateMobileRecenterRadius(left, top, width, height) {
-            if (!subtitleRecenterMobileRadius) return;
-            if (!isMobileRecenterZoneActive()) {
-                subtitleRecenterMobileRadius.style.display = 'none';
-                return;
-            }
-
-            const diameter = RECENTER_MOBILE_RADIUS_PX * 2;
-            const centerX = left + (width * 0.5);
-            const centerY = top + (height * 0.5);
-            subtitleRecenterMobileRadius.style.width = `${diameter}px`;
-            subtitleRecenterMobileRadius.style.height = `${diameter}px`;
-            subtitleRecenterMobileRadius.style.left = `${centerX - RECENTER_MOBILE_RADIUS_PX}px`;
-            subtitleRecenterMobileRadius.style.top = `${centerY - RECENTER_MOBILE_RADIUS_PX}px`;
-            subtitleRecenterMobileRadius.style.display = 'block';
-        }
-
-        function eventPointInMobileRecenterZone(e) {
-            if (!isMobileRecenterZoneActive()) return false;
-            if (!e) return false;
-
-            const point = Number.isFinite(e.clientX) && Number.isFinite(e.clientY)
-                ? { x: e.clientX, y: e.clientY }
-                : (e.changedTouches && e.changedTouches.length > 0
-                    ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
-                    : (e.touches && e.touches.length > 0
-                        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
-                        : null));
-            if (!point) return false;
-
-            const rect = subtitleRecenterBtn.getBoundingClientRect();
-            if (rect.width <= 0 || rect.height <= 0) return false;
-            const centerX = rect.left + (rect.width * 0.5);
-            const centerY = rect.top + (rect.height * 0.5);
-            const dx = point.x - centerX;
-            const dy = point.y - centerY;
-            return (dx * dx + dy * dy) <= (RECENTER_MOBILE_RADIUS_PX * RECENTER_MOBILE_RADIUS_PX);
-        }
-
-        function positionRecenterButton(reason = 'unspecified') {
-            if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
-
-            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
-            syncRecenterButtonMount(isMobileLayout);
-            if (!isMobileLayout) {
-                if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
-                return;
-            }
-
-            const anchorRect = fullscreenBtn ? fullscreenBtn.getBoundingClientRect() : null;
-            if (!anchorRect) return;
-            const btnRect = subtitleRecenterBtn.getBoundingClientRect();
-            const gap = 10;
-
-            const rawLeft = anchorRect.left + (anchorRect.width - btnRect.width) * 0.5;
-            let rawTop = anchorRect.top - btnRect.height - gap;
-
-            if (isMobileLayout) {
-                const subtitleRect = subtitleContainer.getBoundingClientRect();
-                const targetCenterY = subtitleRect.top + subtitleRect.height * 0.5;
-                rawTop = targetCenterY - btnRect.height * 0.5;
-            }
-
-            let left = rawLeft;
-            let top = rawTop;
-            left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
-            top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
-
-            subtitleRecenterBtn.style.left = `${left}px`;
-            subtitleRecenterBtn.style.top = `${top}px`;
-            updateMobileRecenterRadius(left, top, btnRect.width, btnRect.height);
-        }
-
-        function recenterToCurrentTimestamp() {
-            if (!subtitleTracks || subtitleTracks.length === 0) {
-                setSubtitleFollowLocked(false, 'recenter-no-tracks');
-                return;
-            }
-
-            const fallbackIndex = findSubtitleIndexForTime(audioPlayer.currentTime || 0);
-            const safeIndex = Math.max(
-                0,
-                Math.min(
-                    subtitleTracks.length - 1,
-                    Number.isFinite(currentSubtitleIndex) && currentSubtitleIndex >= 0 ? currentSubtitleIndex : fallbackIndex
-                )
-            );
-
-            setSubtitleFollowLocked(false, 'recenter');
-            suppressFollowLockUntil = Date.now() + 450;
-            isDown = false;
-            subtitleContainer.dataset.isDragging = 'false';
-            subtitleContainer.dataset.wasDragging = 'false';
-            currentSubtitleIndex = safeIndex;
-            renderSubtitleLines(safeIndex);
-
-            const activeEl = subtitleContainer.children[safeIndex];
-            if (activeEl) {
-                smoothScrollToElement(subtitleContainer, activeEl);
-            }
-        }
-
-        let lastRecenterActivationAt = 0;
-        let suppressSubtitleClickUntil = 0;
-        function handleRecenterActivate(e) {
-            if (e) {
-                e.preventDefault();
-                e.stopPropagation();
-            }
-            const now = Date.now();
-            if (now - lastRecenterActivationAt < 260) return;
-            lastRecenterActivationAt = now;
-            // Touch devices may emit a delayed "ghost click" after the recenter tap.
-            // Keep subtitle timestamp clicks muted briefly to avoid accidental seeks.
-            const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
-            suppressSubtitleClickUntil = isMobileLayout ? now + 600 : now;
-            recenterToCurrentTimestamp();
-        }
-
-        if (subtitleRecenterBtn) {
-            subtitleRecenterBtn.addEventListener('pointerdown', handleRecenterActivate);
-            subtitleRecenterBtn.addEventListener('touchstart', handleRecenterActivate, { passive: false });
-            subtitleRecenterBtn.addEventListener('click', handleRecenterActivate);
-        }
-
-        window.addEventListener('resize', () => {
-            positionRecenterButton('resize');
-        });
-        window.addEventListener('orientationchange', () => {
-            positionRecenterButton('orientationchange');
-        });
-
-        const TOP_FADE_BYPASS_COUNT = 2;
-        function syncReadingTopFadeMask(activeIndex) {
-            if (!subtitleContainer) return;
-            const shouldDisableTopFade =
-                isReadingMode &&
-                Number.isFinite(activeIndex) &&
-                activeIndex >= 0 &&
-                activeIndex < TOP_FADE_BYPASS_COUNT;
-            subtitleContainer.classList.toggle('no-top-fade', shouldDisableTopFade);
-        }
-
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
             // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
             if (isReadingMode) {
                 // Version Check: Ensure we are rendering the current set of subtitles
-                if (subtitleTracks.length === 0) {
-                    syncReadingTopFadeMask(-1);
-                    subtitleContainer.innerHTML = '';
-                    const emptyLine = document.createElement('div');
-                    emptyLine.className = 'subtitle-line subtitle-current';
-                    emptyLine.innerText = 'Warte auf Audio/Text...';
-                    subtitleContainer.appendChild(emptyLine);
-                    return;
-                }
-
                 const currentVersion = window.subtitleVersion || 0;
                 const renderedVersion = parseInt(subtitleContainer.dataset.version || '-1');
 
@@ -3454,223 +2587,17 @@
                         // Click to Seek
                         div.title = "Klicken zum Springen";
                         div.style.cursor = "pointer";
-                        div.addEventListener('click', async (e) => {
-                            if (contentSwitchInProgress) {
-                                indexTrace('ui:timestamp:blocked', { reason: 'contentSwitchInProgress', index: i, targetTime: track.time });
-                                e.preventDefault();
-                                e.stopPropagation();
-                                return;
-                            }
-                            if (eventPointInMobileRecenterZone(e)) {
-                                indexTrace('ui:timestamp:blocked', { reason: 'mobileRecenterZone', index: i, targetTime: track.time });
-                                handleRecenterActivate(e);
-                                return;
-                            }
-                            if (Date.now() < suppressSubtitleClickUntil) {
-                                indexTrace('ui:timestamp:blocked', { reason: 'suppressSubtitleClickUntil', index: i, targetTime: track.time });
-                                e.preventDefault();
-                                e.stopPropagation();
-                                return;
-                            }
+                        div.addEventListener('click', (e) => {
                             if (subtitleContainer.dataset.wasDragging === 'true') {
                                 console.log("Click ignored due to drag");
-                                indexTrace('ui:timestamp:blocked', { reason: 'wasDragging', index: i, targetTime: track.time });
                                 return;
                             }
-                            // If a bookmark button is visible and was the click target, skip seek
-                            if (e.target.classList.contains('bookmark-btn')) {
-                                indexTrace('ui:timestamp:blocked', { reason: 'bookmark-btn', index: i, targetTime: track.time });
-                                return;
-                            }
-                            setSubtitleFollowLocked(false, 'timestamp-click');
                             console.log(`Seek to ${track.time}s`);
-                            indexTrace('ui:timestamp:seek', { index: i, targetTime: track.time });
-                            await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
-                            try {
-                                await audioPlayer.play();
-                                indexTrace('ui:timestamp:autoplay-ok', { index: i, targetTime: track.time });
-                            } catch (_) {
-                                // ignore autoplay gesture restrictions
-                                indexTrace('ui:timestamp:autoplay-failed', { index: i, targetTime: track.time });
-                            }
+                            audioPlayer.currentTime = track.time;
+                            updateSubtitleDisplay(i);
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
                         });
-
-                        // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
-                        div.style.position = 'relative';
-                        div.style.overflow = 'visible';
-                        let _bmTimer = null;
-                        const BOOKMARK_LABEL = 'Lesezeichen';
-                        const BOOKMARK_SAVED_LABEL = 'Gespeichert';
-                        const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
-                        const clampBookmarkCoord = (value, min, max) => Math.max(min, Math.min(max, value));
-                        const rectOverlapArea = (x, y, width, height, rect) => {
-                            const overlapW = Math.max(0, Math.min(x + width, rect.right) - Math.max(x, rect.left));
-                            const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
-                            return overlapW * overlapH;
-                        };
-                        const collectLineTextRects = (lineEl, containerRect) => {
-                            const rects = [];
-                            if (!lineEl) return rects;
-                            for (const node of lineEl.childNodes) {
-                                if (node.nodeType !== Node.TEXT_NODE) continue;
-                                if (!(node.textContent || '').trim()) continue;
-                                const range = document.createRange();
-                                range.selectNodeContents(node);
-                                for (const rect of range.getClientRects()) {
-                                    if (rect.width <= 0 || rect.height <= 0) continue;
-                                    if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
-                                    rects.push(rect);
-                                }
-                            }
-                            return rects;
-                        };
-                        const collectSubtitleTextRects = () => {
-                            const rects = [];
-                            const containerRect = subtitleContainer.getBoundingClientRect();
-                            subtitleContainer.querySelectorAll('.subtitle-line').forEach((lineEl) => {
-                                rects.push(...collectLineTextRects(lineEl, containerRect));
-                            });
-                            if (subtitleRecenterBtn && subtitleRecenterBtn.offsetParent !== null) {
-                                const recenterRect = subtitleRecenterBtn.getBoundingClientRect();
-                                if (recenterRect.width > 0 && recenterRect.height > 0) rects.push(recenterRect);
-                            }
-                            return { rects, containerRect };
-                        };
-                        const positionBookmarkButton = (btn) => {
-                            const lineRect = div.getBoundingClientRect();
-                            const { rects: textRects, containerRect } = collectSubtitleTextRects();
-                            if (!lineRect.width || !lineRect.height || !containerRect.width || !containerRect.height) return;
-                            const margin = 8;
-                            const btnWidth = btn.offsetWidth || 0;
-                            const btnHeight = btn.offsetHeight || 0;
-                            const minX = containerRect.left + margin;
-                            const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
-                            const minY = containerRect.top + margin;
-                            const maxY = Math.max(minY, containerRect.bottom - btnHeight - margin);
-                            const lineTextRects = collectLineTextRects(div, containerRect);
-                            const anchorRect = lineTextRects.length > 0 ? lineTextRects[lineTextRects.length - 1] : lineRect;
-                            const fallbackY = clampBookmarkCoord(
-                                anchorRect.top + ((anchorRect.height - btnHeight) / 2),
-                                minY,
-                                maxY
-                            );
-                            const xCandidates = [
-                                clampBookmarkCoord(anchorRect.right + margin, minX, maxX),
-                                clampBookmarkCoord(anchorRect.right - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(anchorRect.left - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(containerRect.right - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(containerRect.left + margin, minX, maxX)
-                            ];
-                            const yCandidates = [
-                                fallbackY,
-                                clampBookmarkCoord(anchorRect.top - btnHeight - margin, minY, maxY),
-                                clampBookmarkCoord(anchorRect.bottom + margin, minY, maxY),
-                                clampBookmarkCoord(lineRect.top + ((lineRect.height - btnHeight) / 2), minY, maxY)
-                            ];
-
-                            let best = { score: Number.POSITIVE_INFINITY, x: xCandidates[0], y: yCandidates[0] };
-                            for (const y of yCandidates) {
-                                for (const x of xCandidates) {
-                                    let overlapScore = 0;
-                                    for (const rect of textRects) {
-                                        overlapScore += rectOverlapArea(x, y, btnWidth, btnHeight, rect);
-                                    }
-                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (anchorRect.top + (anchorRect.height / 2))) * 0.08;
-                                    const idealCenterX = clampBookmarkCoord(
-                                        anchorRect.right + margin + (btnWidth / 2),
-                                        minX + (btnWidth / 2),
-                                        maxX + (btnWidth / 2)
-                                    );
-                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - idealCenterX) * 0.03;
-                                    const score = overlapScore + centerPenalty + sidePenalty;
-                                    if (score < best.score) best = { score, x, y };
-                                }
-                            }
-
-                            btn.style.left = `${Math.round(best.x - lineRect.left)}px`;
-                            btn.style.top = `${Math.round(best.y - lineRect.top)}px`;
-                        };
-
-                        const showBookmarkButton = () => {
-                            let btn = div.querySelector('.bookmark-btn');
-                            if (!btn) {
-                                btn = document.createElement('button');
-                                btn.className = 'bookmark-btn';
-                                btn.innerText = BOOKMARK_LABEL;
-                                btn.addEventListener('click', async (ev) => {
-                                    ev.stopPropagation();
-                                    ev.preventDefault();
-                                    btn.classList.remove('pop');
-                                    void btn.offsetWidth;
-                                    btn.classList.add('pop');
-                                    setTimeout(() => btn.classList.remove('pop'), 220);
-                                    const bm = {
-                                        id: Date.now(),
-                                        chapter: CURRENT_CHAPTER,
-                                        chapterTitle: CURRENT_CHAPTER_TITLE,
-                                        page: CURRENT_PAGE,
-                                        time: track.time,
-                                        textPreview: (track.text || '').substring(0, 60),
-                                        createdAt: Date.now()
-                                    };
-                                    const added = await window.GameState.addBookmark(bm);
-                                    if (added) {
-                                        btn.classList.add('saved');
-                                        btn.innerText = BOOKMARK_SAVED_LABEL;
-                                        positionBookmarkButton(btn);
-                                        setTimeout(() => {
-                                            btn.classList.remove('visible', 'saved');
-                                            btn.innerText = BOOKMARK_LABEL;
-                                            positionBookmarkButton(btn);
-                                        }, 1200);
-                                    } else {
-                                        btn.classList.remove('visible');
-                                    }
-                                });
-                                div.appendChild(btn);
-                            }
-                            subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
-                                if (otherBtn !== btn) otherBtn.classList.remove('visible');
-                            });
-                            positionBookmarkButton(btn);
-                            btn.classList.add('visible');
-                            // Auto-hide after 4 seconds
-                            setTimeout(() => {
-                                if (!btn.classList.contains('saved')) {
-                                    btn.classList.remove('visible');
-                                }
-                            }, 4000);
-                        };
-
-                        const startLongPress = () => {
-                            if (isDesktopPointer()) return;
-                            if (_bmTimer) clearTimeout(_bmTimer);
-                            _bmTimer = setTimeout(() => {
-                                _bmTimer = null;
-                                showBookmarkButton();
-                            }, 600);
-                        };
-                        const cancelLongPress = () => {
-                            if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
-                        };
-                        div.addEventListener('mousedown', (e) => {
-                            if (e.button !== 0) return;
-                            startLongPress();
-                        });
-                        div.addEventListener('contextmenu', (e) => {
-                            if (!isDesktopPointer()) return;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            cancelLongPress();
-                            showBookmarkButton();
-                        });
-                        div.addEventListener('touchstart', startLongPress, { passive: true });
-                        div.addEventListener('mouseup', cancelLongPress);
-                        div.addEventListener('mouseleave', cancelLongPress);
-                        div.addEventListener('touchend', cancelLongPress);
-                        div.addEventListener('touchcancel', cancelLongPress);
 
                         subtitleContainer.appendChild(div);
                     });
@@ -3681,9 +2608,7 @@
                 if (oldActive) oldActive.classList.remove('subtitle-current');
 
                 // Ensure centerIndex is valid
-                const normalizedIndex = Number.isFinite(centerIndex) ? centerIndex : 0;
-                const safeIndex = Math.max(0, Math.min(subtitleTracks.length - 1, normalizedIndex));
-                syncReadingTopFadeMask(safeIndex);
+                const safeIndex = centerIndex < 0 ? 0 : centerIndex;
 
                 if (subtitleContainer.children.length > safeIndex) {
                     const activeEl = subtitleContainer.children[safeIndex];
@@ -3692,7 +2617,7 @@
                     // Auto-Scroll only if user is NOT actively dragging AND audio is playing
                     // Uses custom smooth scroll with variable duration (1-3s)
                     const isPlaying = !audioPlayer.paused;
-                    if (subtitleContainer.dataset.isDragging !== 'true' && !subtitleFollowLocked && isPlaying) {
+                    if (subtitleContainer.dataset.isDragging !== 'true' && isPlaying) {
                         smoothScrollToElement(subtitleContainer, activeEl);
                     }
                 }
@@ -3700,7 +2625,6 @@
             }
 
             // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
-            syncReadingTopFadeMask(-1);
             subtitleContainer.innerHTML = '';
 
             if (subtitleTracks.length === 0) {
@@ -3737,7 +2661,7 @@
 
 
         // 2. Parser für Timestamps - CORRECTLY distinguishes between formats:
-        // [hh:mm:ss] - Colon before third part means SECONDS (kapitel1.txt uses [00:mm:ss])
+        // [hh:mm:ss] - Colon before third part means SECONDS (kapitel1c.txt uses [00:mm:ss])
         // [mm:ss.xx] - Dot before third part means CENTISECONDS (lore format)
         function parseSubtitles(rawText) {
             subtitleTracks = [];
@@ -3801,7 +2725,6 @@
             }
 
             subtitleTracks.sort((a, b) => a.time - b.time);
-            setSubtitleFollowLocked(false, 'parse-subtitles');
 
             // Increment version to force re-render in Reading Mode
             window.subtitleVersion = (window.subtitleVersion || 0) + 1;
@@ -3831,12 +2754,16 @@
 
         // 4b. Chapter Transition Logic (Main Audio Ended)
         audioPlayer.addEventListener('ended', () => {
+            // If Lore Mode, we let the OTHER listener (if exists) or restoreMainAudio handle it.
+            // But since I couldn't find the other listener, I'll add a safe check here.
+            // If we are in Lore Mode, we usually want to go back to Main Audio.
+            // Converting to "Global" logic:
             if (isLoreMode) {
-                indexTrace('audio:ended:lore', { activeLoreId: activeLoreId || null });
+                // Determine if there is another handler. 
+                // If restoreMainAudio exists, call it.
                 if (window.restoreMainAudio) {
-                    window.restoreMainAudio({ saveCurrent: false, forceResume: true });
+                    window.restoreMainAudio();
                 }
-                return;
             } else {
                 // MAIN CHAPTER FINISHED
                 console.log("Chapter 1 Finished. ReadingMode:", isReadingMode);
@@ -3855,17 +2782,6 @@
 
                 // Debug Decision
                 console.log(`[DEBUG_SYS] Audio Ended. SubtitleIndex=${currentSubtitleIndex}/${subtitleTracks.length}. TextFinished=${textFinished}`);
-                indexDebugNote('audio-ended', `idx=${currentSubtitleIndex}/${subtitleTracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
-                indexTrace('audio:ended:main', {
-                    subtitleIndex: currentSubtitleIndex,
-                    subtitleCount: subtitleTracks.length,
-                    textFinished: !!textFinished,
-                    readingMode: !!isReadingMode
-                });
-                const shouldClearMainState = !isReadingMode || textFinished;
-                if (shouldClearMainState) {
-                    clearContentState(MAIN_CONTENT_KEY);
-                }
 
                 if (isReadingMode) {
                     if (textFinished) {
@@ -3879,8 +2795,8 @@
                         iconPlay.style.display = 'block';
                         iconPause.style.display = 'none';
                     }
-                } else if (LEVEL.nextChapterTarget) {
-                    // Game Mode: Show Button (nur wenn Folgekapitel vorhanden)
+                } else {
+                    // Game Mode: Show Button
                     const btn = document.getElementById('nextChapterBtn');
                     if (btn) btn.classList.add('visible');
 
@@ -3893,24 +2809,16 @@
         // PINCH-TO-ZOOM REMOVED per user request (caused jitter issues)
 
 
-        window.transitionToNextChapter = async function () {
+        window.transitionToNextChapter = function () {
             const overlay = document.getElementById('transitionOverlay');
             if (overlay) overlay.classList.add('active');
-
-            const nextTarget = LEVEL.nextChapterTarget;
-            if (!nextTarget) return; // Kein Folgekapitel für dieses Level
-
-            await waitForContentSwitchIdle('transition:next-chapter');
-            await saveCurrentContentState({ reason: 'transition:next-chapter' });
-            indexDebugNote('transition', `to ${nextTarget}`);
-            markChapterAutoplayIntent('liminal_library', 'auto', 'chapter-transition');
-            writeStateHandoff('liminal_library');
 
             // Fade out any remaining audio
             fadeAudio(audioPlayer, 0, 1500);
 
             setTimeout(() => {
-                window.location.href = nextTarget;
+                alert("Ende der aktuellen Demo-Inhalte.");
+                window.location.href = 'index.html';
             }, 2000); // 2s Fade Time
         };
 
@@ -3923,33 +2831,18 @@
         }
 
 
-        // 11. Custom Drag-to-Scroll Logic for Subtitle Container (with Momentum)
+        // 11. Custom Drag-to-Scroll Logic for Subtitle Container
         let isDown = false;
         let startY;
         let scrollTop;
-        let lastMoveY = 0;
-        let lastMoveTime = 0;
-        let swipeVelocity = 0;
-        let momentumAnimId = null;
-
-        function cancelMomentum() {
-            if (momentumAnimId) {
-                cancelAnimationFrame(momentumAnimId);
-                momentumAnimId = null;
-            }
-        }
 
         const handleDown = (e) => {
-            cancelMomentum();
             isDown = true;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.dataset.wasDragging = 'false'; // Reset for next click check
             const pageY = e.pageY || e.touches[0].pageY;
             startY = pageY - subtitleContainer.offsetTop;
             scrollTop = subtitleContainer.scrollTop;
-            lastMoveY = pageY;
-            lastMoveTime = performance.now();
-            swipeVelocity = 0;
             // Optional: Cursor style
             subtitleContainer.style.cursor = 'grabbing';
         };
@@ -3961,24 +2854,10 @@
             const y = pageY - subtitleContainer.offsetTop;
             const walk = (y - startY) * 1.0; // Scroll speed
 
-            // Track velocity for momentum
-            const now = performance.now();
-            const elapsed = now - lastMoveTime;
-            if (elapsed > 0) {
-                // velocity in px/ms, smoothed
-                const instantVelocity = (pageY - lastMoveY) / elapsed;
-                swipeVelocity = swipeVelocity * 0.6 + instantVelocity * 0.4;
-            }
-            lastMoveY = pageY;
-            lastMoveTime = now;
-
             // Threshold check
             if (Math.abs(walk) > 5) {
                 subtitleContainer.dataset.isDragging = 'true';
                 subtitleContainer.dataset.wasDragging = 'true';
-                if (isReadingMode && Date.now() >= suppressFollowLockUntil) {
-                    setSubtitleFollowLocked(true, 'drag-threshold');
-                }
                 subtitleContainer.scrollTop = scrollTop - walk;
             }
         };
@@ -3987,47 +2866,17 @@
             isDown = false;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.style.cursor = 'auto';
-
-            // Start momentum animation if velocity is significant
-            const velocityPxPerMs = swipeVelocity;
-            let velocityPxPerSec = -velocityPxPerMs * 1000 * 1.2; // Negate + moderate amplify
-            const MAX_VELOCITY = 5000;
-            const MIN_VELOCITY = 15;
-            velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
-
-            if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
-                let lastFrame = performance.now();
-                const animateMomentum = (now) => {
-                    const dt = (now - lastFrame) / 1000;
-                    lastFrame = now;
-
-                    // Apply velocity
-                    subtitleContainer.scrollTop += velocityPxPerSec * dt;
-
-                    // Decay — 0.96 is much gentler than 0.92, so hard swipes coast far
-                    velocityPxPerSec *= Math.pow(0.96, dt * 60);
-
-                    // Stop when effectively still
-                    if (Math.abs(velocityPxPerSec) < 0.5) {
-                        momentumAnimId = null;
-                        return;
-                    }
-
-                    momentumAnimId = requestAnimationFrame(animateMomentum);
-                };
-                momentumAnimId = requestAnimationFrame(animateMomentum);
-            }
         };
 
         subtitleContainer.addEventListener('mousedown', handleDown);
-        subtitleContainer.addEventListener('touchstart', handleDown, { passive: true });
+        subtitleContainer.addEventListener('touchstart', handleDown);
 
         subtitleContainer.addEventListener('mouseleave', handleUp);
         subtitleContainer.addEventListener('mouseup', handleUp);
         subtitleContainer.addEventListener('touchend', handleUp);
 
         subtitleContainer.addEventListener('mousemove', handleMove);
-        subtitleContainer.addEventListener('touchmove', handleMove, { passive: false });
+        subtitleContainer.addEventListener('touchmove', handleMove);
 
         // 10. Scrollbar Auto-Hide Logic
         let scrollTimeout;
@@ -4041,20 +2890,8 @@
 
         // 5. Play/Pause Steuerung
         playBtn.addEventListener('click', () => {
-            if (contentSwitchInProgress) {
-                indexTrace('ui:play-toggle:blocked', { reason: 'contentSwitchInProgress' });
-                return;
-            }
-            const transportPaused = isAudioTransportPaused();
             console.log("Play Button Clicked. Current Src:", audioPlayer.src, "Paused:", audioPlayer.paused);
-            indexTrace('ui:play-toggle:click', {
-                src: audioPlayer.src,
-                paused: audioPlayer.paused,
-                transportPaused,
-                iconPlay: iconPlay.style.display,
-                iconPause: iconPause.style.display
-            });
-            if (transportPaused) {
+            if (audioPlayer.paused) {
                 audioPlayer.play()
                     .then(() => syncPlayPauseIcon())
                     .catch(e => {
@@ -4068,8 +2905,7 @@
         });
 
         // 6. Skip Buttons (±15 Sekunden)
-        async function skipBySecondsGlobal(deltaSec, reason = 'skip') {
-            if (contentSwitchInProgress) return;
+        async function skipBySecondsGlobal(deltaSec) {
             const delta = Number(deltaSec) || 0;
             if (!delta) return;
 
@@ -4082,7 +2918,35 @@
             }
 
             const target = Math.max(0, before + delta);
-            await seekAndSyncSubtitle(target, `${reason}:${delta > 0 ? 'forward' : 'back'}`);
+            let effectiveTime = target;
+
+            try {
+                if (typeof audioPlayer.seekAndConfirm === 'function') {
+                    const seekResult = await audioPlayer.seekAndConfirm(target, {
+                        maxAttempts: 5,
+                        settleMs: 220,
+                        tolerance: 1.0
+                    });
+                    if (Number.isFinite(seekResult.position) && seekResult.position >= 0) {
+                        effectiveTime = seekResult.position;
+                    }
+                } else {
+                    audioPlayer.currentTime = target;
+                }
+            } catch (e) {
+                console.warn('[Skip] seek failed:', e);
+                audioPlayer.currentTime = target;
+            }
+
+            let newIndex = 0;
+            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                if (effectiveTime >= subtitleTracks[i].time) {
+                    newIndex = i;
+                    break;
+                }
+            }
+            updateSubtitleDisplay(newIndex);
+            renderSubtitleLines(Math.max(0, newIndex));
 
             if (wasPausedBeforeSkip) {
                 audioPlayer.pause();
@@ -4091,85 +2955,35 @@
         }
 
         skipBackBtn.addEventListener('click', () => {
-            skipBySecondsGlobal(-15, 'btn-skip').catch((e) => {
+            skipBySecondsGlobal(-15).catch((e) => {
                 console.warn('[Skip] Back failed:', e);
             });
         });
 
         skipForwardBtn.addEventListener('click', () => {
-            skipBySecondsGlobal(15, 'btn-skip').catch((e) => {
+            skipBySecondsGlobal(15).catch((e) => {
                 console.warn('[Skip] Forward failed:', e);
             });
         });
 
-        // 7. Modus-Wechsel mit robuster Animation
-        let modeSwitchUiTimer = null;
-        let modeSwitchLockUntil = 0;
-
-        function syncModeToggleButton() {
-            if (!modeToggleBtn) return;
-            const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
-            modeToggleBtn.title = nextModeLabel;
-            modeToggleBtn.setAttribute('aria-label', nextModeLabel);
-        }
-
-        function setReadingMode(nextMode, reason = 'manual') {
-            let normalized = !!nextMode;
-            if (!normalized && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
-                normalized = true;
-            }
-            const now = performance.now();
-
-            if (now < modeSwitchLockUntil && normalized === isReadingMode) return;
-            modeSwitchLockUntil = now + 120;
-
-            isReadingMode = normalized;
-            localStorage.setItem('gameboy_reading_mode', normalized ? 'true' : 'false');
-
-            if (normalized) {
-                syncAutoWalkToIndex();
-                uiContainer.classList.add('reading-mode');
-            } else {
-                setSubtitleFollowLocked(false, 'mode-off');
-                if (isLoreMode && !isMenuTriggeredLore) {
-                    endLoreMode();
-                }
-                uiContainer.classList.remove('reading-mode');
-            }
-
-            syncModeToggleButton();
-            moveTarget = null;
-            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-
+        // 7. Modus-Wechsel mit schneller Animation
+        readingModeBtn.addEventListener('click', () => {
             uiContainer.classList.add('mode-switching');
-            if (modeSwitchUiTimer) clearTimeout(modeSwitchUiTimer);
-            modeSwitchUiTimer = setTimeout(() => {
+            // Sofort umschalten, Buttons faden währenddessen
+            isReadingMode = true;
+            localStorage.setItem('gameboy_reading_mode', 'true'); // STATE PERSISTENCE
+
+            // CRITICAL: Synchronize Path Direction
+            // Do not re-sort! Just find where we are on the existing Spawn->End path.
+            syncAutoWalkToIndex();
+
+            moveTarget = null; // Stoppe Bewegung
+            uiContainer.classList.add('reading-mode');
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            // Nach kurzer Zeit Buttons wieder einblenden
+            setTimeout(() => {
                 uiContainer.classList.remove('mode-switching');
             }, 150);
-
-            indexDebugNote(
-                'mode-switch',
-                `${reason} reading=${isReadingMode} tracks=${subtitleTracks.length} switching=${contentSwitchInProgress}`
-            );
-            applySceneAudioMix(`mode-switch:${reason}`);
-            updateRecenterButtonVisibility();
-        }
-
-        syncModeToggleButton();
-        modeSwitchInitialized = true;
-        if (pendingForceReadingFromFreeze) {
-            setReadingMode(true, 'dimmer-freeze-init');
-            pendingForceReadingFromFreeze = false;
-        }
-
-        modeToggleBtn.addEventListener('click', () => {
-            // In frozen mode: reset dimmer to off + switch to game mode
-            if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
-                globalVisualDimmer.setLevel(0, { forceEmit: true });
-                setReadingMode(false, 'ui-mode-toggle-unfreeze');
-            } else {
-                setReadingMode(!isReadingMode, 'ui-mode-toggle');
-            }
         });
 
         // HELPER: Sync AutoWalk Index to current Player Position
@@ -4203,10 +3017,40 @@
             console.log(`AutoWalk Synced to Index: ${closestIdx} / ${autoWalkPath.length}`);
         }
 
+        gameModeBtn.addEventListener('click', () => {
+            uiContainer.classList.add('mode-switching');
+            isReadingMode = false;
+            localStorage.setItem('gameboy_reading_mode', 'false'); // STATE PERSISTENCE
+
+            // Fix: Ensure Lore Mode is also exited IF it was proximity triggered
+            // If menu triggered, allow it to continue (as per user request)
+            if (isLoreMode && !isMenuTriggeredLore) {
+                endLoreMode();
+            }
+
+            // Do NOT force isLoreMode = false if we want it to continue playing!
+            // isLoreMode = false; // REMOVED to allow playback
+
+            // But if we kept it running, we must ensure moveTarget is clear?
+            moveTarget = null;  // Clear any pending movement
+
+            uiContainer.classList.remove('reading-mode');
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            setTimeout(() => {
+                uiContainer.classList.remove('mode-switching');
+            }, 150);
+        });
+
         // 8. Wenn Audio zu Ende ist, Reset
         // 8. Wenn Audio zu Ende ist
         audioPlayer.addEventListener('ended', () => {
-            if (isLoreMode || contentSwitchInProgress) return;
+            // Auto-Resume Main Audio if in Lore Mode
+            if (isLoreMode) {
+                console.log("Lore ended. Returning to Main Audio...");
+                restoreMainAudio();
+                return;
+            }
+
             iconPlay.style.display = 'block';
             renderSubtitleLines(subtitleTracks.length - 1);
         });
@@ -4234,74 +3078,26 @@
         });
 
         // 10. Fullscreen Logic
-        function getFullscreenElementSafe() {
-            return document.fullscreenElement || document.webkitFullscreenElement || null;
-        }
+        fullscreenBtn.addEventListener('click', () => {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.warn(`Error attempting to enable fullscreen: ${err.message}`);
+                });
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        });
 
-        function isFullscreenSupported() {
-            const root = document.documentElement;
-            return !!(
-                document.fullscreenEnabled ||
-                document.webkitFullscreenEnabled ||
-                root.requestFullscreen ||
-                root.webkitRequestFullscreen
-            );
-        }
-
-        function requestFullscreenSafe() {
-            const root = document.documentElement;
-            if (root.requestFullscreen) return root.requestFullscreen();
-            if (root.webkitRequestFullscreen) return Promise.resolve(root.webkitRequestFullscreen());
-            return Promise.reject(new Error('Fullscreen API not supported'));
-        }
-
-        function exitFullscreenSafe() {
-            if (document.exitFullscreen) return document.exitFullscreen();
-            if (document.webkitExitFullscreen) return Promise.resolve(document.webkitExitFullscreen());
-            return Promise.resolve();
-        }
-
-        function syncFullscreenUi() {
-            if (getFullscreenElementSafe()) {
+        document.addEventListener('fullscreenchange', () => {
+            if (document.fullscreenElement) {
                 iconFsEnter.style.display = 'none';
                 iconFsExit.style.display = 'block';
             } else {
                 iconFsEnter.style.display = 'block';
                 iconFsExit.style.display = 'none';
             }
-            positionRecenterButton();
-        }
-
-        fullscreenBtn.addEventListener('click', async () => {
-            if (!isFullscreenSupported()) {
-                showNotification('Vollbild wird auf diesem Geraet nicht unterstuetzt.');
-                syncFullscreenUi();
-                return;
-            }
-
-            try {
-                if (!getFullscreenElementSafe()) {
-                    await requestFullscreenSafe();
-                } else {
-                    await exitFullscreenSafe();
-                }
-            } catch (err) {
-                console.warn(`Error attempting to toggle fullscreen: ${err && err.message ? err.message : err}`);
-                showNotification('Vollbild konnte nicht aktiviert werden.');
-            } finally {
-                syncFullscreenUi();
-            }
-        });
-
-        document.addEventListener('fullscreenchange', syncFullscreenUi);
-        document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
-        document.addEventListener('fullscreenerror', () => {
-            syncFullscreenUi();
-            showNotification('Vollbild ist auf diesem Geraet nicht verfuegbar.');
-        });
-        document.addEventListener('webkitfullscreenerror', () => {
-            syncFullscreenUi();
-            showNotification('Vollbild ist auf diesem Geraet nicht verfuegbar.');
         });
 
         // 11. Custom Fullscreen Button (siehe oben)
@@ -4309,37 +3105,22 @@
 
 
         let lastBrightnessCheck = 0;
-        let backgroundBrightnessTimer = null;
-
-        function scheduleBackgroundBrightnessCheck(delayMs = 600) {
-            if (backgroundBrightnessTimer) clearTimeout(backgroundBrightnessTimer);
-            backgroundBrightnessTimer = setTimeout(() => {
-                requestAnimationFrame(checkBackgroundBrightness);
-            }, Math.max(120, delayMs || 0));
-        }
         function checkBackgroundBrightness(timestamp) {
-            if (manualBackgroundDimLevel > 0) {
-                subtitleContainer.style.background = 'rgba(0, 0, 0, 0)';
-                audioControlsEl.style.background = 'rgba(0, 0, 0, 0)';
-                scheduleBackgroundBrightnessCheck(700);
-                return;
-            }
-
             // Im Lesemodus immer dunkler Hintergrund
             if (isReadingMode) {
-                scheduleBackgroundBrightnessCheck(700);
+                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
                 return;
             }
 
             if (!gameReady || uiContainer.style.display === 'none') {
-                scheduleBackgroundBrightnessCheck(700);
+                setTimeout(() => requestAnimationFrame(checkBackgroundBrightness), 500);
                 return;
             }
 
             // Throttle: Nur alle 1000ms prüfen (Performance!)
             if (!timestamp) timestamp = performance.now();
             if (timestamp - lastBrightnessCheck < 1000) {
-                scheduleBackgroundBrightnessCheck(260);
+                requestAnimationFrame(checkBackgroundBrightness);
                 return;
             }
             lastBrightnessCheck = timestamp;
@@ -4397,11 +3178,11 @@
                 // Canvas-Zugriff kann bei bestimmten Bedingungen fehlschlagen
             }
 
-            scheduleBackgroundBrightnessCheck(700);
+            requestAnimationFrame(checkBackgroundBrightness);
         }
 
         // Starte die Hintergrund-Prüfung
-        scheduleBackgroundBrightnessCheck(350);
+        requestAnimationFrame(checkBackgroundBrightness);
 
         // Global Start Time for Grace Period
         const GAME_START_TIME = Date.now();
@@ -4450,15 +3231,13 @@
             // SHIMMER SOUND TRIGGER (Unabhängig vom Text)
             if (nearestId && minDist < TRIGGER_DIST) {
                 // BUGFIX: Do not play shimmer if already collected!
-                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
                 const alreadyCollected = window.GameState ? window.GameState.isLightCollected(sc, nearestId) : (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId));
 
                 if (!alreadyCollected) {
                     if (lastShimmerLightId !== nearestId) {
                         shimmerSound.currentTime = 0;
-                        if (allowAuxScPlayback()) {
-                            shimmerSound.play().catch(() => { });
-                        }
+                        shimmerSound.play().catch(() => { });
                         lastShimmerLightId = nearestId;
                     }
                 }
@@ -4476,7 +3255,7 @@
                 }
 
                 // Check if this specific light was already collected
-                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
+                const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "kapitel1c";
                 const alreadyCollected = window.GameState ? window.GameState.isLightCollected(sc, nearestId) : (LoreSystem.state.collectedLights[sc] && LoreSystem.state.collectedLights[sc].includes(nearestId));
                 if (alreadyCollected) {
                     return;
@@ -4510,504 +3289,385 @@
                 }
 
             }
-            // Lore intentionally keeps playing even after leaving the trigger area.
+            // STOP LORE (Spieler läuft weg) - NUR wenn NICHT vom Menü gestartet!
+            else if (isLoreMode && minDist > EXIT_DIST && !isMenuTriggeredLore) {
+                endLoreMode();
+            }
         } // End updateLoreSystem
 
         // NEW: Restore Main Audio Function (Replaces basic endLoreMode logic)
-        function getActiveContentKey() {
-            if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
-            return MAIN_CONTENT_KEY;
-        }
-
-        function clearContentState(key) {
-            if (!key) return;
-            if (window.PlayerStateManager) {
-                window.PlayerStateManager.clear(key);
-            }
-
-            if (key === MAIN_CONTENT_KEY) {
-                mainAudioState.time = 0;
-                mainAudioState.wasPlaying = false;
-            } else if (key.startsWith('lore')) {
-                const loreId = parseInt(key.replace('lore', ''), 10);
-                if (Number.isFinite(loreId)) {
-                    loreData.resumeTimes[loreId] = 0;
-                }
-            }
-        }
-
-        function isCurrentContentCompleted() {
-            if (!subtitleTracks || subtitleTracks.length === 0) return false;
-            const t = audioPlayer.currentTime || 0;
-            const duration = audioPlayer.duration || 0;
-            const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.25);
-            const reachedSubtitleEnd = currentSubtitleIndex >= subtitleTracks.length - 1;
-            return reachedAudioEnd && reachedSubtitleEnd;
-        }
-
-        async function saveCurrentContentState(options = {}) {
-            const {
-                keyOverride = null,
-                clear = false,
-                preferCachedTime = false,
-                reason = 'unspecified'
-            } = options;
-
-            const key = keyOverride || getActiveContentKey();
-            if (!key || !audioPlayer) return;
-
-            if (clear) {
-                clearContentState(key);
-                indexDebug.lastSave = { key, cleared: true, reason, at: Date.now() };
-                indexDebugNote('state-clear', `${key} (${reason})`);
+        function restoreMainAudio() {
+            if (!isLoreMode) {
+                console.log("[DEBUG] restoreMainAudio called but not in lore mode - skipping");
                 return;
             }
 
-            try {
-                let currentTime = audioPlayer.currentTime || 0;
-                if (!preferCachedTime && typeof audioPlayer.getAccurateCurrentTime === 'function') {
-                    currentTime = await audioPlayer.getAccurateCurrentTime(800);
-                }
+            console.log("[DEBUG] restoreMainAudio: Starting audio restoration...");
+            console.log("[DEBUG] mainAudioState:", JSON.stringify(mainAudioState));
+            console.log("[DEBUG] mainAudioUrl:", window.mainAudioUrl);
+            console.log("[DEBUG] mainTextContent available:", !!window.mainTextContent);
 
-                const wasPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
-                    ? audioPlayer.isProbablyPlaying()
-                    : !audioPlayer.paused;
+            isLoreMode = false;
+            // isReadingMode intentionally left as is (User can switch manually)
 
-                if (window.PlayerStateManager) {
-                    if (typeof window.PlayerStateManager.saveStateAt === 'function') {
-                        const sentence = window.PlayerStateManager.findSentenceStart(currentTime, subtitleTracks);
-                        window.PlayerStateManager.saveStateAt(key, {
-                            sentenceIndex: sentence.index,
-                            sentenceTime: sentence.time,
-                            wasPlaying
-                        });
+            // Fade out Lore
+            fadeAudio(audioPlayer, 0, 800, () => {
+                audioPlayer.pause();
+                console.log("[DEBUG] Lore audio paused. Loading main audio...");
 
-                        indexDebug.lastSave = {
-                            key,
-                            reason,
-                            currentTime: Number(currentTime.toFixed(3)),
-                            sentenceIndex: sentence.index,
-                            sentenceTime: Number((sentence.time || 0).toFixed(3)),
-                            wasPlaying,
-                            at: Date.now()
-                        };
-                        indexDebugNote('state-save', `${key} -> ${sentence.time.toFixed(2)}s idx=${sentence.index} play=${wasPlaying} (${reason})`);
-                    } else {
-                        window.PlayerStateManager.saveState(key, subtitleTracks, audioPlayer);
-                        indexDebug.lastSave = {
-                            key,
-                            reason,
-                            currentTime: Number(currentTime.toFixed(3)),
-                            sentenceIndex: null,
-                            sentenceTime: Number((currentTime || 0).toFixed(3)),
-                            wasPlaying,
-                            at: Date.now()
-                        };
-                        indexDebugNote('state-save', `${key} (legacy) ${currentTime.toFixed(2)}s (${reason})`);
-                    }
-                }
+                // Restore Main Track
+                const mainUrl = getSCUrl(window.mainAudioUrl);
+                console.log("[DEBUG] Restoring audio src to:", mainUrl);
+                audioPlayer.src = mainUrl;
 
-                if (key === MAIN_CONTENT_KEY) {
-                    mainAudioState.wasPlaying = wasPlaying;
-                    mainAudioState.time = currentTime || 0;
-                    mainAudioState.tracks = [...subtitleTracks];
-                } else if (key.startsWith('lore')) {
-                    const loreId = parseInt(key.replace('lore', ''), 10);
-                    if (Number.isFinite(loreId)) {
-                        loreData.resumeTimes[loreId] = currentTime || 0;
-                    }
-                }
-            } catch (e) {
-                console.warn('[State] saveCurrentContentState failed:', e);
-                indexDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
-            }
-        }
+                // Restore Tracks
+                // Fix: Explicitly reload Chapter 1 text to ensure correctness
+                console.log("[DEBUG] Reloading Main Chapter Text (kapitel1c.txt)...");
+                fetch('assets/kapitel1c.txt')
+                    .then(r => {
+                        if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
+                        return r.text();
+                    })
+                    .then(text => {
+                        console.log("[DEBUG] kapitel1c.txt loaded, length:", text.length);
+                        parseSubtitles(text);
+                        console.log("[DEBUG] After parseSubtitles, tracks:", subtitleTracks.length);
 
-        async function ensureMainTextLoaded() {
-            if (window.mainTextContent && window.mainTextContent.length > 0) {
-                return window.mainTextContent;
-            }
-            const response = await fetch('assets/kapitel1.txt');
-            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-            window.mainTextContent = await response.text();
-            return window.mainTextContent;
-        }
+                        // Use PlayerStateManager for proper sentence-based position restoration
+                        let resumeTime = 0;
+                        if (window.PlayerStateManager) {
+                            const savedState = window.PlayerStateManager.getState('kapitel1c');
+                            if (savedState && savedState.sentenceTime !== undefined) {
+                                resumeTime = savedState.sentenceTime;
+                                console.log("[DEBUG] Restored from PlayerStateManager:", savedState);
+                            } else {
+                                resumeTime = Math.max(0, mainAudioState.time - 5);
+                                console.log("[DEBUG] No saved state, using legacy:", mainAudioState.time);
+                            }
+                        } else {
+                            resumeTime = Math.max(0, mainAudioState.time - 5);
+                        }
+                        console.log("[DEBUG] Setting currentTime to:", resumeTime);
+                        audioPlayer.currentTime = resumeTime;
+                        renderSubtitleLines(Math.max(0, currentSubtitleIndex));
 
-        async function ensureLoreTextLoaded(id) {
-            if (loreData.text[id] && loreData.text[id].length > 0) {
-                return loreData.text[id];
-            }
-
-            const content = window.GameState?.getLore(id);
-            const textPath = content ? content.text : `assets/lore${id}.txt`;
-            const response = await fetch(textPath);
-            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-            loreData.text[id] = await response.text();
-            return loreData.text[id];
-        }
-
-        function findSubtitleIndexForTime(timeSec) {
-            if (!subtitleTracks || subtitleTracks.length === 0) return 0;
-            for (let i = subtitleTracks.length - 1; i >= 0; i--) {
-                if (timeSec >= subtitleTracks[i].time) return i;
-            }
-            return 0;
-        }
-
-        function wait(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
-        async function waitForContentSwitchIdle(reason, timeoutMs = 2200) {
-            const endAt = Date.now() + Math.max(300, timeoutMs || 0);
-            let waited = 0;
-            while (contentSwitchInProgress && Date.now() < endAt) {
-                await wait(60);
-                waited += 60;
-            }
-            if (contentSwitchInProgress) {
-                indexDebugNote('switch-wait-timeout', `${reason || 'unknown'} waited=${waited}ms`);
-            } else if (waited > 0) {
-                indexDebugNote('switch-wait', `${reason || 'unknown'} waited=${waited}ms`);
-            }
-        }
-
-        async function seekAndSyncSubtitle(targetTime, reason) {
-            const safeTarget = Math.max(0, Number(targetTime) || 0);
-            indexTrace('seek:start', {
-                reason,
-                target: Number(safeTarget.toFixed(3)),
-                before: Number(((audioPlayer && audioPlayer.currentTime) || 0).toFixed(3))
-            });
-            let seekResult = {
-                ok: false,
-                target: safeTarget,
-                position: audioPlayer.currentTime || 0,
-                attempts: 0
-            };
-
-            try {
-                if (typeof audioPlayer.seekAndConfirm === 'function') {
-                    seekResult = await audioPlayer.seekAndConfirm(safeTarget, {
-                        maxAttempts: 5,
-                        settleMs: 220,
-                        tolerance: 0.9
+                        // Resume playback NOW after text is loaded
+                        if (mainAudioState.wasPlaying) {
+                            console.log("[DEBUG] Resuming playback...");
+                            audioPlayer.volume = 0;
+                            audioPlayer.play().then(() => {
+                                console.log("[DEBUG] Play successful!");
+                                fadeAudio(audioPlayer, 1, 800);
+                            }).catch(e => {
+                                console.error("[DEBUG] Resume blocked:", e);
+                            });
+                            iconPlay.style.display = 'none';
+                            iconPause.style.display = 'block';
+                        } else {
+                            console.log("[DEBUG] Not resuming playback (was paused before lore)");
+                            iconPlay.style.display = 'block';
+                            iconPause.style.display = 'none';
+                        }
+                    })
+                    .catch(e => {
+                        console.error("[DEBUG] Failed to restore main text:", e);
+                        // Fallback to cached state if fetch fails
+                        if (mainAudioState.tracks && mainAudioState.tracks.length > 0) {
+                            subtitleTracks = [...mainAudioState.tracks];
+                            const resumeTime = Math.max(0, mainAudioState.time - 5);
+                            audioPlayer.currentTime = resumeTime;
+                            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+                        }
                     });
-                } else {
-                    audioPlayer.currentTime = safeTarget;
-                    await wait(260);
-                    const pos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
-                        ? await audioPlayer.getAccurateCurrentTime(900)
-                        : (audioPlayer.currentTime || 0);
-                    seekResult = {
-                        ok: Math.abs(pos - safeTarget) <= 1.0 || pos >= safeTarget - 1.0,
-                        target: safeTarget,
-                        position: pos,
-                        attempts: 1
-                    };
-                }
-            } catch (e) {
-                indexDebugNote('seek-error', `${reason}: ${e && e.message ? e.message : e}`);
-            }
 
-            const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
-            currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
-            renderSubtitleLines(currentSubtitleIndex);
-            indexDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
-            indexTrace('seek:end', {
-                reason,
-                ok: !!seekResult.ok,
-                attempts: seekResult.attempts || 0,
-                target: Number(safeTarget.toFixed(3)),
-                position: Number((effectiveTime || 0).toFixed(3)),
-                subtitleIndex: currentSubtitleIndex
-            });
-            return seekResult;
-        }
-
-        async function pauseWithFade(duration = 800) {
-            if (!audioPlayer || audioPlayer.paused) return;
-            await new Promise(resolve => {
-                fadeAudio(audioPlayer, 0, duration, () => {
-                    audioPlayer.pause();
-                    resolve();
-                });
-            });
-        }
-
-        async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
-            let previousPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
-                ? await audioPlayer.getAccurateCurrentTime(600)
-                : (audioPlayer.currentTime || 0);
-            let sawRecentProgress = (typeof audioPlayer.hasRecentProgress === 'function')
-                ? audioPlayer.hasRecentProgress(1800)
-                : false;
-            indexTrace('verify-play:start', {
-                retries,
-                delayMs,
-                startPos: Number((previousPos || 0).toFixed(3)),
-                paused: !!audioPlayer.paused,
-                transportPaused: isAudioTransportPaused(),
-                sawRecentProgress
-            });
-
-            for (let attempt = 0; attempt <= retries; attempt++) {
-                try {
-                    await audioPlayer.play();
-                } catch (e) {
-                    console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
-                    indexTrace('verify-play:play-error', { attempt: attempt + 1, message: e && e.message ? e.message : String(e) });
-                }
-
-                await wait(delayMs);
-                const currentPos = (typeof audioPlayer.getAccurateCurrentTime === 'function')
-                    ? await audioPlayer.getAccurateCurrentTime(700)
-                    : (audioPlayer.currentTime || 0);
-                const advanced = Number.isFinite(currentPos) && Number.isFinite(previousPos)
-                    ? (currentPos - previousPos) >= 0.08
-                    : false;
-                const probablyPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
-                    ? audioPlayer.isProbablyPlaying()
-                    : !audioPlayer.paused;
-                const transportPaused = isAudioTransportPaused();
-                const hasRecentProgress = (typeof audioPlayer.hasRecentProgress === 'function')
-                    ? audioPlayer.hasRecentProgress(1800)
-                    : false;
-                sawRecentProgress = sawRecentProgress || hasRecentProgress;
-                const started = !transportPaused && (advanced || hasRecentProgress);
-                indexDebugNote(
-                    'play-check',
-                    `attempt=${attempt + 1} paused=${audioPlayer.paused} playing=${probablyPlaying} adv=${advanced} t=${currentPos.toFixed(2)}`
-                );
-                indexTrace('verify-play:attempt', {
-                    attempt: attempt + 1,
-                    paused: !!audioPlayer.paused,
-                    transportPaused,
-                    probablyPlaying: !!probablyPlaying,
-                    advanced: !!advanced,
-                    hasRecentProgress,
-                    previousPos: Number((previousPos || 0).toFixed(3)),
-                    currentPos: Number((currentPos || 0).toFixed(3)),
-                    started
-                });
-                if (started) {
-                    indexTrace('verify-play:success', { attempt: attempt + 1, currentPos: Number((currentPos || 0).toFixed(3)) });
-                    return true;
-                }
-                previousPos = Number.isFinite(currentPos) ? currentPos : previousPos;
-            }
-            // Last fallback: if transport isn't paused and we observed recent progress,
-            // treat playback as started even when sampling delta was too small.
-            const finalTransportPaused = isAudioTransportPaused();
-            if (!finalTransportPaused && sawRecentProgress) {
-                indexTrace('verify-play:success-fallback', { sawRecentProgress: true });
-                return true;
-            }
-            indexTrace('verify-play:failed', { retries, delayMs });
-            return false;
-        }
-
-        async function restoreMainAudio(options = {}) {
-            const {
-                saveCurrent = true,
-                forceResume = false
-            } = options;
-            indexTrace('switch:restore-main:enter', { saveCurrent: !!saveCurrent, forceResume: !!forceResume });
-
-            if (!isLoreMode && !contentSwitchInProgress) {
-                return;
-            }
-
-            if (contentSwitchInProgress) {
-                indexTrace('switch:restore-main:blocked', { reason: 'contentSwitchInProgress' });
-                return;
-            }
-            contentSwitchInProgress = true;
-            const switchToken = ++contentSwitchToken;
-            indexTrace('switch:restore-main:lock', { switchToken });
-
-            try {
-                const loreIdBeforeSwitch = activeLoreId;
-                if (saveCurrent && loreIdBeforeSwitch) {
-                    await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}`, reason: 'restore-main:save-lore' });
-                } else if (!saveCurrent && loreIdBeforeSwitch) {
-                    clearContentState(`lore${loreIdBeforeSwitch}`);
-                }
-
-                isLoreMode = false;
-                isMenuTriggeredLore = false;
+                // Reset Active Lore Flags
                 activeLoreId = null;
                 activeLightSourceId = null;
-                applySceneAudioMix('restore-main:mode');
+                isMenuTriggeredLore = false;
 
-                if (loreResumeTimeout) {
-                    clearTimeout(loreResumeTimeout);
-                    loreResumeTimeout = null;
-                }
-
-                uiContainer.classList.add('mode-switching');
-                indexTrace('switch:restore-main:ui-mode-switching-on', { switchToken });
-
-                await pauseWithFade(700);
-                if (switchToken !== contentSwitchToken) return;
-
-                audioPlayer.src = getSCUrl(window.mainAudioUrl || LEVEL.audioUrl);
-                indexTrace('switch:restore-main:src-set', { switchToken, src: audioPlayer.src });
-
-                const mainText = await ensureMainTextLoaded();
-                if (switchToken !== contentSwitchToken) return;
-                parseSubtitles(mainText);
-                indexTrace('switch:restore-main:text-parsed', { switchToken, tracks: subtitleTracks.length });
-
-                const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
-                const resumeTime = savedMain && savedMain.sentenceTime !== undefined
-                    ? savedMain.sentenceTime
-                    : Math.max(0, mainAudioState.time || 0);
-                indexTrace('switch:restore-main:resume-time', {
-                    switchToken,
-                    resumeTime: Number((resumeTime || 0).toFixed(3)),
-                    hasSavedMain: !!savedMain
-                });
-                indexDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
-                await seekAndSyncSubtitle(resumeTime, 'restore-main:pre-play');
-
-                const shouldResumePlayback = forceResume || (savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying);
-                indexTrace('switch:restore-main:resume-decision', { switchToken, shouldResumePlayback: !!shouldResumePlayback });
-                if (shouldResumePlayback) {
-                    audioPlayer.volume = 0;
-                    const started = await verifyPlaybackStarted(4, 320);
-                    indexTrace('switch:restore-main:verify-result', { switchToken, started: !!started });
-                    if (started) {
-                        // Re-render subtitles at the already-seeked position without re-seeking
-                        currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                        renderSubtitleLines(currentSubtitleIndex);
-                        fadeAudio(audioPlayer, 1.0, 700);
-                        iconPlay.style.display = 'none';
-                        iconPause.style.display = 'block';
-                    } else {
-                        audioPlayer.volume = 1.0;
-                        iconPlay.style.display = 'block';
-                        iconPause.style.display = 'none';
-                    }
-                } else {
-                    audioPlayer.volume = 1.0;
-                    iconPlay.style.display = 'block';
-                    iconPause.style.display = 'none';
-                }
-            } catch (e) {
-                console.error('[Switch] Failed to restore main audio:', e);
-                indexTrace('switch:restore-main:error', { message: e && e.message ? e.message : String(e) });
-                indexDebugNote('restore-main-error', e && e.message ? e.message : String(e));
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
-            } finally {
-                if (switchToken === contentSwitchToken) {
-                    contentSwitchInProgress = false;
-                    uiContainer.classList.remove('mode-switching');
-                    indexTrace('switch:restore-main:unlock', { switchToken });
-                }
-            }
+                uiContainer.classList.remove('mode-switching'); // Clean up class
+            });
         }
 
-        async function startLoreMode(id, fromMenu = false) {
-            indexTrace('switch:start-lore:enter', { id, fromMenu: !!fromMenu });
-            if (isLoreMode && activeLoreId === id) return;
-            if (contentSwitchInProgress) {
-                await waitForContentSwitchIdle(`start-lore:${id}`);
-                if (contentSwitchInProgress) {
-                    indexTrace('switch:start-lore:blocked-after-wait', { id });
-                    return;
+        // endLoreMode() defined below (full implementation)
+
+        function startLoreMode(id, fromMenu = false) {
+            if (isLoreMode && activeLoreId === id) return; // Prevent restart of same
+
+            console.log(`[DEBUG] startLoreMode called with id=${id}, fromMenu=${fromMenu}`);
+            console.log(`[DEBUG] isLoreMode before:`, isLoreMode);
+            console.log(`[DEBUG] audioPlayer.src:`, audioPlayer.src);
+            console.log(`[DEBUG] audioPlayer.paused:`, audioPlayer.paused);
+            console.log(`[DEBUG] audioPlayer.currentTime:`, audioPlayer.currentTime);
+
+            // CRITICAL FIX: Save main audio state BEFORE setting isLoreMode = true
+            // Check if current track is actually MAIN audio before saving
+            const isMainAudio = audioPlayer.src.includes(window.mainAudioUrl) ||
+                audioPlayer.src.includes('kapitel1c') ||
+                audioPlayer.src.includes('2250158603'); // Kapitel 1c track ID
+
+            console.log(`[DEBUG] isMainAudio:`, isMainAudio, `mainAudioUrl:`, window.mainAudioUrl);
+
+            if (isMainAudio && !isLoreMode) {
+                // Save state via Manager (Sentence Based)
+                if (window.PlayerStateManager) {
+                    window.PlayerStateManager.saveState('kapitel1c', subtitleTracks, audioPlayer);
                 }
+
+                // Fallback / legacy state object (keep for now as backup)
+                mainAudioState.wasPlaying = !audioPlayer.paused;
+                mainAudioState.time = audioPlayer.currentTime;
+                console.log(`[DEBUG] Saved mainAudioState (Manager + Legacy):`, JSON.stringify(mainAudioState));
             }
 
-            const content = window.GameState?.getLore(id) || {
-                audio: loreData.audio[id] || `assets/lore${id}.mp3`,
-                text: `assets/lore${id}.txt`
-            };
+            // NOW set loreMode flag
+            isLoreMode = true;
+            // isReadingMode = true; // REMOVED: Respect current mode!
+            // uiContainer.classList.add('reading-mode'); // REMOVED: Respect current mode!
 
-            contentSwitchInProgress = true;
-            const switchToken = ++contentSwitchToken;
-            indexTrace('switch:start-lore:lock', { id, switchToken });
+            // If we are ALREADY in reading mode, update UI class just in case
+            if (isReadingMode) {
+                uiContainer.classList.add('reading-mode');
+            } else {
+                uiContainer.classList.remove('reading-mode');
+            }
+            moveTarget = null; // Stoppe Bewegung
+            activeLoreId = id;
+            isMenuTriggeredLore = fromMenu; // Set flag
 
-            try {
-                await saveCurrentContentState({ reason: `start-lore:${id}` });
+            if (loreResumeTimeout) clearTimeout(loreResumeTimeout);
 
-                isLoreMode = true;
-                activeLoreId = id;
-                isMenuTriggeredLore = !!fromMenu;
-                moveTarget = null;
-                applySceneAudioMix('start-lore:mode');
+            // Sanftes Ausblenden (Main Audio) - 2 Sekunden (oder sofort bei Switch?)
+            fadeAudio(audioPlayer, 0, 1000, async () => {
+                audioPlayer.pause();
+                // ... rest of logic stays mostly same, just ensure flag is used
+                // ...
 
-                if (isReadingMode) {
-                    uiContainer.classList.add('reading-mode');
-                } else {
-                    uiContainer.classList.remove('reading-mode');
-                }
+
+                // UI Feedback
                 uiContainer.classList.add('mode-switching');
-                indexTrace('switch:start-lore:ui-mode-switching-on', { id, switchToken });
 
-                await pauseWithFade(800);
-                if (switchToken !== contentSwitchToken) return;
+                // Debugging Lore Text Loading
+                console.log(`[DEBUG] startLoreMode ID: ${id}`);
+                console.log(`[DEBUG] Text in loreData for ID ${id}:`, loreData.text[id] ? loreData.text[id].substring(0, 50) + "..." : "UNDEFINED/NULL");
 
-                const loreText = await ensureLoreTextLoaded(id);
-                if (switchToken !== contentSwitchToken) return;
+                // RETRY LOADING TEXT IF MISSING
+                // Hardcoded Backup because Fetch might fail on file:// protocol
+                if (!loreData.text[id] || loreData.text[id].length < 10) {
+                    // Try fetch first
+                    try {
+                        // Use path from GameState if available
+                        const content = window.GameState?.getLore(id);
+                        const textPath = content ? content.text : `assets/lore${id}.txt`;
+                        console.log(`Loading text from ${textPath} (ID: ${id})...`);
 
-                const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
-                audioPlayer.src = loreAudioSrc;
-                indexTrace('switch:start-lore:src-set', { id, switchToken, src: loreAudioSrc });
+                        const res = await fetch(textPath);
+                        if (res.ok) {
+                            loreData.text[id] = await res.text();
+                            console.log(`Lore ${id} text recovered.`);
+                        } else {
+                            console.warn(`Fetch failed for ${textPath}: ${res.status}`);
+                        }
+                    } catch (e) {
+                        console.warn("Lore retry failed:", e);
+                    }
+                }
 
-                parseSubtitles(loreText);
-                indexTrace('switch:start-lore:text-parsed', { id, switchToken, tracks: subtitleTracks.length });
-                const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
-                const resumeTime = savedLore && savedLore.sentenceTime !== undefined
-                    ? savedLore.sentenceTime
-                    : Math.max(0, loreData.resumeTimes[id] || 0);
-                indexTrace('switch:start-lore:resume-time', {
-                    id,
-                    switchToken,
-                    resumeTime: Number((resumeTime || 0).toFixed(3)),
-                    hasSavedLore: !!savedLore
-                });
-                indexDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore} fromMenu=${!!fromMenu}`);
-                await seekAndSyncSubtitle(resumeTime, `start-lore:${id}:pre-play`);
+                setTimeout(() => {
+                    // Lore laden
+                    audioPlayer.src = getSCUrl(loreData.audio[id]);
 
-                audioPlayer.volume = 0;
-                const started = await verifyPlaybackStarted(3, 320);
-                indexTrace('switch:start-lore:verify-result', { id, switchToken, started: !!started });
-                if (switchToken !== contentSwitchToken) return;
+                    // Rewind 5s beim Wiederaufnehmen (User-Wunsch)
+                    // 1. TEXT LOAD & PARSING
+                    if (loreData.text[id] && loreData.text[id].length > 0) {
+                        console.log(`[DEBUG] Parsing Subtitles for ID ${id}...`);
+                        parseSubtitles(loreData.text[id]);
+                        console.log(`[DEBUG] Subtitle Tracks Found: ${subtitleTracks.length}`);
+                    } else {
+                        console.warn(`[DEBUG] No text found for ID ${id}!`);
+                        subtitleTracks = [];
+                        subtitleContainer.innerHTML = '<div class="subtitle-line subtitle-current">♪ Lore Audio (Warte auf Text...) ♪</div>';
+                    }
 
-                if (started) {
-                    // Re-render subtitles at the already-seeked position without re-seeking
-                    currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
-                    renderSubtitleLines(currentSubtitleIndex);
-                    fadeAudio(audioPlayer, 1.0, 900);
+                    // 2. RESTORE PLAYER STATE (Sentence-Based)
+                    let resumeTime = 0;
+                    if (window.PlayerStateManager) {
+                        const saved = window.PlayerStateManager.getState('lore' + id);
+                        if (saved) {
+                            resumeTime = saved.sentenceTime;
+                            console.log(`[DEBUG] Restoring Lore ${id} to sentence start: ${resumeTime}s`);
+                        } else {
+                            const last = loreData.resumeTimes[id] || 0;
+                            resumeTime = Math.max(0, last - 5);
+                        }
+                    } else {
+                        const last = loreData.resumeTimes[id] || 0;
+                        resumeTime = Math.max(0, last - 5);
+                    }
+
+                    audioPlayer.currentTime = resumeTime;
+
+                    // 3. INITIAL RENDER
+                    let startIndex = 0;
+                    if (subtitleTracks.length > 0) {
+                        for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                            if (resumeTime >= subtitleTracks[i].time) {
+                                startIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    currentSubtitleIndex = startIndex;
+                    renderSubtitleLines(startIndex);
+                    console.log(`[DEBUG] Starting lore audio playback...`);
+                    console.log(`[DEBUG] audioPlayer.src before play:`, audioPlayer.src);
+
+                    audioPlayer.volume = 0;
+                    audioPlayer.play()
+                        .then(() => {
+                            console.log(`[DEBUG] Lore play() succeeded! Starting fade in...`);
+                            fadeAudio(audioPlayer, 1.0, 1000); // Sanftes Einblenden
+                        })
+                        .catch(e => {
+                            console.error("[DEBUG] Lore play error:", e);
+                            // Try playing again after a short delay (widget might not be ready)
+                            setTimeout(() => {
+                                console.log(`[DEBUG] Retrying lore play after delay...`);
+                                audioPlayer.play().catch(e2 => console.error("[DEBUG] Retry failed:", e2));
+                                fadeAudio(audioPlayer, 1.0, 1000);
+                            }, 500);
+                        });
+
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
-                } else {
-                    audioPlayer.volume = 1.0;
-                    console.warn(`[Switch] Lore ${id} loaded but playback did not start.`);
-                    iconPlay.style.display = 'block';
-                    iconPause.style.display = 'none';
-                }
-            } catch (e) {
-                console.error(`[Switch] Failed to start lore ${id}:`, e);
-                indexTrace('switch:start-lore:error', { id, message: e && e.message ? e.message : String(e) });
-                iconPlay.style.display = 'block';
-                iconPause.style.display = 'none';
-            } finally {
-                if (switchToken === contentSwitchToken) {
-                    contentSwitchInProgress = false;
+
+                    audioPlayer.onended = () => {
+                        console.log(`[DEBUG] Lore audio ended naturally`);
+                        loreData.resumeTimes[id] = 0; // Reset wenn fertig
+                        endLoreMode();
+                    };
+
                     uiContainer.classList.remove('mode-switching');
-                    indexTrace('switch:start-lore:unlock', { id, switchToken });
-                }
-            }
+                    console.log(`Lore ${id} gestartet bei ${audioPlayer.currentTime.toFixed(1)}s`);
+                }, 250);
+            });
         }
 
         function endLoreMode() {
-            indexTrace('switch:end-lore', { activeLoreId: activeLoreId || null });
-            restoreMainAudio({ saveCurrent: true });
+            console.log(`[DEBUG] endLoreMode called!`);
+            console.log(`[DEBUG] isLoreMode: ${isLoreMode}, activeLoreId: ${activeLoreId}`);
+            console.log(`[DEBUG] Stack trace:`, new Error().stack);
+
+            if (!isLoreMode) {
+                console.log(`[DEBUG] endLoreMode: Not in lore mode, skipping`);
+                return;
+            }
+            isLoreMode = false;
+            isMenuTriggeredLore = false; // Reset menu flag
+
+            const id = activeLoreId;
+            // Fortschritt speichern
+            if (id) {
+                loreData.resumeTimes[id] = audioPlayer.currentTime;
+                if (window.PlayerStateManager) {
+                    window.PlayerStateManager.saveState('lore' + id, subtitleTracks, audioPlayer);
+                }
+            }
+            activeLoreId = null;
+            activeLightSourceId = null; // Licht zurücksetzen
+
+            fadeAudio(audioPlayer, 0, 2000, () => {
+                audioPlayer.pause();
+                audioPlayer.onended = null;
+
+                uiContainer.classList.add('mode-switching');
+                subtitleContainer.innerHTML = '';
+
+                // ... logic to resume main audio continues below ...
+
+                // 1 Sekunde Pause vor Resume (wie vom User gewünscht)
+                loreResumeTimeout = setTimeout(() => {
+                    if (window.mainAudioUrl) {
+                        audioPlayer.src = getSCUrl(window.mainAudioUrl);
+
+                        // CRITICAL: Force clear container to rebuild click handlers
+                        subtitleContainer.innerHTML = '';
+
+                        // Load main chapter text
+                        if (window.mainTextContent) {
+                            console.log('[DEBUG] endLoreMode: Parsing main text from window.mainTextContent');
+                            parseSubtitles(window.mainTextContent);
+                        } else {
+                            console.log('[DEBUG] endLoreMode: Fetching kapitel1c.txt...');
+                            fetch('assets/kapitel1c.txt')
+                                .then(r => r.text())
+                                .then(text => {
+                                    window.mainTextContent = text;
+                                    parseSubtitles(text);
+                                    // Force rebuild after async load
+                                    subtitleContainer.innerHTML = '';
+                                    renderSubtitleLines(0);
+                                })
+                                .catch(e => console.error('[DEBUG] Fetch failed:', e));
+                        }
+
+                        // RESTORE MAIN AUDIO STATE (Sentence Based)
+                        let resumeTime = 0;
+                        if (window.PlayerStateManager) {
+                            const saved = window.PlayerStateManager.getState('kapitel1c');
+                            if (saved) {
+                                resumeTime = saved.sentenceTime;
+                                console.log(`[DEBUG] Restoring Main Audio to sentence start: ${resumeTime}s`);
+                            } else {
+                                resumeTime = Math.max(0, mainAudioState.time - 5);
+                            }
+                        } else {
+                            resumeTime = Math.max(0, mainAudioState.time - 5);
+                        }
+
+                        audioPlayer.currentTime = resumeTime;
+
+                        // Find correct subtitle index for current time
+                        let correctIndex = 0;
+                        for (let i = subtitleTracks.length - 1; i >= 0; i--) {
+                            if (resumeTime >= subtitleTracks[i].time) {
+                                correctIndex = i;
+                                break;
+                            }
+                        }
+                        currentSubtitleIndex = correctIndex;
+
+                        console.log(`[DEBUG] endLoreMode: subtitleTracks.length=${subtitleTracks.length}, resumeTime=${resumeTime.toFixed(1)}s, correctIndex=${correctIndex}`);
+
+                        // FORCE rebuild subtitle lines
+                        renderSubtitleLines(correctIndex);
+
+                        if (mainAudioState.wasPlaying) {
+                            audioPlayer.volume = 0;
+                            audioPlayer.play();
+                            fadeAudio(audioPlayer, 1.0, 2000); // 2 Sekunden Einblenden
+                            iconPlay.style.display = 'none';
+                            iconPause.style.display = 'block';
+                        } else {
+                            audioPlayer.volume = 1.0;
+                            iconPlay.style.display = 'block';
+                            iconPause.style.display = 'none';
+                        }
+
+                        audioPlayer.onended = () => {
+                            iconPlay.style.display = 'block';
+                            iconPause.style.display = 'none';
+                            renderSubtitleLines(subtitleTracks.length - 1);
+                        };
+
+                        console.log(`Haupt-Audio fortgesetzt bei ${resumeTime.toFixed(1)}s`);
+                    }
+                    uiContainer.classList.remove('mode-switching');
+                }, 1000); // 1 Sekunde Pause
+            });
         }
 
+        // Hilfsfunktion für Audio-Fading
         function fadeAudio(audio, targetVolume, duration, callback) {
             const startVolume = audio.volume;
             const diff = targetVolume - startVolume;
@@ -5032,4 +3692,3 @@
 </body>
 
 </html>
-
