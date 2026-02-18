@@ -2942,7 +2942,10 @@
         if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
             window.AudioVisibilityManager.unregister(audioPlayer);
         }
-        console.log('[Audio] Created SCAudioAdapter for main audio');
+        // Direkt nach Erstellung: korrekten Audio-Track für das aktive Level laden.
+        // (Analog zu index3.html mit hardcodiertem 'assets/kapitel1c.mp3', hier mit LEVEL.audioUrl)
+        audioPlayer.src = getSCUrl(LEVEL.audioUrl);
+        console.log('[Audio] Created SCAudioAdapter for main audio, src:', audioPlayer.src);
         let subtitleTracks = []; // Array aus { time: sekunden, text: string }
         let currentSubtitleIndex = -1;
         let isReadingMode = false;
