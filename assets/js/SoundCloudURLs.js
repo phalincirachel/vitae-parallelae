@@ -29,9 +29,11 @@ const SC_URLS = {
     // Lore1: ID 2250892529, Token s-XrlxZtj8935
     LORE_1: 'https://api.soundcloud.com/tracks/2250892529?secret_token=s-XrlxZtj8935',
 
-    // Placeholders for future lore tracks
-    LORE_2: 'PLACEHOLDER_SC_LINK_LORE_2',
-    LORE_3: 'PLACEHOLDER_SC_LINK_LORE_3'
+    // Lore2: ID 2268724265, Token s-8pz7WG4egJJ
+    LORE_2: 'https://api.soundcloud.com/tracks/2268724265?secret_token=s-8pz7WG4egJJ',
+
+    // Lore3: ID 2268724358, Token s-t5jtK51t3dK
+    LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK'
 };
 
 /**
@@ -64,7 +66,11 @@ const MP3_TO_SC_MAP = {
 
     // Lore Tracks
     'assets/lore1.mp3': SC_URLS.LORE_1,
-    'lore1.mp3': SC_URLS.LORE_1
+    'lore1.mp3': SC_URLS.LORE_1,
+    'assets/lore2.mp3': SC_URLS.LORE_2,
+    'lore2.mp3': SC_URLS.LORE_2,
+    'assets/lore3.mp3': SC_URLS.LORE_3,
+    'lore3.mp3': SC_URLS.LORE_3
 };
 
 /**
