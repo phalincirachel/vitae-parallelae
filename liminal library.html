@@ -1353,7 +1353,9 @@
                             setTimeout(async () => {
                                 try {
                                     const targetPage = (target && typeof target.page === 'string' && target.page) ? target.page : CURRENT_PAGE;
-                                    if (targetPage !== CURRENT_PAGE) {
+                                    const targetContentKey = resolveBookmarkContentKey(target);
+                                    const isLoreTarget = /^lore\d+$/i.test(targetContentKey);
+                                    if (targetPage !== CURRENT_PAGE && !isLoreTarget) {
                                         console.warn('[Bookmark] Ignored stale on-load bookmark target for other page.', targetPage);
                                         return;
                                     }
@@ -3959,8 +3961,13 @@
                         item.addEventListener('click', async () => {
                             document.getElementById('archiveModal').classList.remove('visible');
                             const targetPage = (typeof bm.page === 'string' && bm.page) ? bm.page : CURRENT_PAGE;
-                            if (targetPage === CURRENT_PAGE) {
-                                const ready = await ensureBookmarkContentForCurrentPage(bm, `bookmark:${bm.id}:same-page`);
+                            const targetContentKey = resolveBookmarkContentKey(bm);
+                            const isLoreBookmark = /^lore\d+$/i.test(targetContentKey);
+                            if (targetPage === CURRENT_PAGE || isLoreBookmark) {
+                                const reason = isLoreBookmark
+                                    ? `bookmark:${bm.id}:lore-local`
+                                    : `bookmark:${bm.id}:same-page`;
+                                const ready = await ensureBookmarkContentForCurrentPage(bm, reason);
                                 if (!ready) {
                                     console.warn('[Bookmark] Could not activate target content on current page.', bm);
                                     return;
