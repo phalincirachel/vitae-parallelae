@@ -381,28 +381,28 @@
         const _chapterParam = _urlParams.get('chapter');
         const LEVEL_CONFIGS = {
             kapitel1: {
-                sceneName:        'marktplatz',
-                contentKey:       'kapitel1',
-                mapFile:          'assets/platz3.png',
-                audioUrl:         'assets/kapitel1.mp3',
-                subtitleFile:     'assets/kapitel1.txt',
+                sceneName: 'marktplatz',
+                contentKey: 'kapitel1',
+                mapFile: 'assets/platz3.png',
+                audioUrl: 'assets/kapitel1.mp3',
+                subtitleFile: 'assets/kapitel1.txt',
                 activeChapterBtn: 'chapter1Btn',
                 nextChapterTarget: 'liminal library.html',
-                page:             'index.html',
-                chapterLabel:     '1a',
-                chapterTitle:     'Der Marktplatz',
+                page: 'index.html',
+                chapterLabel: '1a',
+                chapterTitle: 'Der Marktplatz',
             },
             kapitel1c: {
-                sceneName:        'steingasse',
-                contentKey:       'kapitel1c',
-                mapFile:          'assets/kapitel1c.png',
-                audioUrl:         'assets/kapitel1c.mp3',
-                subtitleFile:     'assets/kapitel1c.txt',
+                sceneName: 'steingasse',
+                contentKey: 'kapitel1c',
+                mapFile: 'assets/kapitel1c.png',
+                audioUrl: 'assets/kapitel1c.mp3',
+                subtitleFile: 'assets/kapitel1c.txt',
                 activeChapterBtn: 'chapter1cBtn',
                 nextChapterTarget: null,
-                page:             'index.html?chapter=kapitel1c',
-                chapterLabel:     '1c',
-                chapterTitle:     'Steingasse',
+                page: 'index.html?chapter=kapitel1c',
+                chapterLabel: '1c',
+                chapterTitle: 'Steingasse',
             }
         };
         const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
@@ -3200,7 +3200,9 @@
         }
 
         function allowAuxScPlayback() {
-            return !isPrimaryNarrationPlaying() && !contentSwitchInProgress && !document.hidden;
+            // Aux-Audio (Ambient, Footsteps) darf parallel zur Narration laufen.
+            // Nur während Content-Switch oder bei verborgenem Tab wird gestoppt.
+            return !contentSwitchInProgress && !document.hidden;
         }
 
         function syncAuxScPlayback(reason = 'unspecified') {
@@ -3241,6 +3243,30 @@
         function unlockAudio() {
             if (audioUnlocked) return;
             audioUnlocked = true;
+            // iOS/Safari: Prime alle Audio-Adapter, damit spätere programmatische
+            // play()-Aufrufe (z.B. bei Lore-Einsammlung) nicht blockiert werden.
+            try {
+                const origMainVol = audioPlayer.volume;
+                audioPlayer.volume = 0;
+                audioPlayer.play().then(() => {
+                    audioPlayer.pause();
+                    audioPlayer.volume = origMainVol;
+                }).catch(() => { audioPlayer.volume = origMainVol; });
+
+                const origAmbientVol = ambientAudio.volume;
+                ambientAudio.volume = 0;
+                ambientAudio.play().then(() => {
+                    ambientAudio.pause();
+                    ambientAudio.volume = origAmbientVol;
+                }).catch(() => { ambientAudio.volume = origAmbientVol; });
+
+                const origFootVol = footstepSound.volume;
+                footstepSound.volume = 0;
+                footstepSound.play().then(() => {
+                    footstepSound.pause();
+                    footstepSound.volume = origFootVol;
+                }).catch(() => { footstepSound.volume = origFootVol; });
+            } catch (_) { }
             syncAuxScPlayback('unlock');
         }
         document.addEventListener('click', unlockAudio, { once: true });
@@ -5073,6 +5099,9 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
+                // iOS/Safari: Sofort play() starten, damit die Audio-Session erhalten bleibt.
+                // Der eigentliche Seek + Verify kommt danach; play() hier ist rein für die Session.
+                try { await audioPlayer.play(); } catch (_) { }
                 indexTrace('switch:start-lore:src-set', { id, switchToken, src: loreAudioSrc });
 
                 parseSubtitles(loreText);
@@ -5151,4 +5180,3 @@
 </body>
 
 </html>
-
