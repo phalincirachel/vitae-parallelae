@@ -679,14 +679,12 @@
                         const keyMap = {
                             'index.html': 'kapitel1',
                             'liminal library.html': 'liminal_library',
-                            'index.html?chapter=kapitel1c': 'kapitel1c',
-                            'index3.html': 'kapitel1c' // Altdaten-Kompatibilität
+                            'index.html?chapter=kapitel1c': 'kapitel1c'
                         };
-                        const bmPage = bm.page === 'index3.html' ? 'index.html?chapter=kapitel1c' : bm.page;
                         const key = keyMap[bm.page] || 'kapitel1';
                         markChapterAutoplayIntent(key, 'manual', 'bookmark');
                         writeStateHandoff(key);
-                        window.location.href = bmPage;
+                        window.location.href = bm.page;
                     }
                 });
 

@@ -9,7 +9,12 @@
 
 class SCAudioAdapter {
     constructor(iframeIdOrOptions = {}) {
-        let iframeId = (typeof iframeIdOrOptions === 'string') ? iframeIdOrOptions : null;
+        let iframeId = null;
+        if (typeof iframeIdOrOptions === 'string') {
+            iframeId = iframeIdOrOptions;
+        } else if (iframeIdOrOptions && typeof iframeIdOrOptions === 'object') {
+            iframeId = (typeof iframeIdOrOptions.iframeId === 'string') ? iframeIdOrOptions.iframeId : null;
+        }
 
         // --- 1. SoundCloud Widget Setup ---
         this.iframe = iframeId ? document.getElementById(iframeId) : null;

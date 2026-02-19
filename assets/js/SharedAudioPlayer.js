@@ -4,7 +4,7 @@ export class SharedAudioPlayer {
         const scUrl = typeof getSCUrl === 'function' ? getSCUrl(audioUrl) : audioUrl;
 
         if (typeof SCAudioAdapter !== 'undefined') {
-            this.audio = new SCAudioAdapter({ iframeId: options.iframeId || 'sc-widget-shared' });
+            this.audio = new SCAudioAdapter(options.iframeId || 'sc-widget-shared');
             this.audio.src = scUrl;
         } else {
             this.audio = new Audio(audioUrl);
@@ -18,9 +18,12 @@ export class SharedAudioPlayer {
         this.isReadingMode = options.isReadingMode || false;
         this.onLineRender = options.onLineRender || null;
         this.canSeek = (typeof options.canSeek === 'function') ? options.canSeek : null;
+        this._textLoadRequestId = 0;
+        this._activeTextAbortController = null;
 
         // Default volumes
-        this.audio.volume = options.volume || 1.0;
+        const requestedVolume = Number(options.volume ?? 1.0);
+        this.audio.volume = Number.isFinite(requestedVolume) ? Math.max(0, Math.min(1, requestedVolume)) : 1.0;
 
         // Load Text & Parse
         if (textUrl) {
@@ -35,18 +38,45 @@ export class SharedAudioPlayer {
     }
 
     async loadText(url) {
+        const requestId = ++this._textLoadRequestId;
+
+        if (this._activeTextAbortController) {
+            try {
+                this._activeTextAbortController.abort();
+            } catch (_) {
+                // no-op: abort may throw in rare polyfill edge-cases
+            }
+        }
+
+        const abortController = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        this._activeTextAbortController = abortController;
+
         try {
-            const response = await fetch(url);
+            const response = await fetch(url, abortController ? { signal: abortController.signal } : undefined);
+            if (requestId !== this._textLoadRequestId) return false;
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             const text = await response.text();
+            if (requestId !== this._textLoadRequestId) return false;
             this.parseSubtitles(text);
             return true;
         } catch (e) {
+            if (e && e.name === 'AbortError') return false;
+            if (requestId !== this._textLoadRequestId) return false;
             console.error("SharedAudioPlayer: Failed to load text", e);
-            this.container.innerHTML = `<div class="subtitle-line subtitle-current">Fehler beim Laden des Textes: ${url}</div>`;
+            if (this.container) {
+                this.container.innerHTML = '';
+                const errorLine = document.createElement('div');
+                errorLine.className = 'subtitle-line subtitle-current';
+                errorLine.textContent = `Fehler beim Laden des Textes: ${url}`;
+                this.container.appendChild(errorLine);
+            }
             return false;
+        } finally {
+            if (this._activeTextAbortController === abortController) {
+                this._activeTextAbortController = null;
+            }
         }
     }
 
@@ -199,11 +229,16 @@ export class SharedAudioPlayer {
 
                     div.style.cursor = 'pointer';
                     div.title = 'Springe zu dieser Stelle';
-                    div.addEventListener('click', async () => {
+                    div.addEventListener('click', async (event) => {
                         if (this.canSeek && !this.canSeek()) return;
                         if (this.container.dataset.wasDragging === 'true') return;
                         // Skip seek if bookmark button was clicked
-                        if (window.event && window.event.target.classList.contains('bookmark-btn')) return;
+                        if (
+                            event &&
+                            event.target &&
+                            typeof event.target.closest === 'function' &&
+                            event.target.closest('.bookmark-btn')
+                        ) return;
 
                         await this.seekToTime(this.subtitleTracks[i].time, { autoplay: true });
                         this.smoothScrollTo(div);
@@ -251,7 +286,7 @@ export class SharedAudioPlayer {
                 if (dist >= 4) div.classList.add('fade-far');
                 else if (dist >= 2) div.classList.add('fade-mid');
             }
-            div.innerHTML = this.subtitleTracks[i].text;
+            div.textContent = this.subtitleTracks[i].text;
             this.container.appendChild(div);
         }
     }
