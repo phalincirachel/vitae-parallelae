@@ -25,7 +25,7 @@ export const GameState = {
     state: {
         collectedLore: [], // Array of Content IDs
         collectedLights: {}, // Map: { "sceneName": [lightId, ...] }
-        bookmarks: [] // Array of { id, chapter, chapterTitle, page, time, textPreview, createdAt }
+        bookmarks: [] // Array of { id, chapter, chapterTitle, page, time, textPreview, contentKey?, loreId?, audioRef?, textRef?, createdAt }
     },
 
     // METHODS
@@ -233,9 +233,22 @@ export const GameState = {
 
     async addBookmark(bm) {
         if (!Array.isArray(this.state.bookmarks)) this.state.bookmarks = [];
-        // Prevent duplicates (same page + time within 1s)
+        // Prevent duplicates (same page + same content scope + time within 1s)
+        const scopeOf = (entry) => {
+            if (!entry || typeof entry !== 'object') return '';
+            const contentKey = typeof entry.contentKey === 'string' ? entry.contentKey.trim() : '';
+            if (contentKey) return contentKey;
+            const audioRef = typeof entry.audioRef === 'string' ? entry.audioRef.trim() : '';
+            if (audioRef) return `audio:${audioRef}`;
+            const textRef = typeof entry.textRef === 'string' ? entry.textRef.trim() : '';
+            if (textRef) return `text:${textRef}`;
+            return typeof entry.page === 'string' ? entry.page : '';
+        };
+        const incomingScope = scopeOf(bm);
         const exists = this.state.bookmarks.some(
-            b => b.page === bm.page && Math.abs(b.time - bm.time) < 1
+            b => b.page === bm.page &&
+                scopeOf(b) === incomingScope &&
+                Math.abs(b.time - bm.time) < 1
         );
         if (exists) {
             console.log('[GameState] Bookmark already exists, skipping.');

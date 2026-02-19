@@ -297,6 +297,14 @@
 
                 // Content switching + resume helpers
                 const MAIN_CONTENT_KEY = 'liminal_library';
+                const CURRENT_PAGE = 'liminal library.html';
+                const CURRENT_CHAPTER = '1b';
+                const CURRENT_CHAPTER_TITLE = 'Liminal Library';
+                const BOOKMARK_PAGE_KEY_MAP = {
+                    'index.html': 'kapitel1',
+                    'liminal library.html': 'liminal_library',
+                    'index.html?chapter=kapitel1c': 'kapitel1c'
+                };
                 let contentSwitchInProgress = false;
                 let contentSwitchToken = 0;
                 const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
@@ -393,6 +401,87 @@
                 function getActiveContentKey() {
                     if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
                     return MAIN_CONTENT_KEY;
+                }
+
+                function resolveBookmarkPageKey(page) {
+                    return BOOKMARK_PAGE_KEY_MAP[page] || 'kapitel1';
+                }
+
+                function extractLoreIdFromBookmark(bm, fallbackKey = '') {
+                    const directLoreId = Number(bm && bm.loreId);
+                    if (Number.isFinite(directLoreId) && directLoreId > 0) return Math.trunc(directLoreId);
+
+                    const keyCandidate = (typeof fallbackKey === 'string' && fallbackKey)
+                        ? fallbackKey
+                        : (typeof (bm && bm.contentKey) === 'string' ? bm.contentKey : '');
+                    const keyMatch = keyCandidate.match(/^lore(\d+)$/i);
+                    if (keyMatch) return Number(keyMatch[1]);
+
+                    const chapterMatch = (typeof (bm && bm.chapter) === 'string' ? bm.chapter : '').match(/^lore(\d+)$/i);
+                    if (chapterMatch) return Number(chapterMatch[1]);
+
+                    const refs = [
+                        (typeof (bm && bm.audioRef) === 'string') ? bm.audioRef : '',
+                        (typeof (bm && bm.textRef) === 'string') ? bm.textRef : ''
+                    ];
+                    for (const ref of refs) {
+                        const m = ref.match(/lore(\d+)\.(?:mp3|txt)/i);
+                        if (m) return Number(m[1]);
+                    }
+                    return null;
+                }
+
+                function resolveBookmarkContentKey(bm) {
+                    if (bm && typeof bm.contentKey === 'string' && bm.contentKey.trim()) {
+                        return bm.contentKey.trim();
+                    }
+
+                    const loreId = extractLoreIdFromBookmark(bm);
+                    if (Number.isFinite(loreId) && loreId > 0) return `lore${loreId}`;
+
+                    if (bm && typeof bm.page === 'string' && BOOKMARK_PAGE_KEY_MAP[bm.page]) {
+                        return BOOKMARK_PAGE_KEY_MAP[bm.page];
+                    }
+                    return '';
+                }
+
+                async function ensureBookmarkContentForCurrentPage(bm, reason = 'bookmark') {
+                    await waitForContentSwitchIdle(`${reason}:pre`);
+
+                    const targetKey = resolveBookmarkContentKey(bm);
+                    if (!targetKey) return true; // Legacy bookmark without content metadata
+
+                    const currentKey = getActiveContentKey();
+                    if (targetKey === currentKey) return true;
+
+                    if (/^lore\d+$/i.test(targetKey)) {
+                        const loreId = extractLoreIdFromBookmark(bm, targetKey);
+                        if (!Number.isFinite(loreId) || loreId <= 0) {
+                            console.warn('[Bookmark] Invalid lore target:', bm);
+                            return false;
+                        }
+                        if (typeof window.startLoreMode === 'function') {
+                            await window.startLoreMode(loreId);
+                        } else {
+                            return false;
+                        }
+                        await waitForContentSwitchIdle(`${reason}:switch-lore`);
+                        return getActiveContentKey() === `lore${loreId}`;
+                    }
+
+                    if (targetKey === MAIN_CONTENT_KEY) {
+                        if (isLoreMode) {
+                            if (typeof window.restoreMainAudio === 'function') {
+                                await window.restoreMainAudio({ saveCurrent: true });
+                            } else {
+                                return false;
+                            }
+                            await waitForContentSwitchIdle(`${reason}:switch-main`);
+                        }
+                        return getActiveContentKey() === MAIN_CONTENT_KEY;
+                    }
+
+                    return false;
                 }
 
                 function getActiveSubtitleTracks() {
@@ -1165,13 +1254,32 @@
                                     void btn.offsetWidth;
                                     btn.classList.add('pop');
                                     setTimeout(() => btn.classList.remove('pop'), 220);
+                                    const loreId = (isLoreMode && Number.isFinite(activeLoreId)) ? Number(activeLoreId) : null;
+                                    const loreMeta = loreId && window.GameState && typeof window.GameState.getLore === 'function'
+                                        ? window.GameState.getLore(loreId)
+                                        : null;
+                                    const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
+                                    const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
+                                    const bookmarkChapterTitle = loreId
+                                        ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
+                                        : CURRENT_CHAPTER_TITLE;
+                                    const bookmarkAudioRef = loreId
+                                        ? ((loreMeta && loreMeta.audio) || `assets/lore${loreId}.mp3`)
+                                        : 'assets/kapitel1b.mp3';
+                                    const bookmarkTextRef = loreId
+                                        ? ((loreMeta && loreMeta.text) || `assets/lore${loreId}.txt`)
+                                        : 'assets/kapitel1b.txt';
                                     const bm = {
                                         id: Date.now(),
-                                        chapter: '1b',
-                                        chapterTitle: 'Liminal Library',
-                                        page: 'liminal library.html',
+                                        chapter: bookmarkChapter,
+                                        chapterTitle: bookmarkChapterTitle,
+                                        page: CURRENT_PAGE,
                                         time: track.time,
                                         textPreview: (track.text || '').substring(0, 60),
+                                        contentKey: bookmarkContentKey,
+                                        loreId: loreId,
+                                        audioRef: bookmarkAudioRef,
+                                        textRef: bookmarkTextRef,
                                         createdAt: Date.now()
                                     };
                                     if (window.GameState && window.GameState.addBookmark) {
@@ -1238,12 +1346,29 @@
                 if (bmTarget) {
                     sessionStorage.removeItem('bookmark_seek_target');
                     try {
-                        const { time } = JSON.parse(bmTarget);
-                        if (typeof time === 'number' && time > 0) {
+                        const target = JSON.parse(bmTarget);
+                        const time = Number(target && target.time);
+                        if (Number.isFinite(time) && time >= 0) {
                             console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
                             setTimeout(async () => {
-                                if (window.audioPlayer && window.audioPlayer.seekToTime) {
-                                    await window.audioPlayer.seekToTime(time, { autoplay: true });
+                                try {
+                                    const targetPage = (target && typeof target.page === 'string' && target.page) ? target.page : CURRENT_PAGE;
+                                    if (targetPage !== CURRENT_PAGE) {
+                                        console.warn('[Bookmark] Ignored stale on-load bookmark target for other page.', targetPage);
+                                        return;
+                                    }
+
+                                    const ready = await ensureBookmarkContentForCurrentPage(target, 'bookmark:on-load');
+                                    if (!ready) {
+                                        console.warn('[Bookmark] Could not activate bookmark target content on load.', target);
+                                        return;
+                                    }
+
+                                    if (window.audioPlayer && window.audioPlayer.seekToTime) {
+                                        await window.audioPlayer.seekToTime(time, { autoplay: true });
+                                    }
+                                } catch (e) {
+                                    console.warn('[Bookmark] Failed to apply on-load bookmark target:', e);
                                 }
                             }, 1500); // Slightly longer delay for SharedAudioPlayer init
                         }
@@ -3789,10 +3914,6 @@
                 initArchiveTabs();
 
                 // --- BOOKMARK RENDERING ---
-                const CURRENT_PAGE = 'liminal library.html';
-                const CURRENT_CHAPTER = '1b';
-                const CURRENT_CHAPTER_TITLE = 'Liminal Library';
-
                 function renderBookmarks() {
                     const list = document.getElementById('bookmarkList');
                     if (!list) return;
@@ -3837,25 +3958,24 @@
 
                         item.addEventListener('click', async () => {
                             document.getElementById('archiveModal').classList.remove('visible');
-                            if (bm.page === CURRENT_PAGE) {
+                            const targetPage = (typeof bm.page === 'string' && bm.page) ? bm.page : CURRENT_PAGE;
+                            if (targetPage === CURRENT_PAGE) {
+                                const ready = await ensureBookmarkContentForCurrentPage(bm, `bookmark:${bm.id}:same-page`);
+                                if (!ready) {
+                                    console.warn('[Bookmark] Could not activate target content on current page.', bm);
+                                    return;
+                                }
                                 if (window.audioPlayer && window.audioPlayer.seekToTime) {
                                     await window.audioPlayer.seekToTime(bm.time, { autoplay: true });
                                 }
                             } else {
                                 await waitForContentSwitchIdle('bookmark:cross-page');
                                 await saveCurrentContentState({ reason: 'bookmark:navigate' });
-                                sessionStorage.setItem('bookmark_seek_target', JSON.stringify({
-                                    time: bm.time, id: bm.id
-                                }));
-                                const keyMap = {
-                                    'index.html': 'kapitel1',
-                                    'liminal library.html': 'liminal_library',
-                                    'index.html?chapter=kapitel1c': 'kapitel1c'
-                                };
-                                const key = keyMap[bm.page] || 'kapitel1';
+                                sessionStorage.setItem('bookmark_seek_target', JSON.stringify(bm));
+                                const key = resolveBookmarkPageKey(targetPage);
                                 markChapterAutoplayIntent(key, 'manual', 'bookmark');
                                 writeStateHandoff(key);
-                                window.location.href = bm.page;
+                                window.location.href = targetPage;
                             }
                         });
 
