@@ -267,7 +267,11 @@
     <div id="archiveModal">
         <div class="archive-card">
             <div class="archive-header">
-                <div class="archive-title">Inhalt</div>
+                <div class="archive-title-wrap">
+                    <div class="archive-title">Inhalt</div>
+                    <button class="archive-settings-btn" id="archiveSettingsBtn" data-tab="einstellungen"
+                        type="button">Einstellungen</button>
+                </div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
 
@@ -275,7 +279,6 @@
                 <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
                 <button class="archive-tab" data-tab="lore">Lore</button>
                 <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
-                <button class="archive-tab" data-tab="einstellungen">Einstellungen</button>
             </div>
 
             <div class="archive-tab-content active" data-tab="kapitel">
@@ -620,8 +623,30 @@
 
         // --- ARCHIVE TAB SWITCHING ---
         function initArchiveTabs() {
-            const tabs = document.querySelectorAll('.archive-tab');
+            const tabs = Array.from(document.querySelectorAll('.archive-tab'));
             const panels = document.querySelectorAll('.archive-tab-content');
+            const settingsBtn = document.getElementById('archiveSettingsBtn');
+
+            const activateArchivePanel = (target, activeTab = null) => {
+                tabs.forEach(t => t.classList.remove('active'));
+                panels.forEach(p => p.classList.remove('active'));
+                if (settingsBtn) settingsBtn.classList.remove('active');
+
+                if (activeTab && activeTab.classList.contains('archive-tab')) {
+                    activeTab.classList.add('active');
+                }
+                if (target === 'einstellungen' && settingsBtn) {
+                    settingsBtn.classList.add('active');
+                }
+
+                const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
+                if (panel) panel.classList.add('active');
+                if (target === 'lesezeichen') renderBookmarks();
+                if (target === 'einstellungen' && typeof syncReaderSettingsUi === 'function') {
+                    syncReaderSettingsUi();
+                }
+            };
+
             tabs.forEach(tab => {
                 tab.addEventListener('click', () => {
                     triggerUiHaptic(7);
@@ -630,18 +655,17 @@
                     void tab.offsetWidth;
                     tab.classList.add('pressed');
                     setTimeout(() => tab.classList.remove('pressed'), 170);
-                    tabs.forEach(t => t.classList.remove('active'));
-                    panels.forEach(p => p.classList.remove('active'));
-                    tab.classList.add('active');
                     const target = tab.getAttribute('data-tab');
-                    const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
-                    if (panel) panel.classList.add('active');
-                    if (target === 'lesezeichen') renderBookmarks();
-                    if (target === 'einstellungen' && typeof syncReaderSettingsUi === 'function') {
-                        syncReaderSettingsUi();
-                    }
+                    activateArchivePanel(target, tab);
                 });
             });
+
+            if (settingsBtn) {
+                settingsBtn.addEventListener('click', () => {
+                    triggerUiHaptic(7);
+                    activateArchivePanel('einstellungen');
+                });
+            }
         }
         initArchiveTabs();
 

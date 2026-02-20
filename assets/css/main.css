@@ -565,10 +565,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
-    font-weight: 400 !important;
-    text-decoration: underline;
-    text-decoration-thickness: 1px;
-    text-underline-offset: 2px;
+    font-weight: 500 !important;
+    margin-right: 0.12em;
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */
@@ -890,6 +888,39 @@ body.scene-dimmer-light-mode .col-header {
     text-shadow: none;
 }
 
+.archive-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.archive-settings-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.55);
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 4px 0;
+    border-bottom: 1px solid transparent;
+    transition: color 0.2s ease, border-color 0.2s ease, transform 0.14s ease;
+}
+
+.archive-settings-btn:hover {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.archive-settings-btn:active {
+    transform: scale(1.03);
+}
+
+.archive-settings-btn.active {
+    color: #ffd700;
+    border-bottom-color: #ffd700;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -902,6 +933,19 @@ body.scene-dimmer-light-mode .col-header {
 
 body.scene-dimmer-light-mode .close-btn {
     color: rgba(0, 0, 0, 0.88);
+}
+
+body.scene-dimmer-light-mode .archive-settings-btn {
+    color: rgba(0, 0, 0, 0.45);
+}
+
+body.scene-dimmer-light-mode .archive-settings-btn:hover {
+    color: rgba(0, 0, 0, 0.82);
+}
+
+body.scene-dimmer-light-mode .archive-settings-btn.active {
+    color: #7b5a00;
+    border-bottom-color: #7b5a00;
 }
 
 .close-btn:hover {
@@ -998,11 +1042,11 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
 }
 
 /* ==========================================
-   ARCHIVE TABS (Kapitel | Lore | Lesezeichen | Einstellungen)
+   ARCHIVE TABS (Kapitel | Lore | Lesezeichen)
    ========================================== */
 .archive-tabs {
     display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     align-items: center;
     width: 100%;
     gap: 8px;
@@ -1296,15 +1340,6 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
    MOBILE OPTIMIZATIONS (Max-width: 768px)
    ========================================== */
 @media (max-width: 768px) {
-    .archive-tabs {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .archive-tab {
-        font-size: 12px;
-        padding: 7px 6px;
-    }
-
     /* Canvas responsive */
     #gameWrapper {
         width: 100% !important;
