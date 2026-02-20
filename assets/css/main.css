@@ -564,21 +564,38 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     display: block;
     line-height: 1.65;
     white-space: normal;
-    --flat-timestamp-gap: 0.1em;
+    --flat-timestamp-gap: 0.12em;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
     display: inline;
     line-height: inherit;
     padding-left: 0;
-    padding-right: calc(var(--flat-leading-comp, 0px) + var(--flat-timestamp-gap));
-    margin-right: 0;
+    padding-right: 0;
+    margin-right: var(--flat-timestamp-gap);
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
-    font-weight: 500 !important;
+    font-weight: 400 !important;
     padding-left: 0;
-    padding-right: var(--flat-timestamp-gap);
+    padding-right: 0;
+    /* Faux-bold highlight without changing glyph advance width. */
+    -webkit-text-stroke: 0.22px currentColor;
+    text-shadow:
+        0.012em 0 currentColor,
+        -0.012em 0 currentColor,
+        0 0.012em currentColor,
+        0 -0.012em currentColor,
+        0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
+    text-shadow:
+        0.012em 0 currentColor,
+        -0.012em 0 currentColor,
+        0 0.012em currentColor,
+        0 -0.012em currentColor,
+        0 0 10px rgba(255, 255, 255, 1);
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */
