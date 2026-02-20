@@ -1087,7 +1087,16 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
 }
 
-/* Scroll bars hidden */
+/* Scroll bars hidden for all browsers inside archive menu */
+#archiveModal * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+}
+
+#archiveModal *::-webkit-scrollbar {
+    display: none !important;
+}
+
 .col-left::-webkit-scrollbar,
 .col-right::-webkit-scrollbar {
     display: none;

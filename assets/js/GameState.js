@@ -180,6 +180,16 @@ export const GameState = {
             this.state.audioPositions = window.PlayerStateManager.exportStates();
         }
 
+        // Export reader settings
+        this.state.readerSettings = {
+            layout: localStorage.getItem('gameboy_reader_sentence_layout'),
+            fontSize: localStorage.getItem('gameboy_reader_font_size_px'),
+            bgColor: localStorage.getItem('gameboy_reader_bg_color'),
+            textColor: localStorage.getItem('gameboy_reader_text_color'),
+            textVolume: localStorage.getItem('gameboy_reader_text_volume'),
+            bgVolume: localStorage.getItem('gameboy_reader_background_volume')
+        };
+
         if (window.electronAPI) {
             await window.electronAPI.saveGame(this.state);
             console.log("[GameState] Saved via Electron.");
@@ -211,6 +221,17 @@ export const GameState = {
                 // Audio Persistence
                 if (window.PlayerStateManager && this.state.audioPositions) {
                     window.PlayerStateManager.importStates(this.state.audioPositions, { replace: true });
+                }
+
+                // Import reader settings
+                if (data.readerSettings) {
+                    const rs = data.readerSettings;
+                    if (rs.layout !== null && rs.layout !== undefined) localStorage.setItem('gameboy_reader_sentence_layout', rs.layout);
+                    if (rs.fontSize !== null && rs.fontSize !== undefined) localStorage.setItem('gameboy_reader_font_size_px', rs.fontSize);
+                    if (rs.bgColor !== null && rs.bgColor !== undefined) localStorage.setItem('gameboy_reader_bg_color', rs.bgColor);
+                    if (rs.textColor !== null && rs.textColor !== undefined) localStorage.setItem('gameboy_reader_text_color', rs.textColor);
+                    if (rs.textVolume !== null && rs.textVolume !== undefined) localStorage.setItem('gameboy_reader_text_volume', rs.textVolume);
+                    if (rs.bgVolume !== null && rs.bgVolume !== undefined) localStorage.setItem('gameboy_reader_background_volume', rs.bgVolume);
                 }
 
                 await this.save();
