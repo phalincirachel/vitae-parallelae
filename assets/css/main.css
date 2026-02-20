@@ -507,15 +507,11 @@ body.scene-dimmer-light-mode .subtitle-current {
     text-shadow: 0 0 10px rgba(255, 255, 255, 1);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors {
-    background: var(--reader-custom-bg, transparent) !important;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors .subtitle-line {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-custom-text .subtitle-line {
     color: var(--reader-custom-text, rgba(255, 255, 255, 0.8)) !important;
 }
 
-body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors .subtitle-line {
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-custom-text .subtitle-line {
     color: var(--reader-custom-text, rgba(0, 0, 0, 0.82)) !important;
 }
 
@@ -1454,6 +1450,8 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
     position: fixed !important;
     left: 0;
     top: 0;
+    width: 124px;
+    min-width: 124px;
     padding: 0;
     overflow: hidden;
     isolation: isolate;
@@ -1471,9 +1469,16 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
 
 .bookmark-btn-flat-overlay .bookmark-map-layer {
     z-index: 1;
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
+    overflow: hidden;
+}
+
+.bookmark-btn-flat-overlay .bookmark-map-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    pointer-events: none;
 }
 
 .bookmark-btn-flat-overlay .bookmark-overlay-layer {

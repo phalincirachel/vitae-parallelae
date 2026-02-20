@@ -1155,9 +1155,10 @@
             window.AudioVisibilityManager.unregister(footstepSound);
         }
 
+        const SHIMMER_BASE_VOLUME = 0.4;
         const shimmerSound = new SCAudioAdapter();
         shimmerSound.src = getSCUrl('assets/shimmer.mp3');
-        shimmerSound.volume = 0.4;
+        shimmerSound.volume = SHIMMER_BASE_VOLUME;
         // One-shot SFX should not auto-resume after visibility changes.
         if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
             window.AudioVisibilityManager.unregister(shimmerSound);
@@ -3210,6 +3211,7 @@
         const readerColorPopoverState = { activeKey: null };
         let subtitleFollowLocked = false;
         let suppressFollowLockUntil = 0;
+        let manualBackgroundDimLevel = 0;
 
         audioPlayer.volume = readerTextVolume;
 
@@ -3288,13 +3290,13 @@
             const overlay = document.getElementById('sceneDimmerOverlay');
             if (!overlay) return;
 
+            const base = document.body.classList.contains('scene-dimmer-light-mode') ? '#ffffff' : '#000000';
             const isFreezeMode = manualBackgroundDimLevel >= 100;
             if (!isFreezeMode || !readerBgColor) {
-                overlay.style.removeProperty('background-color');
+                overlay.style.backgroundColor = base;
                 return;
             }
 
-            const base = document.body.classList.contains('scene-dimmer-light-mode') ? '#ffffff' : '#000000';
             const mixed = mixHexColors(base, readerBgColor, 0.5);
             overlay.style.backgroundColor = mixed;
         }
@@ -3426,9 +3428,7 @@
             if (!options.force && normalized === readerTextVolume) return;
             readerTextVolume = normalized;
             localStorage.setItem(READER_TEXT_VOLUME_STORAGE_KEY, String(readerTextVolume));
-            if (audioPlayer && typeof audioPlayer.volume === 'number' && audioPlayer.volume > 0) {
-                audioPlayer.volume = readerTextVolume;
-            }
+            if (audioPlayer && typeof audioPlayer.volume === 'number') audioPlayer.volume = readerTextVolume;
             syncReaderSettingsUi();
         }
 
@@ -3698,6 +3698,27 @@
                 });
             }
 
+            const bindVolumeInputs = (rangeId, numberId, setter) => {
+                const rangeEl = document.getElementById(rangeId);
+                const numberEl = document.getElementById(numberId);
+                if (rangeEl) {
+                    rangeEl.addEventListener('input', (event) => {
+                        setter(event.target.value);
+                    });
+                }
+                if (numberEl) {
+                    numberEl.addEventListener('input', (event) => {
+                        setter(event.target.value);
+                    });
+                    numberEl.addEventListener('change', (event) => {
+                        setter(event.target.value, { force: true });
+                    });
+                }
+            };
+
+            bindVolumeInputs('readerTextVolumeRange', 'readerTextVolumeNumber', setReaderTextVolume);
+            bindVolumeInputs('readerBackgroundVolumeRange', 'readerBackgroundVolumeNumber', setReaderBackgroundVolume);
+
             readerColorWheelSync.bg = initReaderColorWheelControl({
                 canvasId: 'readerBgColorWheel',
                 markerId: 'readerBgColorMarker',
@@ -3710,6 +3731,73 @@
                 markerId: 'readerTextColorMarker',
                 previewId: 'readerTextColorPreview',
                 onPick: (hexColor) => setReaderTextColor(hexColor)
+            });
+
+            const colorControls = {
+                bg: {
+                    key: 'bg',
+                    button: document.getElementById('readerBgColorToggleBtn'),
+                    popover: document.getElementById('readerBgColorPickerPopover'),
+                    sync: () => {
+                        if (typeof readerColorWheelSync.bg === 'function') {
+                            readerColorWheelSync.bg(readerBgColor || getReaderFallbackBgColor());
+                        }
+                    }
+                },
+                text: {
+                    key: 'text',
+                    button: document.getElementById('readerTextColorToggleBtn'),
+                    popover: document.getElementById('readerTextColorPickerPopover'),
+                    sync: () => {
+                        if (typeof readerColorWheelSync.text === 'function') {
+                            readerColorWheelSync.text(readerTextColor || getReaderFallbackTextColor());
+                        }
+                    }
+                }
+            };
+
+            const closeAllColorPopovers = () => {
+                Object.values(colorControls).forEach((control) => {
+                    if (!control || !control.popover || !control.button) return;
+                    control.popover.hidden = true;
+                    control.button.setAttribute('aria-expanded', 'false');
+                });
+                readerColorPopoverState.activeKey = null;
+            };
+
+            const openColorPopover = (key) => {
+                const control = colorControls[key];
+                if (!control || !control.popover || !control.button) return;
+                closeAllColorPopovers();
+                control.popover.hidden = false;
+                control.button.setAttribute('aria-expanded', 'true');
+                control.sync();
+                readerColorPopoverState.activeKey = key;
+            };
+
+            Object.values(colorControls).forEach((control) => {
+                if (!control || !control.button || !control.popover) return;
+                control.button.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    const shouldOpen = readerColorPopoverState.activeKey !== control.key;
+                    if (shouldOpen) openColorPopover(control.key);
+                    else closeAllColorPopovers();
+                });
+            });
+
+            document.addEventListener('click', (event) => {
+                if (!readerColorPopoverState.activeKey) return;
+                const activeControl = colorControls[readerColorPopoverState.activeKey];
+                if (!activeControl || !activeControl.button || !activeControl.popover) return;
+                const target = event.target;
+                if (activeControl.button.contains(target) || activeControl.popover.contains(target)) return;
+                closeAllColorPopovers();
+            });
+
+            document.addEventListener('keydown', (event) => {
+                if (event.key !== 'Escape') return;
+                if (!readerColorPopoverState.activeKey) return;
+                closeAllColorPopovers();
             });
 
             const resetColorsBtn = document.getElementById('readerColorResetBtn');
@@ -3736,7 +3824,7 @@
                 iconSunId: 'sceneDimmerIconSun'
             })
             : null;
-        let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+        manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
         let pendingForceReadingFromFreeze = false;
         let shouldResumePlaybackAfterDimmerUnfreeze = false;
         let dimmerResumeToken = 0;
@@ -3745,6 +3833,7 @@
             globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
+                applyReaderDimmerTint();
                 dimmerResumeToken += 1;
                 const changeToken = dimmerResumeToken;
 
@@ -3792,6 +3881,7 @@
             pendingForceReadingFromFreeze = window.visualFreezeActive;
 
         }
+        applyReaderDimmerTint();
 
         function isAudioTransportPaused() {
             if (!audioPlayer) return true;
@@ -3842,7 +3932,7 @@
         // Ambient und Schritte Audio via SC Adapter
         const ambientAudio = new SCAudioAdapter();
         ambientAudio.src = getSCUrl('assets/medieval_town.mp3');
-        ambientAudio.volume = AUDIO_PROFILE.ambient;
+        ambientAudio.volume = AUDIO_PROFILE.ambient * readerBackgroundVolume;
         // Index uses a dedicated visibility handler; avoid duplicate manager decisions.
         if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
             window.AudioVisibilityManager.unregister(ambientAudio);
@@ -3886,12 +3976,20 @@
             if (isReadingMode) footstepTarget *= 0.65;
             if (isLoreMode) footstepTarget *= 0.45;
 
+            ambientTarget *= readerBackgroundVolume;
+            footstepTarget *= readerBackgroundVolume;
             ambientAudio.volume = Math.max(0, Math.min(1, ambientTarget));
             footstepSound.volume = Math.max(0, Math.min(1, footstepTarget));
             syncAuxScPlayback(`mix:${reason}`);
             indexDebugNote('audio-mix', `${reason} ambient=${ambientAudio.volume.toFixed(3)} foot=${footstepSound.volume.toFixed(3)} ios=${isIOSDevice}`);
         }
+
+        function applyBackgroundSfxVolume(reason = 'unspecified') {
+            shimmerSound.volume = Math.max(0, Math.min(1, SHIMMER_BASE_VOLUME * readerBackgroundVolume));
+            indexDebugNote('bg-sfx', `${reason} shimmer=${shimmerSound.volume.toFixed(3)}`);
+        }
         applySceneAudioMix('init');
+        applyBackgroundSfxVolume('init');
 
         // Audio unlock on first interaction (required for mobile autoplay policies)
         function unlockAudio() {
@@ -4285,6 +4383,10 @@
                                     btn.innerHTML = '';
                                     const mapLayer = document.createElement('span');
                                     mapLayer.className = 'bookmark-map-layer';
+                                    const mapCanvas = document.createElement('canvas');
+                                    mapCanvas.className = 'bookmark-map-canvas';
+                                    mapCanvas.setAttribute('aria-hidden', 'true');
+                                    mapLayer.appendChild(mapCanvas);
                                     const overlayLayer = document.createElement('span');
                                     overlayLayer.className = 'bookmark-overlay-layer';
                                     const labelLayer = document.createElement('span');
@@ -4296,6 +4398,12 @@
                                 }
                                 btn.classList.add('bookmark-btn-flat-overlay');
                             } else {
+                                if (btn._flatMapRaf) {
+                                    cancelAnimationFrame(btn._flatMapRaf);
+                                    btn._flatMapRaf = 0;
+                                }
+                                btn._flatLockedX = null;
+                                btn._flatLockedY = null;
                                 btn.classList.remove('bookmark-btn-flat-overlay');
                                 if (btn.dataset.flatOverlay === '1') {
                                     btn.dataset.flatOverlay = '0';
@@ -4309,26 +4417,69 @@
                             const anyCanvas = document.querySelector('canvas');
                             return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
                         };
-                        const applyFlatBookmarkMapLayer = (btn) => {
+                        const drawFlatBookmarkMapLayer = (btn) => {
                             if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
                             const mapLayer = btn.querySelector('.bookmark-map-layer');
+                            const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
+                            if (!(mapCanvas instanceof HTMLCanvasElement)) return;
+                            const drawCtx = mapCanvas.getContext('2d');
+                            if (!drawCtx) return;
                             if (!mapLayer) return;
                             const sceneCanvas = resolveSceneCanvas();
-                            if (!sceneCanvas || typeof sceneCanvas.toDataURL !== 'function') {
-                                mapLayer.style.backgroundImage = 'none';
+                            if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
+                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
                                 return;
                             }
                             try {
                                 const canvasRect = sceneCanvas.getBoundingClientRect();
                                 const btnRect = btn.getBoundingClientRect();
                                 if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
-                                const snapshotUrl = sceneCanvas.toDataURL('image/png');
-                                mapLayer.style.backgroundImage = `url("${snapshotUrl}")`;
-                                mapLayer.style.backgroundSize = `${canvasRect.width}px ${canvasRect.height}px`;
-                                mapLayer.style.backgroundPosition = `${Math.round(canvasRect.left - btnRect.left)}px ${Math.round(canvasRect.top - btnRect.top)}px`;
+                                const dpr = Math.max(1, window.devicePixelRatio || 1);
+                                const targetW = Math.max(1, Math.round(btnRect.width * dpr));
+                                const targetH = Math.max(1, Math.round(btnRect.height * dpr));
+                                if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
+                                    mapCanvas.width = targetW;
+                                    mapCanvas.height = targetH;
+                                }
+                                drawCtx.clearRect(0, 0, targetW, targetH);
+
+                                const overlapLeft = Math.max(btnRect.left, canvasRect.left);
+                                const overlapTop = Math.max(btnRect.top, canvasRect.top);
+                                const overlapRight = Math.min(btnRect.right, canvasRect.right);
+                                const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
+                                if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
+
+                                const scaleX = sceneCanvas.width / canvasRect.width;
+                                const scaleY = sceneCanvas.height / canvasRect.height;
+                                const srcX = (overlapLeft - canvasRect.left) * scaleX;
+                                const srcY = (overlapTop - canvasRect.top) * scaleY;
+                                const srcW = (overlapRight - overlapLeft) * scaleX;
+                                const srcH = (overlapBottom - overlapTop) * scaleY;
+                                const dstX = (overlapLeft - btnRect.left) * dpr;
+                                const dstY = (overlapTop - btnRect.top) * dpr;
+                                const dstW = (overlapRight - overlapLeft) * dpr;
+                                const dstH = (overlapBottom - overlapTop) * dpr;
+                                drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
                             } catch (_) {
-                                mapLayer.style.backgroundImage = 'none';
+                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
                             }
+                        };
+                        const stopFlatBookmarkMapLayerLoop = (btn) => {
+                            if (!btn || !btn._flatMapRaf) return;
+                            cancelAnimationFrame(btn._flatMapRaf);
+                            btn._flatMapRaf = 0;
+                        };
+                        const startFlatBookmarkMapLayerLoop = (btn) => {
+                            if (!btn || btn._flatMapRaf) return;
+                            const tick = () => {
+                                if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
+                                    btn._flatMapRaf = 0;
+                                    return;
+                                }
+                                drawFlatBookmarkMapLayer(btn);
+                                btn._flatMapRaf = requestAnimationFrame(tick);
+                            };
+                            tick();
                         };
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
@@ -4358,7 +4509,7 @@
                             }
                             return { rects, containerRect };
                         };
-                        const positionBookmarkButton = (btn) => {
+                        const positionBookmarkButton = (btn, options = {}) => {
                             const useFlatOverlay = isFlatBookmarkLayout();
                             ensureBookmarkButtonMode(btn, useFlatOverlay);
                             const lineRect = div.getBoundingClientRect();
@@ -4368,16 +4519,31 @@
                             const btnHeight = btn.offsetHeight || 0;
 
                             if (useFlatOverlay) {
+                                const lockToExisting = !!options.lockToExisting;
+                                if (lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
+                                    btn.style.left = `${Math.round(btn._flatLockedX)}px`;
+                                    btn.style.top = `${Math.round(btn._flatLockedY)}px`;
+                                    startFlatBookmarkMapLayerLoop(btn);
+                                    drawFlatBookmarkMapLayer(btn);
+                                    return;
+                                }
                                 const lineTextRects = collectLineTextRects(div, containerRect);
                                 const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
                                 const edgeMargin = 6;
                                 const x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
                                 const y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
-                                btn.style.left = `${Math.round(x)}px`;
-                                btn.style.top = `${Math.round(y)}px`;
-                                applyFlatBookmarkMapLayer(btn);
+                                btn._flatLockedX = Math.round(x);
+                                btn._flatLockedY = Math.round(y);
+                                btn.style.left = `${btn._flatLockedX}px`;
+                                btn.style.top = `${btn._flatLockedY}px`;
+                                startFlatBookmarkMapLayerLoop(btn);
+                                drawFlatBookmarkMapLayer(btn);
                                 return;
                             }
+
+                            stopFlatBookmarkMapLayerLoop(btn);
+                            btn._flatLockedX = null;
+                            btn._flatLockedY = null;
 
                             const { rects: textRects } = collectSubtitleTextRects();
                             const margin = 8;
@@ -4474,14 +4640,17 @@
                                     if (added) {
                                         btn.classList.add('saved');
                                         setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
-                                        positionBookmarkButton(btn);
+                                        positionBookmarkButton(btn, { lockToExisting: true });
                                         setTimeout(() => {
                                             btn.classList.remove('visible', 'saved');
+                                            stopFlatBookmarkMapLayerLoop(btn);
                                             ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
                                             setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
-                                            positionBookmarkButton(btn);
+                                            btn._flatLockedX = null;
+                                            btn._flatLockedY = null;
                                         }, 1200);
                                     } else {
+                                        stopFlatBookmarkMapLayerLoop(btn);
                                         btn.classList.remove('visible');
                                     }
                                 });
@@ -4490,14 +4659,22 @@
                             ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
                             if (!btn.classList.contains('saved')) setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
                             subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
-                                if (otherBtn !== btn) otherBtn.classList.remove('visible');
+                                if (otherBtn !== btn) {
+                                    otherBtn.classList.remove('visible');
+                                    stopFlatBookmarkMapLayerLoop(otherBtn);
+                                    otherBtn._flatLockedX = null;
+                                    otherBtn._flatLockedY = null;
+                                }
                             });
-                            positionBookmarkButton(btn);
                             btn.classList.add('visible');
+                            positionBookmarkButton(btn, { lockToExisting: false });
                             // Auto-hide after 4 seconds
                             setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
                                     btn.classList.remove('visible');
+                                    stopFlatBookmarkMapLayerLoop(btn);
+                                    btn._flatLockedX = null;
+                                    btn._flatLockedY = null;
                                 }
                             }, 4000);
                         };
@@ -5751,16 +5928,16 @@
                         // Re-render subtitles at the already-seeked position without re-seeking
                         currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                         renderSubtitleLines(currentSubtitleIndex);
-                        fadeAudio(audioPlayer, 1.0, 700);
+                        fadeAudio(audioPlayer, readerTextVolume, 700);
                         iconPlay.style.display = 'none';
                         iconPause.style.display = 'block';
                     } else {
-                        audioPlayer.volume = 1.0;
+                        audioPlayer.volume = readerTextVolume;
                         iconPlay.style.display = 'block';
                         iconPause.style.display = 'none';
                     }
                 } else {
-                    audioPlayer.volume = 1.0;
+                    audioPlayer.volume = readerTextVolume;
                     iconPlay.style.display = 'block';
                     iconPause.style.display = 'none';
                 }
@@ -5865,11 +6042,11 @@
                     // Re-render subtitles at the already-seeked position without re-seeking
                     currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                     renderSubtitleLines(currentSubtitleIndex);
-                    fadeAudio(audioPlayer, 1.0, 900);
+                    fadeAudio(audioPlayer, readerTextVolume, 900);
                     iconPlay.style.display = 'none';
                     iconPause.style.display = 'block';
                 } else {
-                    audioPlayer.volume = 1.0;
+                    audioPlayer.volume = readerTextVolume;
                     console.warn(`[Switch] Lore ${id} loaded but playback did not start.`);
                     iconPlay.style.display = 'block';
                     iconPause.style.display = 'none';

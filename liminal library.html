@@ -47,10 +47,6 @@
             height: 22px;
         }
     </style>
-    <!-- Import Map Polyfill for older iOS Safari (<16.4) that lack native import map support.
-         This is the official polyfill recommended by Three.js documentation.
-         On modern browsers with native import map support, this is a no-op (zero overhead). -->
-    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -230,13 +226,13 @@
 
             <div class="archive-tab-content" data-tab="lore">
                 <div class="col-left" id="loreList" style="flex:1;">
-                    <!-- Dynamisch gefüllt -->
+                    <!-- Dynamisch gef&uuml;llt -->
                 </div>
             </div>
 
             <div class="archive-tab-content" data-tab="lesezeichen">
                 <div id="bookmarkList" style="width:100%;">
-                    <!-- Dynamisch gefüllt -->
+                    <!-- Dynamisch gef&uuml;llt -->
                 </div>
             </div>
 
@@ -246,7 +242,7 @@
                         <div class="reader-settings-title">Satztechnik</div>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="timestamps" checked>
-                            <span>Timestamps (Standard)</span>
+                            <span>Timestamps</span>
                         </label>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="flat">
@@ -254,7 +250,7 @@
                         </label>
                     </div>
                     <div class="reader-settings-group">
-                        <label class="reader-settings-title" for="readerFontSizeRange">Schriftgröße</label>
+                        <label class="reader-settings-title" for="readerFontSizeRange">Schriftgr&ouml;&szlig;e</label>
                         <div class="reader-size-row">
                             <input id="readerFontSizeRange" type="range" min="14" max="30" step="1" value="18">
                             <input id="readerFontSizeNumber" type="number" min="14" max="30" step="1" value="18">
@@ -271,39 +267,33 @@
                         </div>
                         <div class="reader-volume-row">
                             <label class="reader-volume-label" for="readerBackgroundVolumeRange">Hintergrund</label>
-                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1"
-                                value="100">
-                            <input id="readerBackgroundVolumeNumber" type="number" min="0" max="100" step="1"
-                                value="100">
+                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1" value="100">
+                            <input id="readerBackgroundVolumeNumber" type="number" min="0" max="100" step="1" value="100">
                             <span class="reader-size-unit">%</span>
                         </div>
                     </div>
                     <div class="reader-settings-group">
                         <div class="reader-settings-title">Farben</div>
                         <div class="reader-color-field">
-                            <button id="readerBgColorToggleBtn" class="reader-color-row" type="button"
-                                aria-expanded="false" aria-controls="readerBgColorPickerPopover">
+                            <button id="readerBgColorToggleBtn" class="reader-color-row" type="button" aria-expanded="false" aria-controls="readerBgColorPickerPopover">
                                 <span class="reader-color-row-label">Hintergrund</span>
                                 <span class="reader-color-preview" id="readerBgColorPreview"></span>
                             </button>
                             <div id="readerBgColorPickerPopover" class="reader-color-picker-popover" hidden>
                                 <div class="reader-wheel-wrap">
-                                    <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
-                                        height="168"></canvas>
+                                    <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168" height="168"></canvas>
                                     <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="reader-color-field">
-                            <button id="readerTextColorToggleBtn" class="reader-color-row" type="button"
-                                aria-expanded="false" aria-controls="readerTextColorPickerPopover">
+                            <button id="readerTextColorToggleBtn" class="reader-color-row" type="button" aria-expanded="false" aria-controls="readerTextColorPickerPopover">
                                 <span class="reader-color-row-label">Schrift</span>
                                 <span class="reader-color-preview" id="readerTextColorPreview"></span>
                             </button>
                             <div id="readerTextColorPickerPopover" class="reader-color-picker-popover" hidden>
                                 <div class="reader-wheel-wrap">
-                                    <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
-                                        height="168"></canvas>
+                                    <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168" height="168"></canvas>
                                     <div id="readerTextColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
                                 </div>
                             </div>
@@ -312,7 +302,6 @@
                     </div>
                 </div>
             </div>
-
             <!-- SAVE/LOAD FOOTER -->
             <div class="archive-footer"
                 style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: flex; gap: 20px; justify-content: center;">
@@ -375,16 +364,23 @@
                 const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
                 const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
                 const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
+                const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
+                const READER_BACKGROUND_VOLUME_STORAGE_KEY = 'gameboy_reader_background_volume';
                 const READER_LAYOUT_TIMESTAMPS = 'timestamps';
                 const READER_LAYOUT_FLAT = 'flat';
                 const READER_FONT_SIZE_MIN = 14;
                 const READER_FONT_SIZE_MAX = 30;
                 const READER_FONT_SIZE_DEFAULT = 18;
+                const READER_VOLUME_DEFAULT = 1;
                 let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
                 let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
                 let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
                 let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
+                let readerTextVolume = normalizeReaderVolume(localStorage.getItem(READER_TEXT_VOLUME_STORAGE_KEY));
+                let readerBackgroundVolume = normalizeReaderVolume(localStorage.getItem(READER_BACKGROUND_VOLUME_STORAGE_KEY));
                 const readerColorWheelSync = { bg: null, text: null };
+                const readerColorPopoverState = { activeKey: null };
+                let manualBackgroundDimLevel = 0;
 
                 // FIX: LOAD STATE BEFORE PLAYER INIT
                 const savedMode = localStorage.getItem('gameboy_reading_mode');
@@ -1020,7 +1016,7 @@
 
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
                         liminalTrace('switch:restore-main:src-set', { switchToken, src: p.audio.src });
-                        p.volume = 1.0;
+                        p.volume = readerTextVolume;
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
                         liminalTrace('switch:restore-main:text-parsed', {
@@ -1053,9 +1049,9 @@
                             if (started) {
                                 p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                                 p.renderLines(p.currentSubtitleIndex);
-                                p.volume = 1.0;
+                                p.volume = readerTextVolume;
                             } else {
-                                p.volume = 1.0;
+                                p.volume = readerTextVolume;
                             }
                         }
 
@@ -1137,9 +1133,9 @@
                         if (started) {
                             p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
                             p.renderLines(p.currentSubtitleIndex);
-                            p.volume = 1.0;
+                            p.volume = readerTextVolume;
                         } else {
-                            p.volume = 1.0;
+                            p.volume = readerTextVolume;
                             console.warn(`Lore ${id} loaded but still paused.`);
                         }
 
@@ -1266,6 +1262,13 @@
                     return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
                 }
 
+                function normalizeReaderVolume(value) {
+                    const parsed = Number(value);
+                    if (!Number.isFinite(parsed)) return READER_VOLUME_DEFAULT;
+                    const normalized = parsed > 1 ? (parsed / 100) : parsed;
+                    return Math.max(0, Math.min(1, normalized));
+                }
+
                 function normalizeReaderHexColor(value, fallback = null) {
                     if (typeof value !== 'string') return fallback;
                     const cleaned = value.trim().toLowerCase();
@@ -1285,16 +1288,40 @@
                     return document.body.classList.contains('scene-dimmer-light-mode') ? '#1f1d18' : '#f2ecdc';
                 }
 
-                function applyReaderColorSettings() {
-                    const hasCustomBg = typeof readerBgColor === 'string' && !!readerBgColor;
-                    const hasCustomText = typeof readerTextColor === 'string' && !!readerTextColor;
-                    subtitleContainer.classList.toggle('reader-custom-colors', hasCustomBg || hasCustomText);
+                function mixHexColors(baseHex, tintHex, alpha = 0.5) {
+                    const base = hexToRgb(baseHex);
+                    const tint = hexToRgb(tintHex);
+                    if (!base || !tint) return baseHex;
+                    const a = Math.max(0, Math.min(1, Number(alpha) || 0));
+                    return rgbToHex(
+                        (base.r * (1 - a)) + (tint.r * a),
+                        (base.g * (1 - a)) + (tint.g * a),
+                        (base.b * (1 - a)) + (tint.b * a)
+                    );
+                }
 
-                    if (hasCustomBg) subtitleContainer.style.setProperty('--reader-custom-bg', readerBgColor);
-                    else subtitleContainer.style.removeProperty('--reader-custom-bg');
+                function applyReaderDimmerTint() {
+                    const overlay = document.getElementById('sceneDimmerOverlay');
+                    if (!overlay) return;
+
+                    const base = document.body.classList.contains('scene-dimmer-light-mode') ? '#ffffff' : '#000000';
+                    const isFreezeMode = manualBackgroundDimLevel >= 100;
+                    if (!isFreezeMode || !readerBgColor) {
+                        overlay.style.backgroundColor = base;
+                        return;
+                    }
+
+                    const mixed = mixHexColors(base, readerBgColor, 0.5);
+                    overlay.style.backgroundColor = mixed;
+                }
+
+                function applyReaderColorSettings() {
+                    const hasCustomText = typeof readerTextColor === 'string' && !!readerTextColor;
+                    subtitleContainer.classList.toggle('reader-custom-text', hasCustomText);
 
                     if (hasCustomText) subtitleContainer.style.setProperty('--reader-custom-text', readerTextColor);
                     else subtitleContainer.style.removeProperty('--reader-custom-text');
+                    applyReaderDimmerTint();
                 }
 
                 function applyReaderTextSettings(options = {}) {
@@ -1333,6 +1360,17 @@
                     if (rangeInput) rangeInput.value = valueAsText;
                     if (numberInput) numberInput.value = valueAsText;
 
+                    const textVolumeRange = document.getElementById('readerTextVolumeRange');
+                    const textVolumeNumber = document.getElementById('readerTextVolumeNumber');
+                    const bgVolumeRange = document.getElementById('readerBackgroundVolumeRange');
+                    const bgVolumeNumber = document.getElementById('readerBackgroundVolumeNumber');
+                    const textVolumeValue = String(Math.round(readerTextVolume * 100));
+                    const bgVolumeValue = String(Math.round(readerBackgroundVolume * 100));
+                    if (textVolumeRange) textVolumeRange.value = textVolumeValue;
+                    if (textVolumeNumber) textVolumeNumber.value = textVolumeValue;
+                    if (bgVolumeRange) bgVolumeRange.value = bgVolumeValue;
+                    if (bgVolumeNumber) bgVolumeNumber.value = bgVolumeValue;
+
                     const effectiveBg = readerBgColor || getReaderFallbackBgColor();
                     const effectiveText = readerTextColor || getReaderFallbackTextColor();
                     const bgPreview = document.getElementById('readerBgColorPreview');
@@ -1358,6 +1396,26 @@
                     readerFontSizePx = normalized;
                     localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
                     applyReaderTextSettings({ rerender: readerSentenceLayout === READER_LAYOUT_FLAT });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderTextVolume(nextVolume, options = {}) {
+                    const normalized = normalizeReaderVolume(nextVolume);
+                    if (!options.force && normalized === readerTextVolume) return;
+                    readerTextVolume = normalized;
+                    localStorage.setItem(READER_TEXT_VOLUME_STORAGE_KEY, String(readerTextVolume));
+                    if (window.audioPlayer && typeof window.audioPlayer.volume === 'number') {
+                        window.audioPlayer.volume = readerTextVolume;
+                    }
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderBackgroundVolume(nextVolume, options = {}) {
+                    const normalized = normalizeReaderVolume(nextVolume);
+                    if (!options.force && normalized === readerBackgroundVolume) return;
+                    readerBackgroundVolume = normalized;
+                    localStorage.setItem(READER_BACKGROUND_VOLUME_STORAGE_KEY, String(readerBackgroundVolume));
+                    if (typeof applyBackgroundSfxVolume === 'function') applyBackgroundSfxVolume('reader-background-volume');
                     syncReaderSettingsUi();
                 }
 
@@ -1617,6 +1675,27 @@
                         });
                     }
 
+                    const bindVolumeInputs = (rangeId, numberId, setter) => {
+                        const rangeEl = document.getElementById(rangeId);
+                        const numberEl = document.getElementById(numberId);
+                        if (rangeEl) {
+                            rangeEl.addEventListener('input', (event) => {
+                                setter(event.target.value);
+                            });
+                        }
+                        if (numberEl) {
+                            numberEl.addEventListener('input', (event) => {
+                                setter(event.target.value);
+                            });
+                            numberEl.addEventListener('change', (event) => {
+                                setter(event.target.value, { force: true });
+                            });
+                        }
+                    };
+
+                    bindVolumeInputs('readerTextVolumeRange', 'readerTextVolumeNumber', setReaderTextVolume);
+                    bindVolumeInputs('readerBackgroundVolumeRange', 'readerBackgroundVolumeNumber', setReaderBackgroundVolume);
+
                     readerColorWheelSync.bg = initReaderColorWheelControl({
                         canvasId: 'readerBgColorWheel',
                         markerId: 'readerBgColorMarker',
@@ -1629,6 +1708,73 @@
                         markerId: 'readerTextColorMarker',
                         previewId: 'readerTextColorPreview',
                         onPick: (hexColor) => setReaderTextColor(hexColor)
+                    });
+
+                    const colorControls = {
+                        bg: {
+                            key: 'bg',
+                            button: document.getElementById('readerBgColorToggleBtn'),
+                            popover: document.getElementById('readerBgColorPickerPopover'),
+                            sync: () => {
+                                if (typeof readerColorWheelSync.bg === 'function') {
+                                    readerColorWheelSync.bg(readerBgColor || getReaderFallbackBgColor());
+                                }
+                            }
+                        },
+                        text: {
+                            key: 'text',
+                            button: document.getElementById('readerTextColorToggleBtn'),
+                            popover: document.getElementById('readerTextColorPickerPopover'),
+                            sync: () => {
+                                if (typeof readerColorWheelSync.text === 'function') {
+                                    readerColorWheelSync.text(readerTextColor || getReaderFallbackTextColor());
+                                }
+                            }
+                        }
+                    };
+
+                    const closeAllColorPopovers = () => {
+                        Object.values(colorControls).forEach((control) => {
+                            if (!control || !control.popover || !control.button) return;
+                            control.popover.hidden = true;
+                            control.button.setAttribute('aria-expanded', 'false');
+                        });
+                        readerColorPopoverState.activeKey = null;
+                    };
+
+                    const openColorPopover = (key) => {
+                        const control = colorControls[key];
+                        if (!control || !control.popover || !control.button) return;
+                        closeAllColorPopovers();
+                        control.popover.hidden = false;
+                        control.button.setAttribute('aria-expanded', 'true');
+                        control.sync();
+                        readerColorPopoverState.activeKey = key;
+                    };
+
+                    Object.values(colorControls).forEach((control) => {
+                        if (!control || !control.button || !control.popover) return;
+                        control.button.addEventListener('click', (event) => {
+                            event.preventDefault();
+                            const shouldOpen = readerColorPopoverState.activeKey !== control.key;
+                            if (shouldOpen) openColorPopover(control.key);
+                            else closeAllColorPopovers();
+                        });
+                    });
+
+                    document.addEventListener('click', (event) => {
+                        if (!readerColorPopoverState.activeKey) return;
+                        const activeControl = colorControls[readerColorPopoverState.activeKey];
+                        if (!activeControl || !activeControl.button || !activeControl.popover) return;
+                        const target = event.target;
+                        if (activeControl.button.contains(target) || activeControl.popover.contains(target)) return;
+                        closeAllColorPopovers();
+                    });
+
+                    document.addEventListener('keydown', (event) => {
+                        if (event.key !== 'Escape') return;
+                        if (!readerColorPopoverState.activeKey) return;
+                        closeAllColorPopovers();
                     });
 
                     const resetColorsBtn = document.getElementById('readerColorResetBtn');
@@ -1653,7 +1799,7 @@
                         iconSunId: 'sceneDimmerIconSun'
                     })
                     : null;
-                let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+                manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
                 window.visualFreezeActive = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
 
                 // --- GLOBAL GAME STATE ---
@@ -1661,7 +1807,7 @@
                 // SharedAudioPlayer imported at top
                 window.audioPlayer = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
                     container: document.getElementById('subtitleContainer'),
-                    volume: 1.0,
+                    volume: readerTextVolume,
                     isReadingMode: isReadingMode, // Pass initial state
                     canSeek: () => !contentSwitchInProgress,
                     onLineRender: (div, track) => {
@@ -1693,6 +1839,10 @@
                                     btn.innerHTML = '';
                                     const mapLayer = document.createElement('span');
                                     mapLayer.className = 'bookmark-map-layer';
+                                    const mapCanvas = document.createElement('canvas');
+                                    mapCanvas.className = 'bookmark-map-canvas';
+                                    mapCanvas.setAttribute('aria-hidden', 'true');
+                                    mapLayer.appendChild(mapCanvas);
                                     const overlayLayer = document.createElement('span');
                                     overlayLayer.className = 'bookmark-overlay-layer';
                                     const labelLayer = document.createElement('span');
@@ -1704,6 +1854,12 @@
                                 }
                                 btn.classList.add('bookmark-btn-flat-overlay');
                             } else {
+                                if (btn._flatMapRaf) {
+                                    cancelAnimationFrame(btn._flatMapRaf);
+                                    btn._flatMapRaf = 0;
+                                }
+                                btn._flatLockedX = null;
+                                btn._flatLockedY = null;
                                 btn.classList.remove('bookmark-btn-flat-overlay');
                                 if (btn.dataset.flatOverlay === '1') {
                                     btn.dataset.flatOverlay = '0';
@@ -1720,26 +1876,69 @@
                             const anyCanvas = document.querySelector('canvas');
                             return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
                         };
-                        const applyFlatBookmarkMapLayer = (btn) => {
+                        const drawFlatBookmarkMapLayer = (btn) => {
                             if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
                             const mapLayer = btn.querySelector('.bookmark-map-layer');
+                            const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
+                            if (!(mapCanvas instanceof HTMLCanvasElement)) return;
+                            const drawCtx = mapCanvas.getContext('2d');
+                            if (!drawCtx) return;
                             if (!mapLayer) return;
                             const sceneCanvas = resolveSceneCanvas();
-                            if (!sceneCanvas || typeof sceneCanvas.toDataURL !== 'function') {
-                                mapLayer.style.backgroundImage = 'none';
+                            if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
+                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
                                 return;
                             }
                             try {
                                 const canvasRect = sceneCanvas.getBoundingClientRect();
                                 const btnRect = btn.getBoundingClientRect();
                                 if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
-                                const snapshotUrl = sceneCanvas.toDataURL('image/png');
-                                mapLayer.style.backgroundImage = `url("${snapshotUrl}")`;
-                                mapLayer.style.backgroundSize = `${canvasRect.width}px ${canvasRect.height}px`;
-                                mapLayer.style.backgroundPosition = `${Math.round(canvasRect.left - btnRect.left)}px ${Math.round(canvasRect.top - btnRect.top)}px`;
+                                const dpr = Math.max(1, window.devicePixelRatio || 1);
+                                const targetW = Math.max(1, Math.round(btnRect.width * dpr));
+                                const targetH = Math.max(1, Math.round(btnRect.height * dpr));
+                                if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
+                                    mapCanvas.width = targetW;
+                                    mapCanvas.height = targetH;
+                                }
+                                drawCtx.clearRect(0, 0, targetW, targetH);
+
+                                const overlapLeft = Math.max(btnRect.left, canvasRect.left);
+                                const overlapTop = Math.max(btnRect.top, canvasRect.top);
+                                const overlapRight = Math.min(btnRect.right, canvasRect.right);
+                                const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
+                                if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
+
+                                const scaleX = sceneCanvas.width / canvasRect.width;
+                                const scaleY = sceneCanvas.height / canvasRect.height;
+                                const srcX = (overlapLeft - canvasRect.left) * scaleX;
+                                const srcY = (overlapTop - canvasRect.top) * scaleY;
+                                const srcW = (overlapRight - overlapLeft) * scaleX;
+                                const srcH = (overlapBottom - overlapTop) * scaleY;
+                                const dstX = (overlapLeft - btnRect.left) * dpr;
+                                const dstY = (overlapTop - btnRect.top) * dpr;
+                                const dstW = (overlapRight - overlapLeft) * dpr;
+                                const dstH = (overlapBottom - overlapTop) * dpr;
+                                drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
                             } catch (_) {
-                                mapLayer.style.backgroundImage = 'none';
+                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
                             }
+                        };
+                        const stopFlatBookmarkMapLayerLoop = (btn) => {
+                            if (!btn || !btn._flatMapRaf) return;
+                            cancelAnimationFrame(btn._flatMapRaf);
+                            btn._flatMapRaf = 0;
+                        };
+                        const startFlatBookmarkMapLayerLoop = (btn) => {
+                            if (!btn || btn._flatMapRaf) return;
+                            const tick = () => {
+                                if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
+                                    btn._flatMapRaf = 0;
+                                    return;
+                                }
+                                drawFlatBookmarkMapLayer(btn);
+                                btn._flatMapRaf = requestAnimationFrame(tick);
+                            };
+                            tick();
                         };
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
@@ -1769,7 +1968,7 @@
                             }
                             return { rects, containerRect };
                         };
-                        const positionBookmarkButton = (btn) => {
+                        const positionBookmarkButton = (btn, options = {}) => {
                             const useFlatOverlay = isFlatBookmarkLayout();
                             ensureBookmarkButtonMode(btn, useFlatOverlay);
                             const lineRect = div.getBoundingClientRect();
@@ -1779,16 +1978,31 @@
                             const btnHeight = btn.offsetHeight || 0;
 
                             if (useFlatOverlay) {
+                                const lockToExisting = !!options.lockToExisting;
+                                if (lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
+                                    btn.style.left = `${Math.round(btn._flatLockedX)}px`;
+                                    btn.style.top = `${Math.round(btn._flatLockedY)}px`;
+                                    startFlatBookmarkMapLayerLoop(btn);
+                                    drawFlatBookmarkMapLayer(btn);
+                                    return;
+                                }
                                 const lineTextRects = collectLineTextRects(div, containerRect);
                                 const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
                                 const edgeMargin = 6;
                                 const x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
                                 const y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
-                                btn.style.left = `${Math.round(x)}px`;
-                                btn.style.top = `${Math.round(y)}px`;
-                                applyFlatBookmarkMapLayer(btn);
+                                btn._flatLockedX = Math.round(x);
+                                btn._flatLockedY = Math.round(y);
+                                btn.style.left = `${btn._flatLockedX}px`;
+                                btn.style.top = `${btn._flatLockedY}px`;
+                                startFlatBookmarkMapLayerLoop(btn);
+                                drawFlatBookmarkMapLayer(btn);
                                 return;
                             }
+
+                            stopFlatBookmarkMapLayerLoop(btn);
+                            btn._flatLockedX = null;
+                            btn._flatLockedY = null;
 
                             const { rects: textRects } = collectSubtitleTextRects();
                             const margin = 8;
@@ -1886,13 +2100,18 @@
                                         if (added) {
                                             btn.classList.add('saved');
                                             setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
-                                            positionBookmarkButton(btn);
+                                            positionBookmarkButton(btn, { lockToExisting: true });
                                             setTimeout(() => {
                                                 btn.classList.remove('visible', 'saved');
+                                                stopFlatBookmarkMapLayerLoop(btn);
                                                 ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
                                                 setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
-                                                positionBookmarkButton(btn);
+                                                btn._flatLockedX = null;
+                                                btn._flatLockedY = null;
                                             }, 1200);
+                                        } else {
+                                            stopFlatBookmarkMapLayerLoop(btn);
+                                            btn.classList.remove('visible');
                                         }
                                     }
                                 });
@@ -1901,14 +2120,22 @@
                             ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
                             if (!btn.classList.contains('saved')) setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
                             subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
-                                if (otherBtn !== btn) otherBtn.classList.remove('visible');
+                                if (otherBtn !== btn) {
+                                    otherBtn.classList.remove('visible');
+                                    stopFlatBookmarkMapLayerLoop(otherBtn);
+                                    otherBtn._flatLockedX = null;
+                                    otherBtn._flatLockedY = null;
+                                }
                             });
-                            positionBookmarkButton(btn);
                             btn.classList.add('visible');
+                            positionBookmarkButton(btn, { lockToExisting: false });
                             // Auto-hide after 4 seconds
                             setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
                                     btn.classList.remove('visible');
+                                    stopFlatBookmarkMapLayerLoop(btn);
+                                    btn._flatLockedX = null;
+                                    btn._flatLockedY = null;
                                 }
                             }, 4000);
                         };
@@ -2319,7 +2546,7 @@
 
                 // Auto-Resume when Lore ends or Transition
                 // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
-                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                // ZusÃ¤tzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
                 let _endedHandled = false;
                 function handleAudioEnded() {
                     if (_endedHandled) return;
@@ -2334,8 +2561,8 @@
                     }
 
                     // MAIN CHAPTER ENDED
-                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
-                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurÃ¼cksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd wÃ¼rde false liefern).
                     const tracks = getActiveSubtitleTracks();
                     const subtitleIdx = getActiveSubtitleIndex();
                     const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
@@ -2356,7 +2583,7 @@
                         if (btn) btn.classList.add('visible');
                     }
                 }
-                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                // PrimÃ¤r: SharedAudioPlayer.onEnded (garantiert aufgerufen)
                 player.onEnded = handleAudioEnded;
                 // Fallback: DOM-Event auf dem Audio-Element
                 player.audio.addEventListener('ended', handleAudioEnded);
@@ -2850,14 +3077,21 @@
                 // Note: We use GameState.state.collectedLore.length for global tracking, not a local counter
                 let glowingBookCounter = 0;       // ID generator
                 const activeGlowingBooks = [];    // Currently spawned books
+                const SHIMMER_BASE_VOLUME = 0.4;
                 const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
                 shimmerSound.src = getSCUrl('assets/shimmer.mp3');
-                shimmerSound.volume = 0.4;
+                shimmerSound.volume = SHIMMER_BASE_VOLUME * readerBackgroundVolume;
                 let lastShimmerAt = 0;
                 // One-shot SFX should not auto-resume after visibility changes.
                 if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
                     window.AudioVisibilityManager.unregister(shimmerSound);
                 }
+
+                function applyBackgroundSfxVolume(reason = 'unspecified') {
+                    shimmerSound.volume = Math.max(0, Math.min(1, SHIMMER_BASE_VOLUME * readerBackgroundVolume));
+                    liminalDebugNote('bg-sfx', `${reason} shimmer=${shimmerSound.volume.toFixed(3)}`);
+                }
+                applyBackgroundSfxVolume('init');
 
                 function allowAuxSfxPlaybackLiminal() {
                     const p = window.audioPlayer;
@@ -3401,6 +3635,7 @@
                 if (globalVisualDimmer) {
                     globalVisualDimmer.onChange(({ level, frozen }) => {
                         manualBackgroundDimLevel = level;
+                        applyReaderDimmerTint();
                         applyVisualFreezeState(frozen);
 
                         if (frozen && !isReadingMode) {
@@ -3410,6 +3645,7 @@
                     });
                 }
                 applyVisualFreezeState(window.visualFreezeActive);
+                applyReaderDimmerTint();
                 if (globalVisualDimmer && globalVisualDimmer.isFrozen() && !isReadingMode) {
                     isReadingMode = true;
                     updateReadingModeUI();
@@ -3644,7 +3880,7 @@
                     }
 
                     // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
-                    // If click is in the bottom 80px (approx UI height), IGNORÉ
+                    // If click is in the bottom 80px (approx UI height), IGNORÃ‰
                     if (event.clientY >= getUiDeadzoneTop()) {
                         console.log("Ignored Click in UI Deadzone");
                         liminalCause('C02_WORLD_BLOCKED_CLICK', 'deadzone');
@@ -4163,7 +4399,7 @@
                             input.set(0, 0, -1); // Purely forward along hallway
 
                             // Auto-Center X (Smooth drift to 0)
-                            // "Trägheit der Richtungsjustierung"
+                            // "TrÃ¤gheit der Richtungsjustierung"
                             const centerX = 0;
                             const distToCenter = centerX - camera.position.x;
                             const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
@@ -4598,7 +4834,7 @@
                         const mainText = document.createElement('div');
                         mainText.className = 'item-main-text';
                         const timeStr = window.GameState.formatBookmarkTime(bm.time);
-                        mainText.innerText = `${bm.chapterTitle} · ${timeStr}`;
+                        mainText.innerText = `${bm.chapterTitle} Â· ${timeStr}`;
 
                         const subText = document.createElement('div');
                         subText.className = 'item-sub-text';
@@ -4711,17 +4947,10 @@
 
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
-                // Show user-facing error (especially important on old iOS where imports may fail)
-                var l1 = document.getElementById('loading');
-                var l2 = document.getElementById('loading-screen');
-                if (l1) l1.style.display = 'none';
-                if (l2) {
-                    l2.innerHTML = '<p style="color:#c44;padding:20px;text-align:center;font-family:sans-serif;">' +
-                        'Fehler beim Laden.<br><small style="color:#888;">Dein Browser unterstÃ¼tzt mÃ¶glicherweise nicht alle benÃ¶tigten Funktionen.<br>Bitte verwende Safari 16+ oder Chrome.</small></p>';
-                }
             }
         })();
     </script>
 </body>
 
 </html>
+
