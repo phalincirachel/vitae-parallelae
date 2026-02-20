@@ -893,6 +893,7 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     color: #FFFFFF;
     font-family: "Georgia", serif;
     text-shadow: none;
+    overflow: hidden;
 }
 
 body.scene-dimmer-light-mode .archive-card,
@@ -1014,6 +1015,8 @@ body.scene-dimmer-light-mode .archive-primary-btn.active {
     display: flex;
     flex-direction: column;
     gap: 15px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .col-header {
@@ -1162,6 +1165,8 @@ body.scene-dimmer-light-mode .archive-tab.active {
     gap: 0;
     overflow-y: auto;
     padding-right: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .archive-tab-content[data-tab="lesezeichen"]::-webkit-scrollbar {
@@ -1173,6 +1178,8 @@ body.scene-dimmer-light-mode .archive-tab.active {
     gap: 0;
     overflow-y: auto;
     padding-right: 4px;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
 }
 
 .archive-tab-content[data-tab="einstellungen"]::-webkit-scrollbar {

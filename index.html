@@ -69,7 +69,7 @@
             display: none;
             pointer-events: auto;
             opacity: 0.92;
-            z-index: 2600;
+            z-index: 1900;
         }
 
         #subtitleRecenterBtn svg {
@@ -89,7 +89,7 @@
             border-radius: 50%;
             background: transparent;
             box-shadow: none;
-            z-index: 2598;
+            z-index: 1898;
         }
     </style>
 </head>
@@ -1078,6 +1078,23 @@
         if (btnSave) {
             btnSave.addEventListener('click', () => {
                 if (!window.GameState) return;
+                // Embed reader/chapter-menu settings into state before export
+                const settingsKeys = [
+                    'gameboy_reader_sentence_layout',
+                    'gameboy_reader_font_size_px',
+                    'gameboy_reader_text_volume',
+                    'gameboy_reader_background_volume',
+                    'gameboy_reader_bg_color',
+                    'gameboy_reader_text_color',
+                    'gb_background_dim_level',
+                    'gb_background_dim_phase'
+                ];
+                const readerSettings = {};
+                settingsKeys.forEach(key => {
+                    const val = localStorage.getItem(key);
+                    if (val !== null) readerSettings[key] = val;
+                });
+                window.GameState.state.readerSettings = readerSettings;
                 const json = window.GameState.exportState();
                 const blob = new Blob([json], { type: 'application/json' });
                 const url = URL.createObjectURL(blob);
@@ -1104,6 +1121,17 @@
                 const reader = new FileReader();
                 reader.onload = async (ev) => {
                     if (window.GameState) {
+                        // Pre-parse to extract reader settings before importState
+                        try {
+                            const parsed = JSON.parse(ev.target.result);
+                            if (parsed && parsed.readerSettings && typeof parsed.readerSettings === 'object') {
+                                Object.entries(parsed.readerSettings).forEach(([key, val]) => {
+                                    if (typeof val === 'string') {
+                                        localStorage.setItem(key, val);
+                                    }
+                                });
+                            }
+                        } catch (_) { /* will be caught by importState below */ }
                         const success = await window.GameState.importState(ev.target.result);
                         if (success) {
                             alert("Save Data Imported Successfully! Reloading...");
@@ -4378,6 +4406,7 @@
                         div.style.position = 'relative';
                         div.style.overflow = 'visible';
                         let _bmTimer = null;
+                        let _bmAnchorPoint = null;
                         const BOOKMARK_LABEL = 'Lesezeichen';
                         const BOOKMARK_SAVED_LABEL = 'Gespeichert';
                         const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -4537,6 +4566,8 @@
                             const btnWidth = btn.offsetWidth || 0;
                             const btnHeight = btn.offsetHeight || 0;
 
+                            const anchor = options.anchorPoint || _bmAnchorPoint;
+
                             if (useFlatOverlay) {
                                 const lockToExisting = !!options.lockToExisting;
                                 if (lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
@@ -4546,11 +4577,21 @@
                                     drawFlatBookmarkMapLayer(btn);
                                     return;
                                 }
-                                const lineTextRects = collectLineTextRects(div, containerRect);
-                                const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
                                 const edgeMargin = 6;
-                                const x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
-                                const y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
+                                let x, y;
+                                if (anchor) {
+                                    x = clampBookmarkCoord(anchor.x - btnWidth / 2, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
+                                    y = anchor.y - 200 - btnHeight;
+                                    if (y < 150) {
+                                        y = anchor.y + 200;
+                                    }
+                                    y = clampBookmarkCoord(y, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
+                                } else {
+                                    const lineTextRects = collectLineTextRects(div, containerRect);
+                                    const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
+                                    x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
+                                    y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
+                                }
                                 btn._flatLockedX = Math.round(x);
                                 btn._flatLockedY = Math.round(y);
                                 btn.style.left = `${btn._flatLockedX}px`;
@@ -4563,6 +4604,19 @@
                             stopFlatBookmarkMapLayerLoop(btn);
                             btn._flatLockedX = null;
                             btn._flatLockedY = null;
+
+                            if (anchor) {
+                                const edgeMargin = 6;
+                                let x = clampBookmarkCoord(anchor.x - btnWidth / 2, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
+                                let y = anchor.y - 200 - btnHeight;
+                                if (y < 150) {
+                                    y = anchor.y + 200;
+                                }
+                                y = clampBookmarkCoord(y, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
+                                btn.style.left = `${Math.round(x - lineRect.left)}px`;
+                                btn.style.top = `${Math.round(y - lineRect.top)}px`;
+                                return;
+                            }
 
                             const { rects: textRects } = collectSubtitleTextRects();
                             const margin = 8;
@@ -4698,8 +4752,14 @@
                             }, 4000);
                         };
 
-                        const startLongPress = () => {
+                        const startLongPress = (e) => {
                             if (isDesktopPointer()) return;
+                            if (e) {
+                                const t = e.touches && e.touches.length > 0 ? e.touches[0] : e;
+                                if (Number.isFinite(t.clientX) && Number.isFinite(t.clientY)) {
+                                    _bmAnchorPoint = { x: t.clientX, y: t.clientY };
+                                }
+                            }
                             if (_bmTimer) clearTimeout(_bmTimer);
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
@@ -4711,13 +4771,19 @@
                         };
                         div.addEventListener('mousedown', (e) => {
                             if (e.button !== 0) return;
-                            startLongPress();
+                            if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+                                _bmAnchorPoint = { x: e.clientX, y: e.clientY };
+                            }
+                            startLongPress(e);
                         });
                         div.addEventListener('contextmenu', (e) => {
                             if (!isDesktopPointer()) return;
                             e.preventDefault();
                             e.stopPropagation();
                             cancelLongPress();
+                            if (Number.isFinite(e.clientX) && Number.isFinite(e.clientY)) {
+                                _bmAnchorPoint = { x: e.clientX, y: e.clientY };
+                            }
                             showBookmarkButton();
                         });
                         div.addEventListener('touchstart', startLongPress, { passive: true });
