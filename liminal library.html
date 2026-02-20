@@ -186,9 +186,8 @@
         <div class="archive-card">
             <div class="archive-header">
                 <div class="archive-title-wrap">
-                    <div class="archive-title">Inhalt</div>
-                    <button class="archive-settings-btn" id="archiveSettingsBtn" data-tab="einstellungen"
-                        type="button">Einstellungen</button>
+                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn" type="button">Inhalt</button>
+                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn" type="button">Einstellungen</button>
                 </div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
@@ -1214,6 +1213,7 @@
                     });
 
                     if (rerender && window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
+                        subtitleContainer.dataset.version = '';
                         const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
                             ? window.audioPlayer.currentSubtitleIndex
                             : 0;
@@ -1248,7 +1248,7 @@
                     if (!options.force && normalized === readerFontSizePx) return;
                     readerFontSizePx = normalized;
                     localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
-                    applyReaderTextSettings({ rerender: false });
+                    applyReaderTextSettings({ rerender: readerSentenceLayout === READER_LAYOUT_FLAT });
                     syncReaderSettingsUi();
                 }
 
@@ -4053,27 +4053,41 @@
                 // --- ARCHIVE TAB SWITCHING ---
                 function initArchiveTabs() {
                     const tabs = Array.from(document.querySelectorAll('.archive-tab'));
-                    const panels = document.querySelectorAll('.archive-tab-content');
-                    const settingsBtn = document.getElementById('archiveSettingsBtn');
+                    const panels = Array.from(document.querySelectorAll('.archive-tab-content'));
+                    const tabsBar = document.querySelector('.archive-tabs');
+                    const primaryInhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+                    const primarySettingsBtn = document.getElementById('archivePrimarySettingsBtn');
+                    const settingsPanel = document.querySelector('.archive-tab-content[data-tab="einstellungen"]');
+                    let lastContentTab = 'kapitel';
 
-                    const activateArchivePanel = (target, activeTab = null) => {
-                        tabs.forEach(t => t.classList.remove('active'));
-                        panels.forEach(p => p.classList.remove('active'));
-                        if (settingsBtn) settingsBtn.classList.remove('active');
+                    const setPrimaryMode = (mode) => {
+                        const normalized = mode === 'einstellungen' ? 'einstellungen' : 'inhalt';
 
-                        if (activeTab && activeTab.classList.contains('archive-tab')) {
-                            activeTab.classList.add('active');
+                        if (primaryInhaltBtn) primaryInhaltBtn.classList.toggle('active', normalized === 'inhalt');
+                        if (primarySettingsBtn) primarySettingsBtn.classList.toggle('active', normalized === 'einstellungen');
+                        if (tabsBar) tabsBar.style.display = normalized === 'inhalt' ? '' : 'none';
+                    };
+
+                    const showContentTab = (target, activeTab = null) => {
+                        tabs.forEach((t) => t.classList.remove('active'));
+                        panels.forEach((p) => p.classList.remove('active'));
+
+                        const matchedTab = activeTab || tabs.find((t) => t.getAttribute('data-tab') === target) || null;
+                        if (matchedTab) {
+                            matchedTab.classList.add('active');
+                            lastContentTab = matchedTab.getAttribute('data-tab') || lastContentTab;
                         }
-                        if (target === 'einstellungen' && settingsBtn) {
-                            settingsBtn.classList.add('active');
-                        }
 
-                        const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
+                        const panel = document.querySelector(`.archive-tab-content[data-tab="${lastContentTab}"]`);
                         if (panel) panel.classList.add('active');
-                        if (target === 'lesezeichen') renderBookmarks();
-                        if (target === 'einstellungen' && typeof syncReaderSettingsUi === 'function') {
-                            syncReaderSettingsUi();
-                        }
+                        if (lastContentTab === 'lesezeichen') renderBookmarks();
+                    };
+
+                    const showSettingsPanel = () => {
+                        tabs.forEach((t) => t.classList.remove('active'));
+                        panels.forEach((p) => p.classList.remove('active'));
+                        if (settingsPanel) settingsPanel.classList.add('active');
+                        if (typeof syncReaderSettingsUi === 'function') syncReaderSettingsUi();
                     };
 
                     tabs.forEach(tab => {
@@ -4085,16 +4099,33 @@
                             tab.classList.add('pressed');
                             setTimeout(() => tab.classList.remove('pressed'), 170);
                             const target = tab.getAttribute('data-tab');
-                            activateArchivePanel(target, tab);
+                            setPrimaryMode('inhalt');
+                            showContentTab(target, tab);
                         });
                     });
 
-                    if (settingsBtn) {
-                        settingsBtn.addEventListener('click', () => {
+                    if (primaryInhaltBtn) {
+                        primaryInhaltBtn.addEventListener('click', () => {
                             triggerUiHaptic(7);
-                            activateArchivePanel('einstellungen');
+                            setPrimaryMode('inhalt');
+                            showContentTab(lastContentTab);
                         });
                     }
+
+                    if (primarySettingsBtn) {
+                        primarySettingsBtn.addEventListener('click', () => {
+                            triggerUiHaptic(7);
+                            setPrimaryMode('einstellungen');
+                            showSettingsPanel();
+                        });
+                    }
+
+                    const initiallyActiveTab = tabs.find((tab) => tab.classList.contains('active'));
+                    if (initiallyActiveTab) {
+                        lastContentTab = initiallyActiveTab.getAttribute('data-tab') || 'kapitel';
+                    }
+                    setPrimaryMode('inhalt');
+                    showContentTab(lastContentTab, initiallyActiveTab || undefined);
                 }
                 initArchiveTabs();
 

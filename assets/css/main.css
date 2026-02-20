@@ -561,12 +561,12 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
     display: inline;
     line-height: inherit;
-    margin-right: 0.2em;
+    margin-right: calc(0.16em + var(--flat-comp-gap, 0px));
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     font-weight: 500 !important;
-    margin-right: 0.12em;
+    margin-right: 0.16em;
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */

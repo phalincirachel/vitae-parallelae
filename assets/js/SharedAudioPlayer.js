@@ -20,6 +20,9 @@ export class SharedAudioPlayer {
         this.canSeek = (typeof options.canSeek === 'function') ? options.canSeek : null;
         this._textLoadRequestId = 0;
         this._activeTextAbortController = null;
+        this._flatCompMeasureCanvas = null;
+        this._flatCompMeasureCtx = null;
+        this._flatCompMeasureCache = new Map();
 
         // Default volumes
         const requestedVolume = Number(options.volume ?? 1.0);
@@ -205,6 +208,46 @@ export class SharedAudioPlayer {
         if (this.onUpdate) this.onUpdate(t);
     }
 
+    _getFlatCompensationGapPx(text, sampleEl) {
+        if (!this.container || !this.container.classList.contains('reader-layout-flat')) return 0;
+        if (!sampleEl || !text) return 0;
+        if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return 0;
+
+        if (!this._flatCompMeasureCanvas) {
+            this._flatCompMeasureCanvas = document.createElement('canvas');
+            this._flatCompMeasureCtx = this._flatCompMeasureCanvas.getContext('2d');
+        }
+        if (!this._flatCompMeasureCtx) return 0;
+
+        const styles = window.getComputedStyle(sampleEl);
+        const fontFamily = styles.fontFamily || 'serif';
+        const fontSize = styles.fontSize || '18px';
+        const fontStyle = styles.fontStyle || 'normal';
+        const fontVariant = styles.fontVariant || 'normal';
+        const cacheKey = `${fontStyle}|${fontVariant}|${fontSize}|${fontFamily}|${text}`;
+        if (this._flatCompMeasureCache.has(cacheKey)) {
+            return this._flatCompMeasureCache.get(cacheKey);
+        }
+
+        this._flatCompMeasureCtx.font = `${fontStyle} ${fontVariant} 400 ${fontSize} ${fontFamily}`;
+        const normalWidth = this._flatCompMeasureCtx.measureText(text).width;
+        this._flatCompMeasureCtx.font = `${fontStyle} ${fontVariant} 500 ${fontSize} ${fontFamily}`;
+        const boldWidth = this._flatCompMeasureCtx.measureText(text).width;
+        const compensationPx = Math.max(0, Math.ceil((boldWidth - normalWidth) * 100) / 100);
+        this._flatCompMeasureCache.set(cacheKey, compensationPx);
+        return compensationPx;
+    }
+
+    _applyFlatCompensationGap(lineEl, text) {
+        if (!lineEl) return;
+        if (!this.container || !this.container.classList.contains('reader-layout-flat')) {
+            lineEl.style.removeProperty('--flat-comp-gap');
+            return;
+        }
+        const compensationPx = this._getFlatCompensationGapPx(text, lineEl);
+        lineEl.style.setProperty('--flat-comp-gap', `${compensationPx}px`);
+    }
+
     renderLines(centerIndex) {
         if (!this.container) return;
 
@@ -250,6 +293,7 @@ export class SharedAudioPlayer {
                     }
 
                     this.container.appendChild(div);
+                    this._applyFlatCompensationGap(div, this.subtitleTracks[i].text);
                 }
             }
 
