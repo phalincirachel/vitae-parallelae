@@ -484,7 +484,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
    ========================================== */
 .subtitle-line {
     text-align: left;
-    font-size: 18px;
+    font-size: var(--reader-font-size, 18px);
     font-weight: 400;
     color: rgba(255, 255, 255, 0.8);
     text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
@@ -509,9 +509,6 @@ body.scene-dimmer-light-mode .subtitle-current {
 
 /* Reading mode: stronger text shadow for readability */
 #audioPlayerUI.reading-mode .subtitle-line {
-    display: inline;
-    line-height: inherit;
-    margin-right: 0.32em;
     text-shadow:
         0 0 5px rgba(0, 0, 0, 1),
         0 0 10px rgba(0, 0, 0, 1),
@@ -533,8 +530,6 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
 /* Soft Edges Mask for Reading Mode Container */
 #audioPlayerUI.reading-mode #subtitleContainer {
     justify-content: flex-start;
-    line-height: 1.65;
-    white-space: normal;
     mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
     padding-top: clamp(56px, 8vh, 110px);
@@ -542,6 +537,38 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     pointer-events: auto !important;
     touch-action: pan-y;
     user-select: none;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    line-height: normal;
+    white-space: normal;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
+    display: block;
+    margin-right: 0;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat {
+    display: block;
+    line-height: 1.65;
+    white-space: normal;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
+    display: inline;
+    line-height: inherit;
+    margin-right: 0.2em;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
+    font-weight: 400 !important;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */
@@ -971,11 +998,11 @@ body.scene-dimmer-light-mode .menu-item.active .item-main-text {
 }
 
 /* ==========================================
-   ARCHIVE TABS (Kapitel | Lore | Lesezeichen)
+   ARCHIVE TABS (Kapitel | Lore | Lesezeichen | Einstellungen)
    ========================================== */
 .archive-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     align-items: center;
     width: 100%;
     gap: 8px;
@@ -1048,6 +1075,91 @@ body.scene-dimmer-light-mode .archive-tab.active {
 
 .archive-tab-content[data-tab="lesezeichen"]::-webkit-scrollbar {
     display: none;
+}
+
+.archive-tab-content[data-tab="einstellungen"] {
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.archive-tab-content[data-tab="einstellungen"]::-webkit-scrollbar {
+    display: none;
+}
+
+.reader-settings-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    width: 100%;
+}
+
+.reader-settings-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.reader-settings-title {
+    font-size: 13px;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.reader-radio-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.reader-radio-option input[type="radio"] {
+    accent-color: #ffd700;
+}
+
+.reader-size-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#readerFontSizeRange {
+    flex: 1;
+}
+
+#readerFontSizeNumber {
+    width: 62px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 4px 6px;
+}
+
+.reader-size-unit {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 12px;
+}
+
+body.scene-dimmer-light-mode .reader-settings-title {
+    color: rgba(0, 0, 0, 0.62);
+}
+
+body.scene-dimmer-light-mode .reader-radio-option {
+    color: rgba(0, 0, 0, 0.9);
+}
+
+body.scene-dimmer-light-mode #readerFontSizeNumber {
+    border-color: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.92);
+}
+
+body.scene-dimmer-light-mode .reader-size-unit {
+    color: rgba(0, 0, 0, 0.6);
 }
 
 /* Bookmark items */
@@ -1184,6 +1296,14 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
    MOBILE OPTIMIZATIONS (Max-width: 768px)
    ========================================== */
 @media (max-width: 768px) {
+    .archive-tabs {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .archive-tab {
+        font-size: 12px;
+        padding: 7px 6px;
+    }
 
     /* Canvas responsive */
     #gameWrapper {
@@ -1301,7 +1421,7 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
 
     .subtitle-line {
         text-align: left;
-        font-size: 16px;
+        font-size: var(--reader-font-size, 16px);
         width: 100%;
     }
 

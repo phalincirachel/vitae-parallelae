@@ -83,7 +83,7 @@
 
     <!-- AUDIO PLAYER UI -->
     <div id="audioPlayerUI" style="display:none;">
-        <div id="subtitleContainer"></div>
+        <div id="subtitleContainer" class="reader-layout-timestamps"></div>
         <div id="audioControls">
             <div class="controls-row">
                 <button id="skipBackBtn" class="audio-btn" title="-15 Sekunden">
@@ -192,6 +192,7 @@
                 <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
                 <button class="archive-tab" data-tab="lore">Lore</button>
                 <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
+                <button class="archive-tab" data-tab="einstellungen">Einstellungen</button>
             </div>
 
             <div class="archive-tab-content active" data-tab="kapitel">
@@ -222,6 +223,31 @@
                     <!-- Dynamisch gefüllt -->
                 </div>
             </div>
+
+            <div class="archive-tab-content" data-tab="einstellungen">
+                <div class="reader-settings-panel">
+                    <div class="reader-settings-group">
+                        <div class="reader-settings-title">Satztechnik</div>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerSentenceLayout" value="timestamps" checked>
+                            <span>Timestamps (Standard)</span>
+                        </label>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerSentenceLayout" value="flat">
+                            <span>Flattersatz</span>
+                        </label>
+                    </div>
+                    <div class="reader-settings-group">
+                        <label class="reader-settings-title" for="readerFontSizeRange">Schriftgröße</label>
+                        <div class="reader-size-row">
+                            <input id="readerFontSizeRange" type="range" min="14" max="30" step="1" value="18">
+                            <input id="readerFontSizeNumber" type="number" min="14" max="30" step="1" value="18">
+                            <span class="reader-size-unit">px</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- SAVE/LOAD FOOTER -->
             <div class="archive-footer"
                 style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: flex; gap: 20px; justify-content: center;">
@@ -280,6 +306,15 @@
                 let isLoreMode = false;
                 let activeLoreId = null;
                 let isReadingMode = false;
+                const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
+                const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
+                const READER_LAYOUT_TIMESTAMPS = 'timestamps';
+                const READER_LAYOUT_FLAT = 'flat';
+                const READER_FONT_SIZE_MIN = 14;
+                const READER_FONT_SIZE_MAX = 30;
+                const READER_FONT_SIZE_DEFAULT = 18;
+                let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
+                let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
 
                 // FIX: LOAD STATE BEFORE PLAYER INIT
                 const savedMode = localStorage.getItem('gameboy_reading_mode');
@@ -1148,6 +1183,100 @@
                 const RECENTER_MOBILE_RADIUS_PX = 75;
                 const skipBackBtn = document.getElementById('skipBackBtn');
                 const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+                function normalizeReaderSentenceLayout(value) {
+                    return value === READER_LAYOUT_FLAT ? READER_LAYOUT_FLAT : READER_LAYOUT_TIMESTAMPS;
+                }
+
+                function normalizeReaderFontSize(value) {
+                    const parsed = Number(value);
+                    if (!Number.isFinite(parsed)) return READER_FONT_SIZE_DEFAULT;
+                    const rounded = Math.round(parsed);
+                    return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
+                }
+
+                function applyReaderTextSettings(options = {}) {
+                    if (!subtitleContainer) return;
+                    const rerender = options.rerender !== false;
+                    const isFlatLayout = readerSentenceLayout === READER_LAYOUT_FLAT;
+
+                    subtitleContainer.classList.toggle('reader-layout-flat', isFlatLayout);
+                    subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout);
+                    subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
+
+                    // Open bookmark buttons may overlap after layout/font changes.
+                    subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((btn) => {
+                        btn.classList.remove('visible');
+                    });
+
+                    if (rerender && window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
+                        const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                            ? window.audioPlayer.currentSubtitleIndex
+                            : 0;
+                        window.audioPlayer.renderLines(Math.max(0, idx));
+                    }
+                }
+
+                function syncReaderSettingsUi() {
+                    const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
+                    layoutInputs.forEach((input) => {
+                        input.checked = input.value === readerSentenceLayout;
+                    });
+
+                    const rangeInput = document.getElementById('readerFontSizeRange');
+                    const numberInput = document.getElementById('readerFontSizeNumber');
+                    const valueAsText = String(readerFontSizePx);
+                    if (rangeInput) rangeInput.value = valueAsText;
+                    if (numberInput) numberInput.value = valueAsText;
+                }
+
+                function setReaderSentenceLayout(nextLayout, options = {}) {
+                    const normalized = normalizeReaderSentenceLayout(nextLayout);
+                    if (!options.force && normalized === readerSentenceLayout) return;
+                    readerSentenceLayout = normalized;
+                    localStorage.setItem(READER_LAYOUT_STORAGE_KEY, readerSentenceLayout);
+                    applyReaderTextSettings({ rerender: true });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderFontSize(nextSize, options = {}) {
+                    const normalized = normalizeReaderFontSize(nextSize);
+                    if (!options.force && normalized === readerFontSizePx) return;
+                    readerFontSizePx = normalized;
+                    localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
+                    applyReaderTextSettings({ rerender: false });
+                    syncReaderSettingsUi();
+                }
+
+                function initReaderSettingsControls() {
+                    const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
+                    layoutInputs.forEach((input) => {
+                        input.addEventListener('change', () => {
+                            if (!input.checked) return;
+                            setReaderSentenceLayout(input.value);
+                        });
+                    });
+
+                    const rangeInput = document.getElementById('readerFontSizeRange');
+                    const numberInput = document.getElementById('readerFontSizeNumber');
+                    if (rangeInput) {
+                        rangeInput.addEventListener('input', (event) => {
+                            setReaderFontSize(event.target.value);
+                        });
+                    }
+                    if (numberInput) {
+                        numberInput.addEventListener('input', (event) => {
+                            setReaderFontSize(event.target.value);
+                        });
+                        numberInput.addEventListener('change', (event) => {
+                            setReaderFontSize(event.target.value, { force: true });
+                        });
+                    }
+
+                    syncReaderSettingsUi();
+                    applyReaderTextSettings({ rerender: false });
+                }
+
                 const globalVisualDimmer = window.GlobalVisualDimmer
                     ? window.GlobalVisualDimmer.init({
                         overlayId: 'sceneDimmerOverlay',
@@ -1411,6 +1540,7 @@
                     originalRenderLines(centerIndex);
                     syncReadingTopFadeMask(centerIndex);
                 };
+                initReaderSettingsControls();
                 let subtitleFollowLocked = false;
                 let suppressFollowLockUntil = 0;
 
@@ -3935,6 +4065,9 @@
                             const panel = document.querySelector(`.archive-tab-content[data-tab="${target}"]`);
                             if (panel) panel.classList.add('active');
                             if (target === 'lesezeichen') renderBookmarks();
+                            if (target === 'einstellungen' && typeof syncReaderSettingsUi === 'function') {
+                                syncReaderSettingsUi();
+                            }
                         });
                     });
                 }
