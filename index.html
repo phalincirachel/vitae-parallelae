@@ -268,8 +268,10 @@
         <div class="archive-card">
             <div class="archive-header">
                 <div class="archive-title-wrap">
-                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn" type="button">Inhalt</button>
-                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn" type="button">Einstellungen</button>
+                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn"
+                        type="button">Inhalt</button>
+                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn"
+                        type="button">Einstellungen</button>
                 </div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
@@ -5185,6 +5187,17 @@
                     clearContentState(`lore${loreIdBeforeSwitch}`);
                 }
 
+                // --- RADICAL iOS FALLBACK RESTORE ---
+                if (typeof isIOSDevice !== 'undefined' && isIOSDevice) {
+                    if (ambientAudio && ambientAudio.audioNode && !ambientAudio.audioNode.src) {
+                        ambientAudio.src = getSCUrl(AUDIO_PROFILE.ambientUrl || 'assets/wind.mp3');
+                    }
+                    if (footstepSound && footstepSound.audioNode && !footstepSound.audioNode.src) {
+                        footstepSound.src = getSCUrl('assets/footstep.mp3');
+                    }
+                }
+                // ------------------------------------
+
                 isLoreMode = false;
                 isMenuTriggeredLore = false;
                 activeLoreId = null;
@@ -5280,8 +5293,23 @@
             const switchToken = ++contentSwitchToken;
             indexTrace('switch:start-lore:lock', { id, switchToken });
 
-            try {
+      
                 await saveCurrentContentState({ reason: `start-lore:${id}` });
+
+                // --- RADICAL iOS FALLBACK: Free hardware audio slot ---
+                if (typeof isIOSDevice !== 'undefined' && isIOSDevice) {
+                    if (ambientAudio && typeof ambientAudio.pause === 'function') ambientAudio.pause();
+                    if (footstepSound && typeof footstepSound.pause === 'function') footstepSound.pause();
+                    if (ambientAudio && ambientAudio.audioNode) {
+                        ambientAudio.audioNode.removeAttribute('src');
+                        ambientAudio.audioNode.load();
+                    }
+                    if (footstepSound && footstepSound.audioNode) {
+                        footstepSound.audioNode.removeAttribute('src');
+                        footstepSound.audioNode.load();
+                    }
+                }
+                // -----------------------------------------------------
 
                 isLoreMode = true;
                 activeLoreId = id;

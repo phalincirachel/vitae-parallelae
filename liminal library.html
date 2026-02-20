@@ -186,8 +186,10 @@
         <div class="archive-card">
             <div class="archive-header">
                 <div class="archive-title-wrap">
-                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn" type="button">Inhalt</button>
-                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn" type="button">Einstellungen</button>
+                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn"
+                        type="button">Inhalt</button>
+                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn"
+                        type="button">Einstellungen</button>
                 </div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
@@ -2702,7 +2704,8 @@
                     }
 
                     createBooks(zStart, length, levels, isPreload, onReady) {
-                        const bookCount = 6000;
+                        // --- RADICAL iOS FALLBACK: Cap books to 50 to prevent InstancedMesh overload ---
+                        const bookCount = isIOSSafari ? 50 : 6000;
                         // SAVE REFERENCES for Reset
                         this.bookCount = bookCount;
                         this.isPreload = !!isPreload;
