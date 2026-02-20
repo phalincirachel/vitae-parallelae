@@ -3355,11 +3355,6 @@
         }
 
         function allowAuxScPlayback() {
-            if (typeof isIOSDevice !== 'undefined' && isIOSDevice) {
-                // NUR iOS: Erlaube parallele Wiedergabe von Aux-Audio
-                return !contentSwitchInProgress && !document.hidden;
-            }
-            // ANDERE PLATTFORMEN: Altes Verhalten (Aux wird bei Haupt-Audio blockiert)
             return !isPrimaryNarrationPlaying() && !contentSwitchInProgress && !document.hidden;
         }
 

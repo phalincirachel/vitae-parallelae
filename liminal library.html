@@ -1134,7 +1134,8 @@
 
                 const renderer = new THREE.WebGLRenderer({
                     antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
-                    powerPreference: isIOSSafari ? 'default' : 'high-performance'
+                    powerPreference: isIOSSafari ? 'default' : 'high-performance',
+                    precision: isIOSSafari ? 'mediump' : 'highp'
                 });
                 renderer.setSize(window.innerWidth, window.innerHeight);
 
@@ -2565,7 +2566,7 @@
 
                     createDust(length) {
                         // ~80 particles per segment (approx half global density distributed)
-                        const count = 80;
+                        const count = isIOSSafari ? 30 : 80;
                         const geo = new THREE.BufferGeometry();
                         const positions = new Float32Array(count * 3);
                         this.dustSpeeds = new Float32Array(count);
