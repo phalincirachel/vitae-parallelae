@@ -426,6 +426,7 @@ body {
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer {
+    display: block;
     max-height: 70vh;
     background: transparent !important;
     overflow-y: auto;
@@ -508,6 +509,9 @@ body.scene-dimmer-light-mode .subtitle-current {
 
 /* Reading mode: stronger text shadow for readability */
 #audioPlayerUI.reading-mode .subtitle-line {
+    display: inline;
+    line-height: inherit;
+    margin-right: 0.32em;
     text-shadow:
         0 0 5px rgba(0, 0, 0, 1),
         0 0 10px rgba(0, 0, 0, 1),
@@ -529,6 +533,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
 /* Soft Edges Mask for Reading Mode Container */
 #audioPlayerUI.reading-mode #subtitleContainer {
     justify-content: flex-start;
+    line-height: 1.65;
+    white-space: normal;
     mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 120px, black calc(100% - 120px), transparent 100%);
     padding-top: clamp(56px, 8vh, 110px);

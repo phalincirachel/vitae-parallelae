@@ -3298,9 +3298,13 @@
 
             const startY = container.scrollTop;
 
-            // Calculate Target Y to center the element
-            const relativeTop = targetEl.offsetTop;
-            const targetY = relativeTop - (container.clientHeight / 2) + (targetEl.clientHeight / 2);
+            // Calculate target position from live rects so inline reading-mode timestamps center correctly.
+            const containerRect = container.getBoundingClientRect();
+            const clientRects = targetEl.getClientRects();
+            const anchorRect = clientRects.length > 0 ? clientRects[0] : targetEl.getBoundingClientRect();
+            const relativeTop = (anchorRect.top - containerRect.top) + container.scrollTop;
+            const targetHeight = Math.max(anchorRect.height || 0, targetEl.clientHeight || 0, 1);
+            const targetY = relativeTop - (container.clientHeight / 2) + (targetHeight / 2);
 
             const distance = Math.abs(targetY - startY);
 
@@ -3601,7 +3605,7 @@
                                 return;
                             }
                             // If a bookmark button is visible and was the click target, skip seek
-                            if (e.target.classList.contains('bookmark-btn')) {
+                            if (e.target && typeof e.target.closest === 'function' && e.target.closest('.bookmark-btn')) {
                                 indexTrace('ui:timestamp:blocked', { reason: 'bookmark-btn', index: i, targetTime: track.time });
                                 return;
                             }

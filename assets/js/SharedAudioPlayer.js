@@ -301,8 +301,12 @@ export class SharedAudioPlayer {
 
         const container = this.container;
         const startY = container.scrollTop;
-        const relativeTop = targetEl.offsetTop;
-        const targetY = relativeTop - (container.clientHeight / 2) + (targetEl.clientHeight / 2);
+        const containerRect = container.getBoundingClientRect();
+        const clientRects = targetEl.getClientRects();
+        const anchorRect = clientRects.length > 0 ? clientRects[0] : targetEl.getBoundingClientRect();
+        const relativeTop = (anchorRect.top - containerRect.top) + container.scrollTop;
+        const targetHeight = Math.max(anchorRect.height || 0, targetEl.clientHeight || 0, 1);
+        const targetY = relativeTop - (container.clientHeight / 2) + (targetHeight / 2);
         const distance = Math.abs(targetY - startY);
 
         if (distance < 5) return;
