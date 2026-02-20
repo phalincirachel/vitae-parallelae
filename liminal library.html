@@ -1050,6 +1050,9 @@
                     }
                 };
 
+                // --- iOS/Safari DETECTION (for WebGL performance) ---
+                const isIOSSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
                 // --- CONFIG ---
                 const config = {
                     roomWidth: 8,
@@ -1093,12 +1096,36 @@
                     }
                 };
 
-                const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+                const renderer = new THREE.WebGLRenderer({
+                    antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
+                    powerPreference: isIOSSafari ? 'default' : 'high-performance'
+                });
                 renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.shadowMap.enabled = true;
-                renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+                // iOS: Disable shadow maps to prevent WebGL context loss on older devices
+                renderer.shadowMap.enabled = !isIOSSafari;
+                if (renderer.shadowMap.enabled) {
+                    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                }
                 renderer.toneMapping = THREE.ACESFilmicToneMapping;
                 renderer.toneMappingExposure = 1.0;
+
+                if (isIOSSafari) {
+                    // iOS: Cap pixel ratio to avoid exceeding GPU memory
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                    // WebGL Context Loss recovery (prevents permanent black screen)
+                    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+                        e.preventDefault();
+                        console.warn('[Liminal] WebGL context lost (iOS)');
+                    }, false);
+                    renderer.domElement.addEventListener('webglcontextrestored', () => {
+                        console.log('[Liminal] WebGL context restored (iOS)');
+                    }, false);
+                } else {
+                    renderer.setPixelRatio(window.devicePixelRatio);
+                }
+
                 document.body.appendChild(renderer.domElement);
 
                 function syncViewport() {
@@ -2193,7 +2220,7 @@
                         const bulb = new THREE.Mesh(sharedBulbGeo, bulbMat);
                         this.group.add(bulb);
                         this.light = new THREE.PointLight(0xffaa00, 40, 15);
-                        this.light.castShadow = true;
+                        this.light.castShadow = !isIOSSafari; // Disable on iOS
                         this.group.add(this.light);
                         const cord = new THREE.Mesh(sharedCordGeo, cordMat);
                         cord.position.y = 1.5;
@@ -2355,7 +2382,7 @@
                         // 1. Floor & Ceiling
                         // Use Shared Geometries!
                         const floor = new THREE.Mesh(sharedPlaneGeo, floorMaterial);
-                        floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = true;
+                        floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = !isIOSSafari;
                         floor.frustumCulled = false; // FIX: Prevent Abyss
                         this.meshGroup.add(floor);
 
@@ -2366,12 +2393,12 @@
 
                         // 2. Shelves
                         const leftShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
-                        leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = true; leftShelf.receiveShadow = true;
+                        leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = !isIOSSafari; leftShelf.receiveShadow = !isIOSSafari;
                         leftShelf.frustumCulled = false; // FIX: Prevent Abyss
                         this.meshGroup.add(leftShelf);
 
                         const rightShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
-                        rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = true; rightShelf.receiveShadow = true;
+                        rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = !isIOSSafari; rightShelf.receiveShadow = !isIOSSafari;
                         rightShelf.frustumCulled = false; // FIX: Prevent Abyss
                         this.meshGroup.add(rightShelf);
 
@@ -2382,12 +2409,12 @@
 
                             const pLeft = new THREE.Mesh(sharedPlankGeo, woodMaterial);
                             pLeft.position.set(-2.6, y, zStart - length / 2);
-                            pLeft.castShadow = true; pLeft.receiveShadow = true; // FIX: BLOCK LIGHT
+                            pLeft.castShadow = !isIOSSafari; pLeft.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
                             this.meshGroup.add(pLeft);
 
                             const pRight = new THREE.Mesh(sharedPlankGeo, woodMaterial);
                             pRight.position.set(2.6, y, zStart - length / 2);
-                            pRight.castShadow = true; pRight.receiveShadow = true; // FIX: BLOCK LIGHT
+                            pRight.castShadow = !isIOSSafari; pRight.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
                             this.meshGroup.add(pRight);
                         }
 
