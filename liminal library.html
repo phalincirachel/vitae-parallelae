@@ -241,6 +241,7 @@
     <!-- MAIN APPLICATION LOGIC -->
     <script type="module">
         console.log("DEBUG: Script Wrapper Start");
+        const isIOSSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
         // FALLBACK TIMEOUT: Force hide loading screens after 10s
         setTimeout(() => {
@@ -1049,9 +1050,6 @@
                         }
                     }
                 };
-
-                // --- iOS/Safari DETECTION (for WebGL performance) ---
-                const isIOSSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
                 // --- CONFIG ---
                 const config = {

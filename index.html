@@ -3246,24 +3246,6 @@
         function unlockAudio() {
             if (audioUnlocked) return;
             audioUnlocked = true;
-            if (typeof isIOSDevice !== 'undefined' && isIOSDevice) {
-                // iOS/Safari: Prime alle Audio-Adapter, damit spätere programmatische
-                // play()-Aufrufe (z.B. bei Lore-Einsammlung) nicht blockiert werden.
-                try {
-                    if (typeof audioPlayer !== 'undefined' && audioPlayer) {
-                        const v = audioPlayer.volume; audioPlayer.volume = 0;
-                        audioPlayer.play().then(() => { audioPlayer.pause(); audioPlayer.volume = v; }).catch(() => { audioPlayer.volume = v; });
-                    }
-                    if (typeof ambientAudio !== 'undefined' && ambientAudio) {
-                        const v = ambientAudio.volume; ambientAudio.volume = 0;
-                        ambientAudio.play().then(() => { ambientAudio.pause(); ambientAudio.volume = v; }).catch(() => { ambientAudio.volume = v; });
-                    }
-                    if (typeof footstepSound !== 'undefined' && footstepSound) {
-                        const v = footstepSound.volume; footstepSound.volume = 0;
-                        footstepSound.play().then(() => { footstepSound.pause(); footstepSound.volume = v; }).catch(() => { footstepSound.volume = v; });
-                    }
-                } catch (_) { }
-            }
             syncAuxScPlayback('unlock');
         }
         document.addEventListener('click', unlockAudio, { once: true });
@@ -5100,10 +5082,6 @@
 
                 const loreAudioSrc = getSCUrl(content.audio || loreData.audio[id] || `assets/lore${id}.mp3`);
                 audioPlayer.src = loreAudioSrc;
-                if (typeof isIOSDevice !== 'undefined' && isIOSDevice) {
-                    // iOS/Safari: Sofort play() starten, damit die Audio-Session erhalten bleibt.
-                    try { await audioPlayer.play(); } catch (_) { }
-                }
                 indexTrace('switch:start-lore:src-set', { id, switchToken, src: loreAudioSrc });
 
                 parseSubtitles(loreText);
