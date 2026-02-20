@@ -272,12 +272,12 @@
                         type="button">Inhalt</button>
                     <button class="archive-primary-btn archive-primary-gear" id="archivePrimarySettingsBtn"
                         type="button" aria-label="Einstellungen" title="Einstellungen">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="3.2"></circle>
-                            <path
-                                d="M19.4 12a7.4 7.4 0 0 0-.06-.93l2.02-1.57-1.9-3.29-2.45.74a7.48 7.48 0 0 0-1.6-.93L15.03 3h-3.8l-.39 3.02c-.57.22-1.1.53-1.6.93l-2.45-.74-1.9 3.29 2.02 1.57a7.37 7.37 0 0 0 0 1.86L4.89 14.5l1.9 3.29 2.45-.74c.49.4 1.03.71 1.6.93l.39 3.02h3.8l.39-3.02c.57-.22 1.1-.53 1.6-.93l2.45.74 1.9-3.29-2.02-1.57c.04-.31.06-.62.06-.93z">
-                            </path>
+                            <circle cx="12" cy="12" r="6.35"></circle>
+                            <circle cx="12" cy="12" r="2.85"></circle>
+                            <path d="M12 2.7v2.45M12 18.85v2.45M4.93 4.93l1.73 1.73M17.34 17.34l1.73 1.73"></path>
+                            <path d="M2.7 12h2.45M18.85 12h2.45M4.93 19.07l1.73-1.73M17.34 6.66l1.73-1.73"></path>
                         </svg>
                     </button>
                 </div>
@@ -333,7 +333,7 @@
                         <div class="reader-settings-title">Satztechnik</div>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="timestamps" checked>
-                            <span>Timestamps (Standard)</span>
+                            <span>Timestamps </span>
                         </label>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="flat">
@@ -349,35 +349,53 @@
                         </div>
                     </div>
                     <div class="reader-settings-group">
+                        <div class="reader-settings-title">Lautst&auml;rke</div>
+                        <div class="reader-volume-row">
+                            <label class="reader-volume-label" for="readerTextVolumeRange">Text</label>
+                            <input id="readerTextVolumeRange" type="range" min="0" max="100" step="1" value="100">
+                            <input id="readerTextVolumeNumber" type="number" min="0" max="100" step="1" value="100">
+                            <span class="reader-size-unit">%</span>
+                        </div>
+                        <div class="reader-volume-row">
+                            <label class="reader-volume-label" for="readerBackgroundVolumeRange">Hintergrund</label>
+                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1"
+                                value="100">
+                            <input id="readerBackgroundVolumeNumber" type="number" min="0" max="100" step="1"
+                                value="100">
+                            <span class="reader-size-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="reader-settings-group">
                         <div class="reader-settings-title">Farben</div>
-                        <div class="reader-wheel-stack">
-                            <div class="reader-wheel-block">
-                                <div class="reader-wheel-caption">Hintergrund</div>
-                                <div class="reader-wheel-row">
-                                    <div class="reader-wheel-wrap">
-                                        <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
-                                            height="168"></canvas>
-                                        <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true">
-                                        </div>
-                                    </div>
-                                    <div class="reader-color-preview" id="readerBgColorPreview"></div>
-                                </div>
-                            </div>
-                            <div class="reader-wheel-block">
-                                <div class="reader-wheel-caption">Schrift</div>
-                                <div class="reader-wheel-row">
-                                    <div class="reader-wheel-wrap">
-                                        <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
-                                            height="168"></canvas>
-                                        <div id="readerTextColorMarker" class="reader-wheel-marker"
-                                            aria-hidden="true"></div>
-                                    </div>
-                                    <div class="reader-color-preview" id="readerTextColorPreview"></div>
+                        <div class="reader-color-field">
+                            <button id="readerBgColorToggleBtn" class="reader-color-row" type="button"
+                                aria-expanded="false" aria-controls="readerBgColorPickerPopover">
+                                <span class="reader-color-row-label">Hintergrund</span>
+                                <span class="reader-color-preview" id="readerBgColorPreview"></span>
+                            </button>
+                            <div id="readerBgColorPickerPopover" class="reader-color-picker-popover" hidden>
+                                <div class="reader-wheel-wrap">
+                                    <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
+                                        height="168"></canvas>
+                                    <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
                                 </div>
                             </div>
                         </div>
-                        <button id="readerColorResetBtn" class="reader-color-reset-btn"
-                            type="button">Farben zurÃ¼cksetzen</button>
+                        <div class="reader-color-field">
+                            <button id="readerTextColorToggleBtn" class="reader-color-row" type="button"
+                                aria-expanded="false" aria-controls="readerTextColorPickerPopover">
+                                <span class="reader-color-row-label">Schrift</span>
+                                <span class="reader-color-preview" id="readerTextColorPreview"></span>
+                            </button>
+                            <div id="readerTextColorPickerPopover" class="reader-color-picker-popover" hidden>
+                                <div class="reader-wheel-wrap">
+                                    <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
+                                        height="168"></canvas>
+                                    <div id="readerTextColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="readerColorResetBtn" class="reader-color-reset-btn" type="button">Farben zur&uuml;cksetzen</button>
                     </div>
                 </div>
             </div>
@@ -3174,18 +3192,26 @@
         const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
         const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
         const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
+        const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
+        const READER_BACKGROUND_VOLUME_STORAGE_KEY = 'gameboy_reader_background_volume';
         const READER_LAYOUT_TIMESTAMPS = 'timestamps';
         const READER_LAYOUT_FLAT = 'flat';
         const READER_FONT_SIZE_MIN = 14;
         const READER_FONT_SIZE_MAX = 30;
         const READER_FONT_SIZE_DEFAULT = 18;
+        const READER_VOLUME_DEFAULT = 1;
         let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
         let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
         let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
         let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
+        let readerTextVolume = normalizeReaderVolume(localStorage.getItem(READER_TEXT_VOLUME_STORAGE_KEY));
+        let readerBackgroundVolume = normalizeReaderVolume(localStorage.getItem(READER_BACKGROUND_VOLUME_STORAGE_KEY));
         const readerColorWheelSync = { bg: null, text: null };
+        const readerColorPopoverState = { activeKey: null };
         let subtitleFollowLocked = false;
         let suppressFollowLockUntil = 0;
+
+        audioPlayer.volume = readerTextVolume;
 
         const uiContainer = document.getElementById('audioPlayerUI');
         const subtitleContainer = document.getElementById('subtitleContainer');
@@ -3220,6 +3246,13 @@
             return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
         }
 
+        function normalizeReaderVolume(value) {
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) return READER_VOLUME_DEFAULT;
+            const normalized = parsed > 1 ? (parsed / 100) : parsed;
+            return Math.max(0, Math.min(1, normalized));
+        }
+
         function normalizeReaderHexColor(value, fallback = null) {
             if (typeof value !== 'string') return fallback;
             const cleaned = value.trim().toLowerCase();
@@ -3237,6 +3270,33 @@
 
         function getReaderFallbackTextColor() {
             return document.body.classList.contains('scene-dimmer-light-mode') ? '#1f1d18' : '#f2ecdc';
+        }
+
+        function mixHexColors(baseHex, tintHex, alpha = 0.5) {
+            const base = hexToRgb(baseHex);
+            const tint = hexToRgb(tintHex);
+            if (!base || !tint) return baseHex;
+            const a = Math.max(0, Math.min(1, Number(alpha) || 0));
+            return rgbToHex(
+                (base.r * (1 - a)) + (tint.r * a),
+                (base.g * (1 - a)) + (tint.g * a),
+                (base.b * (1 - a)) + (tint.b * a)
+            );
+        }
+
+        function applyReaderDimmerTint() {
+            const overlay = document.getElementById('sceneDimmerOverlay');
+            if (!overlay) return;
+
+            const isFreezeMode = manualBackgroundDimLevel >= 100;
+            if (!isFreezeMode || !readerBgColor) {
+                overlay.style.removeProperty('background-color');
+                return;
+            }
+
+            const base = document.body.classList.contains('scene-dimmer-light-mode') ? '#ffffff' : '#000000';
+            const mixed = mixHexColors(base, readerBgColor, 0.5);
+            overlay.style.backgroundColor = mixed;
         }
 
         let flatCompMeasureCanvas = null;
@@ -3281,15 +3341,12 @@
         }
 
         function applyReaderColorSettings() {
-            const hasCustomBg = typeof readerBgColor === 'string' && !!readerBgColor;
             const hasCustomText = typeof readerTextColor === 'string' && !!readerTextColor;
-            subtitleContainer.classList.toggle('reader-custom-colors', hasCustomBg || hasCustomText);
-
-            if (hasCustomBg) subtitleContainer.style.setProperty('--reader-custom-bg', readerBgColor);
-            else subtitleContainer.style.removeProperty('--reader-custom-bg');
+            subtitleContainer.classList.toggle('reader-custom-text', hasCustomText);
 
             if (hasCustomText) subtitleContainer.style.setProperty('--reader-custom-text', readerTextColor);
             else subtitleContainer.style.removeProperty('--reader-custom-text');
+            applyReaderDimmerTint();
         }
 
         function applyReaderTextSettings(options = {}) {
@@ -3325,6 +3382,17 @@
             if (rangeInput) rangeInput.value = valueAsText;
             if (numberInput) numberInput.value = valueAsText;
 
+            const textVolumeRange = document.getElementById('readerTextVolumeRange');
+            const textVolumeNumber = document.getElementById('readerTextVolumeNumber');
+            const bgVolumeRange = document.getElementById('readerBackgroundVolumeRange');
+            const bgVolumeNumber = document.getElementById('readerBackgroundVolumeNumber');
+            const textVolumeValue = String(Math.round(readerTextVolume * 100));
+            const bgVolumeValue = String(Math.round(readerBackgroundVolume * 100));
+            if (textVolumeRange) textVolumeRange.value = textVolumeValue;
+            if (textVolumeNumber) textVolumeNumber.value = textVolumeValue;
+            if (bgVolumeRange) bgVolumeRange.value = bgVolumeValue;
+            if (bgVolumeNumber) bgVolumeNumber.value = bgVolumeValue;
+
             const effectiveBg = readerBgColor || getReaderFallbackBgColor();
             const effectiveText = readerTextColor || getReaderFallbackTextColor();
             const bgPreview = document.getElementById('readerBgColorPreview');
@@ -3350,6 +3418,27 @@
             readerFontSizePx = normalized;
             localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
             applyReaderTextSettings({ rerender: readerSentenceLayout === READER_LAYOUT_FLAT });
+            syncReaderSettingsUi();
+        }
+
+        function setReaderTextVolume(nextVolume, options = {}) {
+            const normalized = normalizeReaderVolume(nextVolume);
+            if (!options.force && normalized === readerTextVolume) return;
+            readerTextVolume = normalized;
+            localStorage.setItem(READER_TEXT_VOLUME_STORAGE_KEY, String(readerTextVolume));
+            if (audioPlayer && typeof audioPlayer.volume === 'number' && audioPlayer.volume > 0) {
+                audioPlayer.volume = readerTextVolume;
+            }
+            syncReaderSettingsUi();
+        }
+
+        function setReaderBackgroundVolume(nextVolume, options = {}) {
+            const normalized = normalizeReaderVolume(nextVolume);
+            if (!options.force && normalized === readerBackgroundVolume) return;
+            readerBackgroundVolume = normalized;
+            localStorage.setItem(READER_BACKGROUND_VOLUME_STORAGE_KEY, String(readerBackgroundVolume));
+            if (typeof applySceneAudioMix === 'function') applySceneAudioMix('reader-background-volume');
+            if (typeof applyBackgroundSfxVolume === 'function') applyBackgroundSfxVolume('reader-background-volume');
             syncReaderSettingsUi();
         }
 

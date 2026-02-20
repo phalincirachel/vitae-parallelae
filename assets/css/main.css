@@ -906,7 +906,7 @@ body.scene-dimmer-light-mode .col-header {
 .archive-title-wrap {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 28px;
 }
 
 .archive-primary-btn {
@@ -950,8 +950,8 @@ body.scene-dimmer-light-mode .col-header {
 }
 
 .archive-primary-gear svg {
-    width: 23px;
-    height: 23px;
+    width: 24px;
+    height: 24px;
 }
 
 .close-btn {
@@ -1204,7 +1204,24 @@ body.scene-dimmer-light-mode .archive-tab.active {
     gap: 8px;
 }
 
+.reader-volume-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.reader-volume-label {
+    min-width: 98px;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
 #readerFontSizeRange {
+    flex: 1;
+}
+
+#readerTextVolumeRange,
+#readerBackgroundVolumeRange {
     flex: 1;
 }
 
@@ -1216,41 +1233,57 @@ body.scene-dimmer-light-mode .archive-tab.active {
     padding: 4px 6px;
 }
 
+#readerTextVolumeNumber,
+#readerBackgroundVolumeNumber {
+    width: 58px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 4px 6px;
+}
+
 .reader-size-unit {
     color: rgba(255, 255, 255, 0.65);
     font-size: 12px;
 }
 
-.reader-wheel-row {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.reader-wheel-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-}
-
-.reader-wheel-block {
+.reader-color-field {
     display: flex;
     flex-direction: column;
     gap: 8px;
 }
 
-.reader-wheel-caption {
-    font-size: 12px;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
+.reader-color-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+}
+
+.reader-color-row-label {
+    font-size: 14px;
     color: rgba(255, 255, 255, 0.6);
+}
+
+.reader-color-picker-popover {
+    display: block;
+}
+
+.reader-color-picker-popover[hidden] {
+    display: none !important;
 }
 
 .reader-wheel-wrap {
     position: relative;
     width: 168px;
     height: 168px;
+    margin-left: auto;
+    margin-right: 0;
 }
 
 .reader-color-wheel {
@@ -1279,6 +1312,12 @@ body.scene-dimmer-light-mode .archive-tab.active {
     border-radius: 6px;
     border: 1px solid rgba(255, 255, 255, 0.45);
     background: rgba(255, 255, 255, 0.1);
+    transition: transform 0.16s ease;
+}
+
+.reader-color-row:hover .reader-color-preview,
+.reader-color-row[aria-expanded="true"] .reader-color-preview {
+    transform: scale(1.03);
 }
 
 .reader-color-reset-btn {
@@ -1308,11 +1347,19 @@ body.scene-dimmer-light-mode #readerFontSizeNumber {
     color: rgba(0, 0, 0, 0.92);
 }
 
+body.scene-dimmer-light-mode #readerTextVolumeNumber,
+body.scene-dimmer-light-mode #readerBackgroundVolumeNumber {
+    border-color: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.92);
+}
+
 body.scene-dimmer-light-mode .reader-size-unit {
     color: rgba(0, 0, 0, 0.6);
 }
 
-body.scene-dimmer-light-mode .reader-wheel-caption {
+body.scene-dimmer-light-mode .reader-volume-label,
+body.scene-dimmer-light-mode .reader-color-row-label {
     color: rgba(0, 0, 0, 0.65);
 }
 

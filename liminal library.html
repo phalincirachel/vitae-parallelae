@@ -47,6 +47,10 @@
             height: 22px;
         }
     </style>
+    <!-- Import Map Polyfill for older iOS Safari (<16.4) that lack native import map support.
+         This is the official polyfill recommended by Three.js documentation.
+         On modern browsers with native import map support, this is a no-op (zero overhead). -->
+    <script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -190,12 +194,12 @@
                         type="button">Inhalt</button>
                     <button class="archive-primary-btn archive-primary-gear" id="archivePrimarySettingsBtn"
                         type="button" aria-label="Einstellungen" title="Einstellungen">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="3.2"></circle>
-                            <path
-                                d="M19.4 12a7.4 7.4 0 0 0-.06-.93l2.02-1.57-1.9-3.29-2.45.74a7.48 7.48 0 0 0-1.6-.93L15.03 3h-3.8l-.39 3.02c-.57.22-1.1.53-1.6.93l-2.45-.74-1.9 3.29 2.02 1.57a7.37 7.37 0 0 0 0 1.86L4.89 14.5l1.9 3.29 2.45-.74c.49.4 1.03.71 1.6.93l.39 3.02h3.8l.39-3.02c.57-.22 1.1-.53 1.6-.93l2.45.74 1.9-3.29-2.02-1.57c.04-.31.06-.62.06-.93z">
-                            </path>
+                            <circle cx="12" cy="12" r="6.35"></circle>
+                            <circle cx="12" cy="12" r="2.85"></circle>
+                            <path d="M12 2.7v2.45M12 18.85v2.45M4.93 4.93l1.73 1.73M17.34 17.34l1.73 1.73"></path>
+                            <path d="M2.7 12h2.45M18.85 12h2.45M4.93 19.07l1.73-1.73M17.34 6.66l1.73-1.73"></path>
                         </svg>
                     </button>
                 </div>
@@ -258,35 +262,53 @@
                         </div>
                     </div>
                     <div class="reader-settings-group">
+                        <div class="reader-settings-title">Lautst&auml;rke</div>
+                        <div class="reader-volume-row">
+                            <label class="reader-volume-label" for="readerTextVolumeRange">Text</label>
+                            <input id="readerTextVolumeRange" type="range" min="0" max="100" step="1" value="100">
+                            <input id="readerTextVolumeNumber" type="number" min="0" max="100" step="1" value="100">
+                            <span class="reader-size-unit">%</span>
+                        </div>
+                        <div class="reader-volume-row">
+                            <label class="reader-volume-label" for="readerBackgroundVolumeRange">Hintergrund</label>
+                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1"
+                                value="100">
+                            <input id="readerBackgroundVolumeNumber" type="number" min="0" max="100" step="1"
+                                value="100">
+                            <span class="reader-size-unit">%</span>
+                        </div>
+                    </div>
+                    <div class="reader-settings-group">
                         <div class="reader-settings-title">Farben</div>
-                        <div class="reader-wheel-stack">
-                            <div class="reader-wheel-block">
-                                <div class="reader-wheel-caption">Hintergrund</div>
-                                <div class="reader-wheel-row">
-                                    <div class="reader-wheel-wrap">
-                                        <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
-                                            height="168"></canvas>
-                                        <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true">
-                                        </div>
-                                    </div>
-                                    <div class="reader-color-preview" id="readerBgColorPreview"></div>
-                                </div>
-                            </div>
-                            <div class="reader-wheel-block">
-                                <div class="reader-wheel-caption">Schrift</div>
-                                <div class="reader-wheel-row">
-                                    <div class="reader-wheel-wrap">
-                                        <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
-                                            height="168"></canvas>
-                                        <div id="readerTextColorMarker" class="reader-wheel-marker"
-                                            aria-hidden="true"></div>
-                                    </div>
-                                    <div class="reader-color-preview" id="readerTextColorPreview"></div>
+                        <div class="reader-color-field">
+                            <button id="readerBgColorToggleBtn" class="reader-color-row" type="button"
+                                aria-expanded="false" aria-controls="readerBgColorPickerPopover">
+                                <span class="reader-color-row-label">Hintergrund</span>
+                                <span class="reader-color-preview" id="readerBgColorPreview"></span>
+                            </button>
+                            <div id="readerBgColorPickerPopover" class="reader-color-picker-popover" hidden>
+                                <div class="reader-wheel-wrap">
+                                    <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
+                                        height="168"></canvas>
+                                    <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
                                 </div>
                             </div>
                         </div>
-                        <button id="readerColorResetBtn" class="reader-color-reset-btn"
-                            type="button">Farben zurÃ¼cksetzen</button>
+                        <div class="reader-color-field">
+                            <button id="readerTextColorToggleBtn" class="reader-color-row" type="button"
+                                aria-expanded="false" aria-controls="readerTextColorPickerPopover">
+                                <span class="reader-color-row-label">Schrift</span>
+                                <span class="reader-color-preview" id="readerTextColorPreview"></span>
+                            </button>
+                            <div id="readerTextColorPickerPopover" class="reader-color-picker-popover" hidden>
+                                <div class="reader-wheel-wrap">
+                                    <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
+                                        height="168"></canvas>
+                                    <div id="readerTextColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="readerColorResetBtn" class="reader-color-reset-btn" type="button">Farben zur&uuml;cksetzen</button>
                     </div>
                 </div>
             </div>
@@ -4689,6 +4711,14 @@
 
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
+                // Show user-facing error (especially important on old iOS where imports may fail)
+                var l1 = document.getElementById('loading');
+                var l2 = document.getElementById('loading-screen');
+                if (l1) l1.style.display = 'none';
+                if (l2) {
+                    l2.innerHTML = '<p style="color:#c44;padding:20px;text-align:center;font-family:sans-serif;">' +
+                        'Fehler beim Laden.<br><small style="color:#888;">Dein Browser unterstÃ¼tzt mÃ¶glicherweise nicht alle benÃ¶tigten Funktionen.<br>Bitte verwende Safari 16+ oder Chrome.</small></p>';
+                }
             }
         })();
     </script>
