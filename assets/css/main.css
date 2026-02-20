@@ -568,18 +568,19 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     display: block;
     line-height: 1.65;
     white-space: normal;
+    --flat-inline-gap: 0.19em;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
     display: inline;
     line-height: inherit;
     padding-left: var(--flat-leading-comp, 0px);
-    margin-right: 0.16em;
+    margin-right: var(--flat-inline-gap);
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     font-weight: 500 !important;
-    margin-right: 0.16em;
+    margin-right: var(--flat-inline-gap);
     padding-left: 0 !important;
 }
 
@@ -904,7 +905,7 @@ body.scene-dimmer-light-mode .col-header {
 
 .archive-title-wrap {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 18px;
 }
 
@@ -939,6 +940,18 @@ body.scene-dimmer-light-mode .col-header {
 .archive-primary-btn svg {
     width: 24px;
     height: 24px;
+}
+
+.archive-primary-gear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.archive-primary-gear svg {
+    width: 23px;
+    height: 23px;
 }
 
 .close-btn {
@@ -1215,6 +1228,25 @@ body.scene-dimmer-light-mode .archive-tab.active {
     flex-wrap: wrap;
 }
 
+.reader-wheel-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.reader-wheel-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.reader-wheel-caption {
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+}
+
 .reader-wheel-wrap {
     position: relative;
     width: 168px;
@@ -1249,6 +1281,19 @@ body.scene-dimmer-light-mode .archive-tab.active {
     background: rgba(255, 255, 255, 0.1);
 }
 
+.reader-color-reset-btn {
+    margin-top: 4px;
+    align-self: flex-start;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.92);
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    letter-spacing: 0.6px;
+    padding: 6px 10px;
+    cursor: pointer;
+}
+
 body.scene-dimmer-light-mode .reader-settings-title {
     color: rgba(0, 0, 0, 0.62);
 }
@@ -1267,6 +1312,10 @@ body.scene-dimmer-light-mode .reader-size-unit {
     color: rgba(0, 0, 0, 0.6);
 }
 
+body.scene-dimmer-light-mode .reader-wheel-caption {
+    color: rgba(0, 0, 0, 0.65);
+}
+
 body.scene-dimmer-light-mode .reader-color-wheel {
     border-color: rgba(0, 0, 0, 0.3);
 }
@@ -1278,6 +1327,12 @@ body.scene-dimmer-light-mode .reader-wheel-marker {
 
 body.scene-dimmer-light-mode .reader-color-preview {
     border-color: rgba(0, 0, 0, 0.4);
+}
+
+body.scene-dimmer-light-mode .reader-color-reset-btn {
+    border-color: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.9);
 }
 
 /* Bookmark items */
@@ -1350,17 +1405,19 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
 
 .bookmark-btn-flat-overlay {
     position: fixed !important;
-    left: -9999px;
-    top: -9999px;
+    left: 0;
+    top: 0;
+    padding: 0;
     overflow: hidden;
     isolation: isolate;
     z-index: 3200;
     background: transparent !important;
+    border-color: rgba(255, 255, 255, 0.78) !important;
+    color: rgba(255, 255, 255, 0.98) !important;
 }
 
 .bookmark-btn-flat-overlay .bookmark-map-layer,
-.bookmark-btn-flat-overlay .bookmark-overlay-layer,
-.bookmark-btn-flat-overlay .bookmark-label {
+.bookmark-btn-flat-overlay .bookmark-overlay-layer {
     position: absolute;
     inset: 0;
 }
@@ -1380,15 +1437,25 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
 .bookmark-btn-flat-overlay .bookmark-label {
     z-index: 3;
     position: relative;
+    inset: auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
+    height: 100%;
     padding: 3.45px 11.5px;
     white-space: nowrap;
+    color: inherit;
+    font: inherit;
 }
 
 .bookmark-btn-flat-overlay.saved .bookmark-overlay-layer {
     background: rgba(255, 255, 255, 0.2);
+}
+
+.bookmark-btn-flat-overlay:hover,
+.bookmark-btn-flat-overlay.saved {
+    background: transparent !important;
 }
 
 .bookmark-btn.visible {
@@ -1421,6 +1488,11 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
     background: rgba(0, 0, 0, 0.14);
     border-color: rgba(0, 0, 0, 0.44);
     color: rgba(0, 0, 0, 0.95);
+}
+
+body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
+    border-color: rgba(255, 255, 255, 0.78) !important;
+    color: rgba(255, 255, 255, 0.98) !important;
 }
 
 .bookmark-btn.pop {

@@ -208,7 +208,7 @@ export class SharedAudioPlayer {
         if (this.onUpdate) this.onUpdate(t);
     }
 
-    _getFlatCompensationGapPx(text, sampleEl) {
+    _getFlatLeadingCompensationPx(text, sampleEl) {
         if (!this.container || !this.container.classList.contains('reader-layout-flat')) return 0;
         if (!sampleEl || !text) return 0;
         if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return 0;
@@ -238,14 +238,14 @@ export class SharedAudioPlayer {
         return compensationPx;
     }
 
-    _applyFlatCompensationGap(lineEl, text) {
+    _applyFlatLeadingCompensation(lineEl, text) {
         if (!lineEl) return;
         if (!this.container || !this.container.classList.contains('reader-layout-flat')) {
-            lineEl.style.removeProperty('--flat-comp-gap');
+            lineEl.style.removeProperty('--flat-leading-comp');
             return;
         }
-        const compensationPx = this._getFlatCompensationGapPx(text, lineEl);
-        lineEl.style.setProperty('--flat-comp-gap', `${compensationPx}px`);
+        const compensationPx = this._getFlatLeadingCompensationPx(text, lineEl);
+        lineEl.style.setProperty('--flat-leading-comp', `${compensationPx}px`);
     }
 
     renderLines(centerIndex) {
@@ -293,7 +293,7 @@ export class SharedAudioPlayer {
                     }
 
                     this.container.appendChild(div);
-                    this._applyFlatCompensationGap(div, this.subtitleTracks[i].text);
+                    this._applyFlatLeadingCompensation(div, this.subtitleTracks[i].text);
                 }
             }
 

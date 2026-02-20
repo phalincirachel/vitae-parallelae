@@ -188,8 +188,16 @@
                 <div class="archive-title-wrap">
                     <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn"
                         type="button">Inhalt</button>
-                    <button class="archive-primary-btn" id="archivePrimarySettingsBtn"
-                        type="button">Einstellungen</button>
+                    <button class="archive-primary-btn archive-primary-gear" id="archivePrimarySettingsBtn"
+                        type="button" aria-label="Einstellungen" title="Einstellungen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+                            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <circle cx="12" cy="12" r="3.2"></circle>
+                            <path
+                                d="M19.4 12a7.4 7.4 0 0 0-.06-.93l2.02-1.57-1.9-3.29-2.45.74a7.48 7.48 0 0 0-1.6-.93L15.03 3h-3.8l-.39 3.02c-.57.22-1.1.53-1.6.93l-2.45-.74-1.9 3.29 2.02 1.57a7.37 7.37 0 0 0 0 1.86L4.89 14.5l1.9 3.29 2.45-.74c.49.4 1.03.71 1.6.93l.39 3.02h3.8l.39-3.02c.57-.22 1.1-.53 1.6-.93l2.45.74 1.9-3.29-2.02-1.57c.04-.31.06-.62.06-.93z">
+                            </path>
+                        </svg>
+                    </button>
                 </div>
                 <button class="close-btn" id="closeArchiveBtn">&times;</button>
             </div>
@@ -249,6 +257,37 @@
                             <span class="reader-size-unit">px</span>
                         </div>
                     </div>
+                    <div class="reader-settings-group">
+                        <div class="reader-settings-title">Farben</div>
+                        <div class="reader-wheel-stack">
+                            <div class="reader-wheel-block">
+                                <div class="reader-wheel-caption">Hintergrund</div>
+                                <div class="reader-wheel-row">
+                                    <div class="reader-wheel-wrap">
+                                        <canvas id="readerBgColorWheel" class="reader-color-wheel" width="168"
+                                            height="168"></canvas>
+                                        <div id="readerBgColorMarker" class="reader-wheel-marker" aria-hidden="true">
+                                        </div>
+                                    </div>
+                                    <div class="reader-color-preview" id="readerBgColorPreview"></div>
+                                </div>
+                            </div>
+                            <div class="reader-wheel-block">
+                                <div class="reader-wheel-caption">Schrift</div>
+                                <div class="reader-wheel-row">
+                                    <div class="reader-wheel-wrap">
+                                        <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
+                                            height="168"></canvas>
+                                        <div id="readerTextColorMarker" class="reader-wheel-marker"
+                                            aria-hidden="true"></div>
+                                    </div>
+                                    <div class="reader-color-preview" id="readerTextColorPreview"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="readerColorResetBtn" class="reader-color-reset-btn"
+                            type="button">Farben zurÃ¼cksetzen</button>
+                    </div>
                 </div>
             </div>
 
@@ -297,7 +336,7 @@
                 console.log("DEBUG: THREE Loaded");
 
                 // 2. Load Audio Player
-                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260209-1');
+                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260220-1');
                 console.log("DEBUG: SharedAudioPlayer Loaded");
 
                 // 3. Load GameState
@@ -312,6 +351,8 @@
                 let isReadingMode = false;
                 const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
                 const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
+                const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
+                const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
                 const READER_LAYOUT_TIMESTAMPS = 'timestamps';
                 const READER_LAYOUT_FLAT = 'flat';
                 const READER_FONT_SIZE_MIN = 14;
@@ -319,6 +360,9 @@
                 const READER_FONT_SIZE_DEFAULT = 18;
                 let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
                 let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
+                let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
+                let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
+                const readerColorWheelSync = { bg: null, text: null };
 
                 // FIX: LOAD STATE BEFORE PLAYER INIT
                 const savedMode = localStorage.getItem('gameboy_reading_mode');
@@ -1200,6 +1244,37 @@
                     return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
                 }
 
+                function normalizeReaderHexColor(value, fallback = null) {
+                    if (typeof value !== 'string') return fallback;
+                    const cleaned = value.trim().toLowerCase();
+                    if (!cleaned) return fallback;
+                    const match = cleaned.match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+                    if (!match) return fallback;
+                    let hex = match[1];
+                    if (hex.length === 3) hex = hex.split('').map((ch) => `${ch}${ch}`).join('');
+                    return `#${hex.toLowerCase()}`;
+                }
+
+                function getReaderFallbackBgColor() {
+                    return document.body.classList.contains('scene-dimmer-light-mode') ? '#ede6d6' : '#11161d';
+                }
+
+                function getReaderFallbackTextColor() {
+                    return document.body.classList.contains('scene-dimmer-light-mode') ? '#1f1d18' : '#f2ecdc';
+                }
+
+                function applyReaderColorSettings() {
+                    const hasCustomBg = typeof readerBgColor === 'string' && !!readerBgColor;
+                    const hasCustomText = typeof readerTextColor === 'string' && !!readerTextColor;
+                    subtitleContainer.classList.toggle('reader-custom-colors', hasCustomBg || hasCustomText);
+
+                    if (hasCustomBg) subtitleContainer.style.setProperty('--reader-custom-bg', readerBgColor);
+                    else subtitleContainer.style.removeProperty('--reader-custom-bg');
+
+                    if (hasCustomText) subtitleContainer.style.setProperty('--reader-custom-text', readerTextColor);
+                    else subtitleContainer.style.removeProperty('--reader-custom-text');
+                }
+
                 function applyReaderTextSettings(options = {}) {
                     if (!subtitleContainer) return;
                     const rerender = options.rerender !== false;
@@ -1208,6 +1283,7 @@
                     subtitleContainer.classList.toggle('reader-layout-flat', isFlatLayout);
                     subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout);
                     subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
+                    applyReaderColorSettings();
 
                     // Open bookmark buttons may overlap after layout/font changes.
                     subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((btn) => {
@@ -1234,6 +1310,15 @@
                     const valueAsText = String(readerFontSizePx);
                     if (rangeInput) rangeInput.value = valueAsText;
                     if (numberInput) numberInput.value = valueAsText;
+
+                    const effectiveBg = readerBgColor || getReaderFallbackBgColor();
+                    const effectiveText = readerTextColor || getReaderFallbackTextColor();
+                    const bgPreview = document.getElementById('readerBgColorPreview');
+                    const textPreview = document.getElementById('readerTextColorPreview');
+                    if (bgPreview) bgPreview.style.background = effectiveBg;
+                    if (textPreview) textPreview.style.background = effectiveText;
+                    if (typeof readerColorWheelSync.bg === 'function') readerColorWheelSync.bg(effectiveBg);
+                    if (typeof readerColorWheelSync.text === 'function') readerColorWheelSync.text(effectiveText);
                 }
 
                 function setReaderSentenceLayout(nextLayout, options = {}) {
@@ -1252,6 +1337,237 @@
                     localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
                     applyReaderTextSettings({ rerender: readerSentenceLayout === READER_LAYOUT_FLAT });
                     syncReaderSettingsUi();
+                }
+
+                function setReaderBgColor(nextColor, options = {}) {
+                    const normalized = normalizeReaderHexColor(nextColor, null);
+                    if (!options.force && normalized === readerBgColor) return;
+                    readerBgColor = normalized;
+                    if (readerBgColor) localStorage.setItem(READER_BG_COLOR_STORAGE_KEY, readerBgColor);
+                    else localStorage.removeItem(READER_BG_COLOR_STORAGE_KEY);
+                    applyReaderTextSettings({ rerender: false });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderTextColor(nextColor, options = {}) {
+                    const normalized = normalizeReaderHexColor(nextColor, null);
+                    if (!options.force && normalized === readerTextColor) return;
+                    readerTextColor = normalized;
+                    if (readerTextColor) localStorage.setItem(READER_TEXT_COLOR_STORAGE_KEY, readerTextColor);
+                    else localStorage.removeItem(READER_TEXT_COLOR_STORAGE_KEY);
+                    applyReaderTextSettings({ rerender: false });
+                    syncReaderSettingsUi();
+                }
+
+                function clamp01(value) {
+                    if (!Number.isFinite(value)) return 0;
+                    if (value <= 0) return 0;
+                    if (value >= 1) return 1;
+                    return value;
+                }
+
+                function hexToRgb(hex) {
+                    const normalized = normalizeReaderHexColor(hex, null);
+                    if (!normalized) return null;
+                    const raw = normalized.slice(1);
+                    return {
+                        r: parseInt(raw.slice(0, 2), 16),
+                        g: parseInt(raw.slice(2, 4), 16),
+                        b: parseInt(raw.slice(4, 6), 16)
+                    };
+                }
+
+                function rgbToHex(r, g, b) {
+                    const toHex = (value) => {
+                        const clamped = Math.max(0, Math.min(255, Math.round(value)));
+                        return clamped.toString(16).padStart(2, '0');
+                    };
+                    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+                }
+
+                function rgbToHsl(r, g, b) {
+                    const rr = r / 255;
+                    const gg = g / 255;
+                    const bb = b / 255;
+                    const max = Math.max(rr, gg, bb);
+                    const min = Math.min(rr, gg, bb);
+                    const delta = max - min;
+                    let h = 0;
+                    const l = (max + min) / 2;
+                    let s = 0;
+
+                    if (delta !== 0) {
+                        s = delta / (1 - Math.abs((2 * l) - 1));
+                        if (max === rr) h = 60 * (((gg - bb) / delta) % 6);
+                        else if (max === gg) h = 60 * (((bb - rr) / delta) + 2);
+                        else h = 60 * (((rr - gg) / delta) + 4);
+                    }
+
+                    if (!Number.isFinite(h)) h = 0;
+                    if (h < 0) h += 360;
+                    return { h, s: clamp01(s), l: clamp01(l) };
+                }
+
+                function hslToRgb(h, s, l) {
+                    const hue = ((Number(h) % 360) + 360) % 360;
+                    const sat = clamp01(s);
+                    const lig = clamp01(l);
+                    const c = (1 - Math.abs((2 * lig) - 1)) * sat;
+                    const hh = hue / 60;
+                    const x = c * (1 - Math.abs((hh % 2) - 1));
+                    let r1 = 0;
+                    let g1 = 0;
+                    let b1 = 0;
+
+                    if (hh >= 0 && hh < 1) { r1 = c; g1 = x; }
+                    else if (hh < 2) { r1 = x; g1 = c; }
+                    else if (hh < 3) { g1 = c; b1 = x; }
+                    else if (hh < 4) { g1 = x; b1 = c; }
+                    else if (hh < 5) { r1 = x; b1 = c; }
+                    else { r1 = c; b1 = x; }
+
+                    const m = lig - (c / 2);
+                    return {
+                        r: Math.round((r1 + m) * 255),
+                        g: Math.round((g1 + m) * 255),
+                        b: Math.round((b1 + m) * 255)
+                    };
+                }
+
+                function getWheelColorAtOffset(offsetX, offsetY, radius) {
+                    const safeRadius = Math.max(1, radius);
+                    const distance = Math.min(1, Math.hypot(offsetX, offsetY) / safeRadius);
+                    const hue = ((Math.atan2(offsetY, offsetX) * (180 / Math.PI)) + 360) % 360;
+                    const saturation = 0.18 + (distance * 0.82);
+                    const lightness = 0.64 - (distance * 0.24);
+                    const rgb = hslToRgb(hue, saturation, lightness);
+                    return rgbToHex(rgb.r, rgb.g, rgb.b);
+                }
+
+                function setReaderWheelMarkerFromHex(markerEl, wheelEl, hexColor) {
+                    if (!markerEl || !wheelEl) return;
+                    const rgb = hexToRgb(hexColor);
+                    if (!rgb) return;
+                    const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+                    const size = Math.min(wheelEl.clientWidth || wheelEl.width || 0, wheelEl.clientHeight || wheelEl.height || 0);
+                    if (!size) return;
+                    const radius = size / 2;
+                    const sat = clamp01((hsl.s - 0.18) / 0.82);
+                    const angle = (hsl.h * Math.PI) / 180;
+                    const markerRadius = sat * radius;
+                    const x = radius + (Math.cos(angle) * markerRadius);
+                    const y = radius + (Math.sin(angle) * markerRadius);
+                    markerEl.style.left = `${x}px`;
+                    markerEl.style.top = `${y}px`;
+                }
+
+                function drawReaderGoetheColorWheel(canvasEl) {
+                    if (!canvasEl) return;
+                    const width = Number(canvasEl.width) || 168;
+                    const height = Number(canvasEl.height) || 168;
+                    const ctx = canvasEl.getContext('2d');
+                    if (!ctx) return;
+
+                    const cx = width / 2;
+                    const cy = height / 2;
+                    const radius = Math.min(width, height) / 2;
+                    const image = ctx.createImageData(width, height);
+                    const data = image.data;
+
+                    for (let y = 0; y < height; y++) {
+                        for (let x = 0; x < width; x++) {
+                            const dx = x + 0.5 - cx;
+                            const dy = y + 0.5 - cy;
+                            const dist = Math.hypot(dx, dy);
+                            const index = (y * width + x) * 4;
+                            if (dist > radius) {
+                                data[index + 3] = 0;
+                                continue;
+                            }
+                            const distNorm = dist / radius;
+                            const hue = ((Math.atan2(dy, dx) * (180 / Math.PI)) + 360) % 360;
+                            const saturation = 0.18 + (distNorm * 0.82);
+                            const lightness = 0.64 - (distNorm * 0.24);
+                            const rgb = hslToRgb(hue, saturation, lightness);
+                            data[index] = rgb.r;
+                            data[index + 1] = rgb.g;
+                            data[index + 2] = rgb.b;
+                            data[index + 3] = 255;
+                        }
+                    }
+
+                    ctx.clearRect(0, 0, width, height);
+                    ctx.putImageData(image, 0, 0);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius - 0.5, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, radius * 0.36, 0, Math.PI * 2);
+                    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.restore();
+                }
+
+                function initReaderColorWheelControl(config) {
+                    const canvasEl = document.getElementById(config.canvasId);
+                    const markerEl = document.getElementById(config.markerId);
+                    const previewEl = document.getElementById(config.previewId);
+                    if (!canvasEl || !markerEl || !previewEl || typeof config.onPick !== 'function') {
+                        return null;
+                    }
+
+                    drawReaderGoetheColorWheel(canvasEl);
+
+                    const updatePreviewAndMarker = (hexColor) => {
+                        const normalized = normalizeReaderHexColor(hexColor, null);
+                        if (!normalized) return;
+                        previewEl.style.background = normalized;
+                        setReaderWheelMarkerFromHex(markerEl, canvasEl, normalized);
+                    };
+
+                    const pickFromClientPoint = (clientX, clientY) => {
+                        const rect = canvasEl.getBoundingClientRect();
+                        if (!rect.width || !rect.height) return;
+                        const radius = Math.min(rect.width, rect.height) / 2;
+                        const localX = clientX - (rect.left + (rect.width / 2));
+                        const localY = clientY - (rect.top + (rect.height / 2));
+                        const hex = getWheelColorAtOffset(localX, localY, radius);
+                        config.onPick(hex);
+                    };
+
+                    let pointerActive = false;
+                    const onPointerMove = (event) => {
+                        if (!pointerActive) return;
+                        pickFromClientPoint(event.clientX, event.clientY);
+                    };
+                    const onPointerUp = () => {
+                        pointerActive = false;
+                    };
+                    canvasEl.addEventListener('pointerdown', (event) => {
+                        event.preventDefault();
+                        pointerActive = true;
+                        pickFromClientPoint(event.clientX, event.clientY);
+                    });
+                    window.addEventListener('pointermove', onPointerMove);
+                    window.addEventListener('pointerup', onPointerUp);
+                    window.addEventListener('pointercancel', onPointerUp);
+
+                    canvasEl.addEventListener('touchstart', (event) => {
+                        if (!event.touches || !event.touches.length) return;
+                        const t = event.touches[0];
+                        pickFromClientPoint(t.clientX, t.clientY);
+                    }, { passive: true });
+                    canvasEl.addEventListener('touchmove', (event) => {
+                        if (!event.touches || !event.touches.length) return;
+                        const t = event.touches[0];
+                        pickFromClientPoint(t.clientX, t.clientY);
+                    }, { passive: true });
+
+                    return updatePreviewAndMarker;
                 }
 
                 function initReaderSettingsControls() {
@@ -1276,6 +1592,28 @@
                         });
                         numberInput.addEventListener('change', (event) => {
                             setReaderFontSize(event.target.value, { force: true });
+                        });
+                    }
+
+                    readerColorWheelSync.bg = initReaderColorWheelControl({
+                        canvasId: 'readerBgColorWheel',
+                        markerId: 'readerBgColorMarker',
+                        previewId: 'readerBgColorPreview',
+                        onPick: (hexColor) => setReaderBgColor(hexColor)
+                    });
+
+                    readerColorWheelSync.text = initReaderColorWheelControl({
+                        canvasId: 'readerTextColorWheel',
+                        markerId: 'readerTextColorMarker',
+                        previewId: 'readerTextColorPreview',
+                        onPick: (hexColor) => setReaderTextColor(hexColor)
+                    });
+
+                    const resetColorsBtn = document.getElementById('readerColorResetBtn');
+                    if (resetColorsBtn) {
+                        resetColorsBtn.addEventListener('click', () => {
+                            setReaderBgColor(null, { force: true });
+                            setReaderTextColor(null, { force: true });
                         });
                     }
 
@@ -1318,6 +1656,69 @@
                             const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
                             return overlapW * overlapH;
                         };
+                        const isFlatBookmarkLayout = () => subtitleContainer.classList.contains('reader-layout-flat');
+                        const setBookmarkButtonLabel = (btn, label) => {
+                            if (!btn) return;
+                            const labelNode = btn.querySelector('.bookmark-label');
+                            if (labelNode) labelNode.textContent = label;
+                            else btn.innerText = label;
+                        };
+                        const ensureBookmarkButtonMode = (btn, useFlatOverlay) => {
+                            if (!btn) return;
+                            if (useFlatOverlay) {
+                                if (btn.dataset.flatOverlay !== '1') {
+                                    btn.dataset.flatOverlay = '1';
+                                    btn.innerHTML = '';
+                                    const mapLayer = document.createElement('span');
+                                    mapLayer.className = 'bookmark-map-layer';
+                                    const overlayLayer = document.createElement('span');
+                                    overlayLayer.className = 'bookmark-overlay-layer';
+                                    const labelLayer = document.createElement('span');
+                                    labelLayer.className = 'bookmark-label';
+                                    labelLayer.textContent = BOOKMARK_LABEL;
+                                    btn.appendChild(mapLayer);
+                                    btn.appendChild(overlayLayer);
+                                    btn.appendChild(labelLayer);
+                                }
+                                btn.classList.add('bookmark-btn-flat-overlay');
+                            } else {
+                                btn.classList.remove('bookmark-btn-flat-overlay');
+                                if (btn.dataset.flatOverlay === '1') {
+                                    btn.dataset.flatOverlay = '0';
+                                    btn.replaceChildren(document.createTextNode(BOOKMARK_LABEL));
+                                }
+                            }
+                        };
+                        const resolveSceneCanvas = () => {
+                            if (typeof renderer !== 'undefined' && renderer && renderer.domElement instanceof HTMLCanvasElement) {
+                                return renderer.domElement;
+                            }
+                            const gameCanvas = document.getElementById('gameCanvas');
+                            if (gameCanvas instanceof HTMLCanvasElement) return gameCanvas;
+                            const anyCanvas = document.querySelector('canvas');
+                            return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
+                        };
+                        const applyFlatBookmarkMapLayer = (btn) => {
+                            if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
+                            const mapLayer = btn.querySelector('.bookmark-map-layer');
+                            if (!mapLayer) return;
+                            const sceneCanvas = resolveSceneCanvas();
+                            if (!sceneCanvas || typeof sceneCanvas.toDataURL !== 'function') {
+                                mapLayer.style.backgroundImage = 'none';
+                                return;
+                            }
+                            try {
+                                const canvasRect = sceneCanvas.getBoundingClientRect();
+                                const btnRect = btn.getBoundingClientRect();
+                                if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
+                                const snapshotUrl = sceneCanvas.toDataURL('image/png');
+                                mapLayer.style.backgroundImage = `url("${snapshotUrl}")`;
+                                mapLayer.style.backgroundSize = `${canvasRect.width}px ${canvasRect.height}px`;
+                                mapLayer.style.backgroundPosition = `${Math.round(canvasRect.left - btnRect.left)}px ${Math.round(canvasRect.top - btnRect.top)}px`;
+                            } catch (_) {
+                                mapLayer.style.backgroundImage = 'none';
+                            }
+                        };
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
                             if (!lineEl) return rects;
@@ -1347,12 +1748,28 @@
                             return { rects, containerRect };
                         };
                         const positionBookmarkButton = (btn) => {
+                            const useFlatOverlay = isFlatBookmarkLayout();
+                            ensureBookmarkButtonMode(btn, useFlatOverlay);
                             const lineRect = div.getBoundingClientRect();
-                            const { rects: textRects, containerRect } = collectSubtitleTextRects();
+                            const containerRect = subtitleContainer.getBoundingClientRect();
                             if (!lineRect.width || !lineRect.height || !containerRect.width || !containerRect.height) return;
-                            const margin = 8;
                             const btnWidth = btn.offsetWidth || 0;
                             const btnHeight = btn.offsetHeight || 0;
+
+                            if (useFlatOverlay) {
+                                const lineTextRects = collectLineTextRects(div, containerRect);
+                                const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
+                                const edgeMargin = 6;
+                                const x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
+                                const y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
+                                btn.style.left = `${Math.round(x)}px`;
+                                btn.style.top = `${Math.round(y)}px`;
+                                applyFlatBookmarkMapLayer(btn);
+                                return;
+                            }
+
+                            const { rects: textRects } = collectSubtitleTextRects();
+                            const margin = 8;
                             const minX = containerRect.left + margin;
                             const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
                             const minY = containerRect.top + margin;
@@ -1406,7 +1823,7 @@
                             if (!btn) {
                                 btn = document.createElement('button');
                                 btn.className = 'bookmark-btn';
-                                btn.innerText = BOOKMARK_LABEL;
+                                setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
                                 btn.addEventListener('click', async (ev) => {
                                     ev.stopPropagation();
                                     ev.preventDefault();
@@ -1446,11 +1863,12 @@
                                         const added = await window.GameState.addBookmark(bm);
                                         if (added) {
                                             btn.classList.add('saved');
-                                            btn.innerText = BOOKMARK_SAVED_LABEL;
+                                            setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
                                             positionBookmarkButton(btn);
                                             setTimeout(() => {
                                                 btn.classList.remove('visible', 'saved');
-                                                btn.innerText = BOOKMARK_LABEL;
+                                                ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
+                                                setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
                                                 positionBookmarkButton(btn);
                                             }, 1200);
                                         }
@@ -1458,6 +1876,8 @@
                                 });
                                 div.appendChild(btn);
                             }
+                            ensureBookmarkButtonMode(btn, isFlatBookmarkLayout());
+                            if (!btn.classList.contains('saved')) setBookmarkButtonLabel(btn, BOOKMARK_LABEL);
                             subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
                                 if (otherBtn !== btn) otherBtn.classList.remove('visible');
                             });
