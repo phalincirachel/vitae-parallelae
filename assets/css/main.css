@@ -629,6 +629,11 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     align-items: center;
 }
 
+body:has(#archiveModal.visible) #subtitleRecenterBtn {
+    opacity: 0.3 !important;
+    pointer-events: none !important;
+}
+
 /* Lines far from center fade out */
 .subtitle-line.fade-far {
     opacity: 0.4;

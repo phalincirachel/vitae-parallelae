@@ -4528,6 +4528,29 @@
                             }
                             return { rects, containerRect };
                         };
+                        const startLongPress = (e) => {
+                            if (isDesktopPointer()) return;
+                            if (_bmTimer) clearTimeout(_bmTimer);
+
+                            // Capture coordinates
+                            let clientX = null;
+                            let clientY = null;
+                            if (e) {
+                                if (e.touches && e.touches.length > 0) {
+                                    clientX = e.touches[0].clientX;
+                                    clientY = e.touches[0].clientY;
+                                } else if (e.clientX !== undefined) {
+                                    clientX = e.clientX;
+                                    clientY = e.clientY;
+                                }
+                            }
+
+                            _bmTimer = setTimeout(() => {
+                                _bmTimer = null;
+                                showBookmarkButton({ clientX, clientY });
+                            }, 600);
+                        };
+
                         const positionBookmarkButton = (btn, options = {}) => {
                             const useFlatOverlay = isFlatBookmarkLayout();
                             ensureBookmarkButtonMode(btn, useFlatOverlay);
@@ -4564,6 +4587,26 @@
                             btn._flatLockedX = null;
                             btn._flatLockedY = null;
 
+                            // NEW LOGIC: Based on touch/click point
+                            if (options.clientX !== undefined && options.clientY !== undefined && options.clientX !== null && options.clientY !== null) {
+                                let x = options.clientX - (btnWidth / 2);
+                                let y = options.clientY - 200; // 200px above
+
+                                // Fallback if too close to top (<150px space) or offscreen
+                                if (y < 150) {
+                                    y = options.clientY + 200; // 200px below
+                                }
+
+                                // Prevent horizontal clipping
+                                const margin = 8;
+                                x = clampBookmarkCoord(x, containerRect.left + margin, containerRect.right - btnWidth - margin);
+
+                                btn.style.left = `${Math.round(x - lineRect.left)}px`;
+                                btn.style.top = `${Math.round(y - lineRect.top)}px`;
+                                return;
+                            }
+
+                            // Fallback if no coordinates available (e.g. keyboard triggers or contextmenu)
                             const { rects: textRects } = collectSubtitleTextRects();
                             const margin = 8;
                             const minX = containerRect.left + margin;
@@ -4614,7 +4657,7 @@
                             btn.style.top = `${Math.round(best.y - lineRect.top)}px`;
                         };
 
-                        const showBookmarkButton = () => {
+                        const showBookmarkButton = (options = {}) => {
                             let btn = div.querySelector('.bookmark-btn');
                             if (!btn) {
                                 btn = document.createElement('button');
@@ -4659,6 +4702,16 @@
                                     if (added) {
                                         btn.classList.add('saved');
                                         setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
+
+                                        // Store locked coordinates based on current actual position
+                                        const currentLeft = parseFloat(btn.style.left) || 0;
+                                        const currentTop = parseFloat(btn.style.top) || 0;
+                                        const lineRect = div.getBoundingClientRect();
+
+                                        // If useFlatOverlay is active lockToExisting uses these:
+                                        btn._flatLockedX = currentLeft + lineRect.left;
+                                        btn._flatLockedY = currentTop + lineRect.top;
+
                                         positionBookmarkButton(btn, { lockToExisting: true });
                                         setTimeout(() => {
                                             btn.classList.remove('visible', 'saved');
@@ -4686,7 +4739,7 @@
                                 }
                             });
                             btn.classList.add('visible');
-                            positionBookmarkButton(btn, { lockToExisting: false });
+                            positionBookmarkButton(btn, { lockToExisting: false, clientX: options.clientX, clientY: options.clientY });
                             // Auto-hide after 4 seconds
                             setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
@@ -4698,27 +4751,19 @@
                             }, 4000);
                         };
 
-                        const startLongPress = () => {
-                            if (isDesktopPointer()) return;
-                            if (_bmTimer) clearTimeout(_bmTimer);
-                            _bmTimer = setTimeout(() => {
-                                _bmTimer = null;
-                                showBookmarkButton();
-                            }, 600);
-                        };
                         const cancelLongPress = () => {
                             if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
                         };
                         div.addEventListener('mousedown', (e) => {
                             if (e.button !== 0) return;
-                            startLongPress();
+                            startLongPress(e);
                         });
                         div.addEventListener('contextmenu', (e) => {
                             if (!isDesktopPointer()) return;
                             e.preventDefault();
                             e.stopPropagation();
                             cancelLongPress();
-                            showBookmarkButton();
+                            showBookmarkButton({ clientX: e.clientX, clientY: e.clientY });
                         });
                         div.addEventListener('touchstart', startLongPress, { passive: true });
                         div.addEventListener('mouseup', cancelLongPress);

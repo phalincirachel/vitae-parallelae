@@ -2029,57 +2029,33 @@
                             btn._flatLockedX = null;
                             btn._flatLockedY = null;
 
-                            const { rects: textRects } = collectSubtitleTextRects();
-                            const margin = 8;
-                            const minX = containerRect.left + margin;
-                            const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
-                            const minY = containerRect.top + margin;
-                            const maxY = Math.max(minY, containerRect.bottom - btnHeight - margin);
-                            const lineTextRects = collectLineTextRects(div, containerRect);
-                            const anchorRect = lineTextRects.length > 0 ? lineTextRects[lineTextRects.length - 1] : lineRect;
-                            const fallbackY = clampBookmarkCoord(
-                                anchorRect.top + ((anchorRect.height - btnHeight) / 2),
-                                minY,
-                                maxY
-                            );
-                            const xCandidates = [
-                                clampBookmarkCoord(anchorRect.right + margin, minX, maxX),
-                                clampBookmarkCoord(anchorRect.right - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(anchorRect.left - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(containerRect.right - btnWidth - margin, minX, maxX),
-                                clampBookmarkCoord(containerRect.left + margin, minX, maxX)
-                            ];
-                            const yCandidates = [
-                                fallbackY,
-                                clampBookmarkCoord(anchorRect.top - btnHeight - margin, minY, maxY),
-                                clampBookmarkCoord(anchorRect.bottom + margin, minY, maxY),
-                                clampBookmarkCoord(lineRect.top + ((lineRect.height - btnHeight) / 2), minY, maxY)
-                            ];
+                            // -- NEW POSITIONING LOGIC --
+                            if (options.clientX !== undefined && options.clientY !== undefined && options.clientX !== null && options.clientY !== null) {
+                                let x = options.clientX - (btnWidth / 2);
+                                let y = options.clientY - 200; // 200px above
 
-                            let best = { score: Number.POSITIVE_INFINITY, x: xCandidates[0], y: yCandidates[0] };
-                            for (const y of yCandidates) {
-                                for (const x of xCandidates) {
-                                    let overlapScore = 0;
-                                    for (const rect of textRects) {
-                                        overlapScore += rectOverlapArea(x, y, btnWidth, btnHeight, rect);
-                                    }
-                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (anchorRect.top + (anchorRect.height / 2))) * 0.08;
-                                    const idealCenterX = clampBookmarkCoord(
-                                        anchorRect.right + margin + (btnWidth / 2),
-                                        minX + (btnWidth / 2),
-                                        maxX + (btnWidth / 2)
-                                    );
-                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - idealCenterX) * 0.03;
-                                    const score = overlapScore + centerPenalty + sidePenalty;
-                                    if (score < best.score) best = { score, x, y };
+                                // Fallback if too close to top (<150px space) or offscreen
+                                if (y < 150) {
+                                    y = options.clientY + 200; // 200px below
                                 }
+
+                                // Prevent horizontal clipping
+                                const margin = 8;
+                                x = clampBookmarkCoord(x, containerRect.left + margin, containerRect.right - btnWidth - margin);
+
+                                btn.style.left = `${Math.round(x - lineRect.left)}px`;
+                                btn.style.top = `${Math.round(y - lineRect.top)}px`;
+                                return;
                             }
 
-                            btn.style.left = `${Math.round(best.x - lineRect.left)}px`;
-                            btn.style.top = `${Math.round(best.y - lineRect.top)}px`;
+                            // Fallback if no coordinates (shouldn't happen with updated showBookmarkButton)
+                            const margin = 8;
+                            const anchorRect = lineRect;
+                            btn.style.left = `${Math.round(anchorRect.right + margin - lineRect.left)}px`;
+                            btn.style.top = `${Math.round(anchorRect.top - lineRect.top)}px`;
                         };
 
-                        const showBookmarkButton = () => {
+                        const showBookmarkButton = (options = {}) => {
                             let btn = div.querySelector('.bookmark-btn');
                             if (!btn) {
                                 btn = document.createElement('button');
@@ -2125,7 +2101,7 @@
                                         if (added) {
                                             btn.classList.add('saved');
                                             setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
-                                            positionBookmarkButton(btn, { lockToExisting: true });
+                                            positionBookmarkButton(btn, { lockToExisting: true, clientX: options.clientX, clientY: options.clientY });
                                             setTimeout(() => {
                                                 btn.classList.remove('visible', 'saved');
                                                 stopFlatBookmarkMapLayerLoop(btn);
@@ -2153,7 +2129,7 @@
                                 }
                             });
                             btn.classList.add('visible');
-                            positionBookmarkButton(btn, { lockToExisting: false });
+                            positionBookmarkButton(btn, { lockToExisting: false, clientX: options.clientX, clientY: options.clientY });
                             // Auto-hide after 4 seconds
                             setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
@@ -2165,12 +2141,26 @@
                             }, 4000);
                         };
 
-                        const startLongPress = () => {
+                        const startLongPress = (e) => {
                             if (isDesktopPointer()) return;
                             if (_bmTimer) clearTimeout(_bmTimer);
+
+                            // Capture coordinates
+                            let clientX = null;
+                            let clientY = null;
+                            if (e) {
+                                if (e.touches && e.touches.length > 0) {
+                                    clientX = e.touches[0].clientX;
+                                    clientY = e.touches[0].clientY;
+                                } else if (e.clientX !== undefined) {
+                                    clientX = e.clientX;
+                                    clientY = e.clientY;
+                                }
+                            }
+
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
-                                showBookmarkButton();
+                                showBookmarkButton({ clientX, clientY });
                             }, 600);
                         };
                         const cancelLongPress = () => {
