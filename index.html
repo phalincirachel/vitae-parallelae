@@ -358,8 +358,7 @@
                         </div>
                         <div class="reader-volume-row">
                             <label class="reader-volume-label" for="readerBackgroundVolumeRange">Hintergrund</label>
-                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1"
-                                value="100">
+                            <input id="readerBackgroundVolumeRange" type="range" min="0" max="100" step="1" value="100">
                             <input id="readerBackgroundVolumeNumber" type="number" min="0" max="100" step="1"
                                 value="100">
                             <span class="reader-size-unit">%</span>
@@ -391,11 +390,13 @@
                                 <div class="reader-wheel-wrap">
                                     <canvas id="readerTextColorWheel" class="reader-color-wheel" width="168"
                                         height="168"></canvas>
-                                    <div id="readerTextColorMarker" class="reader-wheel-marker" aria-hidden="true"></div>
+                                    <div id="readerTextColorMarker" class="reader-wheel-marker" aria-hidden="true">
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                        <button id="readerColorResetBtn" class="reader-color-reset-btn" type="button">Farben zur&uuml;cksetzen</button>
+                        <button id="readerColorResetBtn" class="reader-color-reset-btn" type="button">Farben
+                            zur&uuml;cksetzen</button>
                     </div>
                 </div>
             </div>
@@ -3405,6 +3406,8 @@
             if (textPreview) textPreview.style.background = effectiveText;
             if (typeof readerColorWheelSync.bg === 'function') readerColorWheelSync.bg(effectiveBg);
             if (typeof readerColorWheelSync.text === 'function') readerColorWheelSync.text(effectiveText);
+
+            updateAllSliderFills();
         }
 
         function setReaderSentenceLayout(nextLayout, options = {}) {
@@ -3675,6 +3678,18 @@
             return updatePreviewAndMarker;
         }
 
+        // --- Slider fill gradient for WebKit (Chrome/Safari/Electron) ---
+        function updateSliderFill(rangeEl) {
+            // Gold fill removed — plain white track only
+            if (rangeEl) rangeEl.style.background = '';
+        }
+
+        function updateAllSliderFills() {
+            ['readerFontSizeRange', 'readerTextVolumeRange', 'readerBackgroundVolumeRange'].forEach(id => {
+                updateSliderFill(document.getElementById(id));
+            });
+        }
+
         function initReaderSettingsControls() {
             const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
             layoutInputs.forEach((input) => {
@@ -3689,6 +3704,7 @@
             if (rangeInput) {
                 rangeInput.addEventListener('input', (event) => {
                     setReaderFontSize(event.target.value);
+                    updateSliderFill(event.target);
                 });
             }
             if (numberInput) {
@@ -3706,6 +3722,7 @@
                 if (rangeEl) {
                     rangeEl.addEventListener('input', (event) => {
                         setter(event.target.value);
+                        updateSliderFill(event.target);
                     });
                 }
                 if (numberEl) {

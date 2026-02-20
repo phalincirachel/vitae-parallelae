@@ -1196,20 +1196,47 @@ body.scene-dimmer-light-mode .archive-tab.active {
     font-size: 13px;
     letter-spacing: 0.8px;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.55);
 }
 
 .reader-radio-option {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: rgba(255, 255, 255, 0.9);
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.82);
     font-size: 14px;
     cursor: pointer;
 }
 
 .reader-radio-option input[type="radio"] {
-    accent-color: #ffd700;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 15px;
+    height: 15px;
+    border: 1.5px solid rgba(255, 255, 255, 0.45);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    flex-shrink: 0;
+    transition: border-color 0.2s ease;
+}
+
+.reader-radio-option input[type="radio"]:checked {
+    border-color: rgba(255, 255, 255, 0.75);
+}
+
+.reader-radio-option input[type="radio"]:checked::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
 }
 
 .reader-size-row {
@@ -1227,7 +1254,7 @@ body.scene-dimmer-light-mode .archive-tab.active {
 .reader-volume-label {
     min-width: 98px;
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.82);
 }
 
 #readerFontSizeRange {
@@ -1237,6 +1264,79 @@ body.scene-dimmer-light-mode .archive-tab.active {
 #readerTextVolumeRange,
 #readerBackgroundVolumeRange {
     flex: 1;
+}
+
+/* Custom Range Slider Styling */
+input[type="range"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    background: transparent;
+    cursor: pointer;
+    height: 20px;
+}
+
+/* Track – WebKit (Chrome, Safari, Edge) */
+input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+}
+
+/* Track – Firefox */
+input[type="range"]::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    border: none;
+}
+
+/* Filled progress – Firefox (disabled – plain white track only) */
+/*
+input[type="range"]::-moz-range-progress {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(200, 180, 120, 0.50);
+}
+*/
+
+/* Thumb – WebKit */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.88);
+    border: none;
+    margin-top: -5px;
+    box-shadow: 0 0 6px rgba(200, 180, 120, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 10px rgba(200, 180, 120, 0.50);
+}
+
+/* Thumb – Firefox */
+input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.88);
+    border: none;
+    box-shadow: 0 0 6px rgba(200, 180, 120, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+input[type="range"]::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 10px rgba(200, 180, 120, 0.50);
+}
+
+input[type="range"]:focus {
+    outline: none;
 }
 
 #readerFontSizeNumber {
@@ -1281,7 +1381,7 @@ body.scene-dimmer-light-mode .archive-tab.active {
 
 .reader-color-row-label {
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(255, 255, 255, 0.82);
 }
 
 .reader-color-picker-popover {
@@ -1291,12 +1391,13 @@ body.scene-dimmer-light-mode .archive-tab.active {
     transform: translate(-50%, -50%);
     z-index: 4300;
     display: block;
-    padding: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.34);
-    border-radius: 10px;
-    background: rgba(10, 10, 12, 0.74);
-    backdrop-filter: blur(4px);
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    background: rgba(40, 36, 30, 0.82);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.35);
 }
 
 .reader-color-picker-popover[hidden] {
@@ -1317,7 +1418,7 @@ body.scene-dimmer-light-mode .archive-tab.active {
     display: block;
     border-radius: 50%;
     cursor: crosshair;
-    border: 1px solid rgba(255, 255, 255, 0.32);
+    border: none;
 }
 
 .reader-wheel-marker {
@@ -1359,11 +1460,46 @@ body.scene-dimmer-light-mode .archive-tab.active {
 }
 
 body.scene-dimmer-light-mode .reader-settings-title {
-    color: rgba(0, 0, 0, 0.62);
+    color: rgba(0, 0, 0, 0.50);
 }
 
 body.scene-dimmer-light-mode .reader-radio-option {
-    color: rgba(0, 0, 0, 0.9);
+    color: rgba(0, 0, 0, 0.82);
+}
+
+body.scene-dimmer-light-mode .reader-radio-option input[type="radio"] {
+    border-color: rgba(0, 0, 0, 0.40);
+}
+
+body.scene-dimmer-light-mode .reader-radio-option input[type="radio"]:checked {
+    border-color: rgba(0, 0, 0, 0.65);
+}
+
+body.scene-dimmer-light-mode .reader-radio-option input[type="radio"]:checked::after {
+    background: rgba(0, 0, 0, 0.75);
+}
+
+/* Light-mode slider overrides */
+body.scene-dimmer-light-mode input[type="range"]::-webkit-slider-runnable-track {
+    background: rgba(0, 0, 0, 0.14);
+}
+
+body.scene-dimmer-light-mode input[type="range"]::-moz-range-track {
+    background: rgba(0, 0, 0, 0.14);
+}
+
+body.scene-dimmer-light-mode input[type="range"]::-moz-range-progress {
+    background: rgba(120, 100, 50, 0.45);
+}
+
+body.scene-dimmer-light-mode input[type="range"]::-webkit-slider-thumb {
+    background: rgba(0, 0, 0, 0.65);
+    box-shadow: 0 0 6px rgba(120, 100, 50, 0.25);
+}
+
+body.scene-dimmer-light-mode input[type="range"]::-moz-range-thumb {
+    background: rgba(0, 0, 0, 0.65);
+    box-shadow: 0 0 6px rgba(120, 100, 50, 0.25);
 }
 
 body.scene-dimmer-light-mode #readerFontSizeNumber {
@@ -1385,11 +1521,11 @@ body.scene-dimmer-light-mode .reader-size-unit {
 
 body.scene-dimmer-light-mode .reader-volume-label,
 body.scene-dimmer-light-mode .reader-color-row-label {
-    color: rgba(0, 0, 0, 0.65);
+    color: rgba(0, 0, 0, 0.72);
 }
 
 body.scene-dimmer-light-mode .reader-color-wheel {
-    border-color: rgba(0, 0, 0, 0.3);
+    border: none;
 }
 
 body.scene-dimmer-light-mode .reader-wheel-marker {
@@ -1616,6 +1752,7 @@ body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
    MOBILE OPTIMIZATIONS (Max-width: 768px)
    ========================================== */
 @media (max-width: 768px) {
+
     /* Canvas responsive */
     #gameWrapper {
         width: 100% !important;
