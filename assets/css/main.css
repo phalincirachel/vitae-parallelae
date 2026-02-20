@@ -890,35 +890,36 @@ body.scene-dimmer-light-mode .col-header {
 
 .archive-title-wrap {
     display: flex;
-    align-items: center;
-    gap: 14px;
+    align-items: flex-end;
+    gap: 18px;
 }
 
-.archive-settings-btn {
+.archive-primary-btn {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.62);
     font-family: "Georgia", serif;
-    font-size: 12px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
+    font-size: 24px;
+    font-weight: normal;
+    letter-spacing: 2px;
+    text-shadow: none;
     cursor: pointer;
-    padding: 4px 0;
-    border-bottom: 1px solid transparent;
-    transition: color 0.2s ease, border-color 0.2s ease, transform 0.14s ease;
+    padding: 0;
+    opacity: 0.72;
+    transition: opacity 0.2s ease, color 0.2s ease, transform 0.14s ease;
 }
 
-.archive-settings-btn:hover {
-    color: rgba(255, 255, 255, 0.82);
+.archive-primary-btn:hover {
+    opacity: 0.9;
 }
 
-.archive-settings-btn:active {
+.archive-primary-btn:active {
     transform: scale(1.03);
 }
 
-.archive-settings-btn.active {
-    color: #ffd700;
-    border-bottom-color: #ffd700;
+.archive-primary-btn.active {
+    opacity: 1;
+    color: rgba(255, 255, 255, 0.96);
 }
 
 .close-btn {
@@ -935,17 +936,17 @@ body.scene-dimmer-light-mode .close-btn {
     color: rgba(0, 0, 0, 0.88);
 }
 
-body.scene-dimmer-light-mode .archive-settings-btn {
-    color: rgba(0, 0, 0, 0.45);
+body.scene-dimmer-light-mode .archive-primary-btn {
+    color: rgba(0, 0, 0, 0.6);
 }
 
-body.scene-dimmer-light-mode .archive-settings-btn:hover {
-    color: rgba(0, 0, 0, 0.82);
+body.scene-dimmer-light-mode .archive-primary-btn:hover {
+    opacity: 0.9;
 }
 
-body.scene-dimmer-light-mode .archive-settings-btn.active {
-    color: #7b5a00;
-    border-bottom-color: #7b5a00;
+body.scene-dimmer-light-mode .archive-primary-btn.active {
+    color: rgba(0, 0, 0, 0.92);
+    opacity: 1;
 }
 
 .close-btn:hover {
