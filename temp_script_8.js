@@ -1,0 +1,4003 @@
+
+        console.log("DEBUG: Script Wrapper Start");
+        const isIOSSafari = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        // FALLBACK TIMEOUT: Force hide loading screens after 10s
+        setTimeout(() => {
+            console.warn("Liminal Fallback: Force hiding loading screens (10s)");
+            const l1 = document.getElementById('loading');
+            const l2 = document.getElementById('loading-screen');
+            if (l1) l1.style.display = 'none';
+            if (l2) l2.style.display = 'none';
+        }, 10000);
+
+        // --- ERROR HANDLING ---
+        window.addEventListener('unhandledrejection', function (event) {
+            console.error("Unhandled Promise Rejection:", event.reason);
+        });
+
+        (async function () {
+            try {
+                console.log("DEBUG: Starting Imports...");
+
+                // 1. Load THREE
+                const THREE = await import('three');
+                window.THREE = THREE; // Global Ref
+                console.log("DEBUG: THREE Loaded");
+
+                // 2. Load Audio Player
+                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260209-1');
+                console.log("DEBUG: SharedAudioPlayer Loaded");
+
+                // 3. Load GameState
+                const { GameState } = await import('./assets/js/GameState.js');
+                await GameState.init();
+                window.GameState = GameState;
+                console.log("DEBUG: GameState Loaded");
+
+                // --- GLOBALS ---
+                let isLoreMode = false;
+                let activeLoreId = null;
+                let isReadingMode = false;
+                const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
+                const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
+                const READER_LAYOUT_TIMESTAMPS = 'timestamps';
+                const READER_LAYOUT_FLAT = 'flat';
+                const READER_FONT_SIZE_MIN = 14;
+                const READER_FONT_SIZE_MAX = 30;
+                const READER_FONT_SIZE_DEFAULT = 18;
+                let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
+                let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
+
+                // FIX: LOAD STATE BEFORE PLAYER INIT
+                const savedMode = localStorage.getItem('gameboy_reading_mode');
+                if (savedMode === 'true') {
+                    isReadingMode = true;
+                } else {
+                    isReadingMode = false;
+                }
+
+                let isCenteringCamera = false;
+                let activeLightId = null;
+                // window.subtitleTracks removed
+
+                // State to resume main chapter
+                let mainAudioState = { time: 0, wasPlaying: false, src: 'assets/kapitel1b.mp3' };
+
+                // Content switching + resume helpers
+                const MAIN_CONTENT_KEY = 'liminal_library';
+                const CURRENT_PAGE = 'liminal library.html';
+                const CURRENT_CHAPTER = '1b';
+                const CURRENT_CHAPTER_TITLE = 'Liminal Library';
+                const BOOKMARK_PAGE_KEY_MAP = {
+                    'index.html': 'kapitel1',
+                    'liminal library.html': 'liminal_library',
+                    'index.html?chapter=kapitel1c': 'kapitel1c'
+                };
+                let contentSwitchInProgress = false;
+                let contentSwitchToken = 0;
+                const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
+                    ? window.ChapterAutoplayIntent.consume(MAIN_CONTENT_KEY, { defaultPolicy: 'auto' })
+                    : { policy: 'auto', shouldAutoplay: true, source: 'fallback', reason: 'intent-missing' };
+
+                function markChapterAutoplayIntent(targetPageKey, policy = 'auto', reason = '') {
+                    if (!window.ChapterAutoplayIntent || !targetPageKey) return;
+                    if (policy === 'manual') {
+                        window.ChapterAutoplayIntent.markManual(targetPageKey, MAIN_CONTENT_KEY, reason || 'chapter-menu');
+                        return;
+                    }
+                    window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
+                }
+
+                // ============================================
+                // DEBUG (disabled in production UI)
+                // ============================================
+                const liminalDebug = {
+                    lastSave: null
+                };
+
+                function liminalDebugNote() { }
+
+                function liminalCause() { }
+                function liminalTrace() { }
+
+                function writeStateHandoff(targetPageKey) {
+                    try {
+                        if (!window.PlayerStateManager || typeof window.PlayerStateManager.exportStates !== 'function') return;
+                        const states = window.PlayerStateManager.exportStates();
+                        const payload = {
+                            from: MAIN_CONTENT_KEY,
+                            to: targetPageKey,
+                            at: Date.now(),
+                            states
+                        };
+                        sessionStorage.setItem('gb_state_handoff', JSON.stringify(payload));
+                        sessionStorage.setItem('gb_handoff_expect', String(targetPageKey || ''));
+                        liminalDebugNote('handoff-out', `to=${targetPageKey} states=${Object.keys(states).length}`);
+                    } catch (e) {
+                        liminalDebugNote('handoff-out-error', e && e.message ? e.message : String(e));
+                    }
+                }
+
+                function mergeIncomingStateHandoff(expectedTargetKey) {
+                    try {
+                        const raw = sessionStorage.getItem('gb_state_handoff');
+                        const expected = sessionStorage.getItem('gb_handoff_expect');
+                        if (!raw || !window.PlayerStateManager) {
+                            if (expected && expected === expectedTargetKey) {
+                                liminalCause('C09_RESTORE_WITHOUT_STATE', 'handoff missing');
+                                sessionStorage.removeItem('gb_handoff_expect');
+                            }
+                            return;
+                        }
+
+                        const payload = JSON.parse(raw);
+                        if (!payload || payload.to !== expectedTargetKey || !payload.states || typeof payload.states !== 'object') {
+                            return;
+                        }
+
+                        let merged = 0;
+                        for (const [key, incoming] of Object.entries(payload.states)) {
+                            if (!incoming || typeof incoming !== 'object') continue;
+                            const current = window.PlayerStateManager.getState(key);
+                            const incomingStamp = Number(incoming.lastUpdate || 0);
+                            const currentStamp = Number((current && current.lastUpdate) || 0);
+                            if (current && currentStamp > incomingStamp) continue;
+
+                            if (typeof window.PlayerStateManager.saveStateAt === 'function') {
+                                window.PlayerStateManager.saveStateAt(key, {
+                                    sentenceIndex: Number.isFinite(incoming.sentenceIndex) ? incoming.sentenceIndex : 0,
+                                    sentenceTime: Number.isFinite(incoming.sentenceTime) ? incoming.sentenceTime : 0,
+                                    wasPlaying: !!incoming.wasPlaying
+                                });
+                                merged++;
+                            }
+                        }
+
+                        sessionStorage.removeItem('gb_state_handoff');
+                        sessionStorage.removeItem('gb_handoff_expect');
+                        liminalDebugNote('handoff-in', `from=${payload.from || '-'} merged=${merged}`);
+                        if (merged === 0) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', 'handoff merged=0');
+                        }
+                    } catch (e) {
+                        liminalDebugNote('handoff-in-error', e && e.message ? e.message : String(e));
+                    }
+                }
+
+                mergeIncomingStateHandoff(MAIN_CONTENT_KEY);
+
+                function getActiveContentKey() {
+                    if (isLoreMode && activeLoreId) return `lore${activeLoreId}`;
+                    return MAIN_CONTENT_KEY;
+                }
+
+                function resolveBookmarkPageKey(page) {
+                    return BOOKMARK_PAGE_KEY_MAP[page] || 'kapitel1';
+                }
+
+                function extractLoreIdFromBookmark(bm, fallbackKey = '') {
+                    const directLoreId = Number(bm && bm.loreId);
+                    if (Number.isFinite(directLoreId) && directLoreId > 0) return Math.trunc(directLoreId);
+
+                    const keyCandidate = (typeof fallbackKey === 'string' && fallbackKey)
+                        ? fallbackKey
+                        : (typeof (bm && bm.contentKey) === 'string' ? bm.contentKey : '');
+                    const keyMatch = keyCandidate.match(/^lore(\d+)$/i);
+                    if (keyMatch) return Number(keyMatch[1]);
+
+                    const chapterMatch = (typeof (bm && bm.chapter) === 'string' ? bm.chapter : '').match(/^lore(\d+)$/i);
+                    if (chapterMatch) return Number(chapterMatch[1]);
+
+                    const refs = [
+                        (typeof (bm && bm.audioRef) === 'string') ? bm.audioRef : '',
+                        (typeof (bm && bm.textRef) === 'string') ? bm.textRef : ''
+                    ];
+                    for (const ref of refs) {
+                        const m = ref.match(/lore(\d+)\.(?:mp3|txt)/i);
+                        if (m) return Number(m[1]);
+                    }
+                    return null;
+                }
+
+                function resolveBookmarkContentKey(bm) {
+                    if (bm && typeof bm.contentKey === 'string' && bm.contentKey.trim()) {
+                        return bm.contentKey.trim();
+                    }
+
+                    const loreId = extractLoreIdFromBookmark(bm);
+                    if (Number.isFinite(loreId) && loreId > 0) return `lore${loreId}`;
+
+                    if (bm && typeof bm.page === 'string' && BOOKMARK_PAGE_KEY_MAP[bm.page]) {
+                        return BOOKMARK_PAGE_KEY_MAP[bm.page];
+                    }
+                    return '';
+                }
+
+                async function ensureBookmarkContentForCurrentPage(bm, reason = 'bookmark') {
+                    await waitForContentSwitchIdle(`${reason}:pre`);
+
+                    const targetKey = resolveBookmarkContentKey(bm);
+                    if (!targetKey) return true; // Legacy bookmark without content metadata
+
+                    const currentKey = getActiveContentKey();
+                    if (targetKey === currentKey) return true;
+
+                    if (/^lore\d+$/i.test(targetKey)) {
+                        const loreId = extractLoreIdFromBookmark(bm, targetKey);
+                        if (!Number.isFinite(loreId) || loreId <= 0) {
+                            console.warn('[Bookmark] Invalid lore target:', bm);
+                            return false;
+                        }
+                        if (typeof window.startLoreMode === 'function') {
+                            await window.startLoreMode(loreId);
+                        } else {
+                            return false;
+                        }
+                        await waitForContentSwitchIdle(`${reason}:switch-lore`);
+                        return getActiveContentKey() === `lore${loreId}`;
+                    }
+
+                    if (targetKey === MAIN_CONTENT_KEY) {
+                        if (isLoreMode) {
+                            if (typeof window.restoreMainAudio === 'function') {
+                                await window.restoreMainAudio({ saveCurrent: true });
+                            } else {
+                                return false;
+                            }
+                            await waitForContentSwitchIdle(`${reason}:switch-main`);
+                        }
+                        return getActiveContentKey() === MAIN_CONTENT_KEY;
+                    }
+
+                    return false;
+                }
+
+                function getActiveSubtitleTracks() {
+                    return window.audioPlayer && Array.isArray(window.audioPlayer.subtitleTracks)
+                        ? window.audioPlayer.subtitleTracks
+                        : [];
+                }
+
+                function getActiveSubtitleIndex() {
+                    return window.audioPlayer && Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                        ? window.audioPlayer.currentSubtitleIndex
+                        : -1;
+                }
+
+                function clearContentState(key) {
+                    if (!key) return;
+                    if (window.PlayerStateManager) {
+                        window.PlayerStateManager.clear(key);
+                    }
+                    if (key === MAIN_CONTENT_KEY) {
+                        mainAudioState.time = 0;
+                        mainAudioState.wasPlaying = false;
+                    }
+                }
+
+                function isCurrentContentCompleted() {
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return false;
+                    const tracks = getActiveSubtitleTracks();
+                    if (tracks.length === 0) return false;
+
+                    const t = p.audio.currentTime || 0;
+                    const duration = p.audio.duration || 0;
+                    const subtitleIndex = getActiveSubtitleIndex();
+                    const reachedTextEnd = subtitleIndex >= tracks.length - 1;
+                    const reachedAudioEnd = duration > 0 && t >= Math.max(0, duration - 0.25);
+                    return reachedTextEnd && reachedAudioEnd;
+                }
+
+                async function saveCurrentContentState(options = {}) {
+                    const {
+                        keyOverride = null,
+                        clear = false,
+                        preferCachedTime = false,
+                        reason = 'unspecified'
+                    } = options;
+
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    const key = keyOverride || getActiveContentKey();
+                    if (!key) return;
+
+                    if (clear) {
+                        clearContentState(key);
+                        liminalDebug.lastSave = { key, cleared: true, reason, at: Date.now() };
+                        liminalDebugNote('state-clear', `${key} (${reason})`);
+                        return;
+                    }
+
+                    try {
+                        let currentTime = p.audio.currentTime || 0;
+                        if (!preferCachedTime && typeof p.audio.getAccurateCurrentTime === 'function') {
+                            currentTime = await p.audio.getAccurateCurrentTime(800);
+                        }
+
+                        const wasPlaying = (typeof p.audio.isProbablyPlaying === 'function')
+                            ? p.audio.isProbablyPlaying()
+                            : !p.audio.paused;
+
+                        if (window.PlayerStateManager) {
+                            const tracks = getActiveSubtitleTracks();
+                            if (typeof window.PlayerStateManager.saveStateAt === 'function') {
+                                const sentence = window.PlayerStateManager.findSentenceStart(currentTime, tracks);
+                                window.PlayerStateManager.saveStateAt(key, {
+                                    sentenceIndex: sentence.index,
+                                    sentenceTime: sentence.time,
+                                    wasPlaying
+                                });
+                                liminalDebug.lastSave = {
+                                    key,
+                                    reason,
+                                    currentTime: Number((currentTime || 0).toFixed(3)),
+                                    sentenceIndex: sentence.index,
+                                    sentenceTime: Number((sentence.time || 0).toFixed(3)),
+                                    wasPlaying,
+                                    at: Date.now()
+                                };
+                                liminalDebugNote('state-save', `${key} -> ${sentence.time.toFixed(2)}s idx=${sentence.index} play=${wasPlaying} (${reason})`);
+                            } else {
+                                window.PlayerStateManager.saveState(key, tracks, p.audio);
+                                liminalDebug.lastSave = {
+                                    key,
+                                    reason,
+                                    currentTime: Number((currentTime || 0).toFixed(3)),
+                                    sentenceIndex: null,
+                                    sentenceTime: Number((currentTime || 0).toFixed(3)),
+                                    wasPlaying,
+                                    at: Date.now()
+                                };
+                                liminalDebugNote('state-save', `${key} (legacy) ${currentTime.toFixed(2)}s (${reason})`);
+                            }
+                        }
+
+                        if (key === MAIN_CONTENT_KEY) {
+                            mainAudioState.wasPlaying = wasPlaying;
+                            mainAudioState.time = currentTime || 0;
+                        }
+                    } catch (e) {
+                        console.warn('[State] saveCurrentContentState failed', e);
+                        liminalDebugNote('state-error', `${reason}: ${e && e.message ? e.message : e}`);
+                    }
+                }
+
+                async function pauseWithFade(duration = 350) {
+                    const p = window.audioPlayer;
+                    if (!p || p.paused) return;
+
+                    await new Promise(resolve => {
+                        const stepMs = 35;
+                        const startVolume = p.volume;
+                        const steps = Math.max(1, Math.floor(duration / stepMs));
+                        let i = 0;
+                        const timer = setInterval(() => {
+                            i += 1;
+                            p.volume = Math.max(0, startVolume * (1 - (i / steps)));
+                            if (i >= steps) {
+                                clearInterval(timer);
+                                p.pause();
+                                resolve();
+                            }
+                        }, stepMs);
+                    });
+                }
+
+                function wait(ms) {
+                    return new Promise(resolve => setTimeout(resolve, ms));
+                }
+
+                async function waitForContentSwitchIdle(reason, timeoutMs = 2200) {
+                    const endAt = Date.now() + Math.max(300, timeoutMs || 0);
+                    let waited = 0;
+                    while (contentSwitchInProgress && Date.now() < endAt) {
+                        await wait(60);
+                        waited += 60;
+                    }
+                    if (contentSwitchInProgress) {
+                        liminalDebugNote('switch-wait-timeout', `${reason || 'unknown'} waited=${waited}ms`);
+                    } else if (waited > 0) {
+                        liminalDebugNote('switch-wait', `${reason || 'unknown'} waited=${waited}ms`);
+                    }
+                }
+
+                async function seekAndSyncSubtitle(p, targetTime, reason) {
+                    const safeTarget = Math.max(0, Number(targetTime) || 0);
+                    liminalTrace('seek:start', {
+                        reason,
+                        target: Number(safeTarget.toFixed(3)),
+                        before: Number(((p && p.audio && p.audio.currentTime) || 0).toFixed(3))
+                    });
+                    let seekResult = {
+                        ok: false,
+                        target: safeTarget,
+                        position: p.audio.currentTime || 0,
+                        attempts: 0
+                    };
+
+                    try {
+                        if (typeof p.audio.seekAndConfirm === 'function') {
+                            seekResult = await p.audio.seekAndConfirm(safeTarget, {
+                                maxAttempts: 5,
+                                settleMs: 220,
+                                tolerance: 0.9
+                            });
+                        } else {
+                            p.audio.currentTime = safeTarget;
+                            await wait(260);
+                            const pos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                                ? await p.audio.getAccurateCurrentTime(900)
+                                : (p.audio.currentTime || 0);
+                            seekResult = {
+                                ok: Math.abs(pos - safeTarget) <= 1.0 || pos >= safeTarget - 1.0,
+                                target: safeTarget,
+                                position: pos,
+                                attempts: 1
+                            };
+                        }
+                    } catch (e) {
+                        liminalDebugNote('seek-error', `${reason}: ${e && e.message ? e.message : e}`);
+                    }
+
+                    const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
+                    p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
+                    p.renderLines(p.currentSubtitleIndex);
+                    liminalDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
+                    if (!seekResult.ok) {
+                        liminalCause('C10_SEEK_CONFIRM_FAILED', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
+                    }
+                    liminalTrace('seek:end', {
+                        reason,
+                        ok: !!seekResult.ok,
+                        attempts: seekResult.attempts || 0,
+                        target: Number(safeTarget.toFixed(3)),
+                        position: Number((effectiveTime || 0).toFixed(3)),
+                        subtitleIndex: p.currentSubtitleIndex
+                    });
+                    return seekResult;
+                }
+
+                async function verifyPlaybackStarted(retries = 2, delayMs = 320) {
+                    const p = window.audioPlayer;
+                    if (!p) return false;
+                    const isTransportPaused = () => {
+                        if (!p || !p.audio) return true;
+                        if (typeof p.audio.isTransportPaused === 'function') {
+                            return p.audio.isTransportPaused();
+                        }
+                        return !!p.paused;
+                    };
+                    let sawRecentProgress = (p.audio && typeof p.audio.hasRecentProgress === 'function')
+                        ? p.audio.hasRecentProgress(1800)
+                        : false;
+                    liminalTrace('verify-play:start', {
+                        retries,
+                        delayMs,
+                        paused: !!p.paused,
+                        transportPaused: isTransportPaused(),
+                        sawRecentProgress
+                    });
+
+                    for (let attempt = 0; attempt <= retries; attempt++) {
+                        try {
+                            await p.play();
+                        } catch (e) {
+                            console.warn(`[Audio] play() failed on attempt ${attempt + 1}:`, e);
+                            liminalTrace('verify-play:play-error', { attempt: attempt + 1, message: e && e.message ? e.message : String(e) });
+                        }
+                        await wait(delayMs);
+                        const currentPos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                            ? await p.audio.getAccurateCurrentTime(700)
+                            : (p.audio.currentTime || 0);
+                        const transportPaused = isTransportPaused();
+                        const hasRecentProgress = (p.audio && typeof p.audio.hasRecentProgress === 'function')
+                            ? p.audio.hasRecentProgress(1800)
+                            : false;
+                        sawRecentProgress = sawRecentProgress || hasRecentProgress;
+                        const started = !transportPaused && hasRecentProgress;
+                        liminalDebugNote('play-check', `attempt=${attempt + 1} paused=${p.paused} t=${currentPos.toFixed(2)}`);
+                        liminalTrace('verify-play:attempt', {
+                            attempt: attempt + 1,
+                            paused: !!p.paused,
+                            transportPaused,
+                            hasRecentProgress,
+                            currentPos: Number((currentPos || 0).toFixed(3)),
+                            started
+                        });
+                        if (started) {
+                            liminalTrace('verify-play:success', { attempt: attempt + 1, currentPos: Number((currentPos || 0).toFixed(3)) });
+                            return true;
+                        }
+                    }
+                    if (!isTransportPaused() && sawRecentProgress) {
+                        liminalTrace('verify-play:success-fallback', { sawRecentProgress: true });
+                        return true;
+                    }
+                    liminalTrace('verify-play:failed', { retries, delayMs });
+                    return false;
+                }
+
+                async function skipBySecondsInLiminal(deltaSec) {
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+                    if (contentSwitchInProgress) return;
+
+                    const delta = Number(deltaSec) || 0;
+                    if (!delta) return;
+
+                    await waitForContentSwitchIdle(`skip:${delta}`);
+                    const wasPausedBeforeSkip = !!p.paused;
+                    let before = Number(p.audio.currentTime);
+                    if (!Number.isFinite(before) || before < 0) before = 0;
+                    if (!wasPausedBeforeSkip && typeof p.audio.getAccurateCurrentTime === 'function') {
+                        const measuredBefore = await p.audio.getAccurateCurrentTime(900);
+                        if (Number.isFinite(measuredBefore) && measuredBefore >= 0) {
+                            before = measuredBefore;
+                        }
+                    }
+                    let target = Math.max(0, before + delta);
+                    const duration = Number(p.audio.duration);
+                    if (Number.isFinite(duration) && duration > 0) {
+                        target = Math.min(duration, target);
+                    }
+
+                    let seekResult = {
+                        ok: false,
+                        target,
+                        position: before,
+                        attempts: 0
+                    };
+
+                    try {
+                        // SC seeks are significantly more reliable while the stream is playing.
+                        // We preserve original pause state after the seek operation.
+                        if (wasPausedBeforeSkip) {
+                            try {
+                                await p.play();
+                                await wait(140);
+                            } catch (_) { }
+                        }
+
+                        if (typeof p.audio.seekAndConfirm === 'function') {
+                            seekResult = await p.audio.seekAndConfirm(target, {
+                                maxAttempts: 5,
+                                settleMs: 220,
+                                tolerance: 1.0
+                            });
+                        } else {
+                            p.audio.currentTime = target;
+                            await wait(260);
+                            const pos = (typeof p.audio.getAccurateCurrentTime === 'function')
+                                ? await p.audio.getAccurateCurrentTime(900)
+                                : (p.audio.currentTime || 0);
+                            seekResult = {
+                                ok: Math.abs(pos - target) <= 1.2 || pos >= target - 1.2,
+                                target,
+                                position: pos,
+                                attempts: 1
+                            };
+                        }
+                    } catch (e) {
+                        liminalDebugNote('skip-error', `${delta}: ${e && e.message ? e.message : e}`);
+                    }
+
+                    let measuredAfter = Number.isFinite(seekResult.position) ? seekResult.position : NaN;
+                    if (typeof p.audio.getAccurateCurrentTime === 'function') {
+                        const verifyPos = await p.audio.getAccurateCurrentTime(1000);
+                        if (Number.isFinite(verifyPos) && verifyPos >= 0) {
+                            measuredAfter = verifyPos;
+                        }
+                    }
+
+                    // Guard against bad SC seek responses that jump back to the beginning.
+                    if (delta > 0 && Number.isFinite(measuredAfter) && measuredAfter < (before - 0.8)) {
+                        try {
+                            p.audio.currentTime = target;
+                            await wait(240);
+                            if (typeof p.audio.getAccurateCurrentTime === 'function') {
+                                const retryPos = await p.audio.getAccurateCurrentTime(900);
+                                if (Number.isFinite(retryPos) && retryPos >= 0) {
+                                    measuredAfter = retryPos;
+                                }
+                            } else {
+                                measuredAfter = Number(p.audio.currentTime) || target;
+                            }
+                        } catch (_) {
+                            measuredAfter = target;
+                        }
+                    }
+
+                    const effectiveTime = Number.isFinite(measuredAfter) ? measuredAfter : target;
+                    p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
+                    p.renderLines(p.currentSubtitleIndex);
+                    liminalDebugNote(
+                        'skip',
+                        `delta=${delta} before=${before.toFixed(2)} target=${target.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`
+                    );
+                    if (!seekResult.ok) {
+                        liminalCause('C10_SEEK_CONFIRM_FAILED', `skip delta=${delta} target=${target.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
+                    }
+
+                    if (wasPausedBeforeSkip) {
+                        p.pause();
+                        if (typeof updateIcons === 'function') updateIcons();
+                    }
+                }
+
+                function findSubtitleIndexForTime(timeSec) {
+                    const tracks = getActiveSubtitleTracks();
+                    if (tracks.length === 0) return 0;
+                    for (let i = tracks.length - 1; i >= 0; i--) {
+                        if (timeSec >= tracks[i].time) return i;
+                    }
+                    return 0;
+                }
+
+                const TOP_FADE_BYPASS_COUNT = 2;
+                function syncReadingTopFadeMask(activeIndex) {
+                    if (!subtitleContainer) return;
+                    const shouldDisableTopFade =
+                        isReadingMode &&
+                        Number.isFinite(activeIndex) &&
+                        activeIndex >= 0 &&
+                        activeIndex < TOP_FADE_BYPASS_COUNT;
+                    subtitleContainer.classList.toggle('no-top-fade', shouldDisableTopFade);
+                }
+
+                // Helper: Restore Main Audio
+                window.restoreMainAudio = async function (options = {}) {
+                    const {
+                        saveCurrent = true
+                    } = options;
+                    liminalTrace('switch:restore-main:enter', { saveCurrent: !!saveCurrent });
+
+                    if (!isLoreMode && !contentSwitchInProgress) return;
+                    if (contentSwitchInProgress) {
+                        liminalTrace('switch:restore-main:blocked', { reason: 'contentSwitchInProgress' });
+                        return;
+                    }
+
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    contentSwitchInProgress = true;
+                    const switchToken = ++contentSwitchToken;
+                    liminalTrace('switch:restore-main:lock', { switchToken });
+
+                    try {
+                        const loreIdBeforeSwitch = activeLoreId;
+                        if (saveCurrent && loreIdBeforeSwitch) {
+                            await saveCurrentContentState({ keyOverride: `lore${loreIdBeforeSwitch}`, reason: 'restore-main:save-lore' });
+                        } else if (!saveCurrent && loreIdBeforeSwitch) {
+                            clearContentState(`lore${loreIdBeforeSwitch}`);
+                        }
+
+                        isLoreMode = false;
+                        activeLoreId = null;
+
+                        await pauseWithFade(320);
+                        if (switchToken !== contentSwitchToken) return;
+
+                        p.audio.src = getSCUrl('assets/kapitel1b.mp3');
+                        liminalTrace('switch:restore-main:src-set', { switchToken, src: p.audio.src });
+                        p.volume = 1.0;
+                        const textLoaded = await p.loadText('assets/kapitel1b.txt');
+                        if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        liminalTrace('switch:restore-main:text-parsed', {
+                            switchToken,
+                            tracks: Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : -1
+                        });
+
+                        const savedMain = window.PlayerStateManager ? window.PlayerStateManager.getState(MAIN_CONTENT_KEY) : null;
+                        const resumeTime = savedMain && savedMain.sentenceTime !== undefined
+                            ? savedMain.sentenceTime
+                            : Math.max(0, mainAudioState.time || 0);
+                        liminalTrace('switch:restore-main:resume-time', {
+                            switchToken,
+                            resumeTime: Number((resumeTime || 0).toFixed(3)),
+                            hasSavedMain: !!savedMain
+                        });
+                        liminalDebugNote('restore-main', `resume=${resumeTime.toFixed(2)}s saved=${!!savedMain}`);
+                        if (!savedMain && (mainAudioState.time || 0) <= 0.01) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', 'main restore fallback at 0');
+                        }
+
+                        await seekAndSyncSubtitle(p, resumeTime, 'restore-main:pre-play');
+
+                        const shouldResume = savedMain ? !!savedMain.wasPlaying : !!mainAudioState.wasPlaying;
+                        liminalTrace('switch:restore-main:resume-decision', { switchToken, shouldResume: !!shouldResume });
+                        if (shouldResume) {
+                            p.volume = 0;
+                            const started = await verifyPlaybackStarted(2, 320);
+                            liminalTrace('switch:restore-main:verify-result', { switchToken, started: !!started });
+                            if (started) {
+                                p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                                p.renderLines(p.currentSubtitleIndex);
+                                p.volume = 1.0;
+                            } else {
+                                p.volume = 1.0;
+                            }
+                        }
+
+                        updateIcons();
+                    } catch (e) {
+                        console.warn('Restore failed', e);
+                        liminalTrace('switch:restore-main:error', { message: e && e.message ? e.message : String(e) });
+                        liminalDebugNote('restore-main-error', e && e.message ? e.message : String(e));
+                        updateIcons();
+                    } finally {
+                        if (switchToken === contentSwitchToken) {
+                            contentSwitchInProgress = false;
+                            liminalTrace('switch:restore-main:unlock', { switchToken });
+                        }
+                    }
+                };
+
+                // Real startLoreMode implementation
+                window.startLoreMode = async function (id) {
+                    liminalTrace('switch:start-lore:enter', { id });
+                    if (isLoreMode && activeLoreId === id) return;
+                    if (contentSwitchInProgress) {
+                        liminalTrace('switch:start-lore:blocked', { id, reason: 'contentSwitchInProgress' });
+                        return;
+                    }
+
+                    const content = window.GameState?.getLore(id) || {
+                        audio: `assets/lore${id}.mp3`,
+                        text: `assets/lore${id}.txt`
+                    };
+
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return;
+
+                    contentSwitchInProgress = true;
+                    const switchToken = ++contentSwitchToken;
+                    liminalTrace('switch:start-lore:lock', { id, switchToken });
+
+                    try {
+                        await saveCurrentContentState({ reason: `start-lore:${id}` });
+
+                        isLoreMode = true;
+                        activeLoreId = id;
+
+                        await pauseWithFade(320);
+                        if (switchToken !== contentSwitchToken) return;
+
+                        p.audio.src = getSCUrl(content.audio);
+                        liminalTrace('switch:start-lore:src-set', { id, switchToken, src: p.audio.src });
+                        const textPath = content.text || `assets/lore${id}.txt`;
+                        const textLoaded = await p.loadText(textPath);
+                        if (!textLoaded || switchToken !== contentSwitchToken) return;
+                        liminalTrace('switch:start-lore:text-parsed', {
+                            id,
+                            switchToken,
+                            tracks: Array.isArray(p.subtitleTracks) ? p.subtitleTracks.length : -1
+                        });
+
+                        const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
+                        const resumeTime = savedLore && savedLore.sentenceTime !== undefined
+                            ? savedLore.sentenceTime
+                            : 0;
+                        liminalTrace('switch:start-lore:resume-time', {
+                            id,
+                            switchToken,
+                            resumeTime: Number((resumeTime || 0).toFixed(3)),
+                            hasSavedLore: !!savedLore
+                        });
+                        liminalDebugNote('start-lore', `id=${id} resume=${resumeTime.toFixed(2)}s saved=${!!savedLore}`);
+                        if (!savedLore && resumeTime <= 0.01) {
+                            liminalCause('C09_RESTORE_WITHOUT_STATE', `lore${id} restore fallback at 0`);
+                        }
+
+                        await seekAndSyncSubtitle(p, resumeTime, `start-lore:${id}:pre-play`);
+
+                        p.volume = 0;
+                        const started = await verifyPlaybackStarted(3, 320);
+                        liminalTrace('switch:start-lore:verify-result', { id, switchToken, started: !!started });
+                        if (started) {
+                            p.currentSubtitleIndex = findSubtitleIndexForTime(resumeTime);
+                            p.renderLines(p.currentSubtitleIndex);
+                            p.volume = 1.0;
+                        } else {
+                            p.volume = 1.0;
+                            console.warn(`Lore ${id} loaded but still paused.`);
+                        }
+
+                        updateIcons();
+                    } catch (e) {
+                        console.warn('Lore switch failed', e);
+                        liminalTrace('switch:start-lore:error', { id, message: e && e.message ? e.message : String(e) });
+                        updateIcons();
+                    } finally {
+                        if (switchToken === contentSwitchToken) {
+                            contentSwitchInProgress = false;
+                            liminalTrace('switch:start-lore:unlock', { id, switchToken });
+                        }
+                    }
+                };
+
+                // --- CONFIG ---
+                const config = {
+                    roomWidth: 8,
+                    roomHeight: 9,
+                    segmentLength: 10,
+                    shelfDepth: 1.2
+                };
+
+                // --- SCENE SETUP ---
+                const scene = new THREE.Scene();
+                scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
+                scene.background = new THREE.Color(0x050505); // Black-ish background
+
+                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+                camera.position.set(0, 1.6, 3.0);
+                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+                // --- SUBTITLE HELPERS ---
+                // --- SUBTITLE HELPERS REMOVED (Use SharedAudioPlayer) ---
+
+                // Helper to render Archive Content (Fixes ReferenceError)
+                window.renderArchiveContent = function () {
+                    // Reload logic if needed, or just log
+                    console.log("Archive content updated");
+                    if (typeof renderArchive === 'function') renderArchive();
+                };
+
+                // FIX: Define controls object to prevent ReferenceError
+                // Replicates PointerLockControls movement logic (planar forward)
+                const controls = {
+                    moveRight: function (distance) {
+                        const vec = new THREE.Vector3();
+                        vec.setFromMatrixColumn(camera.matrix, 0);
+                        camera.position.addScaledVector(vec, distance);
+                    },
+                    moveForward: function (distance) {
+                        const vec = new THREE.Vector3();
+                        vec.setFromMatrixColumn(camera.matrix, 0);
+                        vec.crossVectors(camera.up, vec);
+                        camera.position.addScaledVector(vec, distance);
+                    }
+                };
+
+                const renderer = new THREE.WebGLRenderer({
+                    antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
+                    powerPreference: isIOSSafari ? 'default' : 'high-performance',
+                    precision: isIOSSafari ? 'mediump' : 'highp'
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+
+                // iOS: Disable shadow maps to prevent WebGL context loss on older devices
+                renderer.shadowMap.enabled = !isIOSSafari;
+                if (renderer.shadowMap.enabled) {
+                    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                }
+                renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                renderer.toneMappingExposure = 1.0;
+
+                if (isIOSSafari) {
+                    // iOS: Cap pixel ratio to avoid exceeding GPU memory
+                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                    // WebGL Context Loss recovery (prevents permanent black screen)
+                    renderer.domElement.addEventListener('webglcontextlost', (e) => {
+                        e.preventDefault();
+                        console.warn('[Liminal] WebGL context lost (iOS)');
+                    }, false);
+                    renderer.domElement.addEventListener('webglcontextrestored', () => {
+                        console.log('[Liminal] WebGL context restored (iOS)');
+                    }, false);
+                } else {
+                    renderer.setPixelRatio(window.devicePixelRatio);
+                }
+
+                document.body.appendChild(renderer.domElement);
+
+                function syncViewport() {
+                    const vv = window.visualViewport;
+                    const viewWidth = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
+                    const viewHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
+                    camera.aspect = viewWidth / viewHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(viewWidth, viewHeight, false);
+                }
+
+                // Ensure initial calibration uses the real visual viewport on mobile.
+                syncViewport();
+
+                // --- AUDIO PLAYER SETUP (SCAudioAdapter) ---
+                const uiContainer = document.getElementById('audioPlayerUI');
+                const iconPlay = document.getElementById('iconPlay');
+                const iconPause = document.getElementById('iconPause');
+                const modeToggleBtn = document.getElementById('readingModeBtn');
+                const subtitleContainer = document.getElementById('subtitleContainer');
+                const subtitleRecenterBtn = document.getElementById('subtitleRecenterBtn');
+                const RECENTER_MOBILE_RADIUS_PX = 75;
+                const skipBackBtn = document.getElementById('skipBackBtn');
+                const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+                function normalizeReaderSentenceLayout(value) {
+                    return value === READER_LAYOUT_FLAT ? READER_LAYOUT_FLAT : READER_LAYOUT_TIMESTAMPS;
+                }
+
+                function normalizeReaderFontSize(value) {
+                    const parsed = Number(value);
+                    if (!Number.isFinite(parsed)) return READER_FONT_SIZE_DEFAULT;
+                    const rounded = Math.round(parsed);
+                    return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
+                }
+
+                function applyReaderTextSettings(options = {}) {
+                    if (!subtitleContainer) return;
+                    const rerender = options.rerender !== false;
+                    const isFlatLayout = readerSentenceLayout === READER_LAYOUT_FLAT;
+
+                    subtitleContainer.classList.toggle('reader-layout-flat', isFlatLayout);
+                    subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout);
+                    subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
+
+                    // Open bookmark buttons may overlap after layout/font changes.
+                    subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((btn) => {
+                        btn.classList.remove('visible');
+                    });
+
+                    if (rerender && window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
+                        subtitleContainer.dataset.version = '';
+                        const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                            ? window.audioPlayer.currentSubtitleIndex
+                            : 0;
+                        window.audioPlayer.renderLines(Math.max(0, idx));
+                    }
+                }
+
+                function syncReaderSettingsUi() {
+                    const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
+                    layoutInputs.forEach((input) => {
+                        input.checked = input.value === readerSentenceLayout;
+                    });
+
+                    const rangeInput = document.getElementById('readerFontSizeRange');
+                    const numberInput = document.getElementById('readerFontSizeNumber');
+                    const valueAsText = String(readerFontSizePx);
+                    if (rangeInput) rangeInput.value = valueAsText;
+                    if (numberInput) numberInput.value = valueAsText;
+                }
+
+                function setReaderSentenceLayout(nextLayout, options = {}) {
+                    const normalized = normalizeReaderSentenceLayout(nextLayout);
+                    if (!options.force && normalized === readerSentenceLayout) return;
+                    readerSentenceLayout = normalized;
+                    localStorage.setItem(READER_LAYOUT_STORAGE_KEY, readerSentenceLayout);
+                    applyReaderTextSettings({ rerender: true });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderFontSize(nextSize, options = {}) {
+                    const normalized = normalizeReaderFontSize(nextSize);
+                    if (!options.force && normalized === readerFontSizePx) return;
+                    readerFontSizePx = normalized;
+                    localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
+                    applyReaderTextSettings({ rerender: readerSentenceLayout === READER_LAYOUT_FLAT });
+                    syncReaderSettingsUi();
+                }
+
+                function initReaderSettingsControls() {
+                    const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
+                    layoutInputs.forEach((input) => {
+                        input.addEventListener('change', () => {
+                            if (!input.checked) return;
+                            setReaderSentenceLayout(input.value);
+                        });
+                    });
+
+                    const rangeInput = document.getElementById('readerFontSizeRange');
+                    const numberInput = document.getElementById('readerFontSizeNumber');
+                    if (rangeInput) {
+                        rangeInput.addEventListener('input', (event) => {
+                            setReaderFontSize(event.target.value);
+                        });
+                    }
+                    if (numberInput) {
+                        numberInput.addEventListener('input', (event) => {
+                            setReaderFontSize(event.target.value);
+                        });
+                        numberInput.addEventListener('change', (event) => {
+                            setReaderFontSize(event.target.value, { force: true });
+                        });
+                    }
+
+                    syncReaderSettingsUi();
+                    applyReaderTextSettings({ rerender: false });
+                }
+
+                const globalVisualDimmer = window.GlobalVisualDimmer
+                    ? window.GlobalVisualDimmer.init({
+                        overlayId: 'sceneDimmerOverlay',
+                        toggleButtonId: 'sceneDimmerToggleBtn',
+                        iconFullId: 'sceneDimmerIconFull',
+                        iconHalfId: 'sceneDimmerIconHalf',
+                        iconCrescentId: 'sceneDimmerIconCrescent',
+                        iconSunId: 'sceneDimmerIconSun'
+                    })
+                    : null;
+                let manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+                window.visualFreezeActive = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
+
+                // --- GLOBAL GAME STATE ---
+                // Locals aliasing globals
+                // SharedAudioPlayer imported at top
+                window.audioPlayer = new SharedAudioPlayer('assets/kapitel1b.mp3', 'assets/kapitel1b.txt', {
+                    container: document.getElementById('subtitleContainer'),
+                    volume: 1.0,
+                    isReadingMode: isReadingMode, // Pass initial state
+                    canSeek: () => !contentSwitchInProgress,
+                    onLineRender: (div, track) => {
+                        // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
+                        div.style.position = 'relative';
+                        div.style.overflow = 'visible';
+                        let _bmTimer = null;
+                        const BOOKMARK_LABEL = 'Lesezeichen';
+                        const BOOKMARK_SAVED_LABEL = 'Gespeichert';
+                        const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+                        const clampBookmarkCoord = (value, min, max) => Math.max(min, Math.min(max, value));
+                        const rectOverlapArea = (x, y, width, height, rect) => {
+                            const overlapW = Math.max(0, Math.min(x + width, rect.right) - Math.max(x, rect.left));
+                            const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
+                            return overlapW * overlapH;
+                        };
+                        const collectLineTextRects = (lineEl, containerRect) => {
+                            const rects = [];
+                            if (!lineEl) return rects;
+                            for (const node of lineEl.childNodes) {
+                                if (node.nodeType !== Node.TEXT_NODE) continue;
+                                if (!(node.textContent || '').trim()) continue;
+                                const range = document.createRange();
+                                range.selectNodeContents(node);
+                                for (const rect of range.getClientRects()) {
+                                    if (rect.width <= 0 || rect.height <= 0) continue;
+                                    if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
+                                    rects.push(rect);
+                                }
+                            }
+                            return rects;
+                        };
+                        const collectSubtitleTextRects = () => {
+                            const rects = [];
+                            const containerRect = subtitleContainer.getBoundingClientRect();
+                            subtitleContainer.querySelectorAll('.subtitle-line').forEach((lineEl) => {
+                                rects.push(...collectLineTextRects(lineEl, containerRect));
+                            });
+                            if (subtitleRecenterBtn && subtitleRecenterBtn.offsetParent !== null) {
+                                const recenterRect = subtitleRecenterBtn.getBoundingClientRect();
+                                if (recenterRect.width > 0 && recenterRect.height > 0) rects.push(recenterRect);
+                            }
+                            return { rects, containerRect };
+                        };
+                        const positionBookmarkButton = (btn) => {
+                            const lineRect = div.getBoundingClientRect();
+                            const { rects: textRects, containerRect } = collectSubtitleTextRects();
+                            if (!lineRect.width || !lineRect.height || !containerRect.width || !containerRect.height) return;
+                            const margin = 8;
+                            const btnWidth = btn.offsetWidth || 0;
+                            const btnHeight = btn.offsetHeight || 0;
+                            const minX = containerRect.left + margin;
+                            const maxX = Math.max(minX, containerRect.right - btnWidth - margin);
+                            const minY = containerRect.top + margin;
+                            const maxY = Math.max(minY, containerRect.bottom - btnHeight - margin);
+                            const lineTextRects = collectLineTextRects(div, containerRect);
+                            const anchorRect = lineTextRects.length > 0 ? lineTextRects[lineTextRects.length - 1] : lineRect;
+                            const fallbackY = clampBookmarkCoord(
+                                anchorRect.top + ((anchorRect.height - btnHeight) / 2),
+                                minY,
+                                maxY
+                            );
+                            const xCandidates = [
+                                clampBookmarkCoord(anchorRect.right + margin, minX, maxX),
+                                clampBookmarkCoord(anchorRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(anchorRect.left - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(containerRect.right - btnWidth - margin, minX, maxX),
+                                clampBookmarkCoord(containerRect.left + margin, minX, maxX)
+                            ];
+                            const yCandidates = [
+                                fallbackY,
+                                clampBookmarkCoord(anchorRect.top - btnHeight - margin, minY, maxY),
+                                clampBookmarkCoord(anchorRect.bottom + margin, minY, maxY),
+                                clampBookmarkCoord(lineRect.top + ((lineRect.height - btnHeight) / 2), minY, maxY)
+                            ];
+
+                            let best = { score: Number.POSITIVE_INFINITY, x: xCandidates[0], y: yCandidates[0] };
+                            for (const y of yCandidates) {
+                                for (const x of xCandidates) {
+                                    let overlapScore = 0;
+                                    for (const rect of textRects) {
+                                        overlapScore += rectOverlapArea(x, y, btnWidth, btnHeight, rect);
+                                    }
+                                    const centerPenalty = Math.abs((y + (btnHeight / 2)) - (anchorRect.top + (anchorRect.height / 2))) * 0.08;
+                                    const idealCenterX = clampBookmarkCoord(
+                                        anchorRect.right + margin + (btnWidth / 2),
+                                        minX + (btnWidth / 2),
+                                        maxX + (btnWidth / 2)
+                                    );
+                                    const sidePenalty = Math.abs((x + (btnWidth / 2)) - idealCenterX) * 0.03;
+                                    const score = overlapScore + centerPenalty + sidePenalty;
+                                    if (score < best.score) best = { score, x, y };
+                                }
+                            }
+
+                            btn.style.left = `${Math.round(best.x - lineRect.left)}px`;
+                            btn.style.top = `${Math.round(best.y - lineRect.top)}px`;
+                        };
+
+                        const showBookmarkButton = () => {
+                            let btn = div.querySelector('.bookmark-btn');
+                            if (!btn) {
+                                btn = document.createElement('button');
+                                btn.className = 'bookmark-btn';
+                                btn.innerText = BOOKMARK_LABEL;
+                                btn.addEventListener('click', async (ev) => {
+                                    ev.stopPropagation();
+                                    ev.preventDefault();
+                                    btn.classList.remove('pop');
+                                    void btn.offsetWidth;
+                                    btn.classList.add('pop');
+                                    setTimeout(() => btn.classList.remove('pop'), 220);
+                                    const loreId = (isLoreMode && Number.isFinite(activeLoreId)) ? Number(activeLoreId) : null;
+                                    const loreMeta = loreId && window.GameState && typeof window.GameState.getLore === 'function'
+                                        ? window.GameState.getLore(loreId)
+                                        : null;
+                                    const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
+                                    const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
+                                    const bookmarkChapterTitle = loreId
+                                        ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
+                                        : CURRENT_CHAPTER_TITLE;
+                                    const bookmarkAudioRef = loreId
+                                        ? ((loreMeta && loreMeta.audio) || `assets/lore${loreId}.mp3`)
+                                        : 'assets/kapitel1b.mp3';
+                                    const bookmarkTextRef = loreId
+                                        ? ((loreMeta && loreMeta.text) || `assets/lore${loreId}.txt`)
+                                        : 'assets/kapitel1b.txt';
+                                    const bm = {
+                                        id: Date.now(),
+                                        chapter: bookmarkChapter,
+                                        chapterTitle: bookmarkChapterTitle,
+                                        page: CURRENT_PAGE,
+                                        time: track.time,
+                                        textPreview: (track.text || '').substring(0, 60),
+                                        contentKey: bookmarkContentKey,
+                                        loreId: loreId,
+                                        audioRef: bookmarkAudioRef,
+                                        textRef: bookmarkTextRef,
+                                        createdAt: Date.now()
+                                    };
+                                    if (window.GameState && window.GameState.addBookmark) {
+                                        const added = await window.GameState.addBookmark(bm);
+                                        if (added) {
+                                            btn.classList.add('saved');
+                                            btn.innerText = BOOKMARK_SAVED_LABEL;
+                                            positionBookmarkButton(btn);
+                                            setTimeout(() => {
+                                                btn.classList.remove('visible', 'saved');
+                                                btn.innerText = BOOKMARK_LABEL;
+                                                positionBookmarkButton(btn);
+                                            }, 1200);
+                                        }
+                                    }
+                                });
+                                div.appendChild(btn);
+                            }
+                            subtitleContainer.querySelectorAll('.bookmark-btn.visible').forEach((otherBtn) => {
+                                if (otherBtn !== btn) otherBtn.classList.remove('visible');
+                            });
+                            positionBookmarkButton(btn);
+                            btn.classList.add('visible');
+                            // Auto-hide after 4 seconds
+                            setTimeout(() => {
+                                if (!btn.classList.contains('saved')) {
+                                    btn.classList.remove('visible');
+                                }
+                            }, 4000);
+                        };
+
+                        const startLongPress = () => {
+                            if (isDesktopPointer()) return;
+                            if (_bmTimer) clearTimeout(_bmTimer);
+                            _bmTimer = setTimeout(() => {
+                                _bmTimer = null;
+                                showBookmarkButton();
+                            }, 600);
+                        };
+                        const cancelLongPress = () => {
+                            if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
+                        };
+                        div.addEventListener('mousedown', (e) => {
+                            if (e.button !== 0) return;
+                            startLongPress();
+                        });
+                        div.addEventListener('contextmenu', (e) => {
+                            if (!isDesktopPointer()) return;
+                            e.preventDefault();
+                            e.stopPropagation();
+                            cancelLongPress();
+                            showBookmarkButton();
+                        });
+                        div.addEventListener('touchstart', startLongPress, { passive: true });
+                        div.addEventListener('mouseup', cancelLongPress);
+                        div.addEventListener('mouseleave', cancelLongPress);
+                        div.addEventListener('touchend', cancelLongPress);
+                        div.addEventListener('touchcancel', cancelLongPress);
+                    }
+                });
+
+                // --- BOOKMARK SEEK ON LOAD ---
+                const bmTarget = sessionStorage.getItem('bookmark_seek_target');
+                if (bmTarget) {
+                    sessionStorage.removeItem('bookmark_seek_target');
+                    try {
+                        const target = JSON.parse(bmTarget);
+                        const time = Number(target && target.time);
+                        if (Number.isFinite(time) && time >= 0) {
+                            console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
+                            setTimeout(async () => {
+                                try {
+                                    const targetPage = (target && typeof target.page === 'string' && target.page) ? target.page : CURRENT_PAGE;
+                                    const targetContentKey = resolveBookmarkContentKey(target);
+                                    const isLoreTarget = /^lore\d+$/i.test(targetContentKey);
+                                    if (targetPage !== CURRENT_PAGE && !isLoreTarget) {
+                                        console.warn('[Bookmark] Ignored stale on-load bookmark target for other page.', targetPage);
+                                        return;
+                                    }
+
+                                    const ready = await ensureBookmarkContentForCurrentPage(target, 'bookmark:on-load');
+                                    if (!ready) {
+                                        console.warn('[Bookmark] Could not activate bookmark target content on load.', target);
+                                        return;
+                                    }
+
+                                    if (window.audioPlayer && window.audioPlayer.seekToTime) {
+                                        await window.audioPlayer.seekToTime(time, { autoplay: true });
+                                    }
+                                } catch (e) {
+                                    console.warn('[Bookmark] Failed to apply on-load bookmark target:', e);
+                                }
+                            }, 1500); // Slightly longer delay for SharedAudioPlayer init
+                        }
+                    } catch (e) {
+                        console.warn('[Bookmark] Failed to parse seek target:', e);
+                    }
+                }
+                const player = window.audioPlayer;
+
+                // Hook into SharedAudioPlayer's renderLines to sync the top fade mask
+                const originalRenderLines = player.renderLines.bind(player);
+                player.renderLines = function (centerIndex) {
+                    originalRenderLines(centerIndex);
+                    syncReadingTopFadeMask(centerIndex);
+                };
+                initReaderSettingsControls();
+                let subtitleFollowLocked = false;
+                let suppressFollowLockUntil = 0;
+
+                function updateRecenterButtonVisibility() {
+                    if (!subtitleRecenterBtn) return;
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    syncRecenterButtonMount(isMobileLayout);
+                    const show = isReadingMode && subtitleFollowLocked;
+                    if (!show) {
+                        subtitleRecenterBtn.style.setProperty('display', 'none', 'important');
+                        subtitleRecenterBtn.setAttribute('aria-hidden', 'true');
+                        return;
+                    }
+
+                    subtitleRecenterBtn.style.setProperty('display', 'inline-flex', 'important');
+                    subtitleRecenterBtn.setAttribute('aria-hidden', 'false');
+                    requestAnimationFrame(positionRecenterButton);
+                }
+
+                function setSubtitleFollowLocked(nextLocked) {
+                    subtitleFollowLocked = !!nextLocked;
+                    // SharedAudioPlayer checks this flag before auto-scroll.
+                    subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
+                    updateRecenterButtonVisibility();
+                }
+
+                function syncRecenterButtonMount(isMobileLayout = window.matchMedia('(max-width: 768px)').matches) {
+                    if (!subtitleRecenterBtn) return;
+
+                    if (isMobileLayout) {
+                        if (subtitleRecenterBtn.parentElement !== document.body) {
+                            // Mobile keeps viewport-fixed placement.
+                            document.body.appendChild(subtitleRecenterBtn);
+                        }
+                        subtitleRecenterBtn.style.position = 'fixed';
+                        return;
+                    }
+
+                    const desktopHost = document.getElementById('audioControls');
+                    if (desktopHost) {
+                        if (subtitleRecenterBtn.parentElement !== desktopHost) {
+                            // Desktop: reuse the same flex flow as the existing control icons.
+                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
+                        } else if (desktopHost.firstElementChild !== subtitleRecenterBtn) {
+                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
+                        }
+                    }
+                    subtitleRecenterBtn.style.position = 'static';
+                    subtitleRecenterBtn.style.left = '';
+                    subtitleRecenterBtn.style.top = '';
+                }
+
+                function isMobileRecenterZoneActive() {
+                    if (!subtitleRecenterBtn) return false;
+                    if (!window.matchMedia('(max-width: 768px)').matches) return false;
+                    const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
+                    return btnStyle.display !== 'none' && isReadingMode && subtitleFollowLocked;
+                }
+
+                function eventPointInMobileRecenterZone(e) {
+                    if (!isMobileRecenterZoneActive()) return false;
+                    if (!e) return false;
+
+                    const point = Number.isFinite(e.clientX) && Number.isFinite(e.clientY)
+                        ? { x: e.clientX, y: e.clientY }
+                        : (e.changedTouches && e.changedTouches.length > 0
+                            ? { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY }
+                            : (e.touches && e.touches.length > 0
+                                ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+                                : null));
+                    if (!point) return false;
+
+                    const rect = subtitleRecenterBtn.getBoundingClientRect();
+                    if (rect.width <= 0 || rect.height <= 0) return false;
+                    const centerX = rect.left + (rect.width * 0.5);
+                    const centerY = rect.top + (rect.height * 0.5);
+                    const dx = point.x - centerX;
+                    const dy = point.y - centerY;
+                    return (dx * dx + dy * dy) <= (RECENTER_MOBILE_RADIUS_PX * RECENTER_MOBILE_RADIUS_PX);
+                }
+
+                function positionRecenterButton() {
+                    if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
+
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    syncRecenterButtonMount(isMobileLayout);
+                    if (!isMobileLayout) return;
+
+                    const anchorRect = fullscreenBtn ? fullscreenBtn.getBoundingClientRect() : null;
+                    if (!anchorRect) return;
+
+                    const btnRect = subtitleRecenterBtn.getBoundingClientRect();
+                    const gap = 10;
+
+                    let left = anchorRect.left + (anchorRect.width - btnRect.width) / 2;
+                    let top = anchorRect.top - btnRect.height - gap;
+
+                    if (isMobileLayout) {
+                        const subtitleRect = subtitleContainer.getBoundingClientRect();
+                        const targetCenterY = subtitleRect.top + subtitleRect.height * 0.5;
+                        top = targetCenterY - btnRect.height * 0.5;
+                    }
+
+                    left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
+                    top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
+
+                    subtitleRecenterBtn.style.left = `${left}px`;
+                    subtitleRecenterBtn.style.top = `${top}px`;
+                }
+
+                function recenterToCurrentTimestamp() {
+                    const tracks = getActiveSubtitleTracks();
+                    if (!tracks || tracks.length === 0) {
+                        setSubtitleFollowLocked(false);
+                        return;
+                    }
+
+                    const fallbackIndex = findSubtitleIndexForTime(player.currentTime || 0);
+                    const safeIndex = Math.max(
+                        0,
+                        Math.min(
+                            tracks.length - 1,
+                            Number.isFinite(player.currentSubtitleIndex) && player.currentSubtitleIndex >= 0
+                                ? player.currentSubtitleIndex
+                                : fallbackIndex
+                        )
+                    );
+
+                    setSubtitleFollowLocked(false);
+                    suppressFollowLockUntil = Date.now() + 450;
+                    isDown = false;
+                    subtitleContainer.dataset.isDragging = 'false';
+                    subtitleContainer.dataset.wasDragging = 'false';
+                    player.currentSubtitleIndex = safeIndex;
+                    player.renderLines(safeIndex);
+                    const activeEl = subtitleContainer.children[safeIndex];
+                    if (activeEl && typeof player.smoothScrollTo === 'function') {
+                        player.smoothScrollTo(activeEl);
+                    }
+                }
+
+                let lastRecenterActivationAt = 0;
+                let suppressSubtitleClickUntil = 0;
+                function handleRecenterActivate(e) {
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    const now = Date.now();
+                    if (now - lastRecenterActivationAt < 260) return;
+                    lastRecenterActivationAt = now;
+                    // Avoid delayed mobile ghost clicks hitting subtitle lines after recenter tap.
+                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    suppressSubtitleClickUntil = isMobileLayout ? now + 600 : now;
+                    recenterToCurrentTimestamp();
+                }
+
+                if (subtitleRecenterBtn) {
+                    subtitleRecenterBtn.addEventListener('pointerdown', handleRecenterActivate);
+                    subtitleRecenterBtn.addEventListener('touchstart', handleRecenterActivate, { passive: false });
+                    subtitleRecenterBtn.addEventListener('click', handleRecenterActivate);
+                }
+
+                window.addEventListener('resize', () => {
+                    positionRecenterButton();
+                });
+                window.addEventListener('orientationchange', () => {
+                    positionRecenterButton();
+                });
+
+                subtitleContainer.addEventListener('click', (e) => {
+                    const subtitleLine = e.target && e.target.closest ? e.target.closest('.subtitle-line') : null;
+                    if (!subtitleLine) return;
+                    if (contentSwitchInProgress) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'contentSwitchInProgress' });
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        return;
+                    }
+                    if (eventPointInMobileRecenterZone(e)) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'mobileRecenterZone' });
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        handleRecenterActivate(e);
+                        return;
+                    }
+                    if (Date.now() < suppressSubtitleClickUntil) {
+                        liminalTrace('ui:subtitle-click:blocked', { reason: 'suppressSubtitleClickUntil' });
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                        return;
+                    }
+                    liminalTrace('ui:subtitle-click:ok');
+                    setSubtitleFollowLocked(false);
+                }, true);
+
+                // PRELOAD IMMEDIATELY - WRAPPED
+                try {
+                    if (window.audioPlayer && window.audioPlayer.audio) {
+                        window.audioPlayer.audio.preload = "auto";
+                        // window.audioPlayer.audio.load(); 
+                        console.log("Liminal Audio Preloading...");
+                    }
+                } catch (e) { console.warn("Liminal Preload Failed", e); }
+
+                // Initialize Game
+                (async () => {
+                    try {
+                        // 2. Load Audio State
+                        const savedState = PlayerStateManager.getState('liminal_library');
+                        if (savedState && savedState.sentenceTime > 0) {
+                            player.audio.currentTime = savedState.sentenceTime;
+                        }
+
+                        // 3. Init Visibility Manage - DISABLED (Bug suspected)
+                        // AudioVisibilityManager.init(player.audio);
+
+                    } catch (e) {
+                        console.error("Game Init Error:", e);
+                    }
+                })();
+
+                // --- UI HELPERS ---
+                function updateReadingModeUI() {
+                    if (!isReadingMode && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
+                        isReadingMode = true;
+                    }
+
+                    // Sync with Shared Player
+                    if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
+                        window.audioPlayer.setReadingMode(isReadingMode);
+                    }
+
+                    if (isReadingMode) {
+                        uiContainer.classList.add('reading-mode');
+                        localStorage.setItem('gameboy_reading_mode', 'true');
+                        isCenteringCamera = true;
+                    } else {
+                        setSubtitleFollowLocked(false);
+                        uiContainer.classList.remove('reading-mode');
+                        localStorage.setItem('gameboy_reading_mode', 'false');
+                    }
+
+                    if (modeToggleBtn) {
+                        const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
+                        modeToggleBtn.title = nextModeLabel;
+                        modeToggleBtn.setAttribute('aria-label', nextModeLabel);
+                    }
+                    updateRecenterButtonVisibility();
+                }
+
+                function isPlayerTransportPaused() {
+                    if (!player || !player.audio) return true;
+                    if (typeof player.audio.isTransportPaused === 'function') {
+                        return player.audio.isTransportPaused();
+                    }
+                    return !!player.paused;
+                }
+
+                // --- EVENT LISTENERS ---
+                async function handleAudioToggleClick() {
+                    if (contentSwitchInProgress) {
+                        liminalTrace('ui:play-toggle:blocked', { reason: 'contentSwitchInProgress' });
+                        return;
+                    }
+                    const wantsPlay = isPlayerTransportPaused();
+                    liminalTrace('ui:play-toggle:click', {
+                        wantsPlay,
+                        paused: !!player.paused,
+                        transportPaused: isPlayerTransportPaused(),
+                        iconPlay: iconPlay.style.display,
+                        iconPause: iconPause.style.display
+                    });
+                    if (wantsPlay) {
+                        iconPlay.style.display = 'none';
+                        iconPause.style.display = 'block';
+                        try {
+                            await player.play();
+                            liminalTrace('ui:play-toggle:play-called');
+                        } catch (e) {
+                            liminalDebugNote('toggle-error', e && e.message ? e.message : String(e));
+                            liminalTrace('ui:play-toggle:play-error', { message: e && e.message ? e.message : String(e) });
+                        }
+                        setTimeout(updateIcons, 120);
+                    } else {
+                        player.pause();
+                        liminalTrace('ui:play-toggle:pause-called');
+                        updateIcons();
+                    }
+                }
+
+                document.getElementById('audioToggleBtn').addEventListener('click', () => {
+                    handleAudioToggleClick();
+                });
+
+                document.getElementById('skipBackBtn').addEventListener('click', () => {
+                    if (contentSwitchInProgress) return;
+                    markUiInteraction('btn:skip-back');
+                    skipBySecondsInLiminal(-15);
+                });
+                document.getElementById('skipForwardBtn').addEventListener('click', () => {
+                    if (contentSwitchInProgress) return;
+                    markUiInteraction('btn:skip-forward');
+                    skipBySecondsInLiminal(15);
+                });
+
+                modeToggleBtn.addEventListener('click', () => {
+                    // In frozen mode: reset dimmer to off + switch to game mode
+                    if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
+                        globalVisualDimmer.setLevel(0, { forceEmit: true });
+                        isReadingMode = false;
+                    } else {
+                        isReadingMode = !isReadingMode;
+                    }
+                    updateReadingModeUI();
+                    markUiInteraction(isReadingMode ? 'btn:reading-mode' : 'btn:game-mode');
+                });
+
+                document.querySelectorAll('#audioControls button, #nextChapterBtn, #chapterMenu .menu-item').forEach(el => {
+                    el.addEventListener('click', () => {
+                        const name = el.id || el.className || 'ui';
+                        liminalDebugNote('ui-click', String(name));
+                    });
+                });
+
+                // Auto-Resume when Lore ends or Transition
+                // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
+                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                let _endedHandled = false;
+                function handleAudioEnded() {
+                    if (_endedHandled) return;
+                    _endedHandled = true;
+                    setTimeout(() => { _endedHandled = false; }, 500);
+
+                    if (isLoreMode) {
+                        liminalDebugNote('audio-ended', 'lore -> restore main');
+                        liminalTrace('audio:ended:lore');
+                        window.restoreMainAudio({ saveCurrent: false });
+                        return;
+                    }
+
+                    // MAIN CHAPTER ENDED
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                    const tracks = getActiveSubtitleTracks();
+                    const subtitleIdx = getActiveSubtitleIndex();
+                    const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
+                    liminalDebugNote('audio-ended', `main idx=${subtitleIdx}/${tracks.length} textFinished=${textFinished} reading=${isReadingMode}`);
+                    liminalTrace('audio:ended:main', {
+                        textFinished: !!textFinished,
+                        subtitleIndex: subtitleIdx,
+                        subtitleCount: tracks.length,
+                        readingMode: !!isReadingMode
+                    });
+
+                    clearContentState(MAIN_CONTENT_KEY);
+
+                    if (isReadingMode) {
+                        transitionToNextChapter();
+                    } else {
+                        const btn = document.getElementById('nextChapterBtn');
+                        if (btn) btn.classList.add('visible');
+                    }
+                }
+                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                player.onEnded = handleAudioEnded;
+                // Fallback: DOM-Event auf dem Audio-Element
+                player.audio.addEventListener('ended', handleAudioEnded);
+
+                // Global Transition Logic
+                window.transitionToNextChapter = async function () {
+                    const overlay = document.getElementById('transitionOverlay');
+                    if (overlay) overlay.classList.add('active');
+                    await waitForContentSwitchIdle('transition:next-chapter');
+                    await saveCurrentContentState({ reason: 'transition:next-chapter' });
+
+                    // Mark autoplay intent so the next chapter auto-plays in reading mode
+                    const targetPageKey = 'kapitel1c';
+                    markChapterAutoplayIntent(targetPageKey, 'auto', 'chapter-transition');
+                    writeStateHandoff(targetPageKey);
+
+                    // Fade Audio
+                    const fade = setInterval(() => {
+                        if (player.volume > 0.05) player.volume -= 0.05;
+                        else { clearInterval(fade); player.pause(); }
+                    }, 100);
+
+                    setTimeout(() => {
+                        // Transition to Chapter 1c (Steingasse)
+                        window.location.href = 'index.html?chapter=kapitel1c';
+                    }, 2000);
+                };
+
+                const nextBtn = document.getElementById('nextChapterBtn');
+                if (nextBtn) nextBtn.addEventListener('click', () => {
+                    nextBtn.classList.remove('visible');
+                    transitionToNextChapter();
+                });
+
+                // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
+                // ALWAYS update UI to sync player state
+                updateReadingModeUI();
+
+                // --- DRAG TO SCROLL LOGIC ---
+
+                // SMART MASK LOGIC (Opacity on scroll)
+                subtitleContainer.addEventListener('scroll', () => {
+                    if (subtitleContainer.scrollTop > 10) {
+                        subtitleContainer.classList.add('scrolled-state');
+                    } else {
+                        subtitleContainer.classList.remove('scrolled-state');
+                    }
+                });
+
+                let isDown = false;
+                let startY;
+                let scrollTop;
+                let lastMoveY = 0;
+                let lastMoveTime = 0;
+                let swipeVelocity = 0;
+                let momentumAnimId = null;
+
+                function cancelMomentum() {
+                    if (momentumAnimId) {
+                        cancelAnimationFrame(momentumAnimId);
+                        momentumAnimId = null;
+                    }
+                }
+
+                const handleDown = (e) => {
+                    cancelMomentum();
+                    isDown = true;
+                    subtitleContainer.dataset.isDragging = 'false';
+                    subtitleContainer.dataset.wasDragging = 'false';
+                    const pageY = e.pageY || e.touches[0].pageY;
+                    startY = pageY - subtitleContainer.offsetTop;
+                    scrollTop = subtitleContainer.scrollTop;
+                    lastMoveY = pageY;
+                    lastMoveTime = performance.now();
+                    swipeVelocity = 0;
+                    subtitleContainer.style.cursor = 'grabbing';
+                };
+
+                const handleMove = (e) => {
+                    if (!isDown) return;
+                    e.preventDefault();
+                    const pageY = e.pageY || e.touches[0].pageY;
+                    const y = pageY - subtitleContainer.offsetTop;
+                    const walk = (y - startY) * 1.0;
+
+                    // Track velocity for momentum
+                    const now = performance.now();
+                    const elapsed = now - lastMoveTime;
+                    if (elapsed > 0) {
+                        const instantVelocity = (pageY - lastMoveY) / elapsed;
+                        swipeVelocity = swipeVelocity * 0.6 + instantVelocity * 0.4;
+                    }
+                    lastMoveY = pageY;
+                    lastMoveTime = now;
+
+                    if (Math.abs(walk) > 5) {
+                        subtitleContainer.dataset.isDragging = 'true';
+                        subtitleContainer.dataset.wasDragging = 'true';
+                        if (isReadingMode && Date.now() >= suppressFollowLockUntil) {
+                            setSubtitleFollowLocked(true);
+                        }
+                        subtitleContainer.scrollTop = scrollTop - walk;
+                    }
+                };
+
+                const handleUp = () => {
+                    isDown = false;
+                    subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
+                    subtitleContainer.style.cursor = 'auto';
+
+                    // Start momentum animation if velocity is significant
+                    const velocityPxPerMs = swipeVelocity;
+                    let velocityPxPerSec = -velocityPxPerMs * 1000 * 1.2; // Moderate amplify
+                    const MAX_VELOCITY = 5000;
+                    const MIN_VELOCITY = 15;
+                    velocityPxPerSec = Math.max(-MAX_VELOCITY, Math.min(MAX_VELOCITY, velocityPxPerSec));
+
+                    if (Math.abs(velocityPxPerSec) > MIN_VELOCITY) {
+                        let lastFrame = performance.now();
+                        const animateMomentum = (now) => {
+                            const dt = (now - lastFrame) / 1000;
+                            lastFrame = now;
+
+                            subtitleContainer.scrollTop += velocityPxPerSec * dt;
+                            velocityPxPerSec *= Math.pow(0.96, dt * 60); // Gentler friction for longer coast
+
+                            if (Math.abs(velocityPxPerSec) < 0.5) {
+                                momentumAnimId = null;
+                                return;
+                            }
+
+                            momentumAnimId = requestAnimationFrame(animateMomentum);
+                        };
+                        momentumAnimId = requestAnimationFrame(animateMomentum);
+                    }
+                };
+
+                subtitleContainer.addEventListener('mousedown', handleDown);
+                subtitleContainer.addEventListener('touchstart', handleDown, { passive: true });
+                subtitleContainer.addEventListener('mouseleave', handleUp);
+                subtitleContainer.addEventListener('mouseup', handleUp);
+                subtitleContainer.addEventListener('touchend', handleUp);
+                subtitleContainer.addEventListener('touchcancel', handleUp);
+                subtitleContainer.addEventListener('mousemove', handleMove);
+                subtitleContainer.addEventListener('touchmove', handleMove, { passive: false });
+
+
+
+                function updateIcons() {
+                    const transportPaused = isPlayerTransportPaused();
+                    if (transportPaused) {
+                        iconPlay.style.display = 'block'; iconPause.style.display = 'none';
+                    } else {
+                        iconPlay.style.display = 'none'; iconPause.style.display = 'block';
+                    }
+                    liminalTrace('icon:sync', {
+                        paused: !!player.paused,
+                        transportPaused,
+                        iconPlay: iconPlay.style.display,
+                        iconPause: iconPause.style.display,
+                        currentTime: Number(((player && player.currentTime) || 0).toFixed(3))
+                    });
+                }
+                player.audio.addEventListener('play', updateIcons);
+                player.audio.addEventListener('pause', updateIcons);
+                player.audio.addEventListener('ended', updateIcons);
+                player.audio.addEventListener('loadedmetadata', updateIcons);
+                updateIcons();
+
+                // --- FULLSCREEN LOGIC ---
+                const iconFsEnter = document.getElementById('iconFsEnter');
+                const iconFsExit = document.getElementById('iconFsExit');
+                function getFullscreenElementSafe() {
+                    return document.fullscreenElement || document.webkitFullscreenElement || null;
+                }
+
+                function isFullscreenSupported() {
+                    const root = document.documentElement;
+                    return !!(
+                        document.fullscreenEnabled ||
+                        document.webkitFullscreenEnabled ||
+                        root.requestFullscreen ||
+                        root.webkitRequestFullscreen
+                    );
+                }
+
+                function requestFullscreenSafe() {
+                    const root = document.documentElement;
+                    if (root.requestFullscreen) return root.requestFullscreen();
+                    if (root.webkitRequestFullscreen) return Promise.resolve(root.webkitRequestFullscreen());
+                    return Promise.reject(new Error('Fullscreen API not supported'));
+                }
+
+                function exitFullscreenSafe() {
+                    if (document.exitFullscreen) return document.exitFullscreen();
+                    if (document.webkitExitFullscreen) return Promise.resolve(document.webkitExitFullscreen());
+                    return Promise.resolve();
+                }
+
+                function syncFullscreenUi() {
+                    if (getFullscreenElementSafe()) {
+                        iconFsEnter.style.display = 'none';
+                        iconFsExit.style.display = 'block';
+                    } else {
+                        iconFsEnter.style.display = 'block';
+                        iconFsExit.style.display = 'none';
+                    }
+                    positionRecenterButton();
+                }
+
+                fullscreenBtn.addEventListener('click', async () => {
+                    if (!isFullscreenSupported()) {
+                        console.warn('[Fullscreen] Not supported on this device.');
+                        syncFullscreenUi();
+                        return;
+                    }
+
+                    try {
+                        if (!getFullscreenElementSafe()) {
+                            await requestFullscreenSafe();
+                        } else {
+                            await exitFullscreenSafe();
+                        }
+                    } catch (err) {
+                        console.warn(`Error attempting to toggle fullscreen: ${err && err.message ? err.message : err}`);
+                    } finally {
+                        syncFullscreenUi();
+                    }
+                });
+
+                document.addEventListener('fullscreenchange', syncFullscreenUi);
+                document.addEventListener('webkitfullscreenchange', syncFullscreenUi);
+                document.addEventListener('fullscreenerror', syncFullscreenUi);
+                document.addEventListener('webkitfullscreenerror', syncFullscreenUi);
+
+                // --- FREE LOOK CONTROLS ---
+                const mouse = { x: 0, y: 0 };
+                let targetMouseX = 0; // Target look direction (screen X normalized)
+                let targetMouseY = 0; // Target look direction (screen Y normalized)
+                let isLookingAtClickTarget = false; // True when camera should rotate toward click
+                // let isCenteringCamera = false; // Moved to global scope
+
+                function syncLookTargetsToCamera() {
+                    if (!camera || !camera.quaternion) return;
+                    euler.setFromQuaternion(camera.quaternion);
+                    mouse.x = Math.max(-1, Math.min(1, -euler.y / 1.5));
+                    mouse.y = Math.max(-1, Math.min(1, -euler.x / 0.5));
+                    targetMouseX = mouse.x;
+                    targetMouseY = mouse.y;
+                }
+
+                // Desktop: Mouse move controls camera look
+                document.addEventListener('mousemove', (event) => {
+                    // Disabled in reading mode
+                    if (player && player.isReadingMode) return;
+
+                    // DISABLED when camera is panning to a click target
+                    if (cameraLookTarget) return;
+
+                    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                    mouse.y = (event.clientY / window.innerHeight) * 2 - 1;
+                    targetMouseX = mouse.x;
+                    targetMouseY = mouse.y;
+                });
+
+                // --- MOBILE TOUCH CONTROLS ---
+                let touchStartX = 0;
+                let touchStartY = 0;
+                let touchStartMouseX = 0;
+                let touchStartMouseY = 0;
+                let isTouchDragging = false;
+                let isTouchValid = true; // FIX: Default true so clicks work from start
+                let touchMovedForTap = false;
+                let touchStartedOnUi = false;
+
+                // Helper: Check if touch is on UI elements
+                function isTouchOnUI(event) {
+                    const target = event && event.target;
+                    const el = target && target.nodeType === 1
+                        ? target
+                        : (target && target.parentElement ? target.parentElement : null);
+                    if (!el || typeof el.closest !== 'function') return false;
+                    const subtitleHit = !!el.closest('#subtitleContainer');
+                    return !!(
+                        el.closest('#audioControls') ||
+                        el.closest('.audio-btn') ||
+                        el.closest('#archiveModal') ||
+                        el.closest('.menu-item') ||
+                        (isReadingMode && subtitleHit) ||
+                        el.closest('#nextChapterBtn') ||
+                        el.closest('#loading')
+                    );
+                }
+
+                document.addEventListener('touchstart', (event) => {
+                    // Disabled in reading mode
+                    if (player && player.isReadingMode) return;
+
+                    if (!isTouchValid && performance.now() - lastUiInteractionAt > 1200) {
+                        liminalCause('C08_TOUCHFLAGS_STUCK', `touchstart with stale invalid flag (${(performance.now() - lastUiInteractionAt).toFixed(0)}ms)`);
+                    }
+
+                    if (event.touches.length !== 1) {
+                        isTouchValid = false;
+                        isTouchDragging = false;
+                        liminalDebugNote('touchstart-skip', `multi-touch:${event.touches.length}`);
+                        return;
+                    }
+
+                    if (event.touches.length === 1) {
+                        const touch = event.touches[0];
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        const startedInDeadzone = touch.clientY >= getUiDeadzoneTop();
+                        const worldLockReason = getWorldInputLockReason();
+
+                        // PERFORMANCE FIX: Check UI collision ONCE at start
+                        if (worldLockReason) {
+                            isTouchValid = false;
+                            touchStartedOnUi = true;
+                            markUiInteraction(`touchstart-world-lock:${worldLockReason}`);
+                            liminalCause('C04_WORLD_BLOCKED_TOUCH', `touchstart-world-lock:${worldLockReason}`);
+                            return;
+                        }
+                        if (isTouchOnUI(event) || startedInDeadzone) {
+                            isTouchValid = false;
+                            touchStartedOnUi = true;
+                            markUiInteraction(startedInDeadzone ? 'touchstart-deadzone' : 'touchstart-ui');
+                            return;
+                        }
+
+                        const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                        const startedOnRenderer = isRendererElement(event.target) || isRendererElement(touchedEl);
+                        if (!startedOnRenderer) {
+                            isTouchValid = false;
+                            touchStartedOnUi = true;
+                            markUiInteraction('touchstart-not-renderer');
+                            liminalCause('C04_WORLD_BLOCKED_TOUCH', 'touchstart-not-renderer');
+                            return;
+                        }
+
+                        isTouchValid = true;
+                        touchStartedOnRenderer = true;
+
+                        touchStartX = touch.clientX;
+                        touchStartY = touch.clientY;
+                        touchStartMouseX = mouse.x;
+                        touchStartMouseY = mouse.y;
+                        isTouchDragging = false;
+                    }
+                }, { passive: true });
+
+                document.addEventListener('touchmove', (event) => {
+                    // Disabled in reading mode
+                    if (player && player.isReadingMode) return;
+
+                    // Optimization: Early exit if touch started on UI
+                    if (!isTouchValid) return;
+                    if (event.touches.length !== 1) return;
+
+                    if (event.touches.length === 1) {
+                        const touch = event.touches[0];
+
+                        const deltaX = touch.clientX - touchStartX;
+                        const deltaY = touch.clientY - touchStartY;
+
+                        // Only treat as drag if moved more than 10 pixels
+                        if (Math.abs(deltaX) > 10 || Math.abs(deltaY) > 10) {
+                            isTouchDragging = true;
+                            touchMovedForTap = true;
+
+                            // CANCEL any auto-pan when user swipes
+                            cameraLookTarget = null;
+
+                            // Swipe-to-look: Map drag delta to mouse position (INVERTED)
+                            const sensitivity = 0.004;
+                            mouse.x = Math.max(-1, Math.min(1, touchStartMouseX - deltaX * sensitivity));
+                            mouse.y = Math.max(-1, Math.min(1, touchStartMouseY - deltaY * sensitivity));
+                            targetMouseX = mouse.x;
+                            targetMouseY = mouse.y;
+                        }
+                    }
+                }, { passive: true });
+
+                // Prevent pinch-zoom from desynchronizing viewport/camera calibration.
+                document.addEventListener('touchmove', (event) => {
+                    if (event.touches && event.touches.length > 1) event.preventDefault();
+                }, { passive: false });
+
+                // --- TEXTURES & MATERIALS ---
+                function createWoodTexture() {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512; canvas.height = 512;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#2a1a10';
+                    ctx.fillRect(0, 0, 512, 512);
+                    for (let i = 0; i < 100; i++) {
+                        ctx.strokeStyle = `rgba(0,0,0, ${Math.random() * 0.2})`; ctx.lineWidth = Math.random() * 3;
+                        ctx.beginPath(); ctx.moveTo(Math.random() * 512, 0); ctx.lineTo(Math.random() * 512, 512); ctx.stroke();
+                    }
+                    return new THREE.CanvasTexture(canvas);
+                }
+                function createCarpetTexture() {
+                    const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 512; const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, 512, 512);
+                    const imgData = ctx.getImageData(0, 0, 512, 512);
+                    for (let i = 0; i < imgData.data.length; i += 4) {
+                        const noise = (Math.random() - 0.5) * 15; imgData.data[i] += noise + 10;
+                        imgData.data[i + 1] += noise + 10; imgData.data[i + 2] += noise + 10;
+                    }
+                    ctx.putImageData(imgData, 0, 0);
+                    const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
+                }
+
+                const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
+                const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
+                const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+                const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+                const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
+
+                // --- SHARED GEOMETRIES (Performance Fix) ---
+                const sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
+                const sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+                const sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+                const sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
+                const sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+
+                // --- CLASSES ---
+                class YellowLight {
+                    constructor(zPos) {
+                        this.position = new THREE.Vector3(0, 3.5, zPos);
+                        this.group = new THREE.Group();
+                        this.group.position.copy(this.position);
+                        const bulb = new THREE.Mesh(sharedBulbGeo, bulbMat);
+                        this.group.add(bulb);
+                        this.light = new THREE.PointLight(0xffaa00, 40, 15);
+                        this.light.castShadow = !isIOSSafari; // Disable on iOS
+                        this.group.add(this.light);
+                        const cord = new THREE.Mesh(sharedCordGeo, cordMat);
+                        cord.position.y = 1.5;
+                        this.group.add(cord);
+                        this.baseIntensity = 40;
+                        this.seed = Math.random() * 100;
+                    }
+                    update(time, playerZ) {
+                        const flicker = Math.sin(time * 20) * 0.05 + Math.random() * 0.1;
+
+                        // Distance Fade Logic
+                        // FIX: Use World Position for distance check
+                        const worldPos = new THREE.Vector3();
+                        this.group.getWorldPosition(worldPos);
+                        const dist = Math.abs(worldPos.z - playerZ);
+
+                        const fadeStart = 40; // Starts fading in at 40m
+                        const fadeEnd = 20;   // Full brightness at 20m
+
+                        // Normalized Fade: 0 at fadeStart, 1 at fadeEnd
+                        // Clamp between 0 and 1
+                        let fade = (fadeStart - dist) / (fadeStart - fadeEnd);
+                        fade = Math.max(0, Math.min(1, fade));
+
+                        // Apply Fade to Intensity
+                        // If fade is 0 (far away), light is OFF.
+                        // If fade is 1 (close), light is FULL.
+                        const currentBase = this.baseIntensity * fade;
+
+                        this.light.intensity = currentBase + flicker * 10 * fade; // Flicker scales with intensity
+                        this.light.distance = 15 * fade; // Also scale range to avoid pop-in
+
+                        this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
+                        this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+                    }
+                    reset() {
+                        // FIX: Do NOT update position. Parent Group move handles it.
+                        // Just reset intensity logic states if needed.
+                        this.light.intensity = 0; // Start off
+                    }
+                    dispose() {
+                        // Traverse to dispose geometries inside the group (bulb, cord)
+                        // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
+                        this.light.intensity = this.baseIntensity + flicker * 10 + boost;
+                        this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
+                        this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+                    }
+                }
+
+                // --- GLOWING LORE BOOK STATE ---
+                // Note: We use GameState.state.collectedLore.length for global tracking, not a local counter
+                let glowingBookCounter = 0;       // ID generator
+                const activeGlowingBooks = [];    // Currently spawned books
+                const shimmerSound = new SCAudioAdapter('sc-widget-shimmer');
+                shimmerSound.src = getSCUrl('assets/shimmer.mp3');
+                shimmerSound.volume = 0.4;
+                let lastShimmerAt = 0;
+                // One-shot SFX should not auto-resume after visibility changes.
+                if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+                    window.AudioVisibilityManager.unregister(shimmerSound);
+                }
+
+                function allowAuxSfxPlaybackLiminal() {
+                    const p = window.audioPlayer;
+                    if (!p || !p.audio) return true;
+                    const primaryPlaying = (typeof p.audio.isProbablyPlaying === 'function')
+                        ? p.audio.isProbablyPlaying()
+                        : !p.paused;
+                    return !primaryPlaying && !contentSwitchInProgress && !document.hidden;
+                }
+
+                // Helper function to get global collected lore count
+                function getGlobalCollectedLoreCount() {
+                    if (window.GameState && window.GameState.state && window.GameState.state.collectedLore) {
+                        return window.GameState.state.collectedLore.length;
+                    }
+                    return 0;
+                }
+
+                // Material for glowing books
+                const glowBookMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xf5c542,
+                    emissive: 0xf5c542,
+                    emissiveIntensity: 0.5,
+                    roughness: 0.8,
+                    metalness: 0.1
+                });
+
+                class GlowingBook {
+                    constructor(zPos, side) {
+                        this.id = glowingBookCounter++;
+                        this.collected = false;
+                        this.missed = false; // NEW: Track if player walked past without collecting
+                        this.side = side; // 'left' or 'right'
+
+                        // Book geometry (thin box for spine)
+                        const geo = new THREE.BoxGeometry(0.6, 0.5, 0.08);
+                        this.mesh = new THREE.Mesh(geo, glowBookMaterial.clone());
+
+                        // Position: eye level (camera at 1.6m), slightly higher for visibility
+                        // X offset: just 5cm (0.05m) towards center so book pops out slightly
+                        // Y = 1.68 (1.4 shelf + 0.025 halfPlank + 0.25 halfBook + 0.005 margin)
+                        const xPos = side === 'left' ? -2.45 : 2.45;
+                        this.mesh.position.set(xPos, 1.68, zPos);
+                        this.mesh.frustumCulled = false;
+
+                        this.baseEmissive = 0.5;
+                    }
+
+                    update(time, playerZ, playerX) {
+                        if (this.collected) return;
+
+                        // FIX: Use world position (meshGroup may have moved)
+                        const worldPos = new THREE.Vector3();
+                        this.mesh.getWorldPosition(worldPos);
+                        const distZ = Math.abs(worldPos.z - playerZ);
+                        const distX = Math.abs(worldPos.x - playerX);
+
+                        // Debug: log position every 60 frames
+                        if (Math.random() < 0.016) { // ~1 per second at 60fps
+                            console.log(`Book ${this.id}: worldZ=${worldPos.z.toFixed(1)}, playerZ=${playerZ.toFixed(1)}, dist=${distZ.toFixed(1)}`);
+                        }
+
+                        // Proximity glow intensification
+                        if (distZ < 8 && distX < 3) {
+                            const pulse = Math.sin(time * 3) * 0.15;
+                            this.mesh.material.emissiveIntensity = 0.8 + pulse;
+                        } else {
+                            this.mesh.material.emissiveIntensity = this.baseEmissive;
+                        }
+                    }
+
+                    collect() {
+                        if (this.collected) return;
+                        this.collected = true;
+                        this.mesh.visible = false;
+                    }
+
+                    reset(newZ, newSide) {
+                        // For pooling: reposition and reset state
+                        this.collected = false;
+                        this.mesh.visible = true;
+                        this.side = newSide;
+                        const xPos = newSide === 'left' ? -2.5 : 2.5;
+                        this.mesh.position.set(xPos, 1.5, newZ);
+                        this.mesh.material.emissiveIntensity = this.baseEmissive;
+                    }
+                }
+
+                class HallwaySegment {
+                    constructor(zStart, length, isPreload = false, onReady = null) {
+                        this.zStart = zStart;
+                        this.originalZStart = zStart; // Store for consistent local positioning
+                        this.length = length;
+                        this.isPreload = !!isPreload;
+                        this.meshGroup = new THREE.Group();
+                        this.lights = [];
+
+                        // 1. Floor & Ceiling
+                        // Use Shared Geometries!
+                        const floor = new THREE.Mesh(sharedPlaneGeo, floorMaterial);
+                        floor.rotation.x = -Math.PI / 2; floor.position.z = zStart - length / 2; floor.receiveShadow = !isIOSSafari;
+                        floor.frustumCulled = false; // FIX: Prevent Abyss
+                        this.meshGroup.add(floor);
+
+                        const ceiling = new THREE.Mesh(sharedPlaneGeo, wallMaterial);
+                        ceiling.rotation.x = Math.PI / 2; ceiling.position.y = config.roomHeight; ceiling.position.z = zStart - length / 2;
+                        ceiling.frustumCulled = false; // FIX: Prevent Abyss
+                        this.meshGroup.add(ceiling);
+
+                        // 2. Shelves
+                        const leftShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                        leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = !isIOSSafari; leftShelf.receiveShadow = !isIOSSafari;
+                        leftShelf.frustumCulled = false; // FIX: Prevent Abyss
+                        this.meshGroup.add(leftShelf);
+
+                        const rightShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                        rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = !isIOSSafari; rightShelf.receiveShadow = !isIOSSafari;
+                        rightShelf.frustumCulled = false; // FIX: Prevent Abyss
+                        this.meshGroup.add(rightShelf);
+
+                        // 3. Plank Levels
+                        const levels = 9;
+                        for (let i = 0; i < levels; i++) {
+                            const y = (config.roomHeight / levels) * i + 0.4;
+
+                            const pLeft = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                            pLeft.position.set(-2.6, y, zStart - length / 2);
+                            pLeft.castShadow = !isIOSSafari; pLeft.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
+                            this.meshGroup.add(pLeft);
+
+                            const pRight = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                            pRight.position.set(2.6, y, zStart - length / 2);
+                            pRight.castShadow = !isIOSSafari; pRight.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
+                            this.meshGroup.add(pRight);
+                        }
+
+                        // 4. Books (InstancedMesh)
+                        this.createBooks(zStart, length, levels, isPreload, onReady);
+
+                        // 5. Light (One per segment)
+                        const light = new YellowLight(zStart - length / 2);
+                        this.lights.push(light);
+                        this.meshGroup.add(light.group);
+
+                        // 6. Dust (Segment-Local)
+                        this.createDust(length);
+
+                        scene.add(this.meshGroup);
+                    }
+
+                    createDust(length) {
+                        // ~80 particles per segment (approx half global density distributed)
+                        const count = isIOSSafari ? 30 : 80;
+                        const geo = new THREE.BufferGeometry();
+                        const positions = new Float32Array(count * 3);
+                        this.dustSpeeds = new Float32Array(count);
+
+                        for (let i = 0; i < count; i++) {
+                            // Local positions relative to segment center (0,0,0 is at floor, zStart-length/2)
+                            // But WAIT: meshGroup origin is (0,0,0). 
+                            // Floor is at zStart - length/2. 
+                            // Let's check meshGroup structure again.
+                            // Elements are added at Absolute World Coords? No.
+                            // floor.position.z = zStart - length / 2;
+                            // Yes, children have 'absolute' coords relative to a (0,0,0) group.
+
+                            // So Dust must be placed within [zStart - length, zStart]
+                            const z = this.zStart - Math.random() * length;
+                            const x = (Math.random() - 0.5) * (config.roomWidth - 1); // Stay inside walls
+                            const y = Math.random() * config.roomHeight;
+
+                            positions[i * 3] = x;
+                            positions[i * 3 + 1] = y;
+                            positions[i * 3 + 2] = z;
+                            this.dustSpeeds[i] = 0.05 + Math.random() * 0.1;
+                        }
+                        geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+                        // Re-create texture here or reuse? Reuse is better but for safety defining inline or global helper.
+                        // Defining simple canvas texture helper:
+                        if (!window.dustTex) {
+                            const c = document.createElement('canvas'); c.width = 32; c.height = 32;
+                            const ctx = c.getContext('2d');
+                            const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+                            g.addColorStop(0, 'rgba(255,255,255,1)');
+                            g.addColorStop(1, 'rgba(255,255,255,0)');
+                            ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32);
+                            window.dustTex = new THREE.CanvasTexture(c);
+                        }
+
+                        const mat = new THREE.PointsMaterial({
+                            color: 0xaaaaaa, size: 0.05, map: window.dustTex,
+                            transparent: true, opacity: 0.3,
+                            depthWrite: false, blending: THREE.AdditiveBlending
+                        });
+
+                        this.dustMesh = new THREE.Points(geo, mat);
+                        this.dustMesh.frustumCulled = false;
+                        this.meshGroup.add(this.dustMesh);
+                    }
+
+                    update(delta, time, playerPos) {
+                        // Update Lights
+                        this.lights.forEach(l => l.update(time, playerPos.z)); // Pass playerZ for light fade
+
+                        // Update Dust
+                        if (this.dustMesh) {
+                            const pos = this.dustMesh.geometry.attributes.position.array;
+                            for (let i = 0; i < pos.length / 3; i++) {
+                                pos[i * 3 + 1] -= this.dustSpeeds[i] * delta * 2.0; // Fall speed
+                                if (pos[i * 3 + 1] < 0) {
+                                    pos[i * 3 + 1] = config.roomHeight;
+                                }
+                            }
+                            this.dustMesh.geometry.attributes.position.needsUpdate = true;
+                        }
+                    }
+
+                    createBooks(zStart, length, levels) {
+                        this.glowingBook = null;
+                        const segmentIndex = Math.abs(Math.round(zStart / length));
+                        // Count uncollected active books
+                        const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
+                        const globalLoreCount = getGlobalCollectedLoreCount();
+                        if (segmentIndex % 5 === 0 && segmentIndex > 0 && globalLoreCount < 5 && uncollectedBooks < 1) {
+                            const side = Math.random() > 0.5 ? 'left' : 'right';
+                            this.glowingBook = new GlowingBook(zStart - length / 2, side);
+                            this.meshGroup.add(this.glowingBook.mesh);
+                            activeGlowingBooks.push(this.glowingBook);
+                        }
+                    }
+
+                    reset(newZStart) {
+                        // FIX: Calculate offset BEFORE updating this.zStart
+                        const currentZStart = this.zStart; // This tracks where it currently is logically
+                        const offset = newZStart - currentZStart;
+
+                        this.zStart = newZStart;
+
+                        // Move everything by offset
+                        this.meshGroup.position.z += offset;
+
+                        // Reset Lights
+                        // FIX: Do NOT pass newZ. Light position is relative and static.
+                        this.lights.forEach(l => l.reset());
+
+                        // Reset Books
+                        this.resetBooks();
+
+                        // Handle Glowing Book for recycled segment
+                        // Remove old book if it was collected or missed
+                        if (this.glowingBook && (this.glowingBook.collected || this.glowingBook.missed)) {
+                            // Remove from active list
+                            const idx = activeGlowingBooks.indexOf(this.glowingBook);
+                            if (idx > -1) activeGlowingBooks.splice(idx, 1);
+                            // Remove mesh
+                            this.meshGroup.remove(this.glowingBook.mesh);
+                            this.glowingBook = null;
+                        }
+
+                        // Try to spawn a new glowing book (same logic as constructor)
+                        const globalLoreCount = getGlobalCollectedLoreCount();
+                        if (!this.glowingBook && globalLoreCount < 5) {
+                            const segmentIndex = Math.abs(Math.round(newZStart / this.length));
+                            const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
+                            if (segmentIndex % 5 === 0 && segmentIndex > 0 && uncollectedBooks < 1) {
+                                const side = Math.random() > 0.5 ? 'left' : 'right';
+                                // FIX: Use ORIGINAL constructor zStart for local coordinates
+                                // This matches how floor, shelves, and other segment objects are positioned
+                                const localZ = this.originalZStart - this.length / 2;
+                                this.glowingBook = new GlowingBook(localZ, side);
+                                this.meshGroup.add(this.glowingBook.mesh);
+                                // Force matrix update so getWorldPosition works immediately
+                                this.glowingBook.mesh.updateMatrixWorld(true);
+                                activeGlowingBooks.push(this.glowingBook);
+
+                                // Debug: log actual world position
+                                const debugPos = new THREE.Vector3();
+                                this.glowingBook.mesh.getWorldPosition(debugPos);
+                                console.log(`Spawned book: local=(${localZ}), world=(${debugPos.z.toFixed(1)}), target=(${(newZStart - this.length / 2).toFixed(1)})`);
+                            }
+                        }
+
+                        // force update
+                        this.meshGroup.updateMatrixWorld(true);
+                    }
+
+                    createBooks(zStart, length, levels, isPreload, onReady) {
+                        // --- RADICAL iOS FALLBACK: Cap books to 50 to prevent InstancedMesh overload ---
+                        const bookCount = isIOSSafari ? 50 : 6000;
+                        // SAVE REFERENCES for Reset
+                        this.bookCount = bookCount;
+                        this.isPreload = !!isPreload;
+                        if (!this.meshBooks) {
+                            this.meshBooks = new THREE.InstancedMesh(sharedBookGeo, bookMat, bookCount);
+                            this.meshBooks.castShadow = true; this.meshBooks.receiveShadow = true;
+                            this.meshBooks.frustumCulled = false; // FIX: Prevent invisible books
+                            this.meshGroup.add(this.meshBooks);
+                        }
+                        this.meshBooks.count = 0; // Hide all initially
+
+                        this.resetBooks = () => {
+                            // Correct Z of InstancedMesh?
+                            // It is child of meshGroup. If Group moves, it moves.
+                            // But book positions are calculated in LOCAL space or WORLD space?
+                            // in `processBatch`: dummy.position.set(..., currentZ)
+                            // currentZ starts at zStart. 
+                            // If meshGroup moved, currentZ (local) should validly be relative?
+                            // Wait. In constructor: `floor.position.z = zStart - length/2`.
+                            // If `meshGroup` is at (0,0,0) initially.
+                            // Objects are at world Z.
+                            // If we now move meshGroup.position.z by -50.
+                            // Objects move -50. 
+                            // So Reset Logic:
+                            // 1. Move MeshGroup.
+                            // 2. Generate books using RELATIVE coords?
+                            // Currently logic uses `zStart` (Absolute).
+                            // We must pass `0` to generator if Group is handling offset?
+                            // Or generator logic must use new Z?
+                            // If Group is moved, generator using Absolute Z will Double Move.
+                            // ERROR RISK.
+
+                            // FIX: Generator should spawn books local to Group (around 0..-Length).
+                            // Constructor currently uses Absolute Z.
+                            // This is improper for grouping.
+                            // BUT converting to relative is risky big refactor.
+
+                            // Alternative:
+                            // Just update `zStart` in this closure?
+                            // New generator run.
+                            if (typeof this.pauseBookGeneration === 'function') {
+                                this.pauseBookGeneration();
+                            }
+                            this.meshBooks.count = 0;
+                            this.startBookGeneration();
+                        };
+
+                        // We need to allow restarting generation.
+                        this.startBookGeneration = () => {
+                            const dummy = new THREE.Object3D();
+                            const color = new THREE.Color();
+                            const bookColors = [0x4a3c31, 0x2f1e15, 0x6e2c2c, 0x1a2e1f, 0x0d0d0d, 0x5c5040];
+
+                            // Calculate Z range relative to GROUP position?
+                            // The group has moved to `newZStart`.
+                            // Objects inside are defined at `oldZStart`.
+                            // Moving group shifts them to `newZStart`.
+                            // So we should generate books at `oldZStart` coordinates? 
+                            // Yes. If we use `zStart` (original) it works.
+
+                            let globalIndex = 0;
+                            const workQueue = [];
+                            this.bookBuildRaf = null;
+                            this.bookBuildPaused = false;
+                            // Use 'local' start (original zStart) 
+                            // because Group translation handles current World Pos.
+                            const localZStart = zStart;
+
+                            // 1. Prepare Queue
+                            for (let side of [-1, 1]) {
+                                const shelfX = side * 2.6;
+                                for (let i = 0; i < levels; i++) {
+                                    workQueue.push({ side, shelfX, levelIndex: i });
+                                }
+                            }
+
+                            this.pauseBookGeneration = () => {
+                                this.bookBuildPaused = true;
+                                if (this.bookBuildRaf !== null) {
+                                    cancelAnimationFrame(this.bookBuildRaf);
+                                    this.bookBuildRaf = null;
+                                }
+                            };
+
+                            this.resumeBookGeneration = () => {
+                                if (!this.bookBuildPaused) return;
+                                this.bookBuildPaused = false;
+                                if (workQueue.length === 0 || globalIndex >= this.bookCount) return;
+                                if (this.bookBuildRaf === null) {
+                                    this.bookBuildRaf = requestAnimationFrame(processBatch);
+                                }
+                            };
+
+                            const processBatch = () => {
+                                // Keep preload alive even if coming from another page with freeze enabled.
+                                const freezeBypassDuringBoot = this.isPreload && !hasStartedGame;
+                                const shouldPauseForFreeze = window.visualFreezeActive && !freezeBypassDuringBoot;
+                                if (this.bookBuildPaused || shouldPauseForFreeze) {
+                                    this.bookBuildPaused = true;
+                                    this.bookBuildRaf = null;
+                                    return;
+                                }
+
+                                // Stop if we are reset again? (version check?)
+                                if (workQueue.length === 0 || globalIndex >= this.bookCount) {
+                                    this.bookBuildPaused = false;
+                                    this.bookBuildRaf = null;
+                                    if (onReady) {
+                                        onReady();
+                                        onReady = null; // Prevent re-triggering during Recycle/Reset!
+                                    }
+                                    return;
+                                }
+                                // ... (Same logic)
+                                const batchSize = isPreload ? 60 : 5;
+                                for (let b = 0; b < batchSize; b++) {
+                                    if (workQueue.length === 0) break;
+                                    const task = workQueue.shift();
+                                    if (task.levelIndex >= 6) continue;
+                                    const y = (config.roomHeight / levels) * task.levelIndex + 0.7;
+                                    if (y > config.roomHeight - 0.5) continue;
+
+                                    let currentZ = localZStart;
+                                    const endZ = localZStart - length;
+
+                                    while (currentZ > endZ) {
+                                        if (globalIndex >= this.bookCount) break;
+                                        // ... Generation ...
+                                        const height = 0.5 + Math.random() * 0.3;
+                                        const thick = 0.05 + Math.random() * 0.08;
+                                        const depth = 0.7 + Math.random() * 0.15;
+                                        const gap = 0.03;
+
+                                        if (Math.random() > 0.02) {
+                                            const xOffset = (Math.random() - 0.5) * 0.1;
+                                            // Coordinates are "Local" (relative to original zStart)
+                                            dummy.position.set(task.shelfX + xOffset, y - 0.3 + height / 2, currentZ - thick / 2);
+                                            dummy.scale.set(depth, height, thick);
+                                            dummy.rotation.set(0, 0, 0);
+                                            if (task.side === 1) dummy.rotation.y = Math.PI;
+                                            dummy.rotation.z = (Math.random() - 0.5) * 0.08;
+                                            dummy.rotation.y += (Math.random() - 0.5) * 0.08;
+                                            dummy.updateMatrix();
+                                            this.meshBooks.setMatrixAt(globalIndex, dummy.matrix);
+
+                                            // Color
+                                            color.setHex(bookColors[Math.floor(Math.random() * bookColors.length)]);
+                                            color.r += (Math.random() - 0.5) * 0.1;
+                                            // ...
+                                            this.meshBooks.setColorAt(globalIndex, color);
+                                            globalIndex++;
+                                            currentZ -= (thick + gap);
+                                        } else {
+                                            currentZ -= (0.05 + Math.random() * 0.15);
+                                        }
+                                    }
+                                }
+                                this.meshBooks.count = globalIndex;
+                                this.meshBooks.instanceMatrix.needsUpdate = true;
+                                if (this.meshBooks.instanceColor) this.meshBooks.instanceColor.needsUpdate = true;
+                                this.bookBuildRaf = requestAnimationFrame(processBatch);
+                            };
+                            processBatch();
+                        };
+
+                        this.startBookGeneration();
+                    }
+
+                    dispose() {
+                        // 1. Dispose Lights
+                        this.lights.forEach(l => l.dispose());
+
+                        // 2. Dispose Geometries
+                        // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
+
+                        // 3. Remove from Scene
+                        scene.remove(this.meshGroup);
+                    }
+                }
+
+                // --- GAME LOOP ---
+                const segments = [];
+                // const segmentPool = []; // REMOVED: Proper recycling uses the active list directly
+                const segmentLength = config.segmentLength;
+
+                function updateSegments(playerZ) {
+                    // Ensure we have 4 segments initially (handled by preload) but check just in case
+                    if (segments.length < 4) {
+                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 10;
+                        addSegment(lastZ - segmentLength);
+                        return;
+                    }
+
+                    const lastSeg = segments[segments.length - 1];
+                    const firstSeg = segments[0];
+
+                    // Recycle trigger: Player passed the first segment's end (plus buffer)
+                    // firstSeg covers [zStart - 20, zStart]. Center is zStart - 10.
+                    // If playerZ < firstSeg.zStart - segmentLength - 5 (approx)
+                    // e.g. zStart=0. Range [-20, 0]. Player at -25.
+                    if (playerZ < firstSeg.zStart - segmentLength - 5) {
+                        // RECYCLE: Take first segment, reset it to new position at end
+                        const newZ = lastSeg.zStart - segmentLength;
+
+                        // console.log(`Recycling Segment: Moving from ${firstSeg.zStart} to ${newZ}`);
+
+                        firstSeg.reset(newZ);
+
+                        // Move from front to back of array
+                        segments.shift();
+                        segments.push(firstSeg);
+                    }
+                }
+
+                function addSegment(zStart) {
+                    const seg = new HallwaySegment(zStart, segmentLength);
+                    segments.push(seg);
+                }
+
+                const clock = new THREE.Clock();
+                const velocity = new THREE.Vector3();
+                const move = { f: false, b: false, l: false, r: false };
+                let animationLoopRunning = false;
+                let hasStartedGame = false;
+
+                function setSegmentGenerationPaused(paused) {
+                    for (const seg of segments) {
+                        if (!seg) continue;
+                        if (!hasStartedGame && seg.isPreload) continue;
+                        if (paused && typeof seg.pauseBookGeneration === 'function') {
+                            seg.pauseBookGeneration();
+                        } else if (!paused && typeof seg.resumeBookGeneration === 'function') {
+                            seg.resumeBookGeneration();
+                        }
+                    }
+                }
+
+                function applyVisualFreezeState(frozen) {
+                    window.visualFreezeActive = !!frozen;
+                    if (window.visualFreezeActive) {
+                        setSegmentGenerationPaused(true);
+                        return;
+                    }
+                    setSegmentGenerationPaused(false);
+                    if (hasStartedGame && !document.hidden) {
+                        clock.getDelta(); // Discard stale frame delta after resume.
+                        startAnimationLoop();
+                    }
+                }
+
+                if (globalVisualDimmer) {
+                    globalVisualDimmer.onChange(({ level, frozen }) => {
+                        manualBackgroundDimLevel = level;
+                        applyVisualFreezeState(frozen);
+
+                        if (frozen && !isReadingMode) {
+                            isReadingMode = true;
+                            updateReadingModeUI();
+                        }
+                    });
+                }
+                applyVisualFreezeState(window.visualFreezeActive);
+                if (globalVisualDimmer && globalVisualDimmer.isFrozen() && !isReadingMode) {
+                    isReadingMode = true;
+                    updateReadingModeUI();
+                }
+
+
+                // Click-to-Move State
+                let moveTarget = null;
+                let cameraLookTarget = null; // 3D point camera should smoothly look at
+                const raycaster = new THREE.Raycaster();
+                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                let uiInteractionStarted = false;
+                let lastUiInteractionAt = 0;
+                const UI_CLICK_SUPPRESS_MS = 700;
+                let suppressWorldInputUntil = 0;
+                let lastDeadzoneTop = null;
+                let touchStartedOnRenderer = false;
+
+                function getWorldInputLockReason() {
+                    const archiveModal = document.getElementById('archiveModal');
+                    if (archiveModal && archiveModal.classList.contains('visible')) return 'archive-modal';
+
+                    const overlay = document.getElementById('transitionOverlay');
+                    if (overlay && overlay.classList.contains('active')) return 'transition-overlay';
+
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) {
+                        const style = window.getComputedStyle(loadingScreen);
+                        if (style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity || '1') > 0.01) {
+                            return 'loading-screen';
+                        }
+                    }
+                    return '';
+                }
+
+                function isRendererElement(target) {
+                    if (!target || !renderer || !renderer.domElement) return false;
+                    if (target === renderer.domElement) return true;
+                    return !!(target.nodeType === 1 && renderer.domElement.contains(target));
+                }
+
+                function markUiInteraction(reason = 'ui') {
+                    lastUiInteractionAt = performance.now();
+                    suppressWorldInputUntil = lastUiInteractionAt + UI_CLICK_SUPPRESS_MS;
+                    uiInteractionStarted = true;
+                    cameraLookTarget = null;
+                    isLookingAtClickTarget = false;
+                    isCenteringCamera = false;
+                    isTouchDragging = false;
+                    touchMovedForTap = false;
+                    touchStartedOnUi = true;
+                    touchStartedOnRenderer = false;
+                    isTouchValid = false;
+                    syncLookTargetsToCamera();
+                    liminalDebugNote('ui-hit', reason);
+                }
+
+                function isUiClickTarget(target) {
+                    const el = target && target.nodeType === 1
+                        ? target
+                        : (target && target.parentElement ? target.parentElement : null);
+                    if (!el || typeof el.closest !== 'function') return false;
+                    const subtitleHit = !!el.closest('#subtitleContainer');
+                    return !!(
+                        el.closest('#audioControls') ||
+                        el.closest('.audio-btn') ||
+                        el.closest('#archiveModal') ||
+                        el.closest('.menu-item') ||
+                        (isReadingMode && subtitleHit) ||
+                        el.closest('#nextChapterBtn') ||
+                        el.closest('#loading')
+                    );
+                }
+
+                function getUiDeadzoneTop() {
+                    const tops = [];
+                    const controls = document.getElementById('audioControls');
+                    const ui = document.getElementById('audioPlayerUI');
+                    const subtitle = document.getElementById('subtitleContainer');
+
+                    if (controls) {
+                        tops.push(controls.getBoundingClientRect().top - 8);
+                    }
+                    if (window.innerWidth <= 768 && isReadingMode && subtitle) {
+                        tops.push(subtitle.getBoundingClientRect().top - 12);
+                    }
+                    if (window.innerWidth <= 768 && isReadingMode && ui) {
+                        tops.push(ui.getBoundingClientRect().top - 8);
+                    }
+
+                    if (tops.length === 0) {
+                        const fallback = window.innerHeight - 160;
+                        if (lastDeadzoneTop !== null && Math.abs(fallback - lastDeadzoneTop) > 60) {
+                            liminalCause('C07_DEADZONE_LAYOUT_DRIFT', `fallback ${lastDeadzoneTop.toFixed(1)} -> ${fallback.toFixed(1)}`);
+                        }
+                        lastDeadzoneTop = fallback;
+                        return fallback;
+                    }
+                    const resolved = Math.max(0, Math.min(...tops));
+                    if (lastDeadzoneTop !== null && Math.abs(resolved - lastDeadzoneTop) > 60) {
+                        liminalCause('C07_DEADZONE_LAYOUT_DRIFT', `${lastDeadzoneTop.toFixed(1)} -> ${resolved.toFixed(1)}`);
+                    }
+                    lastDeadzoneTop = resolved;
+                    return resolved;
+                }
+
+                function isPointInsideUi(clientX, clientY) {
+                    const roots = [
+                        document.getElementById('audioControls'),
+                        document.getElementById('nextChapterBtn'),
+                        document.getElementById('archiveModal'),
+                        document.getElementById('chapterMenu')
+                    ];
+                    if (isReadingMode) {
+                        roots.push(document.getElementById('subtitleContainer'));
+                    }
+                    for (const root of roots) {
+                        if (!root) continue;
+                        const r = root.getBoundingClientRect();
+                        if (clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+
+                function bindUiInputShield() {
+                    const roots = [
+                        document.getElementById('audioControls'),
+                        document.getElementById('nextChapterBtn'),
+                        document.getElementById('archiveModal'),
+                        document.getElementById('chapterMenu')
+                    ];
+                    if (isReadingMode) {
+                        roots.push(document.getElementById('subtitleContainer'));
+                    }
+                    const shieldEvents = ['pointerdown', 'touchstart', 'touchend', 'click'];
+                    const onShield = (event) => {
+                        const targetInfo = event.target && event.target.id ? event.target.id : (event.target && event.target.className ? String(event.target.className) : event.type);
+                        markUiInteraction(`shield:${event.type}:${targetInfo}`);
+                    };
+
+                    for (const root of roots) {
+                        if (!root) continue;
+                        for (const ev of shieldEvents) {
+                            root.addEventListener(ev, onShield, true);
+                        }
+                    }
+                }
+                bindUiInputShield();
+
+                document.addEventListener('pointerdown', (event) => {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`pointerdown-world-lock:${worldLockReason}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `pointerdown-world-lock:${worldLockReason}`);
+                        return;
+                    }
+                    const isUiHit = isUiClickTarget(event.target) || isPointInsideUi(event.clientX, event.clientY) || event.clientY >= getUiDeadzoneTop();
+                    if (isUiHit) {
+                        markUiInteraction(`pointerdown-ui:${event.clientY}`);
+                    } else {
+                        uiInteractionStarted = false;
+                    }
+                }, true);
+
+                document.addEventListener('click', (event) => {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`click-world-lock:${worldLockReason}`);
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', `world-lock:${worldLockReason}`);
+                        return;
+                    }
+
+                    if (performance.now() < suppressWorldInputUntil) {
+                        uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'suppressed-window');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'suppressed-window');
+                        return;
+                    }
+
+                    const isMobile = window.innerWidth <= 768;
+                    if (isMobile) {
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-click-path-disabled');
+                        return;
+                    }
+
+                    const sinceUiInteraction = performance.now() - lastUiInteractionAt;
+                    if (isMobile && sinceUiInteraction < UI_CLICK_SUPPRESS_MS) {
+                        uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'mobile-ui-window');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-ui-window');
+                        return;
+                    }
+
+                    if (uiInteractionStarted) {
+                        uiInteractionStarted = false;
+                        liminalDebugNote('world-click-skip', 'ui-started');
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'ui-started');
+                        return;
+                    }
+
+                    // Use elementFromPoint for reliable detection (works with pointer events)
+                    const clickedEl = document.elementFromPoint(event.clientX, event.clientY);
+
+                    // Ignore clicks on UI elements
+                    if (isUiClickTarget(clickedEl) || event.clientY >= getUiDeadzoneTop()) {
+                        markUiInteraction('click-ui-target');
+                        console.log("Click ignored: UI element");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'click-ui-target');
+                        return;
+                    }
+
+                    if (isMobile && clickedEl !== renderer.domElement) {
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
+                        return;
+                    }
+
+                    // DISABLED in reading mode
+                    if (player.isReadingMode) {
+                        console.log("Click-to-move disabled in reading mode");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'reading-mode');
+                        return;
+                    }
+
+                    // If this was a touch drag (swipe), don't trigger click-to-move
+                    if (isTouchDragging) {
+                        console.log("Click ignored: was a drag gesture");
+                        isTouchDragging = false;
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'drag-gesture');
+                        return;
+                    }
+
+                    // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
+                    // If click is in the bottom 80px (approx UI height), IGNORÉ
+                    if (event.clientY >= getUiDeadzoneTop()) {
+                        console.log("Ignored Click in UI Deadzone");
+                        liminalCause('C02_WORLD_BLOCKED_CLICK', 'deadzone');
+                        return;
+                    }
+
+                    liminalCause('C01_WORLD_PATH_CLICK', `x=${event.clientX} y=${event.clientY}`);
+                    trySetMoveTargetFromScreenPoint(event.clientX, event.clientY, false);
+                });
+
+                function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        liminalDebugNote('move-skip', `world-lock:${worldLockReason}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `move-skip:world-lock:${worldLockReason}`);
+                        return;
+                    }
+
+                    const sinceUi = performance.now() - lastUiInteractionAt;
+                    if (performance.now() < suppressWorldInputUntil) {
+                        liminalDebugNote('move-skip', 'suppressed-window');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'move-skip:suppressed-window');
+                        return;
+                    }
+                    if (clientY >= getUiDeadzoneTop() || isPointInsideUi(clientX, clientY)) {
+                        liminalDebugNote('move-skip', 'ui-deadzone-boundary');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'move-skip:ui-deadzone-boundary');
+                        return;
+                    }
+
+                    // Calculate click position in normalized coordinates
+                    const clickScreenX = (clientX / window.innerWidth) * 2 - 1;
+                    const clickScreenY = (clientY / window.innerHeight) * 2 - 1;
+                    const clickMouse = new THREE.Vector2();
+                    clickMouse.x = clickScreenX;
+                    clickMouse.y = -clickScreenY; // Flip Y for Three.js
+
+                    raycaster.setFromCamera(clickMouse, camera);
+
+                    // Check intersection with Scene Objects
+                    const intersects = raycaster.intersectObjects(scene.children, true);
+                    let target = null;
+
+                    for (let i = 0; i < intersects.length; i++) {
+                        if (intersects[i].object.type === 'Points') continue;
+                        target = intersects[i].point;
+                        break;
+                    }
+
+                    // Fallback to Ground Plane
+                    if (!target) {
+                        const groundTarget = new THREE.Vector3();
+                        if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
+                            target = groundTarget;
+                        }
+                    }
+
+                    if (target) {
+                        if (isPointInsideUi(clientX, clientY) || clientY >= getUiDeadzoneTop()) {
+                            liminalCause('C05_MOVE_SET_FROM_UI_REGION', `x=${clientX} y=${clientY}`);
+                        }
+                        if (sinceUi < UI_CLICK_SUPPRESS_MS + 30) {
+                            liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `sinceUi=${sinceUi.toFixed(0)}ms`);
+                        }
+                        if (isMobileTap) {
+                            cameraLookTarget = target.clone();
+                        }
+
+                        // Clamp X to hallway bounds for movement
+                        if (target.x < -2.5) target.x = -2.5;
+                        if (target.x > 2.5) target.x = 2.5;
+
+                        // NO BACKWARDS MOVEMENT
+                        if (target.z > camera.position.z + 2.0) {
+                            console.log("Ignored Backwards Click");
+                            cameraLookTarget = null; // Don't look at backwards target
+                            liminalDebugNote('move-skip', 'backwards-target');
+                            return;
+                        }
+
+                        // Set movement Target
+                        moveTarget = new THREE.Vector3(target.x, camera.position.y, target.z);
+                        liminalDebugNote('move-set', `${isMobileTap ? 'tap' : 'click'} x=${target.x.toFixed(2)} z=${target.z.toFixed(2)}`);
+                        console.log("Moving to:", moveTarget, "Looking at:", cameraLookTarget);
+                    }
+                }
+
+                document.addEventListener('touchend', (event) => {
+                    if (player && player.isReadingMode) {
+                        liminalDebugNote('touchend-skip', 'reading-mode');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'reading-mode');
+                        touchStartedOnRenderer = false;
+                        return;
+                    }
+                    if (window.innerWidth > 768) return;
+                    const worldLockReason = getWorldInputLockReason();
+                    if (worldLockReason) {
+                        markUiInteraction(`touchend-world-lock:${worldLockReason}`);
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `world-lock:${worldLockReason}`);
+                        return;
+                    }
+                    if (isUiClickTarget(event.target)) {
+                        markUiInteraction('touchend-event-target-ui');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'event-target-ui');
+                        return;
+                    }
+                    if (performance.now() < suppressWorldInputUntil) {
+                        liminalDebugNote('touchend-skip', 'suppressed-window');
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'suppressed-window');
+                        touchStartedOnRenderer = false;
+                        return;
+                    }
+
+                    // Ignore UI-origin touches and drag gestures
+                    if (!isTouchValid || touchStartedOnUi || isTouchDragging || touchMovedForTap) {
+                        const sinceUi = performance.now() - lastUiInteractionAt;
+                        liminalDebugNote('touchend-skip', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `flags valid=${isTouchValid} ui=${touchStartedOnUi} drag=${isTouchDragging} moved=${touchMovedForTap}`);
+                        if (!touchStartedOnUi && !isTouchDragging && !touchMovedForTap && !isTouchValid && sinceUi > 1200) {
+                            liminalCause('C08_TOUCHFLAGS_STUCK', `isTouchValid=false sinceUi=${sinceUi.toFixed(0)}ms`);
+                        }
+                        isTouchDragging = false;
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        return;
+                    }
+
+                    if (!event.changedTouches || event.changedTouches.length === 0) return;
+                    const touch = event.changedTouches[0];
+
+                    if (isPointInsideUi(touch.clientX, touch.clientY)) {
+                        markUiInteraction('touchend-point-ui');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'point-inside-ui');
+                        return;
+                    }
+
+                    // Ignore taps in control deadzone
+                    if (touch.clientY >= getUiDeadzoneTop()) {
+                        liminalDebugNote('touchend-skip', 'deadzone');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'deadzone');
+                        return;
+                    }
+
+                    const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                    if (isUiClickTarget(touchedEl)) {
+                        markUiInteraction('touchend-ui-target');
+                        touchStartedOnRenderer = false;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'touchedEl-ui-target');
+                        return;
+                    }
+                    if (!touchStartedOnRenderer) {
+                        liminalDebugNote('touchend-skip', 'start-not-renderer');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'start-not-renderer');
+                        return;
+                    }
+                    if (!isRendererElement(touchedEl)) {
+                        liminalDebugNote('touchend-skip', 'not-renderer');
+                        touchMovedForTap = false;
+                        touchStartedOnUi = false;
+                        touchStartedOnRenderer = false;
+                        isTouchValid = true;
+                        liminalCause('C04_WORLD_BLOCKED_TOUCH', 'not-renderer');
+                        return;
+                    }
+
+                    liminalCause('C03_WORLD_PATH_TOUCH', `x=${touch.clientX} y=${touch.clientY}`);
+                    trySetMoveTargetFromScreenPoint(touch.clientX, touch.clientY, true);
+                    isTouchDragging = false;
+                    touchMovedForTap = false;
+                    touchStartedOnUi = false;
+                    touchStartedOnRenderer = false;
+                    isTouchValid = true;
+                }, { passive: true });
+                document.addEventListener('keydown', (e) => {
+                    // Debug: Log key code and Mode
+                    // console.log("Keydown:", e.code, "ReadingMode:", isReadingMode);
+                    const code = e.code;
+                    if (code === 'KeyW' || code === 'ArrowUp') move.f = true;
+                    if (code === 'KeyS' || code === 'ArrowDown') move.b = true;
+                    if (code === 'KeyA' || code === 'ArrowLeft') { move.l = true; console.log("Move Left START"); }
+                    if (code === 'KeyD' || code === 'ArrowRight') { move.r = true; console.log("Move Right START"); }
+                });
+                document.addEventListener('keyup', (e) => {
+                    const code = e.code;
+                    if (code === 'KeyW' || code === 'ArrowUp') move.f = false;
+                    if (code === 'KeyS' || code === 'ArrowDown') move.b = false;
+                    if (code === 'KeyA' || code === 'ArrowLeft') move.l = false;
+                    if (code === 'KeyD' || code === 'ArrowRight') move.r = false;
+                });
+
+                // --- LORE MODE FUNCTIONS (Glowing Books) ---
+                // Uses existing isLoreMode and mainAudioState from line ~725
+
+                // --- LORE MODE ---
+                // (Global window.startLoreMode defined above is used)
+
+                // --- INIT & PRELOAD ---
+                console.log("DEBUG: Initialization Complete. Starting Preload...");
+
+                // 1. Initial Segments Preload
+                let loadedSegments = 0;
+                // User Request: Start at Meter 3.00 -> Need segment at +10 to cover start (Range 0 to 10)
+                const initialZ = [10, 0, -10, -20];
+                const totalToLoad = initialZ.length;
+
+                function checkPreloadComplete() {
+                    loadedSegments++;
+                    // console.log(`DEBUG: Loaded Segments: ${loadedSegments} / ${totalToLoad}`);
+                    // Update Loading Bar or Logic here if needed
+                    if (loadedSegments >= totalToLoad) {
+                        console.log("DEBUG: Preload Complete. Starting Game.");
+                        startGame();
+                    }
+                }
+
+                // Create initial segments with High Priority (Preload Mode)
+                initialZ.forEach(z => {
+                    segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
+                });
+
+                function startGame() {
+                    hasStartedGame = true;
+
+                    // Hide 'Click to Start' and Loading Screens
+                    const loadingText = document.getElementById('loading');
+                    if (loadingText) loadingText.style.display = 'none';
+
+                    const loadingScreen = document.getElementById('loading-screen');
+                    if (loadingScreen) loadingScreen.style.display = 'none';
+
+                    // Show Game UI immediately
+                    if (uiContainer) uiContainer.style.display = 'flex';
+
+                    // SAFETY SYNC: Force Reading Mode State
+                    if (window.audioPlayer && isReadingMode) {
+                        window.audioPlayer.setReadingMode(true);
+                    }
+
+                    if (mainChapterAutoplayIntent.shouldAutoplay) {
+                        liminalDebugNote('autoplay', `boot start source=${mainChapterAutoplayIntent.source} reason=${mainChapterAutoplayIntent.reason}`);
+                        verifyPlaybackStarted(3, 320).then(started => {
+                            liminalDebugNote('autoplay', `boot result started=${started}`);
+                            updateIcons();
+                        });
+                    } else {
+                        liminalDebugNote('autoplay', `suppressed policy=${mainChapterAutoplayIntent.policy} reason=${mainChapterAutoplayIntent.reason}`);
+                        updateIcons();
+                    }
+
+                    // Init Dust - REMOVED Global System (now in segments)
+                    // if (!dustSystem) ...
+
+                    // FIX: Force Shader Compilation to prevent initial stutter
+                    try {
+                        renderer.compile(scene, camera);
+                    } catch (e) {
+                        console.warn("Shader compilation failed:", e);
+                    }
+
+                    // ============================================
+                    // AUDIO BACKGROUND HANDLING (FIX FOR FIREFOX MOBILE)
+                    // ============================================
+                    let wasAmbientPlaying = false;
+                    let wasPlayerPlaying = false;
+                    let visibilityResumeToken = 0;
+                    window.gamePaused = false; // Flag for Game Loop
+
+                    document.addEventListener('visibilitychange', () => {
+                        const token = ++visibilityResumeToken;
+                        if (document.hidden) {
+                            // APP BACKGROUNDED -> PAUSE ALL
+                            window.gamePaused = true;
+                            saveCurrentContentState({ preferCachedTime: true, reason: 'visibility:hidden' });
+                            liminalDebugNote('visibility', 'hidden');
+
+                            if (typeof ambientAudio !== 'undefined') {
+                                wasAmbientPlaying = (typeof ambientAudio.isProbablyPlaying === 'function')
+                                    ? ambientAudio.isProbablyPlaying()
+                                    : !ambientAudio.paused;
+                                ambientAudio.pause();
+                                liminalDebugNote('ambient', `pause hidden (wasPlaying=${wasAmbientPlaying})`);
+                            } else {
+                                wasAmbientPlaying = false;
+                            }
+
+                            if (typeof audioPlayer !== 'undefined') {
+                                wasPlayerPlaying = (typeof audioPlayer.isProbablyPlaying === 'function')
+                                    ? audioPlayer.isProbablyPlaying()
+                                    : !audioPlayer.paused;
+                                audioPlayer.pause();
+                                liminalDebugNote('player', `pause hidden (wasPlaying=${wasPlayerPlaying})`);
+                            } else {
+                                wasPlayerPlaying = false;
+                            }
+
+                        } else {
+                            // APP FOREGROUND -> RESUME
+                            window.gamePaused = false;
+                            liminalDebugNote('visibility', 'visible');
+                            if (!window.visualFreezeActive) {
+                                startAnimationLoop();
+                            }
+                            // Discard accumulated clock time on resume
+                            if (typeof clock !== 'undefined') clock.getDelta();
+
+                            setTimeout(() => {
+                                if (token !== visibilityResumeToken || document.hidden) return;
+                                if (contentSwitchInProgress) {
+                                    liminalDebugNote('visibility', 'resume skipped (content switch active)');
+                                    return;
+                                }
+                                if (wasAmbientPlaying && typeof ambientAudio !== 'undefined') {
+                                    ambientAudio.play().catch(e => console.warn("Resume ambient failed", e));
+                                    wasAmbientPlaying = false;
+                                    liminalDebugNote('ambient', 'resume on visible');
+                                }
+                                if (wasPlayerPlaying && typeof audioPlayer !== 'undefined') {
+                                    audioPlayer.play().catch(e => console.warn("Resume player failed", e));
+                                    wasPlayerPlaying = false;
+                                    liminalDebugNote('player', 'resume on visible');
+                                }
+                            }, 100);
+                        }
+                    });
+
+                    window.addEventListener('pagehide', () => {
+                        visibilityResumeToken += 1;
+                        saveCurrentContentState({ preferCachedTime: true, reason: 'pagehide' });
+                        if (typeof ambientAudio !== 'undefined') ambientAudio.pause();
+                        if (typeof audioPlayer !== 'undefined') audioPlayer.pause();
+                        liminalDebugNote('lifecycle', 'pagehide');
+                    });
+
+                    // Start Animation Loop only after preload
+                    startAnimationLoop();
+                }
+
+                // Global Animation State
+                let headBob = 0;
+                // let dustSystem = null; // Removed
+
+                // Handle Window Resize
+                window.addEventListener('resize', () => {
+                    syncViewport();
+                });
+
+                // Animate
+                let lastFrameTime = performance.now();
+                let frameCount = 0;
+                let fpsLogTimer = 0;
+
+                function startAnimationLoop() {
+                    if (animationLoopRunning || window.visualFreezeActive) return;
+                    animationLoopRunning = true;
+                    lastFrameTime = performance.now();
+                    requestAnimationFrame(animate);
+                }
+
+                function animate() {
+                    if (window.visualFreezeActive) {
+                        animationLoopRunning = false;
+                        return;
+                    }
+
+                    // FPS Diagnostic
+                    const now = performance.now();
+                    const frameDelta = now - lastFrameTime;
+                    lastFrameTime = now;
+                    frameCount++;
+                    fpsLogTimer += frameDelta;
+                    if (fpsLogTimer > 3000) {
+                        console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
+                        frameCount = 0;
+                        fpsLogTimer = 0;
+                    }
+
+                    // Check Pause
+                    if (window.gamePaused) {
+                        requestAnimationFrame(animate);
+                        return;
+                    }
+
+                    requestAnimationFrame(animate);
+
+                    try {
+                        const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
+                        const time = clock.getElapsedTime();
+                        const worldLockReason = getWorldInputLockReason();
+                        const lookSuppressed = (!isReadingMode) && (!!worldLockReason || performance.now() < suppressWorldInputUntil);
+
+                        // Free Look
+                        // If we have a 3D look target, smoothly rotate camera toward it
+                        if (lookSuppressed) {
+                            cameraLookTarget = null;
+                            isLookingAtClickTarget = false;
+                            syncLookTargetsToCamera();
+                        } else if (cameraLookTarget) {
+                            // Calculate direction from camera to 3D target point
+                            const lookDir = new THREE.Vector3();
+                            lookDir.subVectors(cameraLookTarget, camera.position).normalize();
+
+                            // Calculate target yaw and pitch from direction
+                            // Forward is -Z, so yaw = atan2(x, -z)
+                            const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
+                            const targetPitch = Math.asin(-lookDir.y);
+
+                            // Get current camera angles
+                            euler.setFromQuaternion(camera.quaternion);
+
+                            // EXTREMELY SLOW interpolation for gentle pan
+                            const lookEase = 0.1 * delta;
+                            euler.y += (targetYaw - euler.y) * lookEase;
+                            euler.x += (targetPitch - euler.x) * lookEase;
+                            euler.z = 0;
+
+                            // Apply rotation
+                            camera.quaternion.setFromEuler(euler);
+
+                            // Update mouse.x/y to match current camera direction
+                            // So swipe continues from current orientation
+                            mouse.x = -euler.y / 1.5;
+                            mouse.y = -euler.x / 0.5;
+                            targetMouseX = mouse.x;
+                            targetMouseY = mouse.y;
+
+                            // Stop when close enough to target
+                            if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
+                                cameraLookTarget = null;
+                            }
+                        } else if (isCenteringCamera) {
+                            // Mobile Reading Mode Recenter
+                            // Smoothly interpolate X to 0 and Yaw to 0
+
+                            // 1. Position X -> 0
+                            camera.position.x += (0 - camera.position.x) * 2.0 * delta;
+
+                            // 2. Rotation Y -> 0 (Look Straight)
+                            euler.setFromQuaternion(camera.quaternion);
+                            // Shortest path angle
+                            let diff = 0 - euler.y;
+                            if (diff > Math.PI) diff -= Math.PI * 2;
+                            if (diff < -Math.PI) diff += Math.PI * 2;
+
+                            euler.y += diff * 2.0 * delta;
+                            euler.x += (0 - euler.x) * 2.0 * delta; // Also level pitch
+                            euler.z = 0;
+                            camera.quaternion.setFromEuler(euler);
+
+                            // Update mouse state to match
+                            mouse.x = 0;
+                            mouse.y = 0;
+                            targetMouseX = 0;
+                            targetMouseY = 0;
+
+                            // Stop if close
+                            if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
+                                isCenteringCamera = false;
+                            }
+                        } else {
+                            // Normal mouse/swipe-based camera control
+                            const targetPitch = -mouse.y * 0.5;
+                            const targetYaw = -mouse.x * 1.5;
+                            const ease = 5.0 * delta;
+                            euler.setFromQuaternion(camera.quaternion);
+                            euler.x += (targetPitch - euler.x) * ease;
+                            euler.y += (targetYaw - euler.y) * ease;
+                            euler.z = 0;
+                            camera.quaternion.setFromEuler(euler);
+                        }
+
+                        // movement constants
+                        // movement constants
+                        // movement constants
+                        // USER: REQUESTED 25% SLOWER than 200 => 150
+                        const baseAccel = 150.0;
+                        const gameSpeed = baseAccel * 0.15;
+                        // Click Speed removed (Unified)
+
+                        // SYNCED: Reading Speed = Game Speed
+                        const readingSpeed = gameSpeed;
+
+                        const isReading = isReadingMode; // Use global state
+
+                        const input = new THREE.Vector3();
+
+                        // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
+                        velocity.x -= velocity.x * 10.0 * delta;
+                        velocity.z -= velocity.z * 10.0 * delta;
+                        velocity.y -= 9.8 * 100.0 * delta;
+
+                        if (isReading) {
+                            // READING MODE: Auto-Walk Forward (Global Z)
+                            // Ignore User Input
+                            input.set(0, 0, -1); // Purely forward along hallway
+
+                            // Auto-Center X (Smooth drift to 0)
+                            // "Trägheit der Richtungsjustierung"
+                            const centerX = 0;
+                            const distToCenter = centerX - camera.position.x;
+                            const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
+                            camera.position.x += centerForce;
+
+                            // Apply Velocity for Z
+                            velocity.add(input.multiplyScalar(readingSpeed * delta));
+
+                        } else {
+                            // GAME MODE
+
+                            // 2. Input Vectors
+
+                            // 2. Input Vectors
+                            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                            forward.y = 0; forward.normalize();
+                            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                            right.y = 0; right.normalize();
+
+                            input.set(0, 0, 0);
+                            if (move.f) input.add(forward);
+                            // if (move.b) input.sub(forward); // Backwards disabled in general config
+                            if (move.r) input.add(right);
+                            if (move.l) input.sub(right);
+
+                            // 3. Apply Velocity (Manual vs Auto)
+                            if (input.length() > 0) {
+                                input.normalize();
+                                velocity.add(input.multiplyScalar(gameSpeed * delta));
+                                // Cancel Auto-Move on manual input
+                                moveTarget = null;
+                                cameraLookTarget = null;
+                            } else if (moveTarget) {
+                                // CLICK-TO-MOVE LOGIC
+                                const sinceUi = performance.now() - lastUiInteractionAt;
+                                const worldLockReason = getWorldInputLockReason();
+                                if (worldLockReason) {
+                                    liminalDebugNote('move-skip', `loop-world-lock:${worldLockReason}`);
+                                    liminalCause('C04_WORLD_BLOCKED_TOUCH', `loop-world-lock:${worldLockReason}`);
+                                    moveTarget = null;
+                                    cameraLookTarget = null;
+                                    velocity.x = 0;
+                                    velocity.z = 0;
+                                } else {
+                                    if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
+                                        liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
+                                    }
+                                    const dx = moveTarget.x - camera.position.x;
+                                    const dz = moveTarget.z - camera.position.z;
+                                    const dist = Math.sqrt(dx * dx + dz * dz);
+
+                                    // FIX: Stop Looking earlier to prevent swing/spin at singularity
+                                    if (dist < 2.0) {
+                                        cameraLookTarget = null;
+                                    }
+
+                                    if (dist < 0.2) {
+                                        moveTarget = null;
+                                        cameraLookTarget = null;
+                                        velocity.set(0, 0, 0); // Full stop
+                                        // Skip remaining movement logic this frame
+                                    } else {
+                                        const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+
+                                        // UNIFIED SPEED: Use gameSpeed for click movement too.
+                                        // Direct World Space addition (since velocity is World Space)
+                                        velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                                    }
+                                }
+                            }
+
+                            // 4. Move Controls (Direct Physics Integration)
+                            camera.position.x += velocity.x * delta;
+                            camera.position.z += velocity.z * delta; // Allow forward/back calc first
+
+                            // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
+                            // User: "negative meter forbidden" / "backwards movement forbidden"
+                            if (velocity.z > 0) velocity.z = 0;
+
+                            // Prevent drifting back if position tries to increase
+                            // (Double safety: clamp delta position change?)
+                            // No, velocity clamp is smoother. But let's check position delta too just in case.
+                            // Accessing last frame? No need, velocity controls it.
+
+                            camera.position.y += (velocity.y * delta);
+
+                            // 5. Floor Collision
+                            if (camera.position.y < 1.6) {
+                                velocity.y = 0;
+                                camera.position.y = 1.6;
+                            }
+
+                            // 6. Wall Collision (Clamp X)
+                            // Strictly clamp X to hallway bounds to prevent wall clipping
+                            camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
+                        }
+
+                        // Friction
+                        velocity.multiplyScalar(1.0 - 5.0 * delta);
+                        camera.position.add(velocity.clone().multiplyScalar(delta));
+
+                        // HEAD BOBBING (Half speed, Half amplitude of previous)
+                        // Previous: delta * 12, Amp 0.025
+                        // New: delta * 6, Amp 0.0125
+                        if (velocity.length() > 0.5) {
+                            headBob += delta * 6;
+                            camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;
+                        } else {
+                            // Return to neutral
+                            camera.position.y += (1.6 - camera.position.y) * 5.0 * delta;
+                        }
+
+                        // Dust Update (Global) - REMOVED
+                        // if (dustSystem) ...
+
+                        // Bounds
+                        // Global Safety Clamp (Runs for both modes)
+                        // Slightly wider than 1.8 to allow movement but prevent wall clipping
+                        // Fixed at 1.95 (just before shelves at ~2.4)
+                        if (camera.position.x < -1.95) camera.position.x = -1.95;
+                        if (camera.position.x > 1.95) camera.position.x = 1.95;
+
+                        updateSegments(camera.position.z);
+                        segments.forEach(seg => {
+                            // Unified update call
+                            seg.update(delta, time, camera.position);
+                        });
+
+                        // Update Glowing Books and check proximity
+                        activeGlowingBooks.forEach(book => {
+                            if (!book.collected && !book.missed) {
+                                book.update(time, camera.position.z, camera.position.x);
+
+                                // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
+                                if (true) {
+                                    // FIX: Use WORLD position, not local position (meshGroup may have moved)
+                                    const worldPos = new THREE.Vector3();
+                                    book.mesh.getWorldPosition(worldPos);
+                                    const distZ = Math.abs(worldPos.z - camera.position.z);
+                                    const distX = Math.abs(worldPos.x - camera.position.x);
+                                    const SCENE_NAME = 'liminal_library';
+                                    const alreadyCollected = !!(
+                                        window.GameState
+                                        && typeof window.GameState.isLightCollected === 'function'
+                                        && window.GameState.isLightCollected(SCENE_NAME, book.id)
+                                    );
+
+                                    // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
+                                    if (distZ < 1.5 && distX < 1.0 && !alreadyCollected) {
+                                        // Collect!
+                                        book.collect();
+                                        // Collect - use GameState for global lore tracking!
+                                        // DON'T increment local counter - GameState handles which lore is next globally
+
+                                        // Register in GameState (GLOBAL - same logic as marketplace)
+                                        if (window.GameState && window.GameState.collectLight) {
+                                            window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
+                                                if (newLoreId) {
+                                                    const now = Date.now();
+                                                    if (now - lastShimmerAt > 400) {
+                                                        lastShimmerAt = now;
+                                                        shimmerSound.pause();
+                                                        shimmerSound.currentTime = 0;
+                                                        if (allowAuxSfxPlaybackLiminal()) {
+                                                            shimmerSound.play().catch(() => { });
+                                                        }
+                                                    }
+                                                    console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
+                                                    // Refresh archive menu so new lore appears immediately
+                                                    if (typeof renderArchive === 'function') renderArchive();
+                                                    // Start lore audio with the GLOBAL lore ID (not local counter!)
+                                                    startLoreMode(newLoreId);
+                                                } else {
+                                                    // All lore already unlocked
+                                                    console.log("All lore already unlocked");
+                                                }
+                                            });
+                                        }
+                                    }
+                                    // Check if player walked past without collecting (book is now behind player)
+                                    // Use world position for this check too
+                                    else if (worldPos.z > camera.position.z + 5) {
+                                        // Missed! Mark as missed but don't count towards collection
+                                        book.missed = true;
+                                        book.mesh.visible = false;
+                                        console.log(`Book ${book.id} missed (player walked past)`);
+                                    }
+                                }
+                            }
+                        });
+
+
+                        // Update Subtitles
+                        // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
+                        // No manual render call needed if SharedAudioPlayer updates innerHTML
+                        if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
+                            // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
+                        }
+
+                        renderer.render(scene, camera);
+
+                        // Update Debug HUD
+                        const debugEl = document.getElementById('debugHUD');
+                        if (debugEl) {
+                            const globalLore = getGlobalCollectedLoreCount();
+                            debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
+                        }
+                    } catch (err) {
+                        console.error("Animation Loop Crash:", err);
+                    }
+                }
+
+                function workQueueSize() {
+                    let count = 0;
+                    // Not easily accessible, but we can verify performance
+                    return "Active";
+                }
+                // animate(); // Moved to startGame()
+
+                // --- MENU LOGIC ---
+                const archiveModal = document.getElementById('archiveModal');
+                const bookBtn = document.getElementById('bookBtn');
+                const closeArchiveBtn = document.getElementById('closeArchiveBtn');
+                const chapter1Btn = document.getElementById('chapter1Btn');
+                const loreList = document.getElementById('loreList');
+
+                // SAVE / LOAD LOGIC
+                const btnSave = document.getElementById('btnSaveData');
+                const btnLoad = document.getElementById('btnLoadData');
+                const fileInput = document.getElementById('fileInputSave');
+
+                if (btnSave) {
+                    btnSave.addEventListener('click', () => {
+                        if (!window.GameState) return;
+                        const json = window.GameState.exportState();
+                        const blob = new Blob([json], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'liminal_save_' + Date.now() + '.json';
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                    });
+                }
+
+                if (btnLoad) {
+                    btnLoad.addEventListener('click', () => {
+                        if (fileInput) fileInput.click();
+                    });
+                }
+
+                if (fileInput) {
+                    fileInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (ev) => {
+                            if (window.GameState) {
+                                // Explicitly import via GameState
+                                const success = await window.GameState.importState(ev.target.result);
+                                if (success) {
+                                    alert("Save Data Imported Successfully! Reloading...");
+                                    window.location.reload();
+                                } else {
+                                    alert("Invalid Save File.");
+                                }
+                            }
+                        };
+                        reader.readAsText(file);
+                    });
+                }
+
+                if (bookBtn) {
+                    bookBtn.addEventListener('click', () => {
+                        if (typeof renderArchive === 'function') renderArchive();
+                        archiveModal.classList.add('visible');
+                    });
+                }
+                if (closeArchiveBtn) {
+                    closeArchiveBtn.addEventListener('click', () => {
+                        archiveModal.classList.remove('visible');
+                    });
+                }
+                if (chapter1Btn) {
+                    chapter1Btn.addEventListener('click', async () => {
+                        console.log("Returning to Chapter 1...");
+                        await waitForContentSwitchIdle('chapter-menu:to-1');
+                        await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
+                        markChapterAutoplayIntent('kapitel1', 'manual', 'chapter-menu');
+                        writeStateHandoff('kapitel1');
+                        window.location.href = 'index.html';
+                    });
+                }
+
+                // Chapter 1b (Resume)
+                const chapter1bBtn = document.getElementById('chapter1bBtn');
+                if (chapter1bBtn) {
+                    // Initialize visually
+                    chapter1bBtn.classList.remove('locked');
+
+                    chapter1bBtn.addEventListener('click', () => {
+                        document.getElementById('archiveModal').classList.remove('visible');
+                        if (isLoreMode) {
+                            window.restoreMainAudio();
+                        } else {
+                            // Unpause if needed
+                            if (player && player.audio && player.audio.paused) {
+                                player.play();
+                            }
+                        }
+                    });
+                }
+
+                // Chapter 1c
+                const chapter1cBtn = document.getElementById('chapter1cBtn');
+                if (chapter1cBtn) {
+                    chapter1cBtn.addEventListener('click', async () => {
+                        console.log("Going to Chapter 1c...");
+                        await waitForContentSwitchIdle('chapter-menu:to-1c');
+                        await saveCurrentContentState({ reason: 'chapter-menu:to-1c' });
+                        markChapterAutoplayIntent('kapitel1c', 'manual', 'chapter-menu');
+                        writeStateHandoff('kapitel1c');
+                        window.location.href = 'index.html?chapter=kapitel1c';
+                    });
+                }
+                function triggerUiHaptic(pattern = 8) {
+                    if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+                    navigator.vibrate(pattern);
+                }
+                // --- ARCHIVE TAB SWITCHING ---
+                function initArchiveTabs() {
+                    const tabs = Array.from(document.querySelectorAll('.archive-tab'));
+                    const panels = Array.from(document.querySelectorAll('.archive-tab-content'));
+                    const tabsBar = document.querySelector('.archive-tabs');
+                    const primaryInhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+                    const primarySettingsBtn = document.getElementById('archivePrimarySettingsBtn');
+                    const settingsPanel = document.querySelector('.archive-tab-content[data-tab="einstellungen"]');
+                    let lastContentTab = 'kapitel';
+
+                    const setPrimaryMode = (mode) => {
+                        const normalized = mode === 'einstellungen' ? 'einstellungen' : 'inhalt';
+
+                        if (primaryInhaltBtn) primaryInhaltBtn.classList.toggle('active', normalized === 'inhalt');
+                        if (primarySettingsBtn) primarySettingsBtn.classList.toggle('active', normalized === 'einstellungen');
+                        if (tabsBar) tabsBar.style.display = normalized === 'inhalt' ? '' : 'none';
+                    };
+
+                    const showContentTab = (target, activeTab = null) => {
+                        tabs.forEach((t) => t.classList.remove('active'));
+                        panels.forEach((p) => p.classList.remove('active'));
+
+                        const matchedTab = activeTab || tabs.find((t) => t.getAttribute('data-tab') === target) || null;
+                        if (matchedTab) {
+                            matchedTab.classList.add('active');
+                            lastContentTab = matchedTab.getAttribute('data-tab') || lastContentTab;
+                        }
+
+                        const panel = document.querySelector(`.archive-tab-content[data-tab="${lastContentTab}"]`);
+                        if (panel) panel.classList.add('active');
+                        if (lastContentTab === 'lesezeichen') renderBookmarks();
+                    };
+
+                    const showSettingsPanel = () => {
+                        tabs.forEach((t) => t.classList.remove('active'));
+                        panels.forEach((p) => p.classList.remove('active'));
+                        if (settingsPanel) settingsPanel.classList.add('active');
+                        if (typeof syncReaderSettingsUi === 'function') syncReaderSettingsUi();
+                    };
+
+                    tabs.forEach(tab => {
+                        tab.addEventListener('click', () => {
+                            triggerUiHaptic(7);
+                            tab.classList.remove('pressed');
+                            // Force reflow so the press animation retriggers on repeated clicks.
+                            void tab.offsetWidth;
+                            tab.classList.add('pressed');
+                            setTimeout(() => tab.classList.remove('pressed'), 170);
+                            const target = tab.getAttribute('data-tab');
+                            setPrimaryMode('inhalt');
+                            showContentTab(target, tab);
+                        });
+                    });
+
+                    if (primaryInhaltBtn) {
+                        primaryInhaltBtn.addEventListener('click', () => {
+                            triggerUiHaptic(7);
+                            setPrimaryMode('inhalt');
+                            showContentTab(lastContentTab);
+                        });
+                    }
+
+                    if (primarySettingsBtn) {
+                        primarySettingsBtn.addEventListener('click', () => {
+                            triggerUiHaptic(7);
+                            setPrimaryMode('einstellungen');
+                            showSettingsPanel();
+                        });
+                    }
+
+                    const initiallyActiveTab = tabs.find((tab) => tab.classList.contains('active'));
+                    if (initiallyActiveTab) {
+                        lastContentTab = initiallyActiveTab.getAttribute('data-tab') || 'kapitel';
+                    }
+                    setPrimaryMode('inhalt');
+                    showContentTab(lastContentTab, initiallyActiveTab || undefined);
+                }
+                initArchiveTabs();
+
+                // --- BOOKMARK RENDERING ---
+                function renderBookmarks() {
+                    const list = document.getElementById('bookmarkList');
+                    if (!list) return;
+                    list.innerHTML = '';
+
+                    if (!window.GameState) return;
+                    const bookmarks = window.GameState.getBookmarks();
+
+                    if (bookmarks.length === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'bookmark-empty-msg';
+                        empty.innerText = 'Keine Lesezeichen gesetzt';
+                        list.appendChild(empty);
+                        return;
+                    }
+
+                    bookmarks.forEach(bm => {
+                        const item = document.createElement('div');
+                        item.className = 'menu-item bookmark-item';
+
+                        const mainText = document.createElement('div');
+                        mainText.className = 'item-main-text';
+                        const timeStr = window.GameState.formatBookmarkTime(bm.time);
+                        mainText.innerText = `${bm.chapterTitle} · ${timeStr}`;
+
+                        const subText = document.createElement('div');
+                        subText.className = 'item-sub-text';
+                        subText.innerText = bm.textPreview || '';
+
+                        const delBtn = document.createElement('button');
+                        delBtn.className = 'bookmark-delete-btn';
+                        delBtn.innerHTML = '&times;';
+                        delBtn.addEventListener('click', async (e) => {
+                            e.stopPropagation();
+                            await window.GameState.removeBookmark(bm.id);
+                            renderBookmarks();
+                        });
+
+                        item.appendChild(mainText);
+                        item.appendChild(subText);
+                        item.appendChild(delBtn);
+
+                        item.addEventListener('click', async () => {
+                            document.getElementById('archiveModal').classList.remove('visible');
+                            const targetPage = (typeof bm.page === 'string' && bm.page) ? bm.page : CURRENT_PAGE;
+                            const targetContentKey = resolveBookmarkContentKey(bm);
+                            const isLoreBookmark = /^lore\d+$/i.test(targetContentKey);
+                            if (targetPage === CURRENT_PAGE || isLoreBookmark) {
+                                const reason = isLoreBookmark
+                                    ? `bookmark:${bm.id}:lore-local`
+                                    : `bookmark:${bm.id}:same-page`;
+                                const ready = await ensureBookmarkContentForCurrentPage(bm, reason);
+                                if (!ready) {
+                                    console.warn('[Bookmark] Could not activate target content on current page.', bm);
+                                    return;
+                                }
+                                if (window.audioPlayer && window.audioPlayer.seekToTime) {
+                                    await window.audioPlayer.seekToTime(bm.time, { autoplay: true });
+                                }
+                            } else {
+                                await waitForContentSwitchIdle('bookmark:cross-page');
+                                await saveCurrentContentState({ reason: 'bookmark:navigate' });
+                                sessionStorage.setItem('bookmark_seek_target', JSON.stringify(bm));
+                                const key = resolveBookmarkPageKey(targetPage);
+                                markChapterAutoplayIntent(key, 'manual', 'bookmark');
+                                writeStateHandoff(key);
+                                window.location.href = targetPage;
+                            }
+                        });
+
+                        list.appendChild(item);
+                    });
+                }
+
+                function renderArchive() {
+                    const list = document.getElementById('loreList');
+                    list.innerHTML = '';
+
+                    if (!window.GameState) return;
+
+                    const db = window.GameState.getAllLore();
+                    const collectedIds = window.GameState.state.collectedLore;
+
+                    if (collectedIds.length === 0) {
+                        const empty = document.createElement('div');
+                        empty.className = 'bookmark-empty-msg';
+                        empty.innerText = 'Keine Lore gefunden';
+                        list.appendChild(empty);
+                    } else {
+                        collectedIds.sort((a, b) => a - b).forEach(id => {
+                            const content = db[id];
+                            if (!content) return;
+
+                            const item = document.createElement('div');
+                            item.className = 'menu-item';
+
+                            // Active State
+                            if (isLoreMode && activeLoreId === id) {
+                                item.classList.add('active');
+                            }
+
+                            const mainText = document.createElement('div');
+                            mainText.className = 'item-main-text';
+                            mainText.innerText = content.title;
+
+                            const subText = document.createElement('div');
+                            subText.className = 'item-sub-text';
+                            subText.innerText = content.duration;
+
+                            item.appendChild(mainText);
+                            item.appendChild(subText);
+
+                            item.addEventListener('click', () => {
+                                document.getElementById('archiveModal').classList.remove('visible');
+                                startLoreMode(id);
+                            });
+                            list.appendChild(item);
+                        });
+                    }
+                }
+
+                // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
+                window.addEventListener('resize', () => {
+                    syncViewport();
+                    console.log(`Resized to ${window.innerWidth}x${window.innerHeight}`);
+                });
+                window.addEventListener('orientationchange', syncViewport, { passive: true });
+                document.addEventListener('fullscreenchange', syncViewport);
+                if (window.visualViewport) {
+                    window.visualViewport.addEventListener('resize', syncViewport, { passive: true });
+                    window.visualViewport.addEventListener('scroll', syncViewport, { passive: true });
+                }
+
+
+            } catch (err) {
+                console.error("FATAL ERROR IN MODULE:", err);
+            }
+        })();
+    

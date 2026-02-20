@@ -5293,7 +5293,7 @@
             const switchToken = ++contentSwitchToken;
             indexTrace('switch:start-lore:lock', { id, switchToken });
 
-      
+            try {
                 await saveCurrentContentState({ reason: `start-lore:${id}` });
 
                 // --- RADICAL iOS FALLBACK: Free hardware audio slot ---
