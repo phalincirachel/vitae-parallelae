@@ -1070,6 +1070,34 @@
             document.getElementById('archiveModal').classList.remove('visible');
         });
 
+        // --- RECENTER BUTTON: hide when archive modal is open ---
+        (function initRecenterArchiveGuard() {
+            const archiveModal = document.getElementById('archiveModal');
+            const recenterBtn = document.getElementById('subtitleRecenterBtn');
+            const recenterRadius = document.getElementById('subtitleRecenterMobileRadius');
+            if (!archiveModal || !recenterBtn) return;
+            let savedDisplay = '';
+
+            function syncRecenterForArchive() {
+                const isOpen = archiveModal.classList.contains('visible');
+                if (isOpen) {
+                    savedDisplay = recenterBtn.style.display || '';
+                    recenterBtn.style.setProperty('display', 'none', 'important');
+                    recenterBtn.style.pointerEvents = 'none';
+                    if (recenterRadius) recenterRadius.style.display = 'none';
+                } else {
+                    recenterBtn.style.pointerEvents = '';
+                    // Let updateRecenterButtonVisibility restore the correct state
+                    if (typeof updateRecenterButtonVisibility === 'function') {
+                        updateRecenterButtonVisibility('archive-close');
+                    }
+                }
+            }
+
+            const observer = new MutationObserver(() => syncRecenterForArchive());
+            observer.observe(archiveModal, { attributes: true, attributeFilter: ['class'] });
+        })();
+
         // SAVE / LOAD LOGIC
         const btnSave = document.getElementById('btnSaveData');
         const btnLoad = document.getElementById('btnLoadData');

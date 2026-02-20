@@ -877,6 +877,19 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     background: transparent;
+    overflow: hidden;
+}
+
+/* Hide ALL scrollbars inside the archive modal */
+#archiveModal,
+#archiveModal * {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+#archiveModal::-webkit-scrollbar,
+#archiveModal *::-webkit-scrollbar {
+    display: none;
 }
 
 #archiveModal.visible {
