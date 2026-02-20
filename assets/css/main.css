@@ -564,20 +564,21 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     display: block;
     line-height: 1.65;
     white-space: normal;
-    --flat-inline-gap: 0.19em;
+    --flat-timestamp-gap: 0.1em;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
     display: inline;
     line-height: inherit;
-    padding-left: var(--flat-leading-comp, 0px);
-    margin-right: var(--flat-inline-gap);
+    padding-left: 0;
+    padding-right: calc(var(--flat-leading-comp, 0px) + var(--flat-timestamp-gap));
+    margin-right: 0;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     font-weight: 500 !important;
-    margin-right: var(--flat-inline-gap);
-    padding-left: 0 !important;
+    padding-left: 0;
+    padding-right: var(--flat-timestamp-gap);
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */
@@ -1267,7 +1268,18 @@ body.scene-dimmer-light-mode .archive-tab.active {
 }
 
 .reader-color-picker-popover {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 4300;
     display: block;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.34);
+    border-radius: 10px;
+    background: rgba(10, 10, 12, 0.74);
+    backdrop-filter: blur(4px);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
 }
 
 .reader-color-picker-popover[hidden] {
@@ -1279,7 +1291,7 @@ body.scene-dimmer-light-mode .archive-tab.active {
     width: 168px;
     height: 168px;
     margin-left: auto;
-    margin-right: 0;
+    margin-right: auto;
 }
 
 .reader-color-wheel {
@@ -1376,6 +1388,12 @@ body.scene-dimmer-light-mode .reader-color-reset-btn {
     border-color: rgba(0, 0, 0, 0.35);
     background: rgba(0, 0, 0, 0.05);
     color: rgba(0, 0, 0, 0.9);
+}
+
+body.scene-dimmer-light-mode .reader-color-picker-popover {
+    border-color: rgba(0, 0, 0, 0.26);
+    background: rgba(243, 236, 225, 0.9);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.2);
 }
 
 /* Bookmark items */

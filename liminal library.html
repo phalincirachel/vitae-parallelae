@@ -190,12 +190,12 @@
                         type="button">Inhalt</button>
                     <button class="archive-primary-btn archive-primary-gear" id="archivePrimarySettingsBtn"
                         type="button" aria-label="Einstellungen" title="Einstellungen">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                            <circle cx="12" cy="12" r="6.35"></circle>
-                            <circle cx="12" cy="12" r="2.85"></circle>
-                            <path d="M12 2.7v2.45M12 18.85v2.45M4.93 4.93l1.73 1.73M17.34 17.34l1.73 1.73"></path>
-                            <path d="M2.7 12h2.45M18.85 12h2.45M4.93 19.07l1.73-1.73M17.34 6.66l1.73-1.73"></path>
+                            <path
+                                d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37c.996.608 2.296.07 2.572-1.065z">
+                            </path>
+                            <circle cx="12" cy="12" r="3"></circle>
                         </svg>
                     </button>
                 </div>
@@ -1263,6 +1263,8 @@
                 }
 
                 function normalizeReaderVolume(value) {
+                    if (value === null || value === undefined) return READER_VOLUME_DEFAULT;
+                    if (typeof value === 'string' && !value.trim()) return READER_VOLUME_DEFAULT;
                     const parsed = Number(value);
                     if (!Number.isFinite(parsed)) return READER_VOLUME_DEFAULT;
                     const normalized = parsed > 1 ? (parsed / 100) : parsed;
