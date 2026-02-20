@@ -507,6 +507,18 @@ body.scene-dimmer-light-mode .subtitle-current {
     text-shadow: 0 0 10px rgba(255, 255, 255, 1);
 }
 
+#audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors {
+    background: var(--reader-custom-bg, transparent) !important;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors .subtitle-line {
+    color: var(--reader-custom-text, rgba(255, 255, 255, 0.8)) !important;
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-custom-colors .subtitle-line {
+    color: var(--reader-custom-text, rgba(0, 0, 0, 0.82)) !important;
+}
+
 /* Reading mode: stronger text shadow for readability */
 #audioPlayerUI.reading-mode .subtitle-line {
     text-shadow:
@@ -561,12 +573,14 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
     display: inline;
     line-height: inherit;
-    margin-right: calc(0.16em + var(--flat-comp-gap, 0px));
+    padding-left: var(--flat-leading-comp, 0px);
+    margin-right: 0.16em;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     font-weight: 500 !important;
     margin-right: 0.16em;
+    padding-left: 0 !important;
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */
@@ -922,6 +936,11 @@ body.scene-dimmer-light-mode .col-header {
     color: rgba(255, 255, 255, 0.96);
 }
 
+.archive-primary-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
 .close-btn {
     background: none;
     border: none;
@@ -1189,6 +1208,47 @@ body.scene-dimmer-light-mode .archive-tab.active {
     font-size: 12px;
 }
 
+.reader-wheel-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.reader-wheel-wrap {
+    position: relative;
+    width: 168px;
+    height: 168px;
+}
+
+.reader-color-wheel {
+    width: 168px;
+    height: 168px;
+    display: block;
+    border-radius: 50%;
+    cursor: crosshair;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+}
+
+.reader-wheel-marker {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.95);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.reader-color-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.1);
+}
+
 body.scene-dimmer-light-mode .reader-settings-title {
     color: rgba(0, 0, 0, 0.62);
 }
@@ -1205,6 +1265,19 @@ body.scene-dimmer-light-mode #readerFontSizeNumber {
 
 body.scene-dimmer-light-mode .reader-size-unit {
     color: rgba(0, 0, 0, 0.6);
+}
+
+body.scene-dimmer-light-mode .reader-color-wheel {
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+body.scene-dimmer-light-mode .reader-wheel-marker {
+    border-color: rgba(0, 0, 0, 0.9);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+body.scene-dimmer-light-mode .reader-color-preview {
+    border-color: rgba(0, 0, 0, 0.4);
 }
 
 /* Bookmark items */
@@ -1273,6 +1346,49 @@ body.scene-dimmer-light-mode .bookmark-empty-msg {
     transition: opacity 0.2s ease, background 0.2s ease, transform 0.2s ease, color 0.2s ease, border-color 0.2s ease;
     white-space: nowrap;
     z-index: 10;
+}
+
+.bookmark-btn-flat-overlay {
+    position: fixed !important;
+    left: -9999px;
+    top: -9999px;
+    overflow: hidden;
+    isolation: isolate;
+    z-index: 3200;
+    background: transparent !important;
+}
+
+.bookmark-btn-flat-overlay .bookmark-map-layer,
+.bookmark-btn-flat-overlay .bookmark-overlay-layer,
+.bookmark-btn-flat-overlay .bookmark-label {
+    position: absolute;
+    inset: 0;
+}
+
+.bookmark-btn-flat-overlay .bookmark-map-layer {
+    z-index: 1;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.bookmark-btn-flat-overlay .bookmark-overlay-layer {
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.bookmark-btn-flat-overlay .bookmark-label {
+    z-index: 3;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 3.45px 11.5px;
+    white-space: nowrap;
+}
+
+.bookmark-btn-flat-overlay.saved .bookmark-overlay-layer {
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .bookmark-btn.visible {
