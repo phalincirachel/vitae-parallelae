@@ -36,6 +36,7 @@ const SC_URLS = {
     LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK'
 };
 
+
 /**
  * Mapping von alten MP3-Pfaden zu SC-URLs
  */
@@ -55,14 +56,10 @@ const MP3_TO_SC_MAP = {
     'kapitel1b.mp3': SC_URLS.LIMINAL_LIBRARY, // Alias wie angefordert
 
     // Ambient
-    'medieval_town.mp3': SC_URLS.AMBIENT_MEDIEVAL,
-    'assets/medieval_town.mp3': SC_URLS.AMBIENT_MEDIEVAL,
+    // (medieval_town locally played)
 
     // SFX
-    'footsteps.mp3': SC_URLS.FOOTSTEPS,
-    'assets/footsteps.mp3': SC_URLS.FOOTSTEPS,
-    'shimmer.mp3': SC_URLS.SHIMMER,
-    'assets/shimmer.mp3': SC_URLS.SHIMMER,
+    // (footsteps and shimmer locally played)
 
     // Lore Tracks
     'assets/lore1.mp3': SC_URLS.LORE_1,
