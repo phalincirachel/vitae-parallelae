@@ -628,8 +628,11 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     padding: clamp(58px, 8vh, 96px) 24px clamp(48px, 7vh, 78px);
     line-height: 1.68;
     text-align: justify;
+    text-justify: inter-word;
     text-wrap: pretty;
     white-space: normal;
+    hyphens: auto;
+    -webkit-hyphens: auto;
     will-change: transform;
 }
 
@@ -659,7 +662,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line {
     display: inline;
     line-height: inherit;
-    margin-right: 0.12em;
+    margin-right: 0.22em;
     padding: 0;
     text-align: justify;
 }
@@ -667,7 +670,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.blaettern-line-smart {
     word-spacing: var(--blaettern-smart-word-spacing, normal);
     letter-spacing: var(--blaettern-smart-letter-spacing, normal);
-    font-size: var(--blaettern-smart-size, 1em);
+    font-stretch: var(--blaettern-smart-stretch, 100%);
+    font-variation-settings: "wdth" var(--blaettern-smart-wdth, 100);
     font-kerning: normal;
 }
 
