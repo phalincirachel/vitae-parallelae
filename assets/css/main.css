@@ -580,22 +580,22 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     font-weight: 400 !important;
     padding-left: 0;
     padding-right: 0;
-    /* Faux-bold highlight without changing glyph advance width. */
-    -webkit-text-stroke: 0.22px currentColor;
+    /* Very subtle emphasis to avoid visually "thick" glyphs. */
+    -webkit-text-stroke: 0.06px currentColor;
     text-shadow:
-        0.012em 0 currentColor,
-        -0.012em 0 currentColor,
-        0 0.012em currentColor,
-        0 -0.012em currentColor,
+        0.004em 0 currentColor,
+        -0.004em 0 currentColor,
+        0 0.004em currentColor,
+        0 -0.004em currentColor,
         0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     text-shadow:
-        0.012em 0 currentColor,
-        -0.012em 0 currentColor,
-        0 0.012em currentColor,
-        0 -0.012em currentColor,
+        0.004em 0 currentColor,
+        -0.004em 0 currentColor,
+        0 0.004em currentColor,
+        0 -0.004em currentColor,
         0 0 10px rgba(255, 255, 255, 1);
 }
 
@@ -671,28 +671,26 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.blaettern-line-smart {
     word-spacing: var(--blaettern-smart-word-spacing, normal);
     letter-spacing: var(--blaettern-smart-letter-spacing, normal);
-    font-stretch: var(--blaettern-smart-stretch, 100%);
-    font-variation-settings: "wdth" var(--blaettern-smart-wdth, 100);
     font-kerning: normal;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
     font-weight: 400 !important;
-    -webkit-text-stroke: 0.22px currentColor;
+    -webkit-text-stroke: 0.06px currentColor;
     text-shadow:
-        0.012em 0 currentColor,
-        -0.012em 0 currentColor,
-        0 0.012em currentColor,
-        0 -0.012em currentColor,
+        0.004em 0 currentColor,
+        -0.004em 0 currentColor,
+        0 0.004em currentColor,
+        0 -0.004em currentColor,
         0 0 10px rgba(0, 0, 0, 0.8);
 }
 
 body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
     text-shadow:
-        0.012em 0 currentColor,
-        -0.012em 0 currentColor,
-        0 0.012em currentColor,
-        0 -0.012em currentColor,
+        0.004em 0 currentColor,
+        -0.004em 0 currentColor,
+        0 0.004em currentColor,
+        0 -0.004em currentColor,
         0 0 10px rgba(255, 255, 255, 1);
 }
 
