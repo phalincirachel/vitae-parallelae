@@ -2822,15 +2822,6 @@
                     applyReaderTextSettings({ rerender: false });
                 }
 
-                let archiveDimmerIsFrozen = false;
-                let archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
-                function syncArchiveAdaptiveContrastModeState() {
-                    const modal = document.getElementById('archiveModal');
-                    if (!modal) return;
-                    const shouldEnable = !archiveDimmerIsFrozen && !archiveDimmerIsWhiteMode;
-                    modal.classList.toggle('archive-adaptive-contrast', shouldEnable);
-                }
-
                 const globalVisualDimmer = window.GlobalVisualDimmer
                     ? window.GlobalVisualDimmer.init({
                         overlayId: 'sceneDimmerOverlay',
@@ -2842,9 +2833,6 @@
                     })
                     : null;
                 manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
-                archiveDimmerIsFrozen = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
-                archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
-                syncArchiveAdaptiveContrastModeState();
                 window.visualFreezeActive = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
 
                 // --- GLOBAL GAME STATE ---
@@ -4891,13 +4879,8 @@
                 }
 
                 if (globalVisualDimmer) {
-                    globalVisualDimmer.onChange(({ level, frozen, isWhiteMode }) => {
+                    globalVisualDimmer.onChange(({ level, frozen }) => {
                         manualBackgroundDimLevel = level;
-                        archiveDimmerIsFrozen = !!frozen;
-                        archiveDimmerIsWhiteMode = typeof isWhiteMode === 'boolean'
-                            ? isWhiteMode
-                            : document.body.classList.contains('scene-dimmer-light-mode');
-                        syncArchiveAdaptiveContrastModeState();
                         applyReaderDimmerTint();
                         applyVisualFreezeState(frozen);
 

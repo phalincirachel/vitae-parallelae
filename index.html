@@ -4786,15 +4786,6 @@
 
         initReaderSettingsControls();
 
-        let archiveDimmerIsFrozen = false;
-        let archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
-        function syncArchiveAdaptiveContrastModeState() {
-            const modal = document.getElementById('archiveModal');
-            if (!modal) return;
-            const shouldEnable = !archiveDimmerIsFrozen && !archiveDimmerIsWhiteMode;
-            modal.classList.toggle('archive-adaptive-contrast', shouldEnable);
-        }
-
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
                 overlayId: 'sceneDimmerOverlay',
@@ -4806,22 +4797,14 @@
             })
             : null;
         manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
-        archiveDimmerIsFrozen = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
-        archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
-        syncArchiveAdaptiveContrastModeState();
         let pendingForceReadingFromFreeze = false;
         let shouldResumePlaybackAfterDimmerUnfreeze = false;
         let dimmerResumeToken = 0;
         let modeSwitchInitialized = false;
         if (globalVisualDimmer) {
-            globalVisualDimmer.onChange(({ level, frozen, isWhiteMode }) => {
+            globalVisualDimmer.onChange(({ level, frozen }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
-                archiveDimmerIsFrozen = !!frozen;
-                archiveDimmerIsWhiteMode = typeof isWhiteMode === 'boolean'
-                    ? isWhiteMode
-                    : document.body.classList.contains('scene-dimmer-light-mode');
-                syncArchiveAdaptiveContrastModeState();
                 applyReaderDimmerTint();
                 dimmerResumeToken += 1;
                 const changeToken = dimmerResumeToken;
