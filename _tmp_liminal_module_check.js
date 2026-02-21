@@ -20,10 +20,19 @@
             try {
                 console.log("DEBUG: Starting Imports...");
 
-                // 1. Load THREE
-                const THREE = await import('three');
-                window.THREE = THREE; // Global Ref
-                console.log("DEBUG: THREE Loaded");
+                window.fallback2DMode = false;
+                let THREE = null;
+
+                try {
+                    // 1. Load THREE (Direct URL instead of importmap for old Safari compatibility)
+                    THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+                    window.THREE = THREE; // Global Ref
+                    console.log("DEBUG: THREE Loaded");
+                } catch (threeErr) {
+                    console.error("DEBUG: Failed to load THREE.js. Forcing 2D fallback mode.", threeErr);
+                    window.fallback2DMode = true;
+                    document.body.style.backgroundColor = '#050505';
+                }
 
                 // 2. Load Audio Player
                 const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260220-1');
@@ -872,37 +881,51 @@
                     roomWidth: 8,
                     roomHeight: 9,
                     segmentLength: 10,
-                    shelfDepth: 1.2
+                    shelfDepth: 1.2,
+                    hallWidth: 6
                 };
 
-                // --- SCENE SETUP ---
-                const scene = new THREE.Scene();
-                scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
-                scene.background = new THREE.Color(0x050505); // Black-ish background
+                // ============================================
+                // SCENE SETUP (THREE.JS)
+                // ============================================
 
-                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-                camera.position.set(0, 1.6, 3.0);
-                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                let scene, camera, euler, backgroundModeColor, lookTargetSphere, renderer;
 
-                // --- SUBTITLE HELPERS ---
-                // --- SUBTITLE HELPERS REMOVED (Use SharedAudioPlayer) ---
+                if (!window.fallback2DMode && THREE) {
+                    scene = new THREE.Scene();
+                    scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
+                    scene.background = new THREE.Color(0x050505); // Black-ish background
+
+                    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+                    camera.position.set(0, 1.6, 3.0);
+                    euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+                    backgroundModeColor = 0x010101;
+                    lookTargetSphere = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.05, 8, 8),
+                        new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.0 }) // Set opacity > 0 to debug
+                    );
+                    scene.add(lookTargetSphere);
+                }
 
                 // Helper to render Archive Content (Fixes ReferenceError)
                 window.renderArchiveContent = function () {
                     // Reload logic if needed, or just log
                     console.log("Archive content updated");
-                    if (typeof renderArchive === 'function') renderArchive();
+                    if (!window.fallback2DMode && typeof renderArchive === 'function') renderArchive();
                 };
 
                 // FIX: Define controls object to prevent ReferenceError
                 // Replicates PointerLockControls movement logic (planar forward)
                 const controls = {
                     moveRight: function (distance) {
+                        if (!camera) return;
                         const vec = new THREE.Vector3();
                         vec.setFromMatrixColumn(camera.matrix, 0);
                         camera.position.addScaledVector(vec, distance);
                     },
                     moveForward: function (distance) {
+                        if (!camera) return;
                         const vec = new THREE.Vector3();
                         vec.setFromMatrixColumn(camera.matrix, 0);
                         vec.crossVectors(camera.up, vec);
@@ -910,52 +933,73 @@
                     }
                 };
 
-                const renderer = new THREE.WebGLRenderer({
-                    antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
-                    powerPreference: isIOSSafari ? 'default' : 'high-performance',
-                    precision: isIOSSafari ? 'mediump' : 'highp'
-                });
-                renderer.setSize(window.innerWidth, window.innerHeight);
+                // SAFELY INITIALIZE WEBGL RENDERER
+                if (!window.fallback2DMode) {
+                    try {
+                        renderer = new THREE.WebGLRenderer({
+                            antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
+                            powerPreference: isIOSSafari ? 'default' : 'high-performance',
+                            precision: isIOSSafari ? 'mediump' : 'highp'
+                        });
+                        renderer.setSize(window.innerWidth, window.innerHeight);
 
-                // iOS: Disable shadow maps to prevent WebGL context loss on older devices
-                renderer.shadowMap.enabled = !isIOSSafari;
-                if (renderer.shadowMap.enabled) {
-                    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-                }
-                renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                renderer.toneMappingExposure = 1.0;
+                        // iOS: Disable shadow maps to prevent WebGL context loss on older devices
+                        renderer.shadowMap.enabled = !isIOSSafari;
+                        if (renderer.shadowMap.enabled) {
+                            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                        }
+                        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                        renderer.toneMappingExposure = 1.0;
 
-                if (isIOSSafari) {
-                    // iOS: Cap pixel ratio to avoid exceeding GPU memory
-                    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                        if (isIOSSafari) {
+                            // iOS: Cap pixel ratio to avoid exceeding GPU memory
+                            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-                    // WebGL Context Loss recovery (prevents permanent black screen)
-                    renderer.domElement.addEventListener('webglcontextlost', (e) => {
-                        e.preventDefault();
-                        console.warn('[Liminal] WebGL context lost (iOS)');
-                    }, false);
-                    renderer.domElement.addEventListener('webglcontextrestored', () => {
-                        console.log('[Liminal] WebGL context restored (iOS)');
-                    }, false);
-                } else {
-                    renderer.setPixelRatio(window.devicePixelRatio);
-                }
+                            // WebGL Context Loss recovery (prevents permanent black screen)
+                            renderer.domElement.addEventListener('webglcontextlost', (e) => {
+                                e.preventDefault();
+                                console.warn('[Liminal] WebGL context lost (iOS)');
+                            }, false);
+                            renderer.domElement.addEventListener('webglcontextrestored', () => {
+                                console.log('[Liminal] WebGL context restored (iOS)');
+                            }, false);
+                        } else {
+                            renderer.setPixelRatio(window.devicePixelRatio);
+                        }
 
-                document.body.appendChild(renderer.domElement);
+                        document.body.appendChild(renderer.domElement);
+                    } catch (e) {
+                        console.error("WebGL Initialization failed, entering 2D Fallback Mode.", e);
+                        window.fallback2DMode = true;
+                        document.body.style.backgroundColor = '#050505';
+                        // Hide loading items if the 3D init failed so users aren't stuck on a loading screen forever
+                        const loadingText = document.getElementById('loading');
+                        if (loadingText) loadingText.style.display = 'none';
+                        const loadingScreen = document.getElementById('loading-screen');
+                        if (loadingScreen) loadingScreen.style.display = 'none';
+                        const uiContainer = document.getElementById('audioPlayerUI');
+                        if (uiContainer) uiContainer.style.display = 'flex';
+                    }
+                } // end if (!window.fallback2DMode)
 
                 function syncViewport() {
                     const vv = window.visualViewport;
                     const viewWidth = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
                     const viewHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
-                    camera.aspect = viewWidth / viewHeight;
-                    camera.updateProjectionMatrix();
-                    renderer.setSize(viewWidth, viewHeight, false);
+                    if (camera) {
+                        camera.aspect = viewWidth / viewHeight;
+                        camera.updateProjectionMatrix();
+                    }
+                    if (!window.fallback2DMode && renderer) {
+                        renderer.setSize(viewWidth, viewHeight, false);
+                    }
                 }
 
                 // Ensure initial calibration uses the real visual viewport on mobile.
                 syncViewport();
 
-                // --- AUDIO PLAYER SETUP (SCAudioAdapter) ---
+                // Start animation with correct background color
+                if (scene) scene.background = new THREE.Color(isReadingMode ? backgroundModeColor : 0x050505);
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
@@ -1181,881 +1225,884 @@
                 }
 
                 function clearBlaetternControlsHideTimer() {
-            if (!blaetternControlsHideTimer) return;
-            clearTimeout(blaetternControlsHideTimer);
-            blaetternControlsHideTimer = null;
-        }
-
-        function clearBlaetternSwipeCommitTimer() {
-            if (!blaetternSwipeCommitTimer) return;
-            clearTimeout(blaetternSwipeCommitTimer);
-            blaetternSwipeCommitTimer = null;
-        }
-
-        function clearBlaetternLongPressTimer() {
-            if (!blaetternLongPressTimer) return;
-            clearTimeout(blaetternLongPressTimer);
-            blaetternLongPressTimer = null;
-        }
-
-        function clearBlaetternBookmarkHideTimer() {
-            if (!blaetternBookmarkHideTimer) return;
-            clearTimeout(blaetternBookmarkHideTimer);
-            blaetternBookmarkHideTimer = null;
-        }
-
-        function setBlaetternControlsVisible(visible, reason = 'unspecified') {
-            const shouldShow = !isBlaetternLayoutActive() ? true : !!visible;
-            blaetternControlsVisible = shouldShow;
-            if (!audioControlsEl) return;
-            audioControlsEl.classList.toggle('blaettern-controls-hidden', !shouldShow);
-            audioControlsEl.classList.toggle('blaettern-controls-visible', shouldShow);
-            liminalTrace('blaettern:controls', {
-                reason,
-                visible: shouldShow,
-                readingMode: !!isReadingMode,
-                layout: readerSentenceLayout
-            });
-        }
-
-        function scheduleBlaetternControlsAutoHide(reason = 'idle') {
-            clearBlaetternControlsHideTimer();
-            if (!isBlaetternLayoutActive()) {
-                setBlaetternControlsVisible(true, `${reason}:inactive`);
-                return;
-            }
-            blaetternControlsHideTimer = setTimeout(() => {
-                setBlaetternControlsVisible(false, `${reason}:timeout`);
-            }, BLAETTERN_CONTROLS_HIDE_DELAY_MS);
-        }
-
-        function bumpBlaetternControlsAutoHide(reason = 'interaction') {
-            if (!isBlaetternLayoutActive()) {
-                clearBlaetternControlsHideTimer();
-                setBlaetternControlsVisible(true, `${reason}:not-blaettern`);
-                return;
-            }
-            setBlaetternControlsVisible(true, reason);
-            scheduleBlaetternControlsAutoHide(reason);
-        }
-
-        function hideBlaetternBookmarkButton() {
-            const root = subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
-            const btn = root ? root.querySelector('.blaettern-bookmark-btn') : null;
-            if (!btn) return;
-            stopBlaetternBookmarkMapLayerLoop(btn);
-            btn.classList.remove('visible', 'saved');
-            btn.style.removeProperty('left');
-            btn.style.removeProperty('top');
-            btn.dataset.index = '';
-            btn._flatLockedX = null;
-            btn._flatLockedY = null;
-            setBlaetternBookmarkButtonLabel(btn, BLAETTERN_BOOKMARK_LABEL);
-            clearBlaetternBookmarkHideTimer();
-        }
-
-        function setBlaetternBookmarkButtonLabel(btn, label) {
-            if (!btn) return;
-            const labelNode = btn.querySelector('.bookmark-label');
-            if (labelNode) labelNode.textContent = label;
-            else btn.innerText = label;
-        }
-
-        function ensureBlaetternBookmarkButtonMode(btn) {
-            if (!btn) return;
-            if (btn.dataset.flatOverlay === '1') {
-                btn.classList.add('bookmark-btn-flat-overlay');
-                return;
-            }
-
-            btn.dataset.flatOverlay = '1';
-            btn.innerHTML = '';
-            const mapLayer = document.createElement('span');
-            mapLayer.className = 'bookmark-map-layer';
-            const mapCanvas = document.createElement('canvas');
-            mapCanvas.className = 'bookmark-map-canvas';
-            mapCanvas.setAttribute('aria-hidden', 'true');
-            mapLayer.appendChild(mapCanvas);
-
-            const overlayLayer = document.createElement('span');
-            overlayLayer.className = 'bookmark-overlay-layer';
-            const labelLayer = document.createElement('span');
-            labelLayer.className = 'bookmark-label';
-            labelLayer.textContent = BLAETTERN_BOOKMARK_LABEL;
-
-            btn.appendChild(mapLayer);
-            btn.appendChild(overlayLayer);
-            btn.appendChild(labelLayer);
-            btn.classList.add('bookmark-btn-flat-overlay');
-        }
-
-        function resolveBlaetternSceneCanvas() {
-            const gameCanvas = document.getElementById('gameCanvas');
-            if (gameCanvas instanceof HTMLCanvasElement) return gameCanvas;
-            const anyCanvas = document.querySelector('canvas');
-            return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
-        }
-
-        function drawBlaetternBookmarkMapLayer(btn) {
-            if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
-            const mapLayer = btn.querySelector('.bookmark-map-layer');
-            const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
-            if (!(mapCanvas instanceof HTMLCanvasElement)) return;
-            const drawCtx = mapCanvas.getContext('2d');
-            if (!drawCtx || !mapLayer) return;
-            const sceneCanvas = resolveBlaetternSceneCanvas();
-            if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
-                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-                return;
-            }
-            try {
-                const canvasRect = sceneCanvas.getBoundingClientRect();
-                const btnRect = btn.getBoundingClientRect();
-                if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
-                const dpr = Math.max(1, window.devicePixelRatio || 1);
-                const targetW = Math.max(1, Math.round(btnRect.width * dpr));
-                const targetH = Math.max(1, Math.round(btnRect.height * dpr));
-                if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
-                    mapCanvas.width = targetW;
-                    mapCanvas.height = targetH;
+                    if (!blaetternControlsHideTimer) return;
+                    clearTimeout(blaetternControlsHideTimer);
+                    blaetternControlsHideTimer = null;
                 }
-                drawCtx.clearRect(0, 0, targetW, targetH);
 
-                const overlapLeft = Math.max(btnRect.left, canvasRect.left);
-                const overlapTop = Math.max(btnRect.top, canvasRect.top);
-                const overlapRight = Math.min(btnRect.right, canvasRect.right);
-                const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
-                if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
+                function clearBlaetternSwipeCommitTimer() {
+                    if (!blaetternSwipeCommitTimer) return;
+                    clearTimeout(blaetternSwipeCommitTimer);
+                    blaetternSwipeCommitTimer = null;
+                }
 
-                const scaleX = sceneCanvas.width / canvasRect.width;
-                const scaleY = sceneCanvas.height / canvasRect.height;
-                const srcX = (overlapLeft - canvasRect.left) * scaleX;
-                const srcY = (overlapTop - canvasRect.top) * scaleY;
-                const srcW = (overlapRight - overlapLeft) * scaleX;
-                const srcH = (overlapBottom - overlapTop) * scaleY;
-                const dstX = (overlapLeft - btnRect.left) * dpr;
-                const dstY = (overlapTop - btnRect.top) * dpr;
-                const dstW = (overlapRight - overlapLeft) * dpr;
-                const dstH = (overlapBottom - overlapTop) * dpr;
-                drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-            } catch (_) {
-                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-            }
-        }
+                function clearBlaetternLongPressTimer() {
+                    if (!blaetternLongPressTimer) return;
+                    clearTimeout(blaetternLongPressTimer);
+                    blaetternLongPressTimer = null;
+                }
 
-        function stopBlaetternBookmarkMapLayerLoop(btn) {
-            if (!btn || !btn._flatMapRaf) return;
-            cancelAnimationFrame(btn._flatMapRaf);
-            btn._flatMapRaf = 0;
-        }
+                function clearBlaetternBookmarkHideTimer() {
+                    if (!blaetternBookmarkHideTimer) return;
+                    clearTimeout(blaetternBookmarkHideTimer);
+                    blaetternBookmarkHideTimer = null;
+                }
 
-        function startBlaetternBookmarkMapLayerLoop(btn) {
-            if (!btn || btn._flatMapRaf) return;
-            const tick = () => {
-                if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
+                function setBlaetternControlsVisible(visible, reason = 'unspecified') {
+                    const shouldShow = !isBlaetternLayoutActive() ? true : !!visible;
+                    blaetternControlsVisible = shouldShow;
+                    if (!audioControlsEl) return;
+                    audioControlsEl.classList.toggle('blaettern-controls-hidden', !shouldShow);
+                    audioControlsEl.classList.toggle('blaettern-controls-visible', shouldShow);
+                    liminalTrace('blaettern:controls', {
+                        reason,
+                        visible: shouldShow,
+                        readingMode: !!isReadingMode,
+                        layout: readerSentenceLayout
+                    });
+                }
+
+                function scheduleBlaetternControlsAutoHide(reason = 'idle') {
+                    clearBlaetternControlsHideTimer();
+                    if (!isBlaetternLayoutActive()) {
+                        setBlaetternControlsVisible(true, `${reason}:inactive`);
+                        return;
+                    }
+                    blaetternControlsHideTimer = setTimeout(() => {
+                        setBlaetternControlsVisible(false, `${reason}:timeout`);
+                    }, BLAETTERN_CONTROLS_HIDE_DELAY_MS);
+                }
+
+                function bumpBlaetternControlsAutoHide(reason = 'interaction') {
+                    if (!isBlaetternLayoutActive()) {
+                        clearBlaetternControlsHideTimer();
+                        setBlaetternControlsVisible(true, `${reason}:not-blaettern`);
+                        return;
+                    }
+                    setBlaetternControlsVisible(true, reason);
+                    scheduleBlaetternControlsAutoHide(reason);
+                }
+
+                function hideBlaetternBookmarkButton() {
+                    const root = subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
+                    const btn = root ? root.querySelector('.blaettern-bookmark-btn') : null;
+                    if (!btn) return;
+                    stopBlaetternBookmarkMapLayerLoop(btn);
+                    btn.classList.remove('visible', 'saved');
+                    btn.style.removeProperty('left');
+                    btn.style.removeProperty('top');
+                    btn.dataset.index = '';
+                    btn._flatLockedX = null;
+                    btn._flatLockedY = null;
+                    setBlaetternBookmarkButtonLabel(btn, BLAETTERN_BOOKMARK_LABEL);
+                    clearBlaetternBookmarkHideTimer();
+                }
+
+                function setBlaetternBookmarkButtonLabel(btn, label) {
+                    if (!btn) return;
+                    const labelNode = btn.querySelector('.bookmark-label');
+                    if (labelNode) labelNode.textContent = label;
+                    else btn.innerText = label;
+                }
+
+                function ensureBlaetternBookmarkButtonMode(btn) {
+                    if (!btn) return;
+                    if (btn.dataset.flatOverlay === '1') {
+                        btn.classList.add('bookmark-btn-flat-overlay');
+                        return;
+                    }
+
+                    btn.dataset.flatOverlay = '1';
+                    btn.innerHTML = '';
+                    const mapLayer = document.createElement('span');
+                    mapLayer.className = 'bookmark-map-layer';
+                    const mapCanvas = document.createElement('canvas');
+                    mapCanvas.className = 'bookmark-map-canvas';
+                    mapCanvas.setAttribute('aria-hidden', 'true');
+                    mapLayer.appendChild(mapCanvas);
+
+                    const overlayLayer = document.createElement('span');
+                    overlayLayer.className = 'bookmark-overlay-layer';
+                    const labelLayer = document.createElement('span');
+                    labelLayer.className = 'bookmark-label';
+                    labelLayer.textContent = BLAETTERN_BOOKMARK_LABEL;
+
+                    btn.appendChild(mapLayer);
+                    btn.appendChild(overlayLayer);
+                    btn.appendChild(labelLayer);
+                    btn.classList.add('bookmark-btn-flat-overlay');
+                }
+
+                function resolveBlaetternSceneCanvas() {
+                    const gameCanvas = document.getElementById('gameCanvas');
+                    if (gameCanvas instanceof HTMLCanvasElement) return gameCanvas;
+                    const anyCanvas = document.querySelector('canvas');
+                    return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
+                }
+
+                function drawBlaetternBookmarkMapLayer(btn) {
+                    if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
+                    const mapLayer = btn.querySelector('.bookmark-map-layer');
+                    const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
+                    if (!(mapCanvas instanceof HTMLCanvasElement)) return;
+                    const drawCtx = mapCanvas.getContext('2d');
+                    if (!drawCtx || !mapLayer) return;
+                    const sceneCanvas = resolveBlaetternSceneCanvas();
+                    if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
+                        drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
+                        return;
+                    }
+                    try {
+                        const canvasRect = sceneCanvas.getBoundingClientRect();
+                        const btnRect = btn.getBoundingClientRect();
+                        if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
+                        const dpr = Math.max(1, window.devicePixelRatio || 1);
+                        const targetW = Math.max(1, Math.round(btnRect.width * dpr));
+                        const targetH = Math.max(1, Math.round(btnRect.height * dpr));
+                        if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
+                            mapCanvas.width = targetW;
+                            mapCanvas.height = targetH;
+                        }
+                        drawCtx.clearRect(0, 0, targetW, targetH);
+
+                        const overlapLeft = Math.max(btnRect.left, canvasRect.left);
+                        const overlapTop = Math.max(btnRect.top, canvasRect.top);
+                        const overlapRight = Math.min(btnRect.right, canvasRect.right);
+                        const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
+                        if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
+
+                        const scaleX = sceneCanvas.width / canvasRect.width;
+                        const scaleY = sceneCanvas.height / canvasRect.height;
+                        const srcX = (overlapLeft - canvasRect.left) * scaleX;
+                        const srcY = (overlapTop - canvasRect.top) * scaleY;
+                        const srcW = (overlapRight - overlapLeft) * scaleX;
+                        const srcH = (overlapBottom - overlapTop) * scaleY;
+                        const dstX = (overlapLeft - btnRect.left) * dpr;
+                        const dstY = (overlapTop - btnRect.top) * dpr;
+                        const dstW = (overlapRight - overlapLeft) * dpr;
+                        const dstH = (overlapBottom - overlapTop) * dpr;
+                        drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+                    } catch (_) {
+                        drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
+                    }
+                }
+
+                function stopBlaetternBookmarkMapLayerLoop(btn) {
+                    if (!btn || !btn._flatMapRaf) return;
+                    cancelAnimationFrame(btn._flatMapRaf);
                     btn._flatMapRaf = 0;
-                    return;
                 }
-                drawBlaetternBookmarkMapLayer(btn);
-                btn._flatMapRaf = requestAnimationFrame(tick);
-            };
-            tick();
-        }
 
-        function resetBlaetternInteractionState() {
-            clearBlaetternLongPressTimer();
-            clearBlaetternSwipeCommitTimer();
-            blaetternSwipeState = null;
-            blaetternSwipeAnimating = false;
-            hideBlaetternBookmarkButton();
-            const root = subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
-            if (root) resetBlaetternLayerTransforms(root);
-        }
+                function startBlaetternBookmarkMapLayerLoop(btn) {
+                    if (!btn || btn._flatMapRaf) return;
+                    const tick = () => {
+                        if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
+                            btn._flatMapRaf = 0;
+                            return;
+                        }
+                        drawBlaetternBookmarkMapLayer(btn);
+                        btn._flatMapRaf = requestAnimationFrame(tick);
+                    };
+                    tick();
+                }
 
-        function syncBlaetternUiState(reason = 'unspecified') {
-            if (!uiContainer) return;
-            const active = isBlaetternLayoutActive();
-            uiContainer.classList.toggle('blaettern-layout-active', active);
-            if (!active) {
-                clearBlaetternControlsHideTimer();
-                setBlaetternControlsVisible(true, `${reason}:off`);
-                resetBlaetternInteractionState();
-                return;
-            }
-            if (!blaetternControlsVisible) {
-                setBlaetternControlsVisible(false, `${reason}:keep-hidden`);
-                scheduleBlaetternControlsAutoHide(`${reason}:keep-hidden`);
-                return;
-            }
-            bumpBlaetternControlsAutoHide(`${reason}:on`);
-        }
+                function resetBlaetternInteractionState() {
+                    clearBlaetternLongPressTimer();
+                    clearBlaetternSwipeCommitTimer();
+                    blaetternSwipeState = null;
+                    blaetternSwipeAnimating = false;
+                    hideBlaetternBookmarkButton();
+                    const root = subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
+                    if (root) resetBlaetternLayerTransforms(root);
+                }
 
-        function getBlaetternRoot() {
-            return subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
-        }
+                function syncBlaetternUiState(reason = 'unspecified') {
+                    if (!uiContainer) return;
+                    const active = isBlaetternLayoutActive();
+                    uiContainer.classList.toggle('blaettern-layout-active', active);
+                    if (!active) {
+                        clearBlaetternControlsHideTimer();
+                        setBlaetternControlsVisible(true, `${reason}:off`);
+                        resetBlaetternInteractionState();
+                        return;
+                    }
+                    if (!blaetternControlsVisible) {
+                        setBlaetternControlsVisible(false, `${reason}:keep-hidden`);
+                        scheduleBlaetternControlsAutoHide(`${reason}:keep-hidden`);
+                        return;
+                    }
+                    bumpBlaetternControlsAutoHide(`${reason}:on`);
+                }
 
-        function getBlaetternLayerRefs(root) {
-            if (!root) return null;
-            const prev = root.querySelector('.blaettern-page-prev');
-            const current = root.querySelector('.blaettern-page-current');
-            const next = root.querySelector('.blaettern-page-next');
-            if (!prev || !current || !next) return null;
-            return { prev, current, next };
-        }
+                function getBlaetternRoot() {
+                    return subtitleContainer ? subtitleContainer.querySelector('.blaettern-page-root') : null;
+                }
 
-        function getBlaetternViewportWidth() {
-            const root = getBlaetternRoot();
-            if (!root) return Math.max(1, subtitleContainer ? subtitleContainer.clientWidth : 1);
-            return Math.max(1, root.clientWidth || subtitleContainer.clientWidth || 1);
-        }
+                function getBlaetternLayerRefs(root) {
+                    if (!root) return null;
+                    const prev = root.querySelector('.blaettern-page-prev');
+                    const current = root.querySelector('.blaettern-page-current');
+                    const next = root.querySelector('.blaettern-page-next');
+                    if (!prev || !current || !next) return null;
+                    return { prev, current, next };
+                }
 
-        function setBlaetternLayerTransition(root, enabled) {
-            const refs = getBlaetternLayerRefs(root);
-            if (!refs) return;
-            const value = enabled ? `transform ${BLAETTERN_SWIPE_SETTLE_MS}ms ease` : 'none';
-            refs.prev.style.transition = value;
-            refs.current.style.transition = value;
-            refs.next.style.transition = value;
-        }
+                function getBlaetternViewportWidth() {
+                    const root = getBlaetternRoot();
+                    if (!root) return Math.max(1, subtitleContainer ? subtitleContainer.clientWidth : 1);
+                    return Math.max(1, root.clientWidth || subtitleContainer.clientWidth || 1);
+                }
 
-        function resetBlaetternLayerTransforms(root) {
-            const refs = getBlaetternLayerRefs(root);
-            const width = getBlaetternViewportWidth();
-            if (!refs || !width) return;
-            refs.prev.style.transform = `translate3d(${-width}px, 0, 0)`;
-            refs.current.style.transform = 'translate3d(0, 0, 0)';
-            refs.next.style.transform = `translate3d(${width}px, 0, 0)`;
-        }
+                function setBlaetternLayerTransition(root, enabled) {
+                    const refs = getBlaetternLayerRefs(root);
+                    if (!refs) return;
+                    const value = enabled ? `transform ${BLAETTERN_SWIPE_SETTLE_MS}ms ease` : 'none';
+                    refs.prev.style.transition = value;
+                    refs.current.style.transition = value;
+                    refs.next.style.transition = value;
+                }
 
-        function applyBlaetternSwipeOffset(root, rawOffsetPx) {
-            const refs = getBlaetternLayerRefs(root);
-            const width = getBlaetternViewportWidth();
-            if (!refs || !width) return;
-            const offsetPx = Number(rawOffsetPx) || 0;
-            const hasPrev = blaetternPageIndex > 0;
-            const hasNext = blaetternPageIndex < blaetternPages.length - 1;
-            let clamped = offsetPx;
-            const edgeClamp = width * 0.24;
-            if (clamped < 0 && !hasNext) clamped = Math.max(clamped, -edgeClamp);
-            if (clamped > 0 && !hasPrev) clamped = Math.min(clamped, edgeClamp);
+                function resetBlaetternLayerTransforms(root) {
+                    const refs = getBlaetternLayerRefs(root);
+                    const width = getBlaetternViewportWidth();
+                    if (!refs || !width) return;
+                    refs.prev.style.transform = `translate3d(${-width}px, 0, 0)`;
+                    refs.current.style.transform = 'translate3d(0, 0, 0)';
+                    refs.next.style.transform = `translate3d(${width}px, 0, 0)`;
+                }
 
-            if (clamped < 0) {
-                refs.prev.style.transform = `translate3d(${-width}px, 0, 0)`;
-                refs.current.style.transform = `translate3d(${clamped}px, 0, 0)`;
-                refs.next.style.transform = `translate3d(${width + clamped}px, 0, 0)`;
-            } else {
-                refs.prev.style.transform = `translate3d(${-width + clamped}px, 0, 0)`;
-                refs.current.style.transform = `translate3d(${clamped}px, 0, 0)`;
-                refs.next.style.transform = `translate3d(${width}px, 0, 0)`;
-            }
-            return clamped;
-        }
+                function applyBlaetternSwipeOffset(root, rawOffsetPx) {
+                    const refs = getBlaetternLayerRefs(root);
+                    const width = getBlaetternViewportWidth();
+                    if (!refs || !width) return;
+                    const offsetPx = Number(rawOffsetPx) || 0;
+                    const hasPrev = blaetternPageIndex > 0;
+                    const hasNext = blaetternPageIndex < blaetternPages.length - 1;
+                    let clamped = offsetPx;
+                    const edgeClamp = width * 0.24;
+                    if (clamped < 0 && !hasNext) clamped = Math.max(clamped, -edgeClamp);
+                    if (clamped > 0 && !hasPrev) clamped = Math.min(clamped, edgeClamp);
 
-        function createBlaetternLineElement(index, options = {}) {
-            const track = getBlaetternTracks()[index];
-            const span = document.createElement('span');
-            span.className = 'subtitle-line blaettern-line';
-            span.dataset.index = String(index);
-            span.innerText = track ? track.text : '';
-            if (!options.forMeasure) {
-                span.title = 'Tippen zum Abspielen';
-                span.style.cursor = 'pointer';
-                if (index === getBlaetternCurrentSubtitleIndex()) span.classList.add('subtitle-current');
-            }
-            return span;
-        }
-
-        function clearBlaetternSmartLineStyle(lineEl) {
-            if (!lineEl) return;
-            lineEl.classList.remove('blaettern-line-smart');
-            lineEl.style.removeProperty('--blaettern-smart-word-spacing');
-            lineEl.style.removeProperty('--blaettern-smart-letter-spacing');
-            lineEl.style.removeProperty('--blaettern-smart-stretch');
-            lineEl.style.removeProperty('--blaettern-smart-wdth');
-        }
-
-        function applyBlaetternSmartJustification(layer) {
-            if (!layer || layer.classList.contains('blaettern-page-empty')) return;
-            const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
-            if (!lineElements.length) return;
-
-            const layerRect = layer.getBoundingClientRect();
-            const layerStyle = window.getComputedStyle(layer);
-            const paddingLeft = parseFloat(layerStyle.paddingLeft) || 0;
-            const paddingRight = parseFloat(layerStyle.paddingRight) || 0;
-            const innerWidth = Math.max(1, layer.clientWidth - paddingLeft - paddingRight);
-            if (innerWidth <= 20) return;
-            const sampleLine = lineElements[0];
-            const sampleLineStyle = sampleLine ? window.getComputedStyle(sampleLine) : null;
-            const timestampGapPx = sampleLineStyle ? (parseFloat(sampleLineStyle.marginRight) || 0) : 0;
-
-            const elementRectCount = new Map();
-            const linesByTop = new Map();
-
-            lineElements.forEach((lineEl) => {
-                clearBlaetternSmartLineStyle(lineEl);
-                const rects = Array.from(lineEl.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1);
-                elementRectCount.set(lineEl, rects.length);
-                rects.forEach((rect) => {
-                    const key = Math.round(rect.top - layerRect.top);
-                    let line = linesByTop.get(key);
-                    if (!line) {
-                        line = {
-                            left: rect.left,
-                            right: rect.right,
-                            elements: new Set()
-                        };
-                        linesByTop.set(key, line);
+                    if (clamped < 0) {
+                        refs.prev.style.transform = `translate3d(${-width}px, 0, 0)`;
+                        refs.current.style.transform = `translate3d(${clamped}px, 0, 0)`;
+                        refs.next.style.transform = `translate3d(${width + clamped}px, 0, 0)`;
                     } else {
-                        line.left = Math.min(line.left, rect.left);
-                        line.right = Math.max(line.right, rect.right);
+                        refs.prev.style.transform = `translate3d(${-width + clamped}px, 0, 0)`;
+                        refs.current.style.transform = `translate3d(${clamped}px, 0, 0)`;
+                        refs.next.style.transform = `translate3d(${width}px, 0, 0)`;
                     }
-                    line.elements.add(lineEl);
-                });
-            });
-
-            const visualLines = Array.from(linesByTop.entries())
-                .sort((a, b) => a[0] - b[0])
-                .map((entry) => entry[1]);
-            if (visualLines.length <= 1) return;
-
-            for (let i = 0; i < visualLines.length - 1; i++) {
-                const line = visualLines[i];
-                const elements = Array.from(line.elements);
-                if (!elements.length) continue;
-                if (elements.some((el) => (elementRectCount.get(el) || 0) > 1)) continue;
-
-                const lineWidth = Math.max(0, line.right - line.left);
-                const boundaryCount = Math.max(0, elements.length - 1);
-                const lineVisualWidth = lineWidth + (boundaryCount * timestampGapPx);
-                const slack = innerWidth - lineVisualWidth;
-                if (slack < 4 || slack > (innerWidth * 0.24)) continue;
-
-                let letters = 0;
-                let spaces = 0;
-                elements.forEach((el) => {
-                    const compact = (el.textContent || '').replace(/\s+/g, ' ').trim();
-                    if (!compact) return;
-                    letters += compact.replace(/\s/g, '').length;
-                    const localSpaces = compact.match(/\s+/g);
-                    if (localSpaces) spaces += localSpaces.length;
-                });
-                const totalGapUnits = spaces + boundaryCount;
-                if (letters < 8) continue;
-                if (totalGapUnits < 3 && slack > 20) continue;
-
-                const sparseLine = totalGapUnits < 6;
-                const wordShare = sparseLine ? 0.52 : 0.68;
-                const letterShare = sparseLine ? 0.31 : 0.24;
-                const stretchShare = 1 - wordShare - letterShare;
-
-                const addWord = Math.min(1.35, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
-                const addLetter = Math.min(0.21, Math.max(0, (slack * letterShare) / Math.max(36, letters)));
-                const usedSlack = (addWord * totalGapUnits) + (addLetter * letters);
-                const remainingSlack = Math.max(0, slack - usedSlack);
-                const stretchScale = Math.min(1.085, 1 + ((remainingSlack * stretchShare) / Math.max(220, lineVisualWidth)));
-                const stretchPercent = stretchScale * 100;
-                const wdthValue = stretchPercent;
-
-                if (addWord < 0.05 && addLetter < 0.01 && stretchScale <= 1.003) continue;
-
-                elements.forEach((el) => {
-                    el.classList.add('blaettern-line-smart');
-                    el.style.setProperty('--blaettern-smart-word-spacing', `${addWord.toFixed(3)}px`);
-                    el.style.setProperty('--blaettern-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
-                    el.style.setProperty('--blaettern-smart-stretch', `${stretchPercent.toFixed(2)}%`);
-                    el.style.setProperty('--blaettern-smart-wdth', wdthValue.toFixed(2));
-                });
-            }
-        }
-
-        function findBlaetternPageIndexForSubtitle(subtitleIndex) {
-            if (!blaetternPages.length) return 0;
-            const idx = Math.max(0, Math.min(getBlaetternTracks().length - 1, Number(subtitleIndex) || 0));
-            for (let i = 0; i < blaetternPages.length; i++) {
-                const page = blaetternPages[i];
-                if (idx >= page.startIndex && idx <= page.endIndex) return i;
-            }
-            return Math.max(0, blaetternPages.length - 1);
-        }
-
-        function ensureBlaetternPagination() {
-            if (!subtitleContainer) return false;
-            if (!getBlaetternTracks().length) {
-                blaetternPages = [];
-                blaetternPageIndex = 0;
-                blaetternPaginationDirty = false;
-                blaetternPaginationKey = '';
-                return true;
-            }
-
-            const width = Math.round(subtitleContainer.clientWidth || 0);
-            const height = Math.round(subtitleContainer.clientHeight || 0);
-            if (width <= 20 || height <= 20) return false;
-
-            const signature = [
-                window.subtitleVersion || 0,
-                getBlaetternTracks().length,
-                readerFontSizePx,
-                readerSentenceLayout,
-                width,
-                height
-            ].join('|');
-
-            if (!blaetternPaginationDirty && blaetternPaginationKey === signature && blaetternPages.length) {
-                return true;
-            }
-
-            const measureLayer = document.createElement('div');
-            measureLayer.className = 'blaettern-page-layer blaettern-page-layer-measure';
-            measureLayer.setAttribute('aria-hidden', 'true');
-            subtitleContainer.appendChild(measureLayer);
-
-            const computedPages = [];
-            let startIndex = 0;
-            while (startIndex < getBlaetternTracks().length) {
-                measureLayer.replaceChildren();
-                let endIndex = startIndex - 1;
-
-                for (let i = startIndex; i < getBlaetternTracks().length; i++) {
-                    const node = createBlaetternLineElement(i, { forMeasure: true });
-                    measureLayer.appendChild(node);
-                    if (measureLayer.scrollHeight > (measureLayer.clientHeight + 1)) {
-                        measureLayer.removeChild(node);
-                        break;
-                    }
-                    endIndex = i;
+                    return clamped;
                 }
 
-                if (endIndex < startIndex) {
-                    endIndex = startIndex;
-                    measureLayer.appendChild(createBlaetternLineElement(startIndex, { forMeasure: true }));
+                function createBlaetternLineElement(index, options = {}) {
+                    const track = getBlaetternTracks()[index];
+                    const span = document.createElement('span');
+                    span.className = 'subtitle-line blaettern-line';
+                    span.dataset.index = String(index);
+                    span.innerText = track ? track.text : '';
+                    if (!options.forMeasure) {
+                        span.title = 'Tippen zum Abspielen';
+                        span.style.cursor = 'pointer';
+                        if (index === getBlaetternCurrentSubtitleIndex()) span.classList.add('subtitle-current');
+                    }
+                    return span;
                 }
 
-                computedPages.push({ startIndex, endIndex });
-                startIndex = endIndex + 1;
-            }
+                function clearBlaetternSmartLineStyle(lineEl) {
+                    if (!lineEl) return;
+                    lineEl.classList.remove('blaettern-line-smart');
+                    lineEl.style.removeProperty('--blaettern-smart-word-spacing');
+                    lineEl.style.removeProperty('--blaettern-smart-letter-spacing');
+                    lineEl.style.removeProperty('--blaettern-smart-stretch');
+                    lineEl.style.removeProperty('--blaettern-smart-wdth');
+                }
 
-            measureLayer.remove();
-            blaetternPages = computedPages;
-            blaetternPaginationDirty = false;
-            blaetternPaginationKey = signature;
+                function applyBlaetternSmartJustification(layer) {
+                    if (!layer || layer.classList.contains('blaettern-page-empty')) return;
+                    const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
+                    if (!lineElements.length) return;
 
-            const anchorIndex = Number.isFinite(getBlaetternCurrentSubtitleIndex()) && getBlaetternCurrentSubtitleIndex() >= 0
-                ? getBlaetternCurrentSubtitleIndex()
-                : (blaetternPages[Math.max(0, Math.min(blaetternPageIndex, blaetternPages.length - 1))]?.startIndex || 0);
-            blaetternPageIndex = findBlaetternPageIndexForSubtitle(anchorIndex);
-            return true;
-        }
+                    const layerRect = layer.getBoundingClientRect();
+                    const layerStyle = window.getComputedStyle(layer);
+                    const paddingLeft = parseFloat(layerStyle.paddingLeft) || 0;
+                    const paddingRight = parseFloat(layerStyle.paddingRight) || 0;
+                    const innerWidth = Math.max(1, layer.clientWidth - paddingLeft - paddingRight);
+                    if (innerWidth <= 20) return;
+                    const sampleLine = lineElements[0];
+                    const sampleLineStyle = sampleLine ? window.getComputedStyle(sampleLine) : null;
+                    const timestampGapPx = sampleLineStyle ? (parseFloat(sampleLineStyle.marginRight) || 0) : 0;
 
-        function renderBlaetternLayer(layer, pageIdx) {
-            if (!layer) return;
-            layer.replaceChildren();
-            layer.dataset.pageIndex = String(pageIdx);
+                    const elementRectCount = new Map();
+                    const linesByTop = new Map();
 
-            if (pageIdx < 0 || pageIdx >= blaetternPages.length) {
-                layer.classList.add('blaettern-page-empty');
-                return;
-            }
+                    lineElements.forEach((lineEl) => {
+                        clearBlaetternSmartLineStyle(lineEl);
+                        const rects = Array.from(lineEl.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1);
+                        elementRectCount.set(lineEl, rects.length);
+                        rects.forEach((rect) => {
+                            const key = Math.round(rect.top - layerRect.top);
+                            let line = linesByTop.get(key);
+                            if (!line) {
+                                line = {
+                                    left: rect.left,
+                                    right: rect.right,
+                                    elements: new Set()
+                                };
+                                linesByTop.set(key, line);
+                            } else {
+                                line.left = Math.min(line.left, rect.left);
+                                line.right = Math.max(line.right, rect.right);
+                            }
+                            line.elements.add(lineEl);
+                        });
+                    });
 
-            layer.classList.remove('blaettern-page-empty');
-            const page = blaetternPages[pageIdx];
-            for (let i = page.startIndex; i <= page.endIndex; i++) {
-                layer.appendChild(createBlaetternLineElement(i));
-            }
-            applyBlaetternSmartJustification(layer);
-        }
+                    const visualLines = Array.from(linesByTop.entries())
+                        .sort((a, b) => a[0] - b[0])
+                        .map((entry) => entry[1]);
+                    if (visualLines.length <= 1) return;
 
-        function updateBlaetternProgressBadge(root) {
-            if (!root) return;
-            const badge = root.querySelector('.blaettern-progress-indicator');
-            if (!badge) return;
-            if (!blaetternPages.length || !getBlaetternTracks().length) {
-                badge.innerText = '0%';
-                return;
-            }
-            const page = blaetternPages[Math.max(0, Math.min(blaetternPageIndex, blaetternPages.length - 1))];
-            const percent = Math.max(0, Math.min(100, Math.floor((page.startIndex / Math.max(1, getBlaetternTracks().length)) * 100)));
-            badge.innerText = `${percent}%`;
-        }
+                    for (let i = 0; i < visualLines.length - 1; i++) {
+                        const line = visualLines[i];
+                        const elements = Array.from(line.elements);
+                        if (!elements.length) continue;
+                        if (elements.some((el) => (elementRectCount.get(el) || 0) > 1)) continue;
 
-        function ensureBlaetternRoot() {
-            let root = getBlaetternRoot();
-            if (root) return root;
+                        const lineWidth = Math.max(0, line.right - line.left);
+                        const boundaryCount = Math.max(0, elements.length - 1);
+                        const lineVisualWidth = lineWidth + (boundaryCount * timestampGapPx);
+                        const slack = innerWidth - lineVisualWidth;
+                        if (slack < 4 || slack > (innerWidth * 0.24)) continue;
 
-            subtitleContainer.innerHTML = '';
-            root = document.createElement('div');
-            root.className = 'blaettern-page-root';
+                        let letters = 0;
+                        let spaces = 0;
+                        elements.forEach((el) => {
+                            const compact = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                            if (!compact) return;
+                            letters += compact.replace(/\s/g, '').length;
+                            const localSpaces = compact.match(/\s+/g);
+                            if (localSpaces) spaces += localSpaces.length;
+                        });
+                        const totalGapUnits = spaces + boundaryCount;
+                        if (letters < 8) continue;
+                        if (totalGapUnits < 3 && slack > 20) continue;
 
-            const badge = document.createElement('div');
-            badge.className = 'blaettern-progress-indicator';
-            badge.setAttribute('aria-live', 'polite');
-            root.appendChild(badge);
+                        const sparseLine = totalGapUnits < 6;
+                        const wordShare = sparseLine ? 0.52 : 0.68;
+                        const letterShare = sparseLine ? 0.31 : 0.24;
+                        const stretchShare = 1 - wordShare - letterShare;
 
-            const prev = document.createElement('div');
-            prev.className = 'blaettern-page-layer blaettern-page-prev';
-            root.appendChild(prev);
+                        const addWord = Math.min(1.35, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
+                        const addLetter = Math.min(0.21, Math.max(0, (slack * letterShare) / Math.max(36, letters)));
+                        const usedSlack = (addWord * totalGapUnits) + (addLetter * letters);
+                        const remainingSlack = Math.max(0, slack - usedSlack);
+                        const stretchScale = Math.min(1.085, 1 + ((remainingSlack * stretchShare) / Math.max(220, lineVisualWidth)));
+                        const stretchPercent = stretchScale * 100;
+                        const wdthValue = stretchPercent;
 
-            const current = document.createElement('div');
-            current.className = 'blaettern-page-layer blaettern-page-current';
-            root.appendChild(current);
+                        if (addWord < 0.05 && addLetter < 0.01 && stretchScale <= 1.003) continue;
 
-            const next = document.createElement('div');
-            next.className = 'blaettern-page-layer blaettern-page-next';
-            root.appendChild(next);
+                        elements.forEach((el) => {
+                            el.classList.add('blaettern-line-smart');
+                            el.style.setProperty('--blaettern-smart-word-spacing', `${addWord.toFixed(3)}px`);
+                            el.style.setProperty('--blaettern-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
+                            el.style.setProperty('--blaettern-smart-stretch', `${stretchPercent.toFixed(2)}%`);
+                            el.style.setProperty('--blaettern-smart-wdth', wdthValue.toFixed(2));
+                        });
+                    }
+                }
 
-            const bookmarkBtn = document.createElement('button');
-            bookmarkBtn.className = 'bookmark-btn blaettern-bookmark-btn bookmark-btn-flat-overlay';
-            bookmarkBtn.type = 'button';
-            bookmarkBtn.dataset.index = '';
-            ensureBlaetternBookmarkButtonMode(bookmarkBtn);
-            setBlaetternBookmarkButtonLabel(bookmarkBtn, BLAETTERN_BOOKMARK_LABEL);
-            root.appendChild(bookmarkBtn);
+                function findBlaetternPageIndexForSubtitle(subtitleIndex) {
+                    if (!blaetternPages.length) return 0;
+                    const idx = Math.max(0, Math.min(getBlaetternTracks().length - 1, Number(subtitleIndex) || 0));
+                    for (let i = 0; i < blaetternPages.length; i++) {
+                        const page = blaetternPages[i];
+                        if (idx >= page.startIndex && idx <= page.endIndex) return i;
+                    }
+                    return Math.max(0, blaetternPages.length - 1);
+                }
 
-            bookmarkBtn.addEventListener('click', async (ev) => {
-                ev.preventDefault();
-                ev.stopPropagation();
-                const idx = Number(bookmarkBtn.dataset.index);
-                if (!Number.isFinite(idx) || idx < 0 || idx >= getBlaetternTracks().length) return;
-                const track = getBlaetternTracks()[idx];
-                if (!track || !window.GameState || typeof window.GameState.addBookmark !== 'function') return;
+                function ensureBlaetternPagination() {
+                    if (!subtitleContainer) return false;
+                    if (!getBlaetternTracks().length) {
+                        blaetternPages = [];
+                        blaetternPageIndex = 0;
+                        blaetternPaginationDirty = false;
+                        blaetternPaginationKey = '';
+                        return true;
+                    }
 
-                const loreId = (isLoreMode && Number.isFinite(activeLoreId)) ? Number(activeLoreId) : null;
-                const loreMeta = loreId && window.GameState && typeof window.GameState.getLore === 'function'
-                    ? window.GameState.getLore(loreId)
-                    : null;
-                const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
-                const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
-                const bookmarkChapterTitle = loreId
-                    ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
-                    : CURRENT_CHAPTER_TITLE;
-                const bookmarkAudioRef = loreId
-                    ? ((loreMeta && loreMeta.audio) || `assets/lore${loreId}.mp3`)
-                    : 'assets/kapitel1b.mp3';
-                const bookmarkTextRef = loreId
-                    ? ((loreMeta && loreMeta.text) || `assets/lore${loreId}.txt`)
-                    : 'assets/kapitel1b.txt';
-                const bm = {
-                    id: Date.now(),
-                    chapter: bookmarkChapter,
-                    chapterTitle: bookmarkChapterTitle,
-                    page: CURRENT_PAGE,
-                    time: track.time,
-                    textPreview: (track.text || '').substring(0, 60),
-                    contentKey: bookmarkContentKey,
-                    loreId: loreId,
-                    audioRef: bookmarkAudioRef,
-                    textRef: bookmarkTextRef,
-                    createdAt: Date.now()
-                };
+                    const width = Math.round(subtitleContainer.clientWidth || 0);
+                    const height = Math.round(subtitleContainer.clientHeight || 0);
+                    if (width <= 20 || height <= 20) return false;
 
-                const added = await window.GameState.addBookmark(bm);
-                if (added) {
-                    bookmarkBtn.classList.add('saved', 'visible');
-                    setBlaetternBookmarkButtonLabel(bookmarkBtn, BLAETTERN_BOOKMARK_SAVED_LABEL);
-                    if (typeof updateBookmarkList === 'function') updateBookmarkList();
+                    const signature = [
+                        window.subtitleVersion || 0,
+                        getBlaetternTracks().length,
+                        readerFontSizePx,
+                        readerSentenceLayout,
+                        width,
+                        height
+                    ].join('|');
+
+                    if (!blaetternPaginationDirty && blaetternPaginationKey === signature && blaetternPages.length) {
+                        return true;
+                    }
+
+                    const measureLayer = document.createElement('div');
+                    measureLayer.className = 'blaettern-page-layer blaettern-page-layer-measure';
+                    measureLayer.setAttribute('aria-hidden', 'true');
+                    subtitleContainer.appendChild(measureLayer);
+
+                    const computedPages = [];
+                    let startIndex = 0;
+                    while (startIndex < getBlaetternTracks().length) {
+                        measureLayer.replaceChildren();
+                        let endIndex = startIndex - 1;
+
+                        for (let i = startIndex; i < getBlaetternTracks().length; i++) {
+                            const node = createBlaetternLineElement(i, { forMeasure: true });
+                            measureLayer.appendChild(node);
+                            if (measureLayer.scrollHeight > (measureLayer.clientHeight + 1)) {
+                                measureLayer.removeChild(node);
+                                break;
+                            }
+                            endIndex = i;
+                        }
+
+                        if (endIndex < startIndex) {
+                            endIndex = startIndex;
+                            measureLayer.appendChild(createBlaetternLineElement(startIndex, { forMeasure: true }));
+                        }
+
+                        computedPages.push({ startIndex, endIndex });
+                        startIndex = endIndex + 1;
+                    }
+
+                    measureLayer.remove();
+                    blaetternPages = computedPages;
+                    blaetternPaginationDirty = false;
+                    blaetternPaginationKey = signature;
+
+                    const anchorIndex = Number.isFinite(getBlaetternCurrentSubtitleIndex()) && getBlaetternCurrentSubtitleIndex() >= 0
+                        ? getBlaetternCurrentSubtitleIndex()
+                        : (blaetternPages[Math.max(0, Math.min(blaetternPageIndex, blaetternPages.length - 1))]?.startIndex || 0);
+                    blaetternPageIndex = findBlaetternPageIndexForSubtitle(anchorIndex);
+                    return true;
+                }
+
+                function renderBlaetternLayer(layer, pageIdx) {
+                    if (!layer) return;
+                    layer.replaceChildren();
+                    layer.dataset.pageIndex = String(pageIdx);
+
+                    if (pageIdx < 0 || pageIdx >= blaetternPages.length) {
+                        layer.classList.add('blaettern-page-empty');
+                        return;
+                    }
+
+                    layer.classList.remove('blaettern-page-empty');
+                    const page = blaetternPages[pageIdx];
+                    for (let i = page.startIndex; i <= page.endIndex; i++) {
+                        layer.appendChild(createBlaetternLineElement(i));
+                    }
+                    applyBlaetternSmartJustification(layer);
+                }
+
+                function updateBlaetternProgressBadge(root) {
+                    if (!root) return;
+                    const badge = root.querySelector('.blaettern-progress-indicator');
+                    if (!badge) return;
+                    if (!blaetternPages.length || !getBlaetternTracks().length) {
+                        badge.innerText = '0%';
+                        return;
+                    }
+                    const page = blaetternPages[Math.max(0, Math.min(blaetternPageIndex, blaetternPages.length - 1))];
+                    const percent = Math.max(0, Math.min(100, Math.floor((page.startIndex / Math.max(1, getBlaetternTracks().length)) * 100)));
+                    badge.innerText = `${percent}%`;
+                }
+
+                function ensureBlaetternRoot() {
+                    let root = getBlaetternRoot();
+                    if (root) return root;
+
+                    subtitleContainer.innerHTML = '';
+                    root = document.createElement('div');
+                    root.className = 'blaettern-page-root';
+
+                    const badge = document.createElement('div');
+                    badge.className = 'blaettern-progress-indicator';
+                    badge.setAttribute('aria-live', 'polite');
+                    root.appendChild(badge);
+
+                    const prev = document.createElement('div');
+                    prev.className = 'blaettern-page-layer blaettern-page-prev';
+                    root.appendChild(prev);
+
+                    const current = document.createElement('div');
+                    current.className = 'blaettern-page-layer blaettern-page-current';
+                    root.appendChild(current);
+
+                    const next = document.createElement('div');
+                    next.className = 'blaettern-page-layer blaettern-page-next';
+                    root.appendChild(next);
+
+                    const bookmarkBtn = document.createElement('button');
+                    bookmarkBtn.className = 'bookmark-btn blaettern-bookmark-btn bookmark-btn-flat-overlay';
+                    bookmarkBtn.type = 'button';
+                    bookmarkBtn.dataset.index = '';
+                    ensureBlaetternBookmarkButtonMode(bookmarkBtn);
+                    setBlaetternBookmarkButtonLabel(bookmarkBtn, BLAETTERN_BOOKMARK_LABEL);
+                    root.appendChild(bookmarkBtn);
+
+                    bookmarkBtn.addEventListener('click', async (ev) => {
+                        ev.preventDefault();
+                        ev.stopPropagation();
+                        const idx = Number(bookmarkBtn.dataset.index);
+                        if (!Number.isFinite(idx) || idx < 0 || idx >= getBlaetternTracks().length) return;
+                        const track = getBlaetternTracks()[idx];
+                        if (!track || !window.GameState || typeof window.GameState.addBookmark !== 'function') return;
+
+                        const loreId = (isLoreMode && Number.isFinite(activeLoreId)) ? Number(activeLoreId) : null;
+                        const loreMeta = loreId && window.GameState && typeof window.GameState.getLore === 'function'
+                            ? window.GameState.getLore(loreId)
+                            : null;
+                        const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
+                        const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
+                        const bookmarkChapterTitle = loreId
+                            ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
+                            : CURRENT_CHAPTER_TITLE;
+                        const bookmarkAudioRef = loreId
+                            ? ((loreMeta && loreMeta.audio) || `assets/lore${loreId}.mp3`)
+                            : 'assets/kapitel1b.mp3';
+                        const bookmarkTextRef = loreId
+                            ? ((loreMeta && loreMeta.text) || `assets/lore${loreId}.txt`)
+                            : 'assets/kapitel1b.txt';
+                        const bm = {
+                            id: Date.now(),
+                            chapter: bookmarkChapter,
+                            chapterTitle: bookmarkChapterTitle,
+                            page: CURRENT_PAGE,
+                            time: track.time,
+                            textPreview: (track.text || '').substring(0, 60),
+                            contentKey: bookmarkContentKey,
+                            loreId: loreId,
+                            audioRef: bookmarkAudioRef,
+                            textRef: bookmarkTextRef,
+                            createdAt: Date.now()
+                        };
+
+                        const added = await window.GameState.addBookmark(bm);
+                        if (added) {
+                            bookmarkBtn.classList.add('saved', 'visible');
+                            setBlaetternBookmarkButtonLabel(bookmarkBtn, BLAETTERN_BOOKMARK_SAVED_LABEL);
+                            if (typeof updateBookmarkList === 'function') updateBookmarkList();
+                            clearBlaetternBookmarkHideTimer();
+                            blaetternBookmarkHideTimer = setTimeout(() => {
+                                hideBlaetternBookmarkButton();
+                            }, 1200);
+                            return;
+                        }
+                        hideBlaetternBookmarkButton();
+                    });
+
+                    subtitleContainer.appendChild(root);
+                    return root;
+                }
+
+                function positionBlaetternBookmarkButton(btn, lineEl, point = null, options = {}) {
+                    if (!btn || !lineEl || !subtitleContainer) return;
+                    ensureBlaetternBookmarkButtonMode(btn);
+                    const containerRect = subtitleContainer.getBoundingClientRect();
+                    const lineRect = lineEl.getBoundingClientRect();
+                    const btnW = btn.offsetWidth || 118;
+                    const btnH = btn.offsetHeight || 36;
+                    const margin = 8;
+
+                    if (options.lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
+                        btn.style.left = `${Math.round(btn._flatLockedX)}px`;
+                        btn.style.top = `${Math.round(btn._flatLockedY)}px`;
+                        startBlaetternBookmarkMapLayerLoop(btn);
+                        drawBlaetternBookmarkMapLayer(btn);
+                        return;
+                    }
+
+                    let x = point && Number.isFinite(point.clientX)
+                        ? point.clientX - (btnW / 2)
+                        : lineRect.left + ((lineRect.width - btnW) / 2);
+                    let y = lineRect.top - btnH - 10;
+                    if (y < containerRect.top + margin) y = lineRect.bottom + 10;
+
+                    x = Math.max(margin, Math.min(window.innerWidth - btnW - margin, x));
+                    y = Math.max(margin, Math.min(window.innerHeight - btnH - margin, y));
+                    btn._flatLockedX = Math.round(x);
+                    btn._flatLockedY = Math.round(y);
+                    btn.style.left = `${btn._flatLockedX}px`;
+                    btn.style.top = `${btn._flatLockedY}px`;
+                    startBlaetternBookmarkMapLayerLoop(btn);
+                    drawBlaetternBookmarkMapLayer(btn);
+                }
+
+                function showBlaetternBookmarkButton(lineIndex, point = null) {
+                    const root = ensureBlaetternRoot();
+                    const lineEl = root.querySelector(`.blaettern-page-current .blaettern-line[data-index="${lineIndex}"]`);
+                    const btn = root.querySelector('.blaettern-bookmark-btn');
+                    if (!lineEl || !btn) return;
+                    btn.dataset.index = String(lineIndex);
+                    ensureBlaetternBookmarkButtonMode(btn);
+                    setBlaetternBookmarkButtonLabel(btn, BLAETTERN_BOOKMARK_LABEL);
+                    btn.classList.remove('saved');
+                    btn.classList.add('visible');
+                    positionBlaetternBookmarkButton(btn, lineEl, point);
                     clearBlaetternBookmarkHideTimer();
                     blaetternBookmarkHideTimer = setTimeout(() => {
-                        hideBlaetternBookmarkButton();
-                    }, 1200);
-                    return;
+                        if (!btn.classList.contains('saved')) hideBlaetternBookmarkButton();
+                    }, 4000);
                 }
-                hideBlaetternBookmarkButton();
-            });
 
-            subtitleContainer.appendChild(root);
-            return root;
-        }
-
-        function positionBlaetternBookmarkButton(btn, lineEl, point = null, options = {}) {
-            if (!btn || !lineEl || !subtitleContainer) return;
-            ensureBlaetternBookmarkButtonMode(btn);
-            const containerRect = subtitleContainer.getBoundingClientRect();
-            const lineRect = lineEl.getBoundingClientRect();
-            const btnW = btn.offsetWidth || 118;
-            const btnH = btn.offsetHeight || 36;
-            const margin = 8;
-
-            if (options.lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
-                btn.style.left = `${Math.round(btn._flatLockedX)}px`;
-                btn.style.top = `${Math.round(btn._flatLockedY)}px`;
-                startBlaetternBookmarkMapLayerLoop(btn);
-                drawBlaetternBookmarkMapLayer(btn);
-                return;
-            }
-
-            let x = point && Number.isFinite(point.clientX)
-                ? point.clientX - (btnW / 2)
-                : lineRect.left + ((lineRect.width - btnW) / 2);
-            let y = lineRect.top - btnH - 10;
-            if (y < containerRect.top + margin) y = lineRect.bottom + 10;
-
-            x = Math.max(margin, Math.min(window.innerWidth - btnW - margin, x));
-            y = Math.max(margin, Math.min(window.innerHeight - btnH - margin, y));
-            btn._flatLockedX = Math.round(x);
-            btn._flatLockedY = Math.round(y);
-            btn.style.left = `${btn._flatLockedX}px`;
-            btn.style.top = `${btn._flatLockedY}px`;
-            startBlaetternBookmarkMapLayerLoop(btn);
-            drawBlaetternBookmarkMapLayer(btn);
-        }
-
-        function showBlaetternBookmarkButton(lineIndex, point = null) {
-            const root = ensureBlaetternRoot();
-            const lineEl = root.querySelector(`.blaettern-page-current .blaettern-line[data-index="${lineIndex}"]`);
-            const btn = root.querySelector('.blaettern-bookmark-btn');
-            if (!lineEl || !btn) return;
-            btn.dataset.index = String(lineIndex);
-            ensureBlaetternBookmarkButtonMode(btn);
-            setBlaetternBookmarkButtonLabel(btn, BLAETTERN_BOOKMARK_LABEL);
-            btn.classList.remove('saved');
-            btn.classList.add('visible');
-            positionBlaetternBookmarkButton(btn, lineEl, point);
-            clearBlaetternBookmarkHideTimer();
-            blaetternBookmarkHideTimer = setTimeout(() => {
-                if (!btn.classList.contains('saved')) hideBlaetternBookmarkButton();
-            }, 4000);
-        }
-
-        function renderBlaetternPageWindow() {
-            const root = ensureBlaetternRoot();
-            const refs = getBlaetternLayerRefs(root);
-            if (!refs) return;
-            renderBlaetternLayer(refs.prev, blaetternPageIndex - 1);
-            renderBlaetternLayer(refs.current, blaetternPageIndex);
-            renderBlaetternLayer(refs.next, blaetternPageIndex + 1);
-            setBlaetternLayerTransition(root, false);
-            resetBlaetternLayerTransforms(root);
-            updateBlaetternProgressBadge(root);
-            hideBlaetternBookmarkButton();
-        }
-
-        function renderBlaetternReadingPage(centerIndex) {
-            syncReadingTopFadeMask(-1);
-            if (!getBlaetternTracks().length) {
-                subtitleContainer.innerHTML = '';
-                const emptyLine = document.createElement('div');
-                emptyLine.className = 'subtitle-line subtitle-current';
-                emptyLine.innerText = 'Warte auf Audio/Text...';
-                subtitleContainer.appendChild(emptyLine);
-                return;
-            }
-
-            if (!ensureBlaetternPagination()) return;
-            const safeIndex = Math.max(
-                0,
-                Math.min(
-                    getBlaetternTracks().length - 1,
-                    Number.isFinite(centerIndex) && centerIndex >= 0 ? centerIndex : 0
-                )
-            );
-
-            if (!blaetternSwipeAnimating) {
-                if (blaetternLastSyncedSubtitleIndex !== safeIndex) {
-                    blaetternPageIndex = findBlaetternPageIndexForSubtitle(safeIndex);
+                function renderBlaetternPageWindow() {
+                    const root = ensureBlaetternRoot();
+                    const refs = getBlaetternLayerRefs(root);
+                    if (!refs) return;
+                    renderBlaetternLayer(refs.prev, blaetternPageIndex - 1);
+                    renderBlaetternLayer(refs.current, blaetternPageIndex);
+                    renderBlaetternLayer(refs.next, blaetternPageIndex + 1);
+                    setBlaetternLayerTransition(root, false);
+                    resetBlaetternLayerTransforms(root);
+                    updateBlaetternProgressBadge(root);
+                    hideBlaetternBookmarkButton();
                 }
-            }
-            blaetternLastSyncedSubtitleIndex = safeIndex;
-            renderBlaetternPageWindow();
-        }
 
-        function resolveBlaetternSwipeDirection(offsetPx, velocityPxPerMs) {
-            const width = getBlaetternViewportWidth();
-            if (!width || blaetternPages.length <= 1) return 0;
-            const hasPrev = blaetternPageIndex > 0;
-            const hasNext = blaetternPageIndex < blaetternPages.length - 1;
-            const turnThreshold = width * BLAETTERN_SWIPE_TURN_RATIO;
+                function renderBlaetternReadingPage(centerIndex) {
+                    syncReadingTopFadeMask(-1);
+                    if (!getBlaetternTracks().length) {
+                        subtitleContainer.innerHTML = '';
+                        const emptyLine = document.createElement('div');
+                        emptyLine.className = 'subtitle-line subtitle-current';
+                        emptyLine.innerText = 'Warte auf Audio/Text...';
+                        subtitleContainer.appendChild(emptyLine);
+                        return;
+                    }
 
-            if (offsetPx < 0 && hasNext) {
-                if (Math.abs(offsetPx) > turnThreshold || velocityPxPerMs <= -BLAETTERN_SWIPE_VELOCITY_THRESHOLD) return 1;
-            }
-            if (offsetPx > 0 && hasPrev) {
-                if (Math.abs(offsetPx) > turnThreshold || velocityPxPerMs >= BLAETTERN_SWIPE_VELOCITY_THRESHOLD) return -1;
-            }
-            return 0;
-        }
+                    if (!ensureBlaetternPagination()) return;
+                    const safeIndex = Math.max(
+                        0,
+                        Math.min(
+                            getBlaetternTracks().length - 1,
+                            Number.isFinite(centerIndex) && centerIndex >= 0 ? centerIndex : 0
+                        )
+                    );
 
-        function finishBlaetternSwipe(direction) {
-            const root = getBlaetternRoot();
-            if (!root) return;
-            const refs = getBlaetternLayerRefs(root);
-            const width = getBlaetternViewportWidth();
-            if (!refs || !width) return;
-
-            blaetternSwipeAnimating = true;
-            setBlaetternLayerTransition(root, true);
-
-            if (direction === 1) {
-                refs.current.style.transform = `translate3d(${-width}px, 0, 0)`;
-                refs.next.style.transform = 'translate3d(0, 0, 0)';
-            } else if (direction === -1) {
-                refs.prev.style.transform = 'translate3d(0, 0, 0)';
-                refs.current.style.transform = `translate3d(${width}px, 0, 0)`;
-            } else {
-                resetBlaetternLayerTransforms(root);
-            }
-
-            clearBlaetternSwipeCommitTimer();
-            blaetternSwipeCommitTimer = setTimeout(() => {
-                blaetternSwipeAnimating = false;
-                if (direction === 1) blaetternPageIndex = Math.min(blaetternPages.length - 1, blaetternPageIndex + 1);
-                if (direction === -1) blaetternPageIndex = Math.max(0, blaetternPageIndex - 1);
-                renderBlaetternPageWindow();
-                if (isBlaetternLayoutActive()) scheduleBlaetternControlsAutoHide('swipe-finish');
-            }, BLAETTERN_SWIPE_SETTLE_MS + 10);
-        }
-
-        async function handleBlaetternTimestampTap(lineIndex) {
-            if (!Number.isFinite(lineIndex) || lineIndex < 0 || lineIndex >= getBlaetternTracks().length) return;
-            if (contentSwitchInProgress) return;
-            if (Date.now() < blaetternSuppressTapUntil) return;
-            const track = getBlaetternTracks()[lineIndex];
-            if (!track) return;
-            setSubtitleFollowLocked(false, 'blaettern-tap');
-            await seekAndSyncSubtitle(window.audioPlayer, track.time, `blaettern-click:${lineIndex}`);
-            try {
-                await window.audioPlayer.play();
-            } catch (_) {
-                // ignore autoplay restrictions
-            }
-            bumpBlaetternControlsAutoHide('blaettern-tap');
-        }
-
-        function onBlaetternPointerDown(event) {
-            if (!isBlaetternLayoutActive()) return;
-            if (contentSwitchInProgress) return;
-            if (blaetternSwipeAnimating) {
-                event.preventDefault();
-                return;
-            }
-            if (event.button !== undefined && event.button !== 0) return;
-            if (event.target && typeof event.target.closest === 'function' && event.target.closest('.blaettern-bookmark-btn')) {
-                bumpBlaetternControlsAutoHide('blaettern-bookmark-touch');
-                return;
-            }
-
-            const targetLine = event.target && typeof event.target.closest === 'function'
-                ? event.target.closest('.blaettern-line')
-                : null;
-            const consumeTap = !blaetternControlsVisible;
-            bumpBlaetternControlsAutoHide('blaettern-touch');
-            if (consumeTap) blaetternSuppressTapUntil = Date.now() + 300;
-
-            hideBlaetternBookmarkButton();
-            blaetternSwipeState = {
-                pointerId: event.pointerId,
-                startX: event.clientX,
-                startY: event.clientY,
-                lastX: event.clientX,
-                lastY: event.clientY,
-                startTime: performance.now(),
-                mode: 'pending',
-                offsetPx: 0,
-                lineIndex: targetLine ? Number(targetLine.dataset.index) : -1,
-                consumeTap,
-                movedBeyondTap: false
-            };
-
-            if (subtitleContainer && typeof subtitleContainer.setPointerCapture === 'function') {
-                try {
-                    subtitleContainer.setPointerCapture(event.pointerId);
-                } catch (_) {
-                    // no-op
+                    if (!blaetternSwipeAnimating && !subtitleFollowLocked) {
+                        if (blaetternLastSyncedSubtitleIndex !== safeIndex) {
+                            blaetternPageIndex = findBlaetternPageIndexForSubtitle(safeIndex);
+                        }
+                    }
+                    blaetternLastSyncedSubtitleIndex = safeIndex;
+                    renderBlaetternPageWindow();
                 }
-            }
 
-            clearBlaetternLongPressTimer();
-            if (!consumeTap && targetLine && Number.isFinite(blaetternSwipeState.lineIndex) && blaetternSwipeState.lineIndex >= 0) {
-                blaetternLongPressTimer = setTimeout(() => {
-                    if (!blaetternSwipeState || blaetternSwipeState.mode !== 'pending') return;
-                    blaetternSwipeState.mode = 'longpress';
-                    blaetternSuppressTapUntil = Date.now() + 500;
-                    showBlaetternBookmarkButton(blaetternSwipeState.lineIndex, {
-                        clientX: blaetternSwipeState.lastX,
-                        clientY: blaetternSwipeState.lastY
-                    });
-                }, BLAETTERN_LONG_PRESS_DELAY_MS);
-            }
+                function resolveBlaetternSwipeDirection(offsetPx, velocityPxPerMs) {
+                    const width = getBlaetternViewportWidth();
+                    if (!width || blaetternPages.length <= 1) return 0;
+                    const hasPrev = blaetternPageIndex > 0;
+                    const hasNext = blaetternPageIndex < blaetternPages.length - 1;
+                    const turnThreshold = width * BLAETTERN_SWIPE_TURN_RATIO;
 
-            event.preventDefault();
-        }
+                    if (offsetPx < 0 && hasNext) {
+                        if (Math.abs(offsetPx) > turnThreshold || velocityPxPerMs <= -BLAETTERN_SWIPE_VELOCITY_THRESHOLD) return 1;
+                    }
+                    if (offsetPx > 0 && hasPrev) {
+                        if (Math.abs(offsetPx) > turnThreshold || velocityPxPerMs >= BLAETTERN_SWIPE_VELOCITY_THRESHOLD) return -1;
+                    }
+                    return 0;
+                }
 
-        function onBlaetternPointerMove(event) {
-            if (!isBlaetternLayoutActive()) return;
-            if (!blaetternSwipeState) return;
-            if (event.pointerId !== blaetternSwipeState.pointerId) return;
+                function finishBlaetternSwipe(direction) {
+                    const root = getBlaetternRoot();
+                    if (!root) return;
+                    const refs = getBlaetternLayerRefs(root);
+                    const width = getBlaetternViewportWidth();
+                    if (!refs || !width) return;
 
-            const dx = event.clientX - blaetternSwipeState.startX;
-            const dy = event.clientY - blaetternSwipeState.startY;
-            blaetternSwipeState.lastX = event.clientX;
-            blaetternSwipeState.lastY = event.clientY;
+                    blaetternSwipeAnimating = true;
+                    setBlaetternLayerTransition(root, true);
 
-            if (blaetternSwipeState.mode === 'pending') {
-                if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.1) {
-                    blaetternSwipeState.mode = 'swipe';
-                    blaetternSwipeState.movedBeyondTap = true;
+                    if (direction === 1) {
+                        refs.current.style.transform = `translate3d(${-width}px, 0, 0)`;
+                        refs.next.style.transform = 'translate3d(0, 0, 0)';
+                    } else if (direction === -1) {
+                        refs.prev.style.transform = 'translate3d(0, 0, 0)';
+                        refs.current.style.transform = `translate3d(${width}px, 0, 0)`;
+                    } else {
+                        resetBlaetternLayerTransforms(root);
+                    }
+
+                    clearBlaetternSwipeCommitTimer();
+                    blaetternSwipeCommitTimer = setTimeout(() => {
+                        blaetternSwipeAnimating = false;
+                        if (direction === 1) blaetternPageIndex = Math.min(blaetternPages.length - 1, blaetternPageIndex + 1);
+                        if (direction === -1) blaetternPageIndex = Math.max(0, blaetternPageIndex - 1);
+                        if (direction !== 0 && isBlaetternLayoutActive()) {
+                            setSubtitleFollowLocked(true);
+                        }
+                        renderBlaetternPageWindow();
+                        if (isBlaetternLayoutActive()) scheduleBlaetternControlsAutoHide('swipe-finish');
+                    }, BLAETTERN_SWIPE_SETTLE_MS + 10);
+                }
+
+                async function handleBlaetternTimestampTap(lineIndex) {
+                    if (!Number.isFinite(lineIndex) || lineIndex < 0 || lineIndex >= getBlaetternTracks().length) return;
+                    if (contentSwitchInProgress) return;
+                    if (Date.now() < blaetternSuppressTapUntil) return;
+                    const track = getBlaetternTracks()[lineIndex];
+                    if (!track) return;
+                    setSubtitleFollowLocked(false, 'blaettern-tap');
+                    await seekAndSyncSubtitle(window.audioPlayer, track.time, `blaettern-click:${lineIndex}`);
+                    try {
+                        await window.audioPlayer.play();
+                    } catch (_) {
+                        // ignore autoplay restrictions
+                    }
+                    bumpBlaetternControlsAutoHide('blaettern-tap');
+                }
+
+                function onBlaetternPointerDown(event) {
+                    if (!isBlaetternLayoutActive()) return;
+                    if (contentSwitchInProgress) return;
+                    if (blaetternSwipeAnimating) {
+                        event.preventDefault();
+                        return;
+                    }
+                    if (event.button !== undefined && event.button !== 0) return;
+                    if (event.target && typeof event.target.closest === 'function' && event.target.closest('.blaettern-bookmark-btn')) {
+                        bumpBlaetternControlsAutoHide('blaettern-bookmark-touch');
+                        return;
+                    }
+
+                    const targetLine = event.target && typeof event.target.closest === 'function'
+                        ? event.target.closest('.blaettern-line')
+                        : null;
+                    const consumeTap = !blaetternControlsVisible;
+                    bumpBlaetternControlsAutoHide('blaettern-touch');
+                    if (consumeTap) blaetternSuppressTapUntil = Date.now() + 300;
+
+                    hideBlaetternBookmarkButton();
+                    blaetternSwipeState = {
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startY: event.clientY,
+                        lastX: event.clientX,
+                        lastY: event.clientY,
+                        startTime: performance.now(),
+                        mode: 'pending',
+                        offsetPx: 0,
+                        lineIndex: targetLine ? Number(targetLine.dataset.index) : -1,
+                        consumeTap,
+                        movedBeyondTap: false
+                    };
+
+                    if (subtitleContainer && typeof subtitleContainer.setPointerCapture === 'function') {
+                        try {
+                            subtitleContainer.setPointerCapture(event.pointerId);
+                        } catch (_) {
+                            // no-op
+                        }
+                    }
+
                     clearBlaetternLongPressTimer();
-                } else if (Math.hypot(dx, dy) > 9) {
-                    blaetternSwipeState.movedBeyondTap = true;
+                    if (!consumeTap && targetLine && Number.isFinite(blaetternSwipeState.lineIndex) && blaetternSwipeState.lineIndex >= 0) {
+                        blaetternLongPressTimer = setTimeout(() => {
+                            if (!blaetternSwipeState || blaetternSwipeState.mode !== 'pending') return;
+                            blaetternSwipeState.mode = 'longpress';
+                            blaetternSuppressTapUntil = Date.now() + 500;
+                            showBlaetternBookmarkButton(blaetternSwipeState.lineIndex, {
+                                clientX: blaetternSwipeState.lastX,
+                                clientY: blaetternSwipeState.lastY
+                            });
+                        }, BLAETTERN_LONG_PRESS_DELAY_MS);
+                    }
+
+                    event.preventDefault();
+                }
+
+                function onBlaetternPointerMove(event) {
+                    if (!isBlaetternLayoutActive()) return;
+                    if (!blaetternSwipeState) return;
+                    if (event.pointerId !== blaetternSwipeState.pointerId) return;
+
+                    const dx = event.clientX - blaetternSwipeState.startX;
+                    const dy = event.clientY - blaetternSwipeState.startY;
+                    blaetternSwipeState.lastX = event.clientX;
+                    blaetternSwipeState.lastY = event.clientY;
+
+                    if (blaetternSwipeState.mode === 'pending') {
+                        if (Math.abs(dx) > 14 && Math.abs(dx) > Math.abs(dy) * 1.1) {
+                            blaetternSwipeState.mode = 'swipe';
+                            blaetternSwipeState.movedBeyondTap = true;
+                            clearBlaetternLongPressTimer();
+                        } else if (Math.hypot(dx, dy) > 9) {
+                            blaetternSwipeState.movedBeyondTap = true;
+                            clearBlaetternLongPressTimer();
+                        }
+                    }
+
+                    if (blaetternSwipeState.mode !== 'swipe') return;
+                    const root = getBlaetternRoot();
+                    if (!root) return;
+                    setBlaetternLayerTransition(root, false);
+                    blaetternSwipeState.offsetPx = applyBlaetternSwipeOffset(root, dx);
+                    event.preventDefault();
+                }
+
+                function onBlaetternPointerEnd(event) {
+                    if (!isBlaetternLayoutActive()) return;
+                    if (!blaetternSwipeState) return;
+                    if (event.pointerId !== blaetternSwipeState.pointerId) return;
+
+                    const localState = blaetternSwipeState;
+                    blaetternSwipeState = null;
                     clearBlaetternLongPressTimer();
+                    if (subtitleContainer && typeof subtitleContainer.releasePointerCapture === 'function') {
+                        try {
+                            subtitleContainer.releasePointerCapture(event.pointerId);
+                        } catch (_) {
+                            // no-op
+                        }
+                    }
+
+                    if (event.type === 'pointercancel') return;
+
+                    if (localState.mode === 'swipe') {
+                        const elapsed = Math.max(1, performance.now() - localState.startTime);
+                        const velocity = (localState.lastX - localState.startX) / elapsed;
+                        const direction = resolveBlaetternSwipeDirection(localState.offsetPx, velocity);
+                        finishBlaetternSwipe(direction);
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (localState.mode === 'longpress') {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (localState.consumeTap) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (localState.movedBeyondTap) {
+                        event.preventDefault();
+                        return;
+                    }
+
+                    if (Number.isFinite(localState.lineIndex) && localState.lineIndex >= 0) {
+                        handleBlaetternTimestampTap(localState.lineIndex);
+                        event.preventDefault();
+                    }
                 }
-            }
-
-            if (blaetternSwipeState.mode !== 'swipe') return;
-            const root = getBlaetternRoot();
-            if (!root) return;
-            setBlaetternLayerTransition(root, false);
-            blaetternSwipeState.offsetPx = applyBlaetternSwipeOffset(root, dx);
-            event.preventDefault();
-        }
-
-        function onBlaetternPointerEnd(event) {
-            if (!isBlaetternLayoutActive()) return;
-            if (!blaetternSwipeState) return;
-            if (event.pointerId !== blaetternSwipeState.pointerId) return;
-
-            const localState = blaetternSwipeState;
-            blaetternSwipeState = null;
-            clearBlaetternLongPressTimer();
-            if (subtitleContainer && typeof subtitleContainer.releasePointerCapture === 'function') {
-                try {
-                    subtitleContainer.releasePointerCapture(event.pointerId);
-                } catch (_) {
-                    // no-op
-                }
-            }
-
-            if (event.type === 'pointercancel') return;
-
-            if (localState.mode === 'swipe') {
-                const elapsed = Math.max(1, performance.now() - localState.startTime);
-                const velocity = (localState.lastX - localState.startX) / elapsed;
-                const direction = resolveBlaetternSwipeDirection(localState.offsetPx, velocity);
-                finishBlaetternSwipe(direction);
-                event.preventDefault();
-                return;
-            }
-
-            if (localState.mode === 'longpress') {
-                event.preventDefault();
-                return;
-            }
-
-            if (localState.consumeTap) {
-                event.preventDefault();
-                return;
-            }
-
-            if (localState.movedBeyondTap) {
-                event.preventDefault();
-                return;
-            }
-
-            if (Number.isFinite(localState.lineIndex) && localState.lineIndex >= 0) {
-                handleBlaetternTimestampTap(localState.lineIndex);
-                event.preventDefault();
-            }
-        }
 
                 function clamp01(value) {
                     if (!Number.isFinite(value)) return 0;
@@ -2270,7 +2317,7 @@
 
                 // --- Slider fill gradient for WebKit (Chrome/Safari/Electron) ---
                 function updateSliderFill(rangeEl) {
-                    // Gold fill removed — plain white track only
+                    // Gold fill removed Ã¢â‚¬â€ plain white track only
                     if (rangeEl) rangeEl.style.background = '';
                 }
 
@@ -2953,6 +3000,9 @@
 
                 function setSubtitleFollowLocked(nextLocked) {
                     subtitleFollowLocked = !!nextLocked;
+                    if (!subtitleFollowLocked && isBlaetternLayoutActive()) {
+                        blaetternLastSyncedSubtitleIndex = -1;
+                    }
                     // SharedAudioPlayer checks this flag before auto-scroll.
                     subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     updateRecenterButtonVisibility();
@@ -2960,6 +3010,14 @@
 
                 function syncRecenterButtonMount(isMobileLayout = window.matchMedia('(max-width: 768px)').matches) {
                     if (!subtitleRecenterBtn) return;
+
+                    if (isBlaetternLayoutActive()) {
+                        if (subtitleRecenterBtn.parentElement !== document.body) {
+                            document.body.appendChild(subtitleRecenterBtn);
+                        }
+                        subtitleRecenterBtn.style.position = 'fixed';
+                        return;
+                    }
 
                     if (isMobileLayout) {
                         if (subtitleRecenterBtn.parentElement !== document.body) {
@@ -3018,13 +3076,31 @@
 
                     const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
                     syncRecenterButtonMount(isMobileLayout);
+                    const isBlaetternLayout = isBlaetternLayoutActive();
+                    const btnRect = subtitleRecenterBtn.getBoundingClientRect();
+                    const gap = 10;
+
+                    if (isBlaetternLayout) {
+                        const subtitleRect = subtitleContainer.getBoundingClientRect();
+                        const controlsRect = audioControlsEl ? audioControlsEl.getBoundingClientRect() : null;
+                        let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
+                        let top = subtitleRect.bottom - btnRect.height - gap;
+
+                        if (controlsRect && controlsRect.top > 0) {
+                            top = Math.min(top, controlsRect.top - btnRect.height - gap);
+                        }
+
+                        left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
+                        top = Math.max(subtitleRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
+                        subtitleRecenterBtn.style.left = `${left}px`;
+                        subtitleRecenterBtn.style.top = `${top}px`;
+                        return;
+                    }
+
                     if (!isMobileLayout) return;
 
                     const anchorRect = fullscreenBtn ? fullscreenBtn.getBoundingClientRect() : null;
                     if (!anchorRect) return;
-
-                    const btnRect = subtitleRecenterBtn.getBoundingClientRect();
-                    const gap = 10;
 
                     let left = anchorRect.left + (anchorRect.width - btnRect.width) / 2;
                     let top = anchorRect.top - btnRect.height - gap;
@@ -3296,7 +3372,7 @@
 
                 // Auto-Resume when Lore ends or Transition
                 // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
-                // ZusÃ¤tzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                // ZusÃƒÆ’Ã‚Â¤tzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
                 let _endedHandled = false;
                 function handleAudioEnded() {
                     if (_endedHandled) return;
@@ -3311,8 +3387,8 @@
                     }
 
                     // MAIN CHAPTER ENDED
-                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurÃ¼cksetzen,
-                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd wÃ¼rde false liefern).
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurÃƒÆ’Ã‚Â¼cksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd wÃƒÆ’Ã‚Â¼rde false liefern).
                     const tracks = getActiveSubtitleTracks();
                     const subtitleIdx = getActiveSubtitleIndex();
                     const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
@@ -3333,7 +3409,7 @@
                         if (btn) btn.classList.add('visible');
                     }
                 }
-                // PrimÃ¤r: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                // PrimÃƒÆ’Ã‚Â¤r: SharedAudioPlayer.onEnded (garantiert aufgerufen)
                 player.onEnded = handleAudioEnded;
                 // Fallback: DOM-Event auf dem Audio-Element
                 player.audio.addEventListener('ended', handleAudioEnded);
@@ -3755,21 +3831,40 @@
                     ctx.putImageData(imgData, 0, 0);
                     const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
                 }
+                let woodMaterial, floorMaterial, wallMaterial, bookMat, bulbMat, cordMat;
+                let sharedPlaneGeo, sharedShelfGeo, sharedPlankGeo, sharedBookGeo, sharedBulbGeo, sharedCordGeo;
 
-                const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
-                const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
-                const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-                const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
-                const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-                const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
+                if (!window.fallback2DMode && THREE) {
+                    woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
+                    floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
+                    wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+                    bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+                    bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                    cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
 
-                // --- SHARED GEOMETRIES (Performance Fix) ---
-                const sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
-                const sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
-                const sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
-                const sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
-                const sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
-                const sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+                    // --- SHARED GEOMETRIES (Performance Fix) ---
+                    sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
+                    sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+                    sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+                    sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
+
+                    // --- GLOBAL BOOK GEOMETRY REDUCTION (6 faces -> 2 faces) ---
+                    // By keeping only the spine (+X, indices 0-5) and the front cover (+Z, indices 24-29)
+                    // we save 66% of geometry rendering overhead per book for ALL devices.
+                    try {
+                        const oldIdx = sharedBookGeo.index.array;
+                        const newIdx = [];
+                        for (let i = 0; i < 6; i++) newIdx.push(oldIdx[i]);
+                        for (let i = 24; i < 30; i++) newIdx.push(oldIdx[i]);
+                        sharedBookGeo.setIndex(newIdx);
+                        sharedBookGeo.clearGroups();
+                    } catch (e) {
+                        console.warn("Global book geometry reduction failed:", e);
+                    }
+
+                    sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                    sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+                }
 
                 // --- CLASSES ---
                 class YellowLight {
@@ -4137,8 +4232,8 @@
                     }
 
                     createBooks(zStart, length, levels, isPreload, onReady) {
-                        // --- RADICAL iOS FALLBACK: Cap books to 50 to prevent InstancedMesh overload ---
-                        const bookCount = isIOSSafari ? 50 : 6000;
+                        // User requested to NOT reduce book count, but instead reduce geometry faces (applied to sharedBookGeo)
+                        const bookCount = 6000;
                         // SAVE REFERENCES for Reset
                         this.bookCount = bookCount;
                         this.isPreload = !!isPreload;
@@ -4166,13 +4261,6 @@
                             // 1. Move MeshGroup.
                             // 2. Generate books using RELATIVE coords?
                             // Currently logic uses `zStart` (Absolute).
-                            // We must pass `0` to generator if Group is handling offset?
-                            // Or generator logic must use new Z?
-                            // If Group is moved, generator using Absolute Z will Double Move.
-                            // ERROR RISK.
-
-                            // FIX: Generator should spawn books local to Group (around 0..-Length).
-                            // Constructor currently uses Absolute Z.
                             // This is improper for grouping.
                             // BUT converting to relative is risky big refactor.
 
@@ -4278,8 +4366,14 @@
                                             dummy.position.set(task.shelfX + xOffset, y - 0.3 + height / 2, currentZ - thick / 2);
                                             dummy.scale.set(depth, height, thick);
                                             dummy.rotation.set(0, 0, 0);
-                                            if (task.side === 1) dummy.rotation.y = Math.PI;
-                                            dummy.rotation.z = (Math.random() - 0.5) * 0.08;
+                                            let zRot = 0;
+                                            if (task.side === 1) {
+                                                // Rotate 180 deg around Z:
+                                                // Spine (+X) flips to (-X) facing the shelf center.
+                                                // Cover (+Z) stays (+Z) facing the player.
+                                                zRot = Math.PI;
+                                            }
+                                            dummy.rotation.z = zRot + (Math.random() - 0.5) * 0.08;
                                             dummy.rotation.y += (Math.random() - 0.5) * 0.08;
                                             dummy.updateMatrix();
                                             this.meshBooks.setMatrixAt(globalIndex, dummy.matrix);
@@ -4358,8 +4452,12 @@
                     segments.push(seg);
                 }
 
-                const clock = new THREE.Clock();
-                const velocity = new THREE.Vector3();
+                let clock = null;
+                let velocity = null;
+                if (!window.fallback2DMode && THREE) {
+                    clock = new THREE.Clock();
+                    velocity = new THREE.Vector3();
+                }
                 const move = { f: false, b: false, l: false, r: false };
                 let animationLoopRunning = false;
                 let hasStartedGame = false;
@@ -4384,7 +4482,7 @@
                     }
                     setSegmentGenerationPaused(false);
                     if (hasStartedGame && !document.hidden) {
-                        clock.getDelta(); // Discard stale frame delta after resume.
+                        if (clock) clock.getDelta(); // Discard stale frame delta after resume.
                         startAnimationLoop();
                     }
                 }
@@ -4412,8 +4510,12 @@
                 // Click-to-Move State
                 let moveTarget = null;
                 let cameraLookTarget = null; // 3D point camera should smoothly look at
-                const raycaster = new THREE.Raycaster();
-                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                let raycaster = null;
+                let groundPlane = null;
+                if (!window.fallback2DMode && THREE) {
+                    raycaster = new THREE.Raycaster();
+                    groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                }
                 let uiInteractionStarted = false;
                 let lastUiInteractionAt = 0;
                 const UI_CLICK_SUPPRESS_MS = 700;
@@ -4439,7 +4541,7 @@
                 }
 
                 function isRendererElement(target) {
-                    if (!target || !renderer || !renderer.domElement) return false;
+                    if (window.fallback2DMode || !target || !renderer || !renderer.domElement) return false;
                     if (target === renderer.domElement) return true;
                     return !!(target.nodeType === 1 && renderer.domElement.contains(target));
                 }
@@ -4616,7 +4718,7 @@
                         return;
                     }
 
-                    if (isMobile && clickedEl !== renderer.domElement) {
+                    if (isMobile && (!renderer || clickedEl !== renderer.domElement)) {
                         liminalCause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
                         return;
                     }
@@ -4637,7 +4739,7 @@
                     }
 
                     // CHECK DEADZONE (Bottom Screen - Mobile Buttons)
-                    // If click is in the bottom 80px (approx UI height), IGNORÃ‰
+                    // If click is in the bottom 80px (approx UI height), IGNORÃƒÆ’Ã¢â‚¬Â°
                     if (event.clientY >= getUiDeadzoneTop()) {
                         console.log("Ignored Click in UI Deadzone");
                         liminalCause('C02_WORLD_BLOCKED_CLICK', 'deadzone');
@@ -4649,6 +4751,7 @@
                 });
 
                 function trySetMoveTargetFromScreenPoint(clientX, clientY, isMobileTap) {
+                    if (window.fallback2DMode) return;
                     const worldLockReason = getWorldInputLockReason();
                     if (worldLockReason) {
                         liminalDebugNote('move-skip', `world-lock:${worldLockReason}`);
@@ -4876,9 +4979,14 @@
                 }
 
                 // Create initial segments with High Priority (Preload Mode)
-                initialZ.forEach(z => {
-                    segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
-                });
+                if (!window.fallback2DMode && THREE) {
+                    initialZ.forEach(z => {
+                        segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
+                    });
+                } else {
+                    console.log("DEBUG: Fallback Mode active. Skipping 3D preload.");
+                    startGame();
+                }
 
                 function startGame() {
                     hasStartedGame = true;
@@ -4914,7 +5022,7 @@
 
                     // FIX: Force Shader Compilation to prevent initial stutter
                     try {
-                        renderer.compile(scene, camera);
+                        if (!window.fallback2DMode && renderer) renderer.compile(scene, camera);
                     } catch (e) {
                         console.warn("Shader compilation failed:", e);
                     }
@@ -5045,325 +5153,328 @@
                     requestAnimationFrame(animate);
 
                     try {
-                        const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
-                        const time = clock.getElapsedTime();
+                        const delta = clock ? Math.min(clock.getDelta(), 0.05) : 0.05; // Cap at 0.05 (20fps min) to prevent huge jumps
+                        const time = clock ? clock.getElapsedTime() : (performance.now() / 1000);
                         const worldLockReason = getWorldInputLockReason();
                         const lookSuppressed = (!isReadingMode) && (!!worldLockReason || performance.now() < suppressWorldInputUntil);
 
-                        // Free Look
-                        // If we have a 3D look target, smoothly rotate camera toward it
-                        if (lookSuppressed) {
-                            cameraLookTarget = null;
-                            isLookingAtClickTarget = false;
-                            syncLookTargetsToCamera();
-                        } else if (cameraLookTarget) {
-                            // Calculate direction from camera to 3D target point
-                            const lookDir = new THREE.Vector3();
-                            lookDir.subVectors(cameraLookTarget, camera.position).normalize();
-
-                            // Calculate target yaw and pitch from direction
-                            // Forward is -Z, so yaw = atan2(x, -z)
-                            const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
-                            const targetPitch = Math.asin(-lookDir.y);
-
-                            // Get current camera angles
-                            euler.setFromQuaternion(camera.quaternion);
-
-                            // EXTREMELY SLOW interpolation for gentle pan
-                            const lookEase = 0.1 * delta;
-                            euler.y += (targetYaw - euler.y) * lookEase;
-                            euler.x += (targetPitch - euler.x) * lookEase;
-                            euler.z = 0;
-
-                            // Apply rotation
-                            camera.quaternion.setFromEuler(euler);
-
-                            // Update mouse.x/y to match current camera direction
-                            // So swipe continues from current orientation
-                            mouse.x = -euler.y / 1.5;
-                            mouse.y = -euler.x / 0.5;
-                            targetMouseX = mouse.x;
-                            targetMouseY = mouse.y;
-
-                            // Stop when close enough to target
-                            if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
+                        if (!window.fallback2DMode) {
+                            // Free Look
+                            // If we have a 3D look target, smoothly rotate camera toward it
+                            if (lookSuppressed) {
                                 cameraLookTarget = null;
+                                isLookingAtClickTarget = false;
+                                syncLookTargetsToCamera();
+                            } else if (cameraLookTarget) {
+                                // Calculate direction from camera to 3D target point
+                                const lookDir = new THREE.Vector3();
+                                lookDir.subVectors(cameraLookTarget, camera.position).normalize();
+
+                                // Calculate target yaw and pitch from direction
+                                // Forward is -Z, so yaw = atan2(x, -z)
+                                const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
+                                const targetPitch = Math.asin(-lookDir.y);
+
+                                // Get current camera angles
+                                euler.setFromQuaternion(camera.quaternion);
+
+                                // EXTREMELY SLOW interpolation for gentle pan
+                                const lookEase = 0.1 * delta;
+                                euler.y += (targetYaw - euler.y) * lookEase;
+                                euler.x += (targetPitch - euler.x) * lookEase;
+                                euler.z = 0;
+
+                                // Apply rotation
+                                camera.quaternion.setFromEuler(euler);
+
+                                // Update mouse.x/y to match current camera direction
+                                // So swipe continues from current orientation
+                                mouse.x = -euler.y / 1.5;
+                                mouse.y = -euler.x / 0.5;
+                                targetMouseX = mouse.x;
+                                targetMouseY = mouse.y;
+
+                                // Stop when close enough to target
+                                if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
+                                    cameraLookTarget = null;
+                                }
+                            } else if (isCenteringCamera) {
+                                // Mobile Reading Mode Recenter
+                                // Smoothly interpolate X to 0 and Yaw to 0
+
+                                // 1. Position X -> 0
+                                camera.position.x += (0 - camera.position.x) * 2.0 * delta;
+
+                                // 2. Rotation Y -> 0 (Look Straight)
+                                euler.setFromQuaternion(camera.quaternion);
+                                // Shortest path angle
+                                let diff = 0 - euler.y;
+                                if (diff > Math.PI) diff -= Math.PI * 2;
+                                if (diff < -Math.PI) diff += Math.PI * 2;
+
+                                euler.y += diff * 2.0 * delta;
+                                euler.x += (0 - euler.x) * 2.0 * delta; // Also level pitch
+                                euler.z = 0;
+                                camera.quaternion.setFromEuler(euler);
+
+                                // Update mouse state to match
+                                mouse.x = 0;
+                                mouse.y = 0;
+                                targetMouseX = 0;
+                                targetMouseY = 0;
+
+                                // Stop if close
+                                if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
+                                    isCenteringCamera = false;
+                                }
+                            } else {
+                                // Normal mouse/swipe-based camera control
+                                const targetPitch = -mouse.y * 0.5;
+                                const targetYaw = -mouse.x * 1.5;
+                                const ease = 5.0 * delta;
+                                euler.setFromQuaternion(camera.quaternion);
+                                euler.x += (targetPitch - euler.x) * ease;
+                                euler.y += (targetYaw - euler.y) * ease;
+                                euler.z = 0;
+                                camera.quaternion.setFromEuler(euler);
                             }
-                        } else if (isCenteringCamera) {
-                            // Mobile Reading Mode Recenter
-                            // Smoothly interpolate X to 0 and Yaw to 0
 
-                            // 1. Position X -> 0
-                            camera.position.x += (0 - camera.position.x) * 2.0 * delta;
+                            // movement constants
+                            // movement constants
+                            // movement constants
+                            // USER: REQUESTED 25% SLOWER than 200 => 150
+                            const baseAccel = 150.0;
+                            const gameSpeed = baseAccel * 0.15;
+                            // Click Speed removed (Unified)
 
-                            // 2. Rotation Y -> 0 (Look Straight)
-                            euler.setFromQuaternion(camera.quaternion);
-                            // Shortest path angle
-                            let diff = 0 - euler.y;
-                            if (diff > Math.PI) diff -= Math.PI * 2;
-                            if (diff < -Math.PI) diff += Math.PI * 2;
+                            // SYNCED: Reading Speed = Game Speed
+                            const readingSpeed = gameSpeed;
 
-                            euler.y += diff * 2.0 * delta;
-                            euler.x += (0 - euler.x) * 2.0 * delta; // Also level pitch
-                            euler.z = 0;
-                            camera.quaternion.setFromEuler(euler);
+                            const isReading = isReadingMode; // Use global state
 
-                            // Update mouse state to match
-                            mouse.x = 0;
-                            mouse.y = 0;
-                            targetMouseX = 0;
-                            targetMouseY = 0;
+                            const input = new THREE.Vector3();
 
-                            // Stop if close
-                            if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
-                                isCenteringCamera = false;
-                            }
-                        } else {
-                            // Normal mouse/swipe-based camera control
-                            const targetPitch = -mouse.y * 0.5;
-                            const targetYaw = -mouse.x * 1.5;
-                            const ease = 5.0 * delta;
-                            euler.setFromQuaternion(camera.quaternion);
-                            euler.x += (targetPitch - euler.x) * ease;
-                            euler.y += (targetYaw - euler.y) * ease;
-                            euler.z = 0;
-                            camera.quaternion.setFromEuler(euler);
-                        }
+                            // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
+                            velocity.x -= velocity.x * 10.0 * delta;
+                            velocity.z -= velocity.z * 10.0 * delta;
+                            velocity.y -= 9.8 * 100.0 * delta;
 
-                        // movement constants
-                        // movement constants
-                        // movement constants
-                        // USER: REQUESTED 25% SLOWER than 200 => 150
-                        const baseAccel = 150.0;
-                        const gameSpeed = baseAccel * 0.15;
-                        // Click Speed removed (Unified)
+                            if (isReading) {
+                                // READING MODE: Auto-Walk Forward (Global Z)
+                                // Ignore User Input
+                                input.set(0, 0, -1); // Purely forward along hallway
 
-                        // SYNCED: Reading Speed = Game Speed
-                        const readingSpeed = gameSpeed;
+                                // Auto-Center X (Smooth drift to 0)
+                                // "TrÃƒÆ’Ã‚Â¤gheit der Richtungsjustierung"
+                                const centerX = 0;
+                                const distToCenter = centerX - camera.position.x;
+                                const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
+                                camera.position.x += centerForce;
 
-                        const isReading = isReadingMode; // Use global state
+                                // Apply Velocity for Z
+                                velocity.add(input.multiplyScalar(readingSpeed * delta));
 
-                        const input = new THREE.Vector3();
+                            } else {
+                                // GAME MODE
 
-                        // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
-                        velocity.x -= velocity.x * 10.0 * delta;
-                        velocity.z -= velocity.z * 10.0 * delta;
-                        velocity.y -= 9.8 * 100.0 * delta;
+                                // 2. Input Vectors
 
-                        if (isReading) {
-                            // READING MODE: Auto-Walk Forward (Global Z)
-                            // Ignore User Input
-                            input.set(0, 0, -1); // Purely forward along hallway
+                                // 2. Input Vectors
+                                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                                forward.y = 0; forward.normalize();
+                                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                                right.y = 0; right.normalize();
 
-                            // Auto-Center X (Smooth drift to 0)
-                            // "TrÃ¤gheit der Richtungsjustierung"
-                            const centerX = 0;
-                            const distToCenter = centerX - camera.position.x;
-                            const centerForce = distToCenter * 0.5 * delta; // Adjust 0.5 for smoothness
-                            camera.position.x += centerForce;
+                                input.set(0, 0, 0);
+                                if (move.f) input.add(forward);
+                                // if (move.b) input.sub(forward); // Backwards disabled in general config
+                                if (move.r) input.add(right);
+                                if (move.l) input.sub(right);
 
-                            // Apply Velocity for Z
-                            velocity.add(input.multiplyScalar(readingSpeed * delta));
-
-                        } else {
-                            // GAME MODE
-
-                            // 2. Input Vectors
-
-                            // 2. Input Vectors
-                            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                            forward.y = 0; forward.normalize();
-                            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                            right.y = 0; right.normalize();
-
-                            input.set(0, 0, 0);
-                            if (move.f) input.add(forward);
-                            // if (move.b) input.sub(forward); // Backwards disabled in general config
-                            if (move.r) input.add(right);
-                            if (move.l) input.sub(right);
-
-                            // 3. Apply Velocity (Manual vs Auto)
-                            if (input.length() > 0) {
-                                input.normalize();
-                                velocity.add(input.multiplyScalar(gameSpeed * delta));
-                                // Cancel Auto-Move on manual input
-                                moveTarget = null;
-                                cameraLookTarget = null;
-                            } else if (moveTarget) {
-                                // CLICK-TO-MOVE LOGIC
-                                const sinceUi = performance.now() - lastUiInteractionAt;
-                                const worldLockReason = getWorldInputLockReason();
-                                if (worldLockReason) {
-                                    liminalDebugNote('move-skip', `loop-world-lock:${worldLockReason}`);
-                                    liminalCause('C04_WORLD_BLOCKED_TOUCH', `loop-world-lock:${worldLockReason}`);
+                                // 3. Apply Velocity (Manual vs Auto)
+                                if (input.length() > 0) {
+                                    input.normalize();
+                                    velocity.add(input.multiplyScalar(gameSpeed * delta));
+                                    // Cancel Auto-Move on manual input
                                     moveTarget = null;
                                     cameraLookTarget = null;
-                                    velocity.x = 0;
-                                    velocity.z = 0;
-                                } else {
-                                    if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
-                                        liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
-                                    }
-                                    const dx = moveTarget.x - camera.position.x;
-                                    const dz = moveTarget.z - camera.position.z;
-                                    const dist = Math.sqrt(dx * dx + dz * dz);
-
-                                    // FIX: Stop Looking earlier to prevent swing/spin at singularity
-                                    if (dist < 2.0) {
-                                        cameraLookTarget = null;
-                                    }
-
-                                    if (dist < 0.2) {
+                                } else if (moveTarget) {
+                                    // CLICK-TO-MOVE LOGIC
+                                    const sinceUi = performance.now() - lastUiInteractionAt;
+                                    const worldLockReason = getWorldInputLockReason();
+                                    if (worldLockReason) {
+                                        liminalDebugNote('move-skip', `loop-world-lock:${worldLockReason}`);
+                                        liminalCause('C04_WORLD_BLOCKED_TOUCH', `loop-world-lock:${worldLockReason}`);
                                         moveTarget = null;
                                         cameraLookTarget = null;
-                                        velocity.set(0, 0, 0); // Full stop
-                                        // Skip remaining movement logic this frame
+                                        velocity.x = 0;
+                                        velocity.z = 0;
                                     } else {
-                                        const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+                                        if (sinceUi < UI_CLICK_SUPPRESS_MS + 50) {
+                                            liminalCause('C06_MOVE_SET_RECENT_UI_WINDOW', `loop-consume sinceUi=${sinceUi.toFixed(0)}ms`);
+                                        }
+                                        const dx = moveTarget.x - camera.position.x;
+                                        const dz = moveTarget.z - camera.position.z;
+                                        const dist = Math.sqrt(dx * dx + dz * dz);
 
-                                        // UNIFIED SPEED: Use gameSpeed for click movement too.
-                                        // Direct World Space addition (since velocity is World Space)
-                                        velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
-                                    }
-                                }
-                            }
+                                        // FIX: Stop Looking earlier to prevent swing/spin at singularity
+                                        if (dist < 2.0) {
+                                            cameraLookTarget = null;
+                                        }
 
-                            // 4. Move Controls (Direct Physics Integration)
-                            camera.position.x += velocity.x * delta;
-                            camera.position.z += velocity.z * delta; // Allow forward/back calc first
+                                        if (dist < 0.2) {
+                                            moveTarget = null;
+                                            cameraLookTarget = null;
+                                            velocity.set(0, 0, 0); // Full stop
+                                            // Skip remaining movement logic this frame
+                                        } else {
+                                            const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
 
-                            // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
-                            // User: "negative meter forbidden" / "backwards movement forbidden"
-                            if (velocity.z > 0) velocity.z = 0;
-
-                            // Prevent drifting back if position tries to increase
-                            // (Double safety: clamp delta position change?)
-                            // No, velocity clamp is smoother. But let's check position delta too just in case.
-                            // Accessing last frame? No need, velocity controls it.
-
-                            camera.position.y += (velocity.y * delta);
-
-                            // 5. Floor Collision
-                            if (camera.position.y < 1.6) {
-                                velocity.y = 0;
-                                camera.position.y = 1.6;
-                            }
-
-                            // 6. Wall Collision (Clamp X)
-                            // Strictly clamp X to hallway bounds to prevent wall clipping
-                            camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
-                        }
-
-                        // Friction
-                        velocity.multiplyScalar(1.0 - 5.0 * delta);
-                        camera.position.add(velocity.clone().multiplyScalar(delta));
-
-                        // HEAD BOBBING (Half speed, Half amplitude of previous)
-                        // Previous: delta * 12, Amp 0.025
-                        // New: delta * 6, Amp 0.0125
-                        if (velocity.length() > 0.5) {
-                            headBob += delta * 6;
-                            camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;
-                        } else {
-                            // Return to neutral
-                            camera.position.y += (1.6 - camera.position.y) * 5.0 * delta;
-                        }
-
-                        // Dust Update (Global) - REMOVED
-                        // if (dustSystem) ...
-
-                        // Bounds
-                        // Global Safety Clamp (Runs for both modes)
-                        // Slightly wider than 1.8 to allow movement but prevent wall clipping
-                        // Fixed at 1.95 (just before shelves at ~2.4)
-                        if (camera.position.x < -1.95) camera.position.x = -1.95;
-                        if (camera.position.x > 1.95) camera.position.x = 1.95;
-
-                        updateSegments(camera.position.z);
-                        segments.forEach(seg => {
-                            // Unified update call
-                            seg.update(delta, time, camera.position);
-                        });
-
-                        // Update Glowing Books and check proximity
-                        activeGlowingBooks.forEach(book => {
-                            if (!book.collected && !book.missed) {
-                                book.update(time, camera.position.z, camera.position.x);
-
-                                // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
-                                if (true) {
-                                    // FIX: Use WORLD position, not local position (meshGroup may have moved)
-                                    const worldPos = new THREE.Vector3();
-                                    book.mesh.getWorldPosition(worldPos);
-                                    const distZ = Math.abs(worldPos.z - camera.position.z);
-                                    const distX = Math.abs(worldPos.x - camera.position.x);
-                                    const SCENE_NAME = 'liminal_library';
-                                    const alreadyCollected = !!(
-                                        window.GameState
-                                        && typeof window.GameState.isLightCollected === 'function'
-                                        && window.GameState.isLightCollected(SCENE_NAME, book.id)
-                                    );
-
-                                    // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
-                                    if (distZ < 1.5 && distX < 1.0 && !alreadyCollected) {
-                                        // Collect!
-                                        book.collect();
-                                        // Collect - use GameState for global lore tracking!
-                                        // DON'T increment local counter - GameState handles which lore is next globally
-
-                                        // Register in GameState (GLOBAL - same logic as marketplace)
-                                        if (window.GameState && window.GameState.collectLight) {
-                                            window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
-                                                if (newLoreId) {
-                                                    const now = Date.now();
-                                                    if (now - lastShimmerAt > 400) {
-                                                        lastShimmerAt = now;
-                                                        shimmerSound.pause();
-                                                        shimmerSound.currentTime = 0;
-                                                        if (allowAuxSfxPlaybackLiminal()) {
-                                                            shimmerSound.play().catch(() => { });
-                                                        }
-                                                    }
-                                                    console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
-                                                    // Refresh archive menu so new lore appears immediately
-                                                    if (typeof renderArchive === 'function') renderArchive();
-                                                    // Start lore audio with the GLOBAL lore ID (not local counter!)
-                                                    startLoreMode(newLoreId);
-                                                } else {
-                                                    // All lore already unlocked
-                                                    console.log("All lore already unlocked");
-                                                }
-                                            });
+                                            // UNIFIED SPEED: Use gameSpeed for click movement too.
+                                            // Direct World Space addition (since velocity is World Space)
+                                            velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
                                         }
                                     }
-                                    // Check if player walked past without collecting (book is now behind player)
-                                    // Use world position for this check too
-                                    else if (worldPos.z > camera.position.z + 5) {
-                                        // Missed! Mark as missed but don't count towards collection
-                                        book.missed = true;
-                                        book.mesh.visible = false;
-                                        console.log(`Book ${book.id} missed (player walked past)`);
+                                }
+
+                                // 4. Move Controls (Direct Physics Integration)
+                                camera.position.x += velocity.x * delta;
+                                camera.position.z += velocity.z * delta; // Allow forward/back calc first
+
+                                // DISALLOW BACKWARDS MOVEMENT (Global +Z is "Back")
+                                // User: "negative meter forbidden" / "backwards movement forbidden"
+                                if (velocity.z > 0) velocity.z = 0;
+
+                                // Prevent drifting back if position tries to increase
+                                // (Double safety: clamp delta position change?)
+                                // No, velocity clamp is smoother. But let's check position delta too just in case.
+                                // Accessing last frame? No need, velocity controls it.
+
+                                camera.position.y += (velocity.y * delta);
+
+                                // 5. Floor Collision
+                                if (camera.position.y < 1.6) {
+                                    velocity.y = 0;
+                                    camera.position.y = 1.6;
+                                }
+
+                                // 6. Wall Collision (Clamp X)
+                                // Strictly clamp X to hallway bounds to prevent wall clipping
+                                camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
+                            }
+
+                            // Friction
+                            velocity.multiplyScalar(1.0 - 5.0 * delta);
+                            camera.position.add(velocity.clone().multiplyScalar(delta));
+
+                            // HEAD BOBBING (Half speed, Half amplitude of previous)
+                            // Previous: delta * 12, Amp 0.025
+                            // New: delta * 6, Amp 0.0125
+                            if (velocity.length() > 0.5) {
+                                headBob += delta * 6;
+                                camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;
+                            } else {
+                                // Return to neutral
+                                camera.position.y += (1.6 - camera.position.y) * 5.0 * delta;
+                            }
+
+                            // Dust Update (Global) - REMOVED
+                            // if (dustSystem) ...
+
+                            // Bounds
+                            // Global Safety Clamp (Runs for both modes)
+                            // Slightly wider than 1.8 to allow movement but prevent wall clipping
+                            // Fixed at 1.95 (just before shelves at ~2.4)
+                            if (camera.position.x < -1.95) camera.position.x = -1.95;
+                            if (camera.position.x > 1.95) camera.position.x = 1.95;
+
+                            updateSegments(camera.position.z);
+                            segments.forEach(seg => {
+                                // Unified update call
+                                seg.update(delta, time, camera.position);
+                            });
+
+                            // Update Glowing Books and check proximity
+                            activeGlowingBooks.forEach(book => {
+                                if (!book.collected && !book.missed) {
+                                    book.update(time, camera.position.z, camera.position.x);
+
+                                    // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
+                                    if (true) {
+                                        // FIX: Use WORLD position, not local position (meshGroup may have moved)
+                                        const worldPos = new THREE.Vector3();
+                                        book.mesh.getWorldPosition(worldPos);
+                                        const distZ = Math.abs(worldPos.z - camera.position.z);
+                                        const distX = Math.abs(worldPos.x - camera.position.x);
+                                        const SCENE_NAME = 'liminal_library';
+                                        const alreadyCollected = !!(
+                                            window.GameState
+                                            && typeof window.GameState.isLightCollected === 'function'
+                                            && window.GameState.isLightCollected(SCENE_NAME, book.id)
+                                        );
+
+                                        // USER: Reduce distance to 1.5m (from 3) and 1.0m (from 2)
+                                        if (distZ < 1.5 && distX < 1.0 && !alreadyCollected) {
+                                            // Collect!
+                                            book.collect();
+                                            // Collect - use GameState for global lore tracking!
+                                            // DON'T increment local counter - GameState handles which lore is next globally
+
+                                            // Register in GameState (GLOBAL - same logic as marketplace)
+                                            if (window.GameState && window.GameState.collectLight) {
+                                                window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
+                                                    if (newLoreId) {
+                                                        const now = Date.now();
+                                                        if (now - lastShimmerAt > 400) {
+                                                            lastShimmerAt = now;
+                                                            shimmerSound.pause();
+                                                            shimmerSound.currentTime = 0;
+                                                            if (allowAuxSfxPlaybackLiminal()) {
+                                                                shimmerSound.play().catch(() => { });
+                                                            }
+                                                        }
+                                                        console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
+                                                        // Refresh archive menu so new lore appears immediately
+                                                        if (typeof renderArchive === 'function') renderArchive();
+                                                        // Start lore audio with the GLOBAL lore ID (not local counter!)
+                                                        startLoreMode(newLoreId);
+                                                    } else {
+                                                        // All lore already unlocked
+                                                        console.log("All lore already unlocked");
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        // Check if player walked past without collecting (book is now behind player)
+                                        // Use world position for this check too
+                                        else if (worldPos.z > camera.position.z + 5) {
+                                            // Missed! Mark as missed but don't count towards collection
+                                            book.missed = true;
+                                            book.mesh.visible = false;
+                                            console.log(`Book ${book.id} missed (player walked past)`);
+                                        }
                                     }
                                 }
+                            });
+
+
+                            // Update Subtitles
+                            // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
+                            // No manual render call needed if SharedAudioPlayer updates innerHTML
+                            if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
+                                // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
                             }
-                        });
 
+                            if (renderer) renderer.render(scene, camera);
 
-                        // Update Subtitles
-                        // SharedAudioPlayer handles this internally via events, but for 3D sync we rely on DOM updates
-                        // No manual render call needed if SharedAudioPlayer updates innerHTML
-                        if (window.audioPlayer && window.audioPlayer.onTimeUpdate) {
-                            // window.audioPlayer.onTimeUpdate(); // It binds to timeupdate event
-                        }
+                            // Update Debug HUD
+                            const debugEl = document.getElementById('debugHUD');
+                            if (debugEl) {
+                                const globalLore = getGlobalCollectedLoreCount();
+                                debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
+                            }
 
-                        renderer.render(scene, camera);
-
-                        // Update Debug HUD
-                        const debugEl = document.getElementById('debugHUD');
-                        if (debugEl) {
-                            const globalLore = getGlobalCollectedLoreCount();
-                            debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
-                        }
+                        } // end if (!window.fallback2DMode)
                     } catch (err) {
                         console.error("Animation Loop Crash:", err);
                     }
@@ -5591,7 +5702,7 @@
                         const mainText = document.createElement('div');
                         mainText.className = 'item-main-text';
                         const timeStr = window.GameState.formatBookmarkTime(bm.time);
-                        mainText.innerText = `${bm.chapterTitle} Â· ${timeStr}`;
+                        mainText.innerText = `${bm.chapterTitle} Ãƒâ€šÃ‚Â· ${timeStr}`;
 
                         const subText = document.createElement('div');
                         subText.className = 'item-sub-text';
