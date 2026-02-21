@@ -625,7 +625,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     inset: 0;
     overflow: hidden;
     display: block;
-    padding: clamp(68px, 9vh, 132px) 24px clamp(100px, 15vh, 156px);
+    padding: clamp(58px, 8vh, 96px) 24px clamp(48px, 7vh, 78px);
     line-height: 1.68;
     text-align: justify;
     text-wrap: pretty;
@@ -662,6 +662,13 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     margin-right: 0.12em;
     padding: 0;
     text-align: justify;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.blaettern-line-smart {
+    word-spacing: var(--blaettern-smart-word-spacing, normal);
+    letter-spacing: var(--blaettern-smart-letter-spacing, normal);
+    font-size: var(--blaettern-smart-size, 1em);
+    font-kerning: normal;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
@@ -2042,7 +2049,7 @@ body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
     }
 
     #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer {
-        padding: clamp(52px, 9vh, 96px) 16px clamp(82px, 14vh, 124px);
+        padding: clamp(44px, 7vh, 76px) 16px clamp(30px, 5vh, 56px);
     }
 
     #audioPlayerUI.reading-mode #audioControls,

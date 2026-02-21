@@ -3685,6 +3685,95 @@
             return span;
         }
 
+        function clearBlaetternSmartLineStyle(lineEl) {
+            if (!lineEl) return;
+            lineEl.classList.remove('blaettern-line-smart');
+            lineEl.style.removeProperty('--blaettern-smart-word-spacing');
+            lineEl.style.removeProperty('--blaettern-smart-letter-spacing');
+            lineEl.style.removeProperty('--blaettern-smart-size');
+        }
+
+        function applyBlaetternSmartJustification(layer) {
+            if (!layer || layer.classList.contains('blaettern-page-empty')) return;
+            const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
+            if (!lineElements.length) return;
+
+            const layerRect = layer.getBoundingClientRect();
+            const layerStyle = window.getComputedStyle(layer);
+            const paddingLeft = parseFloat(layerStyle.paddingLeft) || 0;
+            const paddingRight = parseFloat(layerStyle.paddingRight) || 0;
+            const innerWidth = Math.max(1, layer.clientWidth - paddingLeft - paddingRight);
+            if (innerWidth <= 20) return;
+
+            const elementRectCount = new Map();
+            const linesByTop = new Map();
+
+            lineElements.forEach((lineEl) => {
+                clearBlaetternSmartLineStyle(lineEl);
+                const rects = Array.from(lineEl.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1);
+                elementRectCount.set(lineEl, rects.length);
+                rects.forEach((rect) => {
+                    const key = Math.round(rect.top - layerRect.top);
+                    let line = linesByTop.get(key);
+                    if (!line) {
+                        line = {
+                            left: rect.left,
+                            right: rect.right,
+                            elements: new Set()
+                        };
+                        linesByTop.set(key, line);
+                    } else {
+                        line.left = Math.min(line.left, rect.left);
+                        line.right = Math.max(line.right, rect.right);
+                    }
+                    line.elements.add(lineEl);
+                });
+            });
+
+            const visualLines = Array.from(linesByTop.entries())
+                .sort((a, b) => a[0] - b[0])
+                .map((entry) => entry[1]);
+            if (visualLines.length <= 1) return;
+
+            for (let i = 0; i < visualLines.length - 1; i++) {
+                const line = visualLines[i];
+                const elements = Array.from(line.elements);
+                if (!elements.length) continue;
+                if (elements.some((el) => (elementRectCount.get(el) || 0) > 1)) continue;
+
+                const lineWidth = Math.max(0, line.right - line.left);
+                const slack = innerWidth - lineWidth;
+                if (slack < 4 || slack > (innerWidth * 0.22)) continue;
+
+                let letters = 0;
+                let spaces = 0;
+                elements.forEach((el) => {
+                    const compact = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (!compact) return;
+                    letters += compact.replace(/\s/g, '').length;
+                    const localSpaces = compact.match(/\s+/g);
+                    if (localSpaces) spaces += localSpaces.length;
+                });
+                spaces += Math.max(0, elements.length - 1);
+                if (letters < 8) continue;
+
+                const addWord = Math.min(1.9, Math.max(0, (slack * 0.72) / Math.max(1, spaces)));
+                const addLetter = Math.min(0.14, Math.max(0, (slack * 0.24) / Math.max(40, letters)));
+                const usedSlack = (addWord * spaces) + (addLetter * letters);
+                const remainingSlack = Math.max(0, slack - usedSlack);
+                const sizeScale = Math.min(1.012, 1 + (remainingSlack / Math.max(1, innerWidth * 24)));
+
+                if (addWord < 0.06 && addLetter < 0.01 && sizeScale <= 1.001) continue;
+
+                elements.forEach((el) => {
+                    el.classList.add('blaettern-line-smart');
+                    el.style.setProperty('--blaettern-smart-word-spacing', `${addWord.toFixed(3)}px`);
+                    el.style.setProperty('--blaettern-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
+                    el.style.setProperty('--blaettern-smart-size', `${sizeScale.toFixed(4)}em`);
+                });
+            }
+        }
+
         function findBlaetternPageIndexForSubtitle(subtitleIndex) {
             if (!blaetternPages.length) return 0;
             const idx = Math.max(0, Math.min(subtitleTracks.length - 1, Number(subtitleIndex) || 0));
@@ -3779,6 +3868,7 @@
             for (let i = page.startIndex; i <= page.endIndex; i++) {
                 layer.appendChild(createBlaetternLineElement(i));
             }
+            applyBlaetternSmartJustification(layer);
         }
 
         function updateBlaetternProgressBadge(root) {
