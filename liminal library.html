@@ -4137,6 +4137,19 @@
                     sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
                     sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
                     sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
+                    if (isIOSSafari) {
+                        try {
+                            const oldIdx = sharedBookGeo.index.array;
+                            const newIdx = [];
+                            // Keep right/spine (0-5), front (24-29) and back (30-35)
+                            for (let i = 0; i < 6; i++) newIdx.push(oldIdx[i]);
+                            for (let i = 24; i < 36; i++) newIdx.push(oldIdx[i]);
+                            sharedBookGeo.setIndex(newIdx);
+                            sharedBookGeo.clearGroups();
+                        } catch (e) {
+                            console.warn("Book geometry reduction failed:", e);
+                        }
+                    }
                     sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
                     sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
                 }
@@ -4507,8 +4520,8 @@
                     }
 
                     createBooks(zStart, length, levels, isPreload, onReady) {
-                        // --- RADICAL iOS FALLBACK: Cap books to 50 to prevent InstancedMesh overload ---
-                        const bookCount = isIOSSafari ? 50 : 6000;
+                        // User requested to NOT reduce book count, but instead reduce geometry faces (applied to sharedBookGeo)
+                        const bookCount = 6000;
                         // SAVE REFERENCES for Reset
                         this.bookCount = bookCount;
                         this.isPreload = !!isPreload;
