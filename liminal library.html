@@ -1356,6 +1356,8 @@
 
                 function normalizeReaderSentenceLayout(value) {
                     if (value === 'kindle') return READER_LAYOUT_BLAETTERN;
+                    if (value === 'timestamp') return READER_LAYOUT_TIMESTAMPS;
+                    if (value === READER_LAYOUT_TIMESTAMPS) return READER_LAYOUT_TIMESTAMPS;
                     if (value === READER_LAYOUT_BLAETTERN) return READER_LAYOUT_BLAETTERN;
                     if (value === READER_LAYOUT_FLAT) return READER_LAYOUT_FLAT;
                     return READER_LAYOUT_BLAETTERN;
