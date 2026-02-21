@@ -1503,8 +1503,8 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
     font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
 }
 
-.reader-font-sample-georgia {
-    font-family: "Georgia", "Times New Roman", serif;
+.reader-font-sample-times {
+    font-family: "Times New Roman", Times, serif;
 }
 
 .reader-font-sample-arial {

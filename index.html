@@ -355,9 +355,9 @@
                                 aria-label="Segoe UI" aria-pressed="true">
                                 <span class="reader-font-sample reader-font-sample-segoe" aria-hidden="true">Aa</span>
                             </button>
-                            <button type="button" class="reader-font-option" data-font="georgia"
-                                aria-label="Georgia" aria-pressed="false">
-                                <span class="reader-font-sample reader-font-sample-georgia"
+                            <button type="button" class="reader-font-option" data-font="times"
+                                aria-label="Times New Roman" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-times"
                                     aria-hidden="true">Aa</span>
                             </button>
                             <button type="button" class="reader-font-option" data-font="arial" aria-label="Arial"
@@ -3220,7 +3220,7 @@
         const READER_FONT_FAMILY_DEFAULT = 'segoe';
         const READER_FONT_FAMILIES = Object.freeze({
             segoe: '"Segoe UI", "Trebuchet MS", system-ui, sans-serif',
-            georgia: '"Georgia", "Times New Roman", serif',
+            times: '"Times New Roman", Times, serif',
             arial: '"Arial", "Helvetica Neue", Helvetica, sans-serif',
             constantia: '"Constantia", "Palatino Linotype", "Book Antiqua", Palatino, serif'
         });
@@ -3341,6 +3341,7 @@
         function normalizeReaderFontFamilyKey(value) {
             if (typeof value !== 'string') return READER_FONT_FAMILY_DEFAULT;
             const cleaned = value.trim().toLowerCase();
+            if (cleaned === 'georgia') return 'times';
             return Object.prototype.hasOwnProperty.call(READER_FONT_FAMILIES, cleaned)
                 ? cleaned
                 : READER_FONT_FAMILY_DEFAULT;
