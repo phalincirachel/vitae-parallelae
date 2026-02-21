@@ -11,7 +11,7 @@ const SC_URLS = {
     // Kapitel 1c (Steingasse): ID 2250158603, Token s-Aj6rsLMlFG1
     KAPITEL_1C: 'https://api.soundcloud.com/tracks/2250158603?secret_token=s-Aj6rsLMlFG1',
 
-    // Kapitel 1b (Liminal Library): ID 2250158606, Token s-2olKSU8eJOH
+    // Kapitel 1b (Antiquariat Hannrath): ID 2250158606, Token s-2olKSU8eJOH
     LIMINAL_LIBRARY: 'https://api.soundcloud.com/tracks/2250158606?secret_token=s-2olKSU8eJOH',
 
     // SFX & Ambient
@@ -48,7 +48,7 @@ const MP3_TO_SC_MAP = {
     'assets/kapitel1c.mp3': SC_URLS.KAPITEL_1C,
     'kapitel1c.mp3': SC_URLS.KAPITEL_1C,
 
-    // Liminal Library (Kapitel 1b)
+    // Antiquariat Hannrath (Kapitel 1b)
     'assets/liminal.mp3': SC_URLS.LIMINAL_LIBRARY,
     'liminal.mp3': SC_URLS.LIMINAL_LIBRARY,
     'assets/kapitel1b.mp3': SC_URLS.LIMINAL_LIBRARY, // Alias wie angefordert

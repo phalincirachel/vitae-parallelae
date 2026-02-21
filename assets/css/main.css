@@ -1303,6 +1303,28 @@ body.scene-dimmer-light-mode .archive-tab.active {
     border-bottom-color: #7b5a00;
 }
 
+/* Adaptive chapter-menu contrast on bright backgrounds */
+#archiveModal {
+    --archive-adaptive-blend: normal;
+}
+
+body:not(.scene-dimmer-light-mode) #archiveModal.visible {
+    --archive-adaptive-blend: difference;
+}
+
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-primary-btn,
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .close-btn,
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab,
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab-content[data-tab="kapitel"] .item-main-text,
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab-content[data-tab="kapitel"] .item-sub-text {
+    mix-blend-mode: var(--archive-adaptive-blend);
+}
+
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab.active,
+body:not(.scene-dimmer-light-mode) #archiveModal.visible .menu-item.active .item-main-text {
+    mix-blend-mode: normal;
+}
+
 /* Tab content panels */
 .archive-tab-content {
     display: none;
@@ -1336,6 +1358,44 @@ body.scene-dimmer-light-mode .archive-tab.active {
 
 .archive-tab-content[data-tab="einstellungen"]::-webkit-scrollbar {
     display: none;
+}
+
+.archive-footer {
+    margin-top: 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    padding-top: 15px;
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.archive-footer-btn {
+    font-family: inherit;
+    color: rgba(255, 255, 255, 0.95);
+    cursor: pointer;
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.archive-footer-btn:hover {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+body.scene-dimmer-light-mode .archive-footer {
+    border-top-color: rgba(0, 0, 0, 0.2);
+}
+
+body.scene-dimmer-light-mode .archive-footer-btn {
+    color: rgba(0, 0, 0, 0.9);
+    border-color: rgba(0, 0, 0, 0.4);
+    background: rgba(0, 0, 0, 0.08);
+}
+
+body.scene-dimmer-light-mode .archive-footer-btn:hover {
+    background: rgba(0, 0, 0, 0.14);
 }
 
 .reader-settings-panel {

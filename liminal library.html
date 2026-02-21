@@ -200,11 +200,11 @@
                 <div class="col-left" id="chapterList" style="flex:1;">
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
-                        <div class="item-sub-text">Der Marktplatz</div>
+                        <div class="item-sub-text">Marktplatz</div>
                     </div>
                     <div class="menu-item active" id="chapter1bBtn">
                         <div class="item-main-text">Kapitel 1b</div>
-                        <div class="item-sub-text">Liminal Library (Hier)</div>
+                        <div class="item-sub-text">Antiquariat Hannrath (Hier)</div>
                     </div>
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
@@ -228,18 +228,18 @@
             <div class="archive-tab-content" data-tab="einstellungen">
                 <div class="reader-settings-panel">
                     <div class="reader-settings-group">
-                        <div class="reader-settings-title">Satztechnik</div>
+                        <div class="reader-settings-title">Anordnung</div>
                         <label class="reader-radio-option">
-                            <input type="radio" name="readerSentenceLayout" value="blaettern">
+                            <input type="radio" name="readerSentenceLayout" value="blaettern" checked>
                             <span>Bl&auml;ttern</span>
                         </label>
                         <label class="reader-radio-option">
-                            <input type="radio" name="readerSentenceLayout" value="timestamps" checked>
+                            <input type="radio" name="readerSentenceLayout" value="timestamps">
                             <span>Timestamps</span>
                         </label>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="flat">
-                            <span>Flattersatz</span>
+                            <span>Feed</span>
                         </label>
                     </div>
                     <div class="reader-settings-group">
@@ -303,14 +303,9 @@
                 </div>
             </div>
             <!-- SAVE/LOAD FOOTER -->
-            <div class="archive-footer"
-                style="margin-top: 20px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; display: flex; gap: 20px; justify-content: center;">
-                <button id="btnSaveData"
-                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">SAVE
-                    (Export)</button>
-                <button id="btnLoadData"
-                    style="font-family: inherit; color: white; cursor: pointer; padding: 8px 16px; border: 1px solid rgba(255,255,255,0.4); background: rgba(255,255,255,0.1); transition: all 0.2s;">LOAD
-                    (Import)</button>
+            <div class="archive-footer">
+                <button id="btnSaveData" class="archive-footer-btn">SAVE (Export)</button>
+                <button id="btnLoadData" class="archive-footer-btn">LOAD (Import)</button>
                 <input type="file" id="fileInputSave" style="display: none;" accept=".json">
             </div>
         </div>
@@ -444,7 +439,7 @@
                 const MAIN_CONTENT_KEY = 'liminal_library';
                 const CURRENT_PAGE = 'liminal library.html';
                 const CURRENT_CHAPTER = '1b';
-                const CURRENT_CHAPTER_TITLE = 'Liminal Library';
+                const CURRENT_CHAPTER_TITLE = 'Antiquariat Hannrath';
                 const BOOKMARK_PAGE_KEY_MAP = {
                     'index.html': 'kapitel1',
                     'liminal library.html': 'liminal_library',
@@ -1336,7 +1331,7 @@
                     if (value === 'kindle') return READER_LAYOUT_BLAETTERN;
                     if (value === READER_LAYOUT_BLAETTERN) return READER_LAYOUT_BLAETTERN;
                     if (value === READER_LAYOUT_FLAT) return READER_LAYOUT_FLAT;
-                    return READER_LAYOUT_TIMESTAMPS;
+                    return READER_LAYOUT_BLAETTERN;
                 }
 
                 function normalizeReaderFontSize(value) {
@@ -5961,6 +5956,7 @@
                     const tabs = Array.from(document.querySelectorAll('.archive-tab'));
                     const panels = Array.from(document.querySelectorAll('.archive-tab-content'));
                     const tabsBar = document.querySelector('.archive-tabs');
+                    const archiveFooter = document.querySelector('#archiveModal .archive-footer');
                     const primaryInhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
                     const primarySettingsBtn = document.getElementById('archivePrimarySettingsBtn');
                     const settingsPanel = document.querySelector('.archive-tab-content[data-tab="einstellungen"]');
@@ -5972,6 +5968,7 @@
                         if (primaryInhaltBtn) primaryInhaltBtn.classList.toggle('active', normalized === 'inhalt');
                         if (primarySettingsBtn) primarySettingsBtn.classList.toggle('active', normalized === 'einstellungen');
                         if (tabsBar) tabsBar.style.display = normalized === 'inhalt' ? '' : 'none';
+                        if (archiveFooter) archiveFooter.style.display = normalized === 'inhalt' ? '' : 'none';
                     };
 
                     const showContentTab = (target, activeTab = null) => {
