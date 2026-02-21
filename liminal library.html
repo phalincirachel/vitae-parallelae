@@ -47,14 +47,6 @@
             height: 22px;
         }
     </style>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
 </head>
 
 <body>
@@ -350,10 +342,19 @@
             try {
                 console.log("DEBUG: Starting Imports...");
 
-                // 1. Load THREE
-                const THREE = await import('three');
-                window.THREE = THREE; // Global Ref
-                console.log("DEBUG: THREE Loaded");
+                window.fallback2DMode = false;
+                let THREE = null;
+
+                try {
+                    // 1. Load THREE (Direct URL instead of importmap for old Safari compatibility)
+                    THREE = await import('https://unpkg.com/three@0.160.0/build/three.module.js');
+                    window.THREE = THREE; // Global Ref
+                    console.log("DEBUG: THREE Loaded");
+                } catch (threeErr) {
+                    console.error("DEBUG: Failed to load THREE.js. Forcing 2D fallback mode.", threeErr);
+                    window.fallback2DMode = true;
+                    document.body.style.backgroundColor = '#050505';
+                }
 
                 // 2. Load Audio Player
                 const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260220-1');
@@ -1202,37 +1203,51 @@
                     roomWidth: 8,
                     roomHeight: 9,
                     segmentLength: 10,
-                    shelfDepth: 1.2
+                    shelfDepth: 1.2,
+                    hallWidth: 6
                 };
 
-                // --- SCENE SETUP ---
-                const scene = new THREE.Scene();
-                scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
-                scene.background = new THREE.Color(0x050505); // Black-ish background
+                // ============================================
+                // SCENE SETUP (THREE.JS)
+                // ============================================
 
-                const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
-                camera.position.set(0, 1.6, 3.0);
-                const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                let scene, camera, euler, backgroundModeColor, lookTargetSphere, renderer;
 
-                // --- SUBTITLE HELPERS ---
-                // --- SUBTITLE HELPERS REMOVED (Use SharedAudioPlayer) ---
+                if (!window.fallback2DMode && THREE) {
+                    scene = new THREE.Scene();
+                    scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
+                    scene.background = new THREE.Color(0x050505); // Black-ish background
+
+                    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+                    camera.position.set(0, 1.6, 3.0);
+                    euler = new THREE.Euler(0, 0, 0, 'YXZ');
+
+                    backgroundModeColor = 0x010101;
+                    lookTargetSphere = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.05, 8, 8),
+                        new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.0 }) // Set opacity > 0 to debug
+                    );
+                    scene.add(lookTargetSphere);
+                }
 
                 // Helper to render Archive Content (Fixes ReferenceError)
                 window.renderArchiveContent = function () {
                     // Reload logic if needed, or just log
                     console.log("Archive content updated");
-                    if (typeof renderArchive === 'function') renderArchive();
+                    if (!window.fallback2DMode && typeof renderArchive === 'function') renderArchive();
                 };
 
                 // FIX: Define controls object to prevent ReferenceError
                 // Replicates PointerLockControls movement logic (planar forward)
                 const controls = {
                     moveRight: function (distance) {
+                        if (!camera) return;
                         const vec = new THREE.Vector3();
                         vec.setFromMatrixColumn(camera.matrix, 0);
                         camera.position.addScaledVector(vec, distance);
                     },
                     moveForward: function (distance) {
+                        if (!camera) return;
                         const vec = new THREE.Vector3();
                         vec.setFromMatrixColumn(camera.matrix, 0);
                         vec.crossVectors(camera.up, vec);
@@ -1241,60 +1256,62 @@
                 };
 
                 // SAFELY INITIALIZE WEBGL RENDERER
-                window.fallback2DMode = false;
-                let renderer;
-                try {
-                    renderer = new THREE.WebGLRenderer({
-                        antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
-                        powerPreference: isIOSSafari ? 'default' : 'high-performance',
-                        precision: isIOSSafari ? 'mediump' : 'highp'
-                    });
-                    renderer.setSize(window.innerWidth, window.innerHeight);
+                if (!window.fallback2DMode) {
+                    try {
+                        renderer = new THREE.WebGLRenderer({
+                            antialias: !isIOSSafari, // iOS: Disable antialiasing to save GPU budget
+                            powerPreference: isIOSSafari ? 'default' : 'high-performance',
+                            precision: isIOSSafari ? 'mediump' : 'highp'
+                        });
+                        renderer.setSize(window.innerWidth, window.innerHeight);
 
-                    // iOS: Disable shadow maps to prevent WebGL context loss on older devices
-                    renderer.shadowMap.enabled = !isIOSSafari;
-                    if (renderer.shadowMap.enabled) {
-                        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                        // iOS: Disable shadow maps to prevent WebGL context loss on older devices
+                        renderer.shadowMap.enabled = !isIOSSafari;
+                        if (renderer.shadowMap.enabled) {
+                            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                        }
+                        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+                        renderer.toneMappingExposure = 1.0;
+
+                        if (isIOSSafari) {
+                            // iOS: Cap pixel ratio to avoid exceeding GPU memory
+                            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+                            // WebGL Context Loss recovery (prevents permanent black screen)
+                            renderer.domElement.addEventListener('webglcontextlost', (e) => {
+                                e.preventDefault();
+                                console.warn('[Liminal] WebGL context lost (iOS)');
+                            }, false);
+                            renderer.domElement.addEventListener('webglcontextrestored', () => {
+                                console.log('[Liminal] WebGL context restored (iOS)');
+                            }, false);
+                        } else {
+                            renderer.setPixelRatio(window.devicePixelRatio);
+                        }
+
+                        document.body.appendChild(renderer.domElement);
+                    } catch (e) {
+                        console.error("WebGL Initialization failed, entering 2D Fallback Mode.", e);
+                        window.fallback2DMode = true;
+                        document.body.style.backgroundColor = '#050505';
+                        // Hide loading items if the 3D init failed so users aren't stuck on a loading screen forever
+                        const loadingText = document.getElementById('loading');
+                        if (loadingText) loadingText.style.display = 'none';
+                        const loadingScreen = document.getElementById('loading-screen');
+                        if (loadingScreen) loadingScreen.style.display = 'none';
+                        const uiContainer = document.getElementById('audioPlayerUI');
+                        if (uiContainer) uiContainer.style.display = 'flex';
                     }
-                    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-                    renderer.toneMappingExposure = 1.0;
-
-                    if (isIOSSafari) {
-                        // iOS: Cap pixel ratio to avoid exceeding GPU memory
-                        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-                        // WebGL Context Loss recovery (prevents permanent black screen)
-                        renderer.domElement.addEventListener('webglcontextlost', (e) => {
-                            e.preventDefault();
-                            console.warn('[Liminal] WebGL context lost (iOS)');
-                        }, false);
-                        renderer.domElement.addEventListener('webglcontextrestored', () => {
-                            console.log('[Liminal] WebGL context restored (iOS)');
-                        }, false);
-                    } else {
-                        renderer.setPixelRatio(window.devicePixelRatio);
-                    }
-
-                    document.body.appendChild(renderer.domElement);
-                } catch (e) {
-                    console.error("WebGL Initialization failed, entering 2D Fallback Mode.", e);
-                    window.fallback2DMode = true;
-                    document.body.style.backgroundColor = '#050505';
-                    // Hide loading items if the 3D init failed so users aren't stuck on a loading screen forever
-                    const loadingText = document.getElementById('loading');
-                    if (loadingText) loadingText.style.display = 'none';
-                    const loadingScreen = document.getElementById('loading-screen');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-                    const uiContainer = document.getElementById('audioPlayerUI');
-                    if (uiContainer) uiContainer.style.display = 'flex';
-                }
+                } // end if (!window.fallback2DMode)
 
                 function syncViewport() {
                     const vv = window.visualViewport;
                     const viewWidth = Math.max(1, Math.round(vv ? vv.width : window.innerWidth));
                     const viewHeight = Math.max(1, Math.round(vv ? vv.height : window.innerHeight));
-                    camera.aspect = viewWidth / viewHeight;
-                    camera.updateProjectionMatrix();
+                    if (camera) {
+                        camera.aspect = viewWidth / viewHeight;
+                        camera.updateProjectionMatrix();
+                    }
                     if (!window.fallback2DMode && renderer) {
                         renderer.setSize(viewWidth, viewHeight, false);
                     }
@@ -1303,7 +1320,8 @@
                 // Ensure initial calibration uses the real visual viewport on mobile.
                 syncViewport();
 
-                // --- AUDIO PLAYER SETUP (SCAudioAdapter) ---
+                // Start animation with correct background color
+                if (scene) scene.background = new THREE.Color(isReadingMode ? backgroundModeColor : 0x050505);
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
@@ -4103,21 +4121,25 @@
                     ctx.putImageData(imgData, 0, 0);
                     const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
                 }
+                let woodMaterial, floorMaterial, wallMaterial, bookMat, bulbMat, cordMat;
+                let sharedPlaneGeo, sharedShelfGeo, sharedPlankGeo, sharedBookGeo, sharedBulbGeo, sharedCordGeo;
 
-                const woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
-                const floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
-                const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
-                const bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
-                const bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
-                const cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
+                if (!window.fallback2DMode && THREE) {
+                    woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
+                    floorMaterial = new THREE.MeshStandardMaterial({ map: createCarpetTexture(), roughness: 0.9, metalness: 0.1 });
+                    wallMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+                    bookMat = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.7 });
+                    bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
+                    cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
 
-                // --- SHARED GEOMETRIES (Performance Fix) ---
-                const sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
-                const sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
-                const sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
-                const sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
-                const sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
-                const sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+                    // --- SHARED GEOMETRIES (Performance Fix) ---
+                    sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
+                    sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+                    sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+                    sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
+                    sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                    sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+                }
 
                 // --- CLASSES ---
                 class YellowLight {
@@ -4514,13 +4536,6 @@
                             // 1. Move MeshGroup.
                             // 2. Generate books using RELATIVE coords?
                             // Currently logic uses `zStart` (Absolute).
-                            // We must pass `0` to generator if Group is handling offset?
-                            // Or generator logic must use new Z?
-                            // If Group is moved, generator using Absolute Z will Double Move.
-                            // ERROR RISK.
-
-                            // FIX: Generator should spawn books local to Group (around 0..-Length).
-                            // Constructor currently uses Absolute Z.
                             // This is improper for grouping.
                             // BUT converting to relative is risky big refactor.
 
@@ -4706,8 +4721,12 @@
                     segments.push(seg);
                 }
 
-                const clock = new THREE.Clock();
-                const velocity = new THREE.Vector3();
+                let clock = null;
+                let velocity = null;
+                if (!window.fallback2DMode && THREE) {
+                    clock = new THREE.Clock();
+                    velocity = new THREE.Vector3();
+                }
                 const move = { f: false, b: false, l: false, r: false };
                 let animationLoopRunning = false;
                 let hasStartedGame = false;
@@ -4732,7 +4751,7 @@
                     }
                     setSegmentGenerationPaused(false);
                     if (hasStartedGame && !document.hidden) {
-                        clock.getDelta(); // Discard stale frame delta after resume.
+                        if (clock) clock.getDelta(); // Discard stale frame delta after resume.
                         startAnimationLoop();
                     }
                 }
@@ -4760,8 +4779,12 @@
                 // Click-to-Move State
                 let moveTarget = null;
                 let cameraLookTarget = null; // 3D point camera should smoothly look at
-                const raycaster = new THREE.Raycaster();
-                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                let raycaster = null;
+                let groundPlane = null;
+                if (!window.fallback2DMode && THREE) {
+                    raycaster = new THREE.Raycaster();
+                    groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); // Plane y=0 (facing up)
+                }
                 let uiInteractionStarted = false;
                 let lastUiInteractionAt = 0;
                 const UI_CLICK_SUPPRESS_MS = 700;
@@ -5225,9 +5248,14 @@
                 }
 
                 // Create initial segments with High Priority (Preload Mode)
-                initialZ.forEach(z => {
-                    segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
-                });
+                if (!window.fallback2DMode && THREE) {
+                    initialZ.forEach(z => {
+                        segments.push(new HallwaySegment(z, segmentLength, true, checkPreloadComplete));
+                    });
+                } else {
+                    console.log("DEBUG: Fallback Mode active. Skipping 3D preload.");
+                    startGame();
+                }
 
                 function startGame() {
                     hasStartedGame = true;
@@ -5394,8 +5422,8 @@
                     requestAnimationFrame(animate);
 
                     try {
-                        const delta = Math.min(clock.getDelta(), 0.05); // Cap at 0.05 (20fps min) to prevent huge jumps
-                        const time = clock.getElapsedTime();
+                        const delta = clock ? Math.min(clock.getDelta(), 0.05) : 0.05; // Cap at 0.05 (20fps min) to prevent huge jumps
+                        const time = clock ? clock.getElapsedTime() : (performance.now() / 1000);
                         const worldLockReason = getWorldInputLockReason();
                         const lookSuppressed = (!isReadingMode) && (!!worldLockReason || performance.now() < suppressWorldInputUntil);
 
