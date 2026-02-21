@@ -922,9 +922,7 @@
             const db = window.GameState.getAllLore();
             const collectedIds = window.GameState.state.collectedLore;
 
-            if (collectedIds.length === 0) {
-                return;
-            } else {
+            if (collectedIds.length > 0) {
                 collectedIds.sort((a, b) => a - b).forEach(id => {
                     const content = db[id];
                     if (!content) return;

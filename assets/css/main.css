@@ -1536,10 +1536,15 @@ input[type="range"]:focus {
     background: none;
     cursor: pointer;
     text-align: left;
+    font: inherit;
+    color: inherit;
 }
 
 .reader-color-row-label {
+    min-width: 98px;
     font-size: 14px;
+    font-family: inherit;
+    font-weight: 400;
     color: rgba(255, 255, 255, 0.82);
 }
 
