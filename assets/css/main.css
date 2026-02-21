@@ -547,27 +547,16 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     user-select: none;
 }
 
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat,
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    line-height: normal;
-    white-space: normal;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
-    display: block;
-    margin-right: 0;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat {
     display: block;
     line-height: 1.65;
     white-space: normal;
     --flat-timestamp-gap: 0.12em;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line,
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
     display: inline;
     line-height: inherit;
     padding-left: 0;
@@ -575,7 +564,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     margin-right: var(--flat-timestamp-gap);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current,
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-current {
     font-weight: 400 !important;
     padding-left: 0;
     padding-right: 0;
@@ -589,7 +579,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
         0 0 10px rgba(0, 0, 0, 0.8);
 }
 
-body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current,
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-current {
     text-shadow:
         0.012em 0 currentColor,
         -0.012em 0 currentColor,
@@ -713,9 +704,13 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     text-shadow: 0 1px 6px rgba(255, 255, 255, 0.7);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-bookmark-btn {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-bookmark-btn:not(.bookmark-btn-flat-overlay) {
     position: absolute;
     z-index: 4;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-bookmark-btn.bookmark-btn-flat-overlay {
+    z-index: 3200;
 }
 
 /* Keep early timestamps fully readable while top fade would otherwise clip them. */

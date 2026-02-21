@@ -1852,7 +1852,9 @@
                             const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
                             return overlapW * overlapH;
                         };
-                        const isFlatBookmarkLayout = () => subtitleContainer.classList.contains('reader-layout-flat');
+                        const isFlatBookmarkLayout = () =>
+                            subtitleContainer.classList.contains('reader-layout-flat')
+                            || subtitleContainer.classList.contains('reader-layout-timestamps');
                         const setBookmarkButtonLabel = (btn, label) => {
                             if (!btn) return;
                             const labelNode = btn.querySelector('.bookmark-label');
