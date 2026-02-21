@@ -4373,6 +4373,13 @@
                         div.style.position = 'relative';
                         div.style.overflow = 'visible';
                         let _bmTimer = null;
+                        let _bmTouchStart = null;
+                        let _bmLastTouch = null;
+                        let _bmLongPressReady = false;
+                        let _bmDocTouchMoveHandler = null;
+                        let _bmDocTouchEndHandler = null;
+                        let _bmDocTouchCancelHandler = null;
+                        const BOOKMARK_MAX_TOUCH_MOVE_PX = 200;
                         const BOOKMARK_LABEL = 'Lesezeichen';
                         const BOOKMARK_SAVED_LABEL = 'Gespeichert';
                         const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -4523,26 +4530,106 @@
                             }
                             return { rects, containerRect };
                         };
+                        const getPointerPoint = (event) => {
+                            if (!event) return null;
+                            if (event.touches && event.touches.length > 0) {
+                                return { clientX: event.touches[0].clientX, clientY: event.touches[0].clientY };
+                            }
+                            if (event.changedTouches && event.changedTouches.length > 0) {
+                                return { clientX: event.changedTouches[0].clientX, clientY: event.changedTouches[0].clientY };
+                            }
+                            if (event.clientX !== undefined && event.clientY !== undefined) {
+                                return { clientX: event.clientX, clientY: event.clientY };
+                            }
+                            return null;
+                        };
+                        const clearLongPressTracking = () => {
+                            if (_bmDocTouchMoveHandler) {
+                                document.removeEventListener('touchmove', _bmDocTouchMoveHandler);
+                                _bmDocTouchMoveHandler = null;
+                            }
+                            if (_bmDocTouchEndHandler) {
+                                document.removeEventListener('touchend', _bmDocTouchEndHandler);
+                                _bmDocTouchEndHandler = null;
+                            }
+                            if (_bmDocTouchCancelHandler) {
+                                document.removeEventListener('touchcancel', _bmDocTouchCancelHandler);
+                                _bmDocTouchCancelHandler = null;
+                            }
+                            _bmTouchStart = null;
+                            _bmLastTouch = null;
+                            _bmLongPressReady = false;
+                        };
+                        const getLongPressMovement = () => {
+                            if (!_bmTouchStart) return { pointerDistance: 0, scrollDistance: 0 };
+                            const lastPoint = _bmLastTouch || _bmTouchStart;
+                            const dx = lastPoint.clientX - _bmTouchStart.clientX;
+                            const dy = lastPoint.clientY - _bmTouchStart.clientY;
+                            return {
+                                pointerDistance: Math.hypot(dx, dy),
+                                scrollDistance: Math.abs(subtitleContainer.scrollTop - _bmTouchStart.scrollTop)
+                            };
+                        };
+                        const isLongPressBlockedByMovement = () => {
+                            const movement = getLongPressMovement();
+                            return movement.pointerDistance > BOOKMARK_MAX_TOUCH_MOVE_PX
+                                || movement.scrollDistance > BOOKMARK_MAX_TOUCH_MOVE_PX;
+                        };
+                        const cancelLongPress = () => {
+                            if (_bmTimer) {
+                                clearTimeout(_bmTimer);
+                                _bmTimer = null;
+                            }
+                            clearLongPressTracking();
+                        };
+                        const finalizeLongPress = () => {
+                            if (!_bmTouchStart) {
+                                cancelLongPress();
+                                return;
+                            }
+                            const triggerPoint = _bmLastTouch || _bmTouchStart;
+                            const shouldShow = _bmLongPressReady && !isLongPressBlockedByMovement();
+                            cancelLongPress();
+                            if (shouldShow) {
+                                showBookmarkButton({ clientX: triggerPoint.clientX, clientY: triggerPoint.clientY });
+                            }
+                        };
+                        const updateLongPressMovement = (event) => {
+                            if (!_bmTouchStart) return;
+                            const point = getPointerPoint(event);
+                            if (!point) return;
+                            _bmLastTouch = { clientX: point.clientX, clientY: point.clientY };
+                            if (isLongPressBlockedByMovement()) {
+                                cancelLongPress();
+                            }
+                        };
                         const startLongPress = (e) => {
                             if (isDesktopPointer()) return;
-                            if (_bmTimer) clearTimeout(_bmTimer);
-
-                            // Capture coordinates
-                            let clientX = null;
-                            let clientY = null;
-                            if (e) {
-                                if (e.touches && e.touches.length > 0) {
-                                    clientX = e.touches[0].clientX;
-                                    clientY = e.touches[0].clientY;
-                                } else if (e.clientX !== undefined) {
-                                    clientX = e.clientX;
-                                    clientY = e.clientY;
-                                }
-                            }
+                            cancelLongPress();
+                            const point = getPointerPoint(e);
+                            if (!point) return;
+                            _bmTouchStart = {
+                                clientX: point.clientX,
+                                clientY: point.clientY,
+                                scrollTop: subtitleContainer.scrollTop
+                            };
+                            _bmLastTouch = { clientX: point.clientX, clientY: point.clientY };
+                            _bmLongPressReady = false;
+                            _bmDocTouchMoveHandler = (event) => updateLongPressMovement(event);
+                            _bmDocTouchEndHandler = () => finalizeLongPress();
+                            _bmDocTouchCancelHandler = () => cancelLongPress();
+                            document.addEventListener('touchmove', _bmDocTouchMoveHandler, { passive: true });
+                            document.addEventListener('touchend', _bmDocTouchEndHandler, { passive: true });
+                            document.addEventListener('touchcancel', _bmDocTouchCancelHandler, { passive: true });
 
                             _bmTimer = setTimeout(() => {
                                 _bmTimer = null;
-                                showBookmarkButton({ clientX, clientY });
+                                if (!_bmTouchStart) return;
+                                if (isLongPressBlockedByMovement()) {
+                                    cancelLongPress();
+                                    return;
+                                }
+                                _bmLongPressReady = true;
                             }, 600);
                         };
 
@@ -4746,9 +4833,6 @@
                             }, 4000);
                         };
 
-                        const cancelLongPress = () => {
-                            if (_bmTimer) { clearTimeout(_bmTimer); _bmTimer = null; }
-                        };
                         div.addEventListener('mousedown', (e) => {
                             if (e.button !== 0) return;
                             startLongPress(e);
@@ -4763,7 +4847,7 @@
                         div.addEventListener('touchstart', startLongPress, { passive: true });
                         div.addEventListener('mouseup', cancelLongPress);
                         div.addEventListener('mouseleave', cancelLongPress);
-                        div.addEventListener('touchend', cancelLongPress);
+                        div.addEventListener('touchend', finalizeLongPress);
                         div.addEventListener('touchcancel', cancelLongPress);
 
                         subtitleContainer.appendChild(div);
