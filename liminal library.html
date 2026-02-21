@@ -4163,9 +4163,45 @@
                     bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
                     cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
 
+                    let sharedShelfGeoLeft, sharedShelfGeoRight;
+                    let sharedPlankGeoLeft, sharedPlankGeoRight;
+
+                    // --- SHARED GEOMETRIES (Performance Fix) ---
                     sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);
-                    sharedShelfGeo = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
-                    sharedPlankGeo = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+
+                    sharedShelfGeoLeft = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+                    sharedShelfGeoRight = new THREE.BoxGeometry(config.shelfDepth, config.roomHeight, config.segmentLength);
+
+                    sharedPlankGeoLeft = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+                    sharedPlankGeoRight = new THREE.BoxGeometry(1.2, 0.05, config.segmentLength);
+
+                    // --- EXPLICIT SHELF CULLING (Keep ONLY inward-facing wall) ---
+                    try {
+                        const idxL = sharedShelfGeoLeft.index.array;
+                        const newL = [];
+                        for (let i = 0; i < 6; i++) newL.push(idxL[i]); // Keep +X (Right) face for Left Wall
+                        sharedShelfGeoLeft.setIndex(newL); sharedShelfGeoLeft.clearGroups();
+
+                        const idxR = sharedShelfGeoRight.index.array;
+                        const newR = [];
+                        for (let i = 6; i < 12; i++) newR.push(idxR[i]); // Keep -X (Left) face for Right Wall
+                        sharedShelfGeoRight.setIndex(newR); sharedShelfGeoRight.clearGroups();
+                    } catch (e) { }
+
+                    // --- EXPLICIT PLANK CULLING (Keep Front Edge, Top, Bottom) ---
+                    try {
+                        const idxPL = sharedPlankGeoLeft.index.array;
+                        const newPL = [];
+                        for (let i = 0; i < 6; i++) newPL.push(idxPL[i]);   // Keep +X (Right edge) 
+                        for (let i = 12; i < 24; i++) newPL.push(idxPL[i]); // Keep +Y (Top), -Y (Bottom)
+                        sharedPlankGeoLeft.setIndex(newPL); sharedPlankGeoLeft.clearGroups();
+
+                        const idxPR = sharedPlankGeoRight.index.array;
+                        const newPR = [];
+                        for (let i = 6; i < 12; i++) newPR.push(idxPR[i]);  // Keep -X (Left edge)
+                        for (let i = 12; i < 24; i++) newPR.push(idxPR[i]); // Keep +Y (Top), -Y (Bottom)
+                        sharedPlankGeoRight.setIndex(newPR); sharedPlankGeoRight.clearGroups();
+                    } catch (e) { }
 
                     sharedBookGeo = new THREE.BoxGeometry(1, 1, 1);
 
@@ -4375,12 +4411,12 @@
                         this.meshGroup.add(ceiling);
 
                         // 2. Shelves
-                        const leftShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                        const leftShelf = new THREE.Mesh(sharedShelfGeoLeft, woodMaterial);
                         leftShelf.position.set(-3.2, config.roomHeight / 2, zStart - length / 2); leftShelf.castShadow = !isIOSSafari; leftShelf.receiveShadow = !isIOSSafari;
                         leftShelf.frustumCulled = false; // FIX: Prevent Abyss
                         this.meshGroup.add(leftShelf);
 
-                        const rightShelf = new THREE.Mesh(sharedShelfGeo, woodMaterial);
+                        const rightShelf = new THREE.Mesh(sharedShelfGeoRight, woodMaterial);
                         rightShelf.position.set(3.2, config.roomHeight / 2, zStart - length / 2); rightShelf.castShadow = !isIOSSafari; rightShelf.receiveShadow = !isIOSSafari;
                         rightShelf.frustumCulled = false; // FIX: Prevent Abyss
                         this.meshGroup.add(rightShelf);
@@ -4390,12 +4426,12 @@
                         for (let i = 0; i < levels; i++) {
                             const y = (config.roomHeight / levels) * i + 0.4;
 
-                            const pLeft = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                            const pLeft = new THREE.Mesh(sharedPlankGeoLeft, woodMaterial);
                             pLeft.position.set(-2.6, y, zStart - length / 2);
                             pLeft.castShadow = !isIOSSafari; pLeft.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
                             this.meshGroup.add(pLeft);
 
-                            const pRight = new THREE.Mesh(sharedPlankGeo, woodMaterial);
+                            const pRight = new THREE.Mesh(sharedPlankGeoRight, woodMaterial);
                             pRight.position.set(2.6, y, zStart - length / 2);
                             pRight.castShadow = !isIOSSafari; pRight.receiveShadow = !isIOSSafari; // FIX: BLOCK LIGHT (Disable on iOS)
                             this.meshGroup.add(pRight);
