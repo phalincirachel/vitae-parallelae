@@ -598,24 +598,29 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
         0 0 10px rgba(255, 255, 255, 1);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern {
     display: block;
     position: relative;
     overflow: hidden;
     padding: 0;
+    align-self: stretch;
+    height: 100%;
+    min-height: 240px;
     mask-image: none;
     -webkit-mask-image: none;
     touch-action: none;
     user-select: none;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-page-root {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-root {
     position: relative;
     width: 100%;
     height: 100%;
+    min-height: 100%;
+    isolation: isolate;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-page-layer {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer {
     position: absolute;
     inset: 0;
     overflow: hidden;
@@ -628,18 +633,30 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     will-change: transform;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-page-layer.kindle-page-empty {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-prev {
+    z-index: 1;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-current {
+    z-index: 2;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-next {
+    z-index: 1;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer.blaettern-page-empty {
     pointer-events: none;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-page-layer-measure {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer-measure {
     visibility: hidden;
     pointer-events: none;
     transform: none !important;
     z-index: -1;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .subtitle-line.kindle-line {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line {
     display: inline;
     line-height: inherit;
     margin-right: 0.12em;
@@ -647,7 +664,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     text-align: justify;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .subtitle-line.kindle-line.subtitle-current {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
     font-weight: 400 !important;
     -webkit-text-stroke: 0.22px currentColor;
     text-shadow:
@@ -658,7 +675,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
         0 0 10px rgba(0, 0, 0, 0.8);
 }
 
-body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .subtitle-line.kindle-line.subtitle-current {
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
     text-shadow:
         0.012em 0 currentColor,
         -0.012em 0 currentColor,
@@ -667,7 +684,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
         0 0 10px rgba(255, 255, 255, 1);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-progress-indicator {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-progress-indicator {
     position: absolute;
     top: max(10px, env(safe-area-inset-top));
     right: 16px;
@@ -680,12 +697,12 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     pointer-events: none;
 }
 
-body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-progress-indicator {
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-progress-indicator {
     color: rgba(0, 0, 0, 0.64);
     text-shadow: 0 1px 6px rgba(255, 255, 255, 0.7);
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-bookmark-btn {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-bookmark-btn {
     position: absolute;
     z-index: 4;
 }
@@ -711,7 +728,9 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
         padding-top: clamp(84px, 11vh, 148px);
     }
 
-    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle {
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern {
+        height: calc(100vh - 24px);
+        min-height: calc(100vh - 24px);
         max-height: calc(100vh - 24px);
         mask-image: none;
         -webkit-mask-image: none;
@@ -758,12 +777,12 @@ body:has(#archiveModal.visible) #subtitleRecenterBtn {
     transition: background 0.5s ease, opacity 0.3s ease;
 }
 
-#audioPlayerUI.kindle-layout-active #audioControls.kindle-controls-hidden {
+#audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-hidden {
     opacity: 0;
     pointer-events: none;
 }
 
-#audioPlayerUI.kindle-layout-active #audioControls.kindle-controls-visible {
+#audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-visible {
     opacity: 1;
     pointer-events: auto;
 }
@@ -2012,13 +2031,17 @@ body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
         overflow-y: auto !important;
     }
 
-    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle {
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern {
         padding: 0 !important;
+        height: calc(100% - 70px) !important;
+        min-height: calc(100% - 70px) !important;
         overflow: hidden !important;
         max-height: calc(100% - 70px) !important;
+        mask-image: none !important;
+        -webkit-mask-image: none !important;
     }
 
-    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-kindle .kindle-page-layer {
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer {
         padding: clamp(52px, 9vh, 96px) 16px clamp(82px, 14vh, 124px);
     }
 
