@@ -884,6 +884,17 @@ body.scene-dimmer-light-mode .audio-btn svg {
     grid-row: 1;
 }
 
+#bookBtn img {
+    width: 24px;
+    height: 24px;
+    display: block;
+    filter: brightness(0) invert(1) drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
+}
+
+body.scene-dimmer-light-mode #bookBtn img {
+    filter: brightness(0) invert(0) drop-shadow(2px 2px 6px rgba(255, 255, 255, 0.9));
+}
+
 #readingModeBtn {
     grid-column: 2;
     grid-row: 1;
