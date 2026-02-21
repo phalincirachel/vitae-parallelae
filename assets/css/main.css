@@ -1024,14 +1024,24 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     justify-content: center;
     align-items: center;
     z-index: 2000;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
     background: transparent;
+    overflow: hidden;
 }
 
 #archiveModal.visible {
     display: flex;
     animation: fadeIn 0.3s ease-out;
+}
+
+#archiveModal::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: rgba(0, 0, 0, 0.001);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 }
 
 .archive-card {
@@ -1040,6 +1050,8 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     height: 70%;
     display: flex;
     flex-direction: column;
+    position: relative;
+    z-index: 1;
     color: #FFFFFF;
     font-family: "Georgia", serif;
     text-shadow: none;
@@ -1303,25 +1315,36 @@ body.scene-dimmer-light-mode .archive-tab.active {
     border-bottom-color: #7b5a00;
 }
 
-/* Adaptive chapter-menu contrast on bright backgrounds */
-#archiveModal {
-    --archive-adaptive-blend: normal;
+/* Adaptive chapter-menu contrast for OFF/HALF dimmer mode. */
+#archiveModal.archive-adaptive-contrast .archive-primary-btn,
+#archiveModal.archive-adaptive-contrast .close-btn,
+#archiveModal.archive-adaptive-contrast .archive-tab,
+#archiveModal.archive-adaptive-contrast .archive-tab-content .item-main-text,
+#archiveModal.archive-adaptive-contrast .archive-tab-content .item-sub-text,
+#archiveModal.archive-adaptive-contrast .reader-settings-title,
+#archiveModal.archive-adaptive-contrast .reader-radio-option,
+#archiveModal.archive-adaptive-contrast .reader-volume-label,
+#archiveModal.archive-adaptive-contrast .reader-color-row-label,
+#archiveModal.archive-adaptive-contrast .reader-size-unit,
+#archiveModal.archive-adaptive-contrast .reader-color-reset-btn,
+#archiveModal.archive-adaptive-contrast #readerFontSizeNumber,
+#archiveModal.archive-adaptive-contrast #readerTextVolumeNumber,
+#archiveModal.archive-adaptive-contrast #readerBackgroundVolumeNumber,
+#archiveModal.archive-adaptive-contrast .bookmark-empty-msg,
+#archiveModal.archive-adaptive-contrast .bookmark-delete-btn,
+#archiveModal.archive-adaptive-contrast .archive-footer-btn {
+    color: #ffffff !important;
+    border-color: rgba(255, 255, 255, 0.5);
+    mix-blend-mode: difference;
+    text-shadow: none !important;
 }
 
-body:not(.scene-dimmer-light-mode) #archiveModal.visible {
-    --archive-adaptive-blend: difference;
+#archiveModal.archive-adaptive-contrast .archive-footer-btn {
+    background: rgba(255, 255, 255, 0.06);
 }
 
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-primary-btn,
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .close-btn,
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab,
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab-content[data-tab="kapitel"] .item-main-text,
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab-content[data-tab="kapitel"] .item-sub-text {
-    mix-blend-mode: var(--archive-adaptive-blend);
-}
-
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .archive-tab.active,
-body:not(.scene-dimmer-light-mode) #archiveModal.visible .menu-item.active .item-main-text {
+#archiveModal.archive-adaptive-contrast .archive-tab.active,
+#archiveModal.archive-adaptive-contrast .menu-item.active .item-main-text {
     mix-blend-mode: normal;
 }
 

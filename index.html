@@ -1593,6 +1593,10 @@
 
             // Always show UI
             if (typeof uiContainer !== 'undefined' && uiContainer) uiContainer.style.display = 'flex';
+            if (isReadingMode && isBlaetternLayoutSelected()) {
+                scheduleBlaetternPaginationRetry('ui-visible');
+            }
+            renderSubtitleLines(Math.max(0, currentSubtitleIndex));
 
             // 3. Load Save Game
             // Handled by generic GameState.init() called at top of script
@@ -3246,6 +3250,7 @@
         let blaetternLongPressTimer = null;
         let blaetternSuppressTapUntil = 0;
         let blaetternLastSyncedSubtitleIndex = -1;
+        let blaetternPaginationRetryTimer = null;
 
         function isBlaetternLayoutSelected() {
             return readerSentenceLayout === READER_LAYOUT_BLAETTERN;
@@ -3253,6 +3258,30 @@
 
         function isBlaetternLayoutActive() {
             return !!(isReadingMode && isBlaetternLayoutSelected());
+        }
+
+        function clearBlaetternPaginationRetryTimer() {
+            if (!blaetternPaginationRetryTimer) return;
+            clearTimeout(blaetternPaginationRetryTimer);
+            blaetternPaginationRetryTimer = null;
+        }
+
+        function scheduleBlaetternPaginationRetry(reason = 'layout') {
+            if (blaetternPaginationRetryTimer) return;
+            blaetternPaginationRetryTimer = setTimeout(() => {
+                blaetternPaginationRetryTimer = null;
+                if (!isBlaetternLayoutActive()) return;
+                const width = Math.round(subtitleContainer ? subtitleContainer.clientWidth : 0);
+                const height = Math.round(subtitleContainer ? subtitleContainer.clientHeight : 0);
+                if (width <= 20 || height <= 20) {
+                    scheduleBlaetternPaginationRetry(`${reason}:wait`);
+                    return;
+                }
+                const targetIndex = Number.isFinite(currentSubtitleIndex) && currentSubtitleIndex >= 0
+                    ? currentSubtitleIndex
+                    : 0;
+                renderSubtitleLines(Math.max(0, targetIndex));
+            }, 140);
         }
 
         function markBlaetternPaginationDirty() {
@@ -4153,6 +4182,7 @@
         function renderBlaetternReadingPage(centerIndex) {
             syncReadingTopFadeMask(-1);
             if (!subtitleTracks.length) {
+                clearBlaetternPaginationRetryTimer();
                 subtitleContainer.innerHTML = '';
                 const emptyLine = document.createElement('div');
                 emptyLine.className = 'subtitle-line subtitle-current';
@@ -4161,7 +4191,17 @@
                 return;
             }
 
-            if (!ensureBlaetternPagination()) return;
+            if (!ensureBlaetternPagination()) {
+                scheduleBlaetternPaginationRetry('pagination-not-ready');
+                if (!subtitleContainer.children.length) {
+                    const emptyLine = document.createElement('div');
+                    emptyLine.className = 'subtitle-line subtitle-current';
+                    emptyLine.innerText = 'Lade Seitenlayout...';
+                    subtitleContainer.appendChild(emptyLine);
+                }
+                return;
+            }
+            clearBlaetternPaginationRetryTimer();
             const safeIndex = Math.max(
                 0,
                 Math.min(
@@ -4746,6 +4786,15 @@
 
         initReaderSettingsControls();
 
+        let archiveDimmerIsFrozen = false;
+        let archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
+        function syncArchiveAdaptiveContrastModeState() {
+            const modal = document.getElementById('archiveModal');
+            if (!modal) return;
+            const shouldEnable = !archiveDimmerIsFrozen && !archiveDimmerIsWhiteMode;
+            modal.classList.toggle('archive-adaptive-contrast', shouldEnable);
+        }
+
         const globalVisualDimmer = window.GlobalVisualDimmer
             ? window.GlobalVisualDimmer.init({
                 overlayId: 'sceneDimmerOverlay',
@@ -4757,14 +4806,22 @@
             })
             : null;
         manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
+        archiveDimmerIsFrozen = globalVisualDimmer ? globalVisualDimmer.isFrozen() : false;
+        archiveDimmerIsWhiteMode = document.body.classList.contains('scene-dimmer-light-mode');
+        syncArchiveAdaptiveContrastModeState();
         let pendingForceReadingFromFreeze = false;
         let shouldResumePlaybackAfterDimmerUnfreeze = false;
         let dimmerResumeToken = 0;
         let modeSwitchInitialized = false;
         if (globalVisualDimmer) {
-            globalVisualDimmer.onChange(({ level, frozen }) => {
+            globalVisualDimmer.onChange(({ level, frozen, isWhiteMode }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
+                archiveDimmerIsFrozen = !!frozen;
+                archiveDimmerIsWhiteMode = typeof isWhiteMode === 'boolean'
+                    ? isWhiteMode
+                    : document.body.classList.contains('scene-dimmer-light-mode');
+                syncArchiveAdaptiveContrastModeState();
                 applyReaderDimmerTint();
                 dimmerResumeToken += 1;
                 const changeToken = dimmerResumeToken;
@@ -6296,6 +6353,7 @@
                 syncAutoWalkToIndex();
                 uiContainer.classList.add('reading-mode');
             } else {
+                clearBlaetternPaginationRetryTimer();
                 setSubtitleFollowLocked(false, 'mode-off');
                 if (isLoreMode && !isMenuTriggeredLore) {
                     endLoreMode();
