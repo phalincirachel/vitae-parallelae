@@ -282,7 +282,7 @@
 
             <div class="archive-tabs">
                 <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
-                <button class="archive-tab" data-tab="lore">Lore</button>
+                <button class="archive-tab" data-tab="lore">Funde</button>
                 <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
             </div>
 
@@ -341,7 +341,7 @@
                         </label>
                     </div>
                     <div class="reader-settings-group">
-                        <label class="reader-settings-title" for="readerFontSizeRange">SchriftgrÃ¶ÃŸe</label>
+                        <label class="reader-settings-title" for="readerFontSizeRange">Schriftgr&ouml;&szlig;e</label>
                         <div class="reader-size-row">
                             <input id="readerFontSizeRange" type="range" min="14" max="30" step="1" value="18">
                             <input id="readerFontSizeNumber" type="number" min="14" max="30" step="1" value="18">
@@ -850,13 +850,7 @@
             if (!window.GameState) return;
             const bookmarks = window.GameState.getBookmarks();
 
-            if (bookmarks.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'bookmark-empty-msg';
-                empty.innerText = 'Keine Lesezeichen gesetzt';
-                list.appendChild(empty);
-                return;
-            }
+            if (bookmarks.length === 0) return;
 
             bookmarks.forEach(bm => {
                 const item = document.createElement('div');
@@ -929,10 +923,7 @@
             const collectedIds = window.GameState.state.collectedLore;
 
             if (collectedIds.length === 0) {
-                const empty = document.createElement('div');
-                empty.className = 'bookmark-empty-msg';
-                empty.innerText = 'Keine Lore gefunden';
-                list.appendChild(empty);
+                return;
             } else {
                 collectedIds.sort((a, b) => a - b).forEach(id => {
                     const content = db[id];
@@ -7240,4 +7231,3 @@
 </body>
 
 </html>
-
