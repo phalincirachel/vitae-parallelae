@@ -81,35 +81,35 @@
         const sceneOverlay = options.sceneOverlay || document.getElementById('sceneDimmerOverlay');
 
         const config = {
-            activeIntervalMs: Math.max(220, Number(options.activeIntervalMs) || 320),
+            activeIntervalMs: Math.max(180, Number(options.activeIntervalMs) || 260),
             inactiveIntervalMs: Math.max(600, Number(options.inactiveIntervalMs) || 1400),
-            eventLatencyMs: Math.max(0, Number(options.eventLatencyMs) || 220),
-            eventMinIntervalMs: Math.max(140, Number(options.eventMinIntervalMs) || 260),
+            eventLatencyMs: Math.max(0, Number(options.eventLatencyMs) || 140),
+            eventMinIntervalMs: Math.max(120, Number(options.eventMinIntervalMs) || 200),
             maxVisibleLines: Math.max(10, Number(options.maxVisibleLines) || 48),
 
             sampleScale: clamp(Number(options.sampleScale) || 0.34, 0.16, 1),
-            thresholdLuma: clamp(Number(options.thresholdLuma) || 0.72, 0.5, 0.95),
-            fullLuma: clamp(Number(options.fullLuma) || 0.94, 0.6, 1),
-            minAlpha: clamp(Number(options.minAlpha) || 0.04, 0, 1),
-            maxAlpha: clamp(Number(options.maxAlpha) || 0.72, 0, 1),
+            thresholdLuma: clamp(Number(options.thresholdLuma) || 0.66, 0.5, 0.95),
+            fullLuma: clamp(Number(options.fullLuma) || 0.89, 0.6, 1),
+            minAlpha: clamp(Number(options.minAlpha) || 0.03, 0, 1),
+            maxAlpha: clamp(Number(options.maxAlpha) || 0.78, 0, 1),
 
             minBands: Math.max(3, Number(options.minBands) || 4),
             maxBands: Math.max(4, Number(options.maxBands) || 7),
             bandVerticalPaddingPx: Math.max(0, Number(options.bandVerticalPaddingPx) || 22),
             bandHorizontalInsetPx: Math.max(0, Number(options.bandHorizontalInsetPx) || 32),
 
-            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.24, 0.05, 1),
-            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.12, 0.05, 1),
-            activationAlpha: clamp(Number(options.activationAlpha) || 0.08, 0, 1),
-            deactivationAlpha: clamp(Number(options.deactivationAlpha) || 0.05, 0, 1),
+            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.28, 0.05, 1),
+            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.14, 0.05, 1),
+            activationAlpha: clamp(Number(options.activationAlpha) || 0.065, 0, 1),
+            deactivationAlpha: clamp(Number(options.deactivationAlpha) || 0.04, 0, 1),
             alphaQuantStep: clamp(Number(options.alphaQuantStep) || 0.015, 0.001, 0.25),
 
-            lumaRiseSmoothing: clamp(Number(options.lumaRiseSmoothing) || 0.26, 0.03, 1),
-            lumaFallSmoothing: clamp(Number(options.lumaFallSmoothing) || 0.12, 0.03, 1),
-            alphaDeadband: clamp(Number(options.alphaDeadband) || 0.03, 0.001, 0.2),
-            brightenDelayMs: Math.max(0, Number(options.brightenDelayMs) || 650),
-            darkenDelayMs: Math.max(0, Number(options.darkenDelayMs) || 1100),
-            minDisplayHoldMs: Math.max(0, Number(options.minDisplayHoldMs) || 520)
+            lumaRiseSmoothing: clamp(Number(options.lumaRiseSmoothing) || 0.34, 0.03, 1),
+            lumaFallSmoothing: clamp(Number(options.lumaFallSmoothing) || 0.16, 0.03, 1),
+            alphaDeadband: clamp(Number(options.alphaDeadband) || 0.018, 0.001, 0.2),
+            brightenDelayMs: Math.max(0, Number(options.brightenDelayMs) || 320),
+            darkenDelayMs: Math.max(0, Number(options.darkenDelayMs) || 780),
+            minDisplayHoldMs: Math.max(0, Number(options.minDisplayHoldMs) || 360)
         };
 
         if (config.deactivationAlpha > config.activationAlpha) {
@@ -306,22 +306,31 @@
 
             const directionUp = delta > 0;
             const delayMs = directionUp ? config.brightenDelayMs : config.darkenDelayMs;
-            const candidateChanged = Math.abs(rawAlpha - (meta.candidateAlpha || 0)) > config.alphaDeadband;
-
-            if (!meta.candidateSinceTs || candidateChanged) {
+            if (!meta.candidateSinceTs) {
                 meta.candidateSinceTs = nowTs;
                 meta.candidateAlpha = rawAlpha;
                 return committed;
             }
 
+            // Keep the timer stable; adapt candidate gradually instead of resetting it.
+            meta.candidateAlpha = quantizeAlpha(
+                (meta.candidateAlpha || 0) + ((rawAlpha - (meta.candidateAlpha || 0)) * 0.32)
+            );
+
             if ((nowTs - meta.candidateSinceTs) < delayMs) {
                 return committed;
             }
 
-            meta.committedAlpha = rawAlpha;
+            const commitAlpha = meta.candidateAlpha;
+            if (Math.abs(commitAlpha - committed) <= config.alphaDeadband) {
+                meta.candidateSinceTs = 0;
+                return committed;
+            }
+
+            meta.committedAlpha = commitAlpha;
             meta.lastCommitTs = nowTs;
             meta.candidateSinceTs = 0;
-            return rawAlpha;
+            return commitAlpha;
         }
 
         function smoothBandAlpha(bandKey, targetAlpha) {
