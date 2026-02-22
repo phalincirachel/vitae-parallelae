@@ -2621,7 +2621,7 @@
                 }
             }
 
-            // Fallback für Legacy moveTarget (zur Sicherheit)
+            // Fallback für Legacy moveTarget (zur Sicherheit - läuft in Wand und stoppt/gleitet)
             if (dx === 0 && dy === 0 && moveTarget && !isReadingMode) {
                 const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
                 const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
@@ -2644,6 +2644,30 @@
                     } else {
                         player.dir = tdy > 0 ? 0 : 1;
                     }
+
+                    // Collision Override for Fallback (simulate keypress move so it slides and stops)
+                    player.isMoving = true;
+                    const amount = player.speed * dt;
+                    const vx = dx * amount;
+                    const vy = dy * amount;
+                    const targetX = player.x + vx;
+                    const targetY = player.y + vy;
+
+                    if (!checkCollisionAt(targetX, targetY)) {
+                        player.x = targetX;
+                        player.y = targetY;
+                    } else {
+                        if (!checkCollisionAt(targetX, player.y)) player.x = targetX;
+                        else if (!checkCollisionAt(player.x, targetY)) player.y = targetY;
+                        else {
+                            // Completely stuck in both directions
+                            moveTarget = null; // abort fallback
+                        }
+                    }
+
+                    // Reset dx/dy to prevent double-applying in MANUAL MOVEMENT block below
+                    dx = 0;
+                    dy = 0;
                 }
             }
 
