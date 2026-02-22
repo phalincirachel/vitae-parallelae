@@ -2,6 +2,7 @@
  * Heidelberg RPG - Main Stylesheet
  * Extracted from index.html during refactoring
  */
+@import url('https://fonts.bunny.net/css?family=ibm-plex-sans:400,500|eb-garamond:400,500|libre-baskerville:400,700|bodoni-moda:400,500&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=EB+Garamond:wght@400;500&family=Libre+Baskerville:wght@400;700&family=Bodoni+Moda:opsz,wght@6..96,400;500&display=swap');
 
 /* ==========================================
@@ -1491,19 +1492,19 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
 }
 
 .reader-font-sample-grotesk {
-    font-family: "IBM Plex Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif;
+    font-family: "IBM Plex Sans", "Roboto", "Noto Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif;
 }
 
 .reader-font-sample-renaissance {
-    font-family: "EB Garamond", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    font-family: "EB Garamond", "Noto Serif", "Droid Serif", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif;
 }
 
 .reader-font-sample-baroque {
-    font-family: "Libre Baskerville", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif;
+    font-family: "Libre Baskerville", "Noto Serif Display", "Noto Serif", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif;
 }
 
 .reader-font-sample-neoclassical {
-    font-family: "Bodoni Moda", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif;
+    font-family: "Bodoni Moda", "Noto Serif", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif;
 }
 
 .reader-volume-row {

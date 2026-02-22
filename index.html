@@ -3223,10 +3223,10 @@
         const READER_FONT_SIZE_DEFAULT = 18;
         const READER_FONT_FAMILY_DEFAULT = 'grotesk';
         const READER_FONT_FAMILIES = Object.freeze({
-            grotesk: '"IBM Plex Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif',
-            renaissance: '"EB Garamond", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif',
-            baroque: '"Libre Baskerville", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif',
-            neoclassical: '"Bodoni Moda", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif'
+            grotesk: '"IBM Plex Sans", "Roboto", "Noto Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif',
+            renaissance: '"EB Garamond", "Noto Serif", "Droid Serif", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+            baroque: '"Libre Baskerville", "Noto Serif Display", "Noto Serif", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif',
+            neoclassical: '"Bodoni Moda", "Noto Serif", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif'
         });
         const READER_VOLUME_DEFAULT = 1;
         let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
@@ -5301,19 +5301,34 @@
             const isBlaetternLayout = isBlaetternLayoutActive();
             const isDesktopLayout = !isMobileLayout;
 
-            if (isBlaetternLayout || isDesktopLayout) {
+            if (isBlaetternLayout) {
                 const subtitleRect = subtitleContainer.getBoundingClientRect();
                 const controlsRef = audioControlsEl || document.getElementById('audioControls');
                 const controlsRect = controlsRef ? controlsRef.getBoundingClientRect() : null;
                 let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
                 let top = subtitleRect.bottom - btnRect.height - gap;
 
-                if (controlsRect && controlsRect.top > 0 && isMobileLayout) {
+                if (controlsRect && controlsRect.top > 0) {
                     top = Math.min(top, controlsRect.top - btnRect.height - gap);
                 }
 
                 left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
                 top = Math.max(subtitleRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
+                subtitleRecenterBtn.style.left = `${left}px`;
+                subtitleRecenterBtn.style.top = `${top}px`;
+                if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
+                return;
+            }
+
+            if (isDesktopLayout) {
+                const subtitleRect = subtitleContainer.getBoundingClientRect();
+                const left = Math.max(
+                    6,
+                    Math.min(window.innerWidth - btnRect.width - 6, subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5)
+                );
+                const dockTop = window.innerHeight - btnRect.height - 18;
+                let top = Math.max(subtitleRect.bottom - btnRect.height - gap, dockTop);
+                top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
                 subtitleRecenterBtn.style.left = `${left}px`;
                 subtitleRecenterBtn.style.top = `${top}px`;
                 if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
