@@ -403,10 +403,10 @@
                 const READER_FONT_SIZE_DEFAULT = 18;
                 const READER_FONT_FAMILY_DEFAULT = 'grotesk';
                 const READER_FONT_FAMILIES = Object.freeze({
-                    grotesk: '"Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif',
-                    renaissance: '"Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif',
-                    baroque: '"Baskerville Old Face", Baskerville, "Times New Roman", Times, serif',
-                    neoclassical: '"Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif'
+                    grotesk: '"IBM Plex Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif',
+                    renaissance: '"EB Garamond", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+                    baroque: '"Libre Baskerville", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif',
+                    neoclassical: '"Bodoni Moda", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif'
                 });
                 const READER_VOLUME_DEFAULT = 1;
                 let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
@@ -3514,7 +3514,7 @@
                         let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
                         let top = subtitleRect.bottom - btnRect.height - gap;
 
-                        if (controlsRect && controlsRect.top > 0) {
+                        if (controlsRect && controlsRect.top > 0 && isMobileLayout) {
                             top = Math.min(top, controlsRect.top - btnRect.height - gap);
                         }
 
