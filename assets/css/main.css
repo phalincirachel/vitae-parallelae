@@ -1502,8 +1502,8 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
     pointer-events: none;
 }
 
-.reader-font-sample-segoe {
-    font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
+.reader-font-sample-grotesk {
+    font-family: "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif;
 }
 
 .reader-font-sample-renaissance {
@@ -1515,20 +1515,7 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
 }
 
 .reader-font-sample-neoclassical {
-    font-family: "Didot", "Bodoni MT", "Bodoni 72", "Times New Roman", serif;
-}
-
-/* Backward-compatible aliases for current font option keys in markup. */
-.reader-font-sample-times {
-    font-family: "Times New Roman", Times, serif;
-}
-
-.reader-font-sample-arial {
-    font-family: "Arial", "Helvetica Neue", Helvetica, sans-serif;
-}
-
-.reader-font-sample-constantia {
-    font-family: "Constantia", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    font-family: "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif;
 }
 
 .reader-volume-row {

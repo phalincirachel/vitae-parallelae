@@ -255,23 +255,23 @@
                     <div class="reader-settings-group">
                         <div class="reader-settings-title">Schriftart</div>
                         <div class="reader-font-picker" role="group" aria-label="Schriftart ausw&auml;hlen">
-                            <button type="button" class="reader-font-option is-active" data-font="segoe"
-                                aria-label="Segoe UI" aria-pressed="true">
-                                <span class="reader-font-sample reader-font-sample-segoe" aria-hidden="true">AaBbCc</span>
+                            <button type="button" class="reader-font-option is-active" data-font="grotesk"
+                                aria-label="Grotesk (Segoe UI)" aria-pressed="true">
+                                <span class="reader-font-sample reader-font-sample-grotesk" aria-hidden="true">apfoe</span>
                             </button>
-                            <button type="button" class="reader-font-option" data-font="times"
-                                aria-label="Times New Roman" aria-pressed="false">
-                                <span class="reader-font-sample reader-font-sample-times"
-                                    aria-hidden="true">AaBbCc</span>
+                            <button type="button" class="reader-font-option" data-font="renaissance"
+                                aria-label="Renaissance (Garamond)" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-renaissance"
+                                    aria-hidden="true">apfoe</span>
                             </button>
-                            <button type="button" class="reader-font-option" data-font="arial" aria-label="Arial"
-                                aria-pressed="false">
-                                <span class="reader-font-sample reader-font-sample-arial" aria-hidden="true">AaBbCc</span>
+                            <button type="button" class="reader-font-option" data-font="baroque"
+                                aria-label="Barock (Baskerville)" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-baroque" aria-hidden="true">apfoe</span>
                             </button>
-                            <button type="button" class="reader-font-option" data-font="constantia"
-                                aria-label="Constantia" aria-pressed="false">
-                                <span class="reader-font-sample reader-font-sample-constantia"
-                                    aria-hidden="true">AaBbCc</span>
+                            <button type="button" class="reader-font-option" data-font="neoclassical"
+                                aria-label="Neoklassisch (Bodoni)" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-neoclassical"
+                                    aria-hidden="true">apfoe</span>
                             </button>
                         </div>
                     </div>
@@ -401,12 +401,12 @@
                 const READER_FONT_SIZE_MIN = 14;
                 const READER_FONT_SIZE_MAX = 30;
                 const READER_FONT_SIZE_DEFAULT = 18;
-                const READER_FONT_FAMILY_DEFAULT = 'segoe';
+                const READER_FONT_FAMILY_DEFAULT = 'grotesk';
                 const READER_FONT_FAMILIES = Object.freeze({
-                    segoe: '"Segoe UI", "Trebuchet MS", system-ui, sans-serif',
-                    times: '"Times New Roman", Times, serif',
-                    arial: '"Arial", "Helvetica Neue", Helvetica, sans-serif',
-                    constantia: '"Constantia", "Palatino Linotype", "Book Antiqua", Palatino, serif'
+                    grotesk: '"Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif',
+                    renaissance: '"Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif',
+                    baroque: '"Baskerville Old Face", Baskerville, "Times New Roman", Times, serif',
+                    neoclassical: '"Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif'
                 });
                 const READER_VOLUME_DEFAULT = 1;
                 let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
@@ -423,7 +423,7 @@
                 const readerColorWheelSync = { bg: null, text: null };
                 const readerColorPopoverState = { activeKey: null };
                 let manualBackgroundDimLevel = 0;
-                const BLAETTERN_CONTROLS_HIDE_DELAY_MS = 5000;
+                const BLAETTERN_CONTROLS_HIDE_DELAY_MS = 10000;
                 const BLAETTERN_LONG_PRESS_DELAY_MS = 600;
                 const BLAETTERN_SWIPE_TURN_RATIO = 0.18;
                 const BLAETTERN_SWIPE_VELOCITY_THRESHOLD = 0.45;
@@ -450,6 +450,14 @@
 
                 function isBlaetternLayoutActive() {
                     return !!(isReadingMode && isBlaetternLayoutSelected());
+                }
+
+                function isDesktopPointerLayout() {
+                    return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+                }
+
+                function isEffectiveMobileLayout() {
+                    return window.matchMedia('(max-width: 768px)').matches && !isDesktopPointerLayout();
                 }
 
                 function clearBlaetternPaginationRetryTimer() {
@@ -1410,7 +1418,9 @@
                 function normalizeReaderFontFamilyKey(value) {
                     if (typeof value !== 'string') return READER_FONT_FAMILY_DEFAULT;
                     const cleaned = value.trim().toLowerCase();
-                    if (cleaned === 'georgia') return 'times';
+                    if (cleaned === 'segoe' || cleaned === 'arial') return 'grotesk';
+                    if (cleaned === 'georgia' || cleaned === 'times') return 'baroque';
+                    if (cleaned === 'constantia') return 'renaissance';
                     return Object.prototype.hasOwnProperty.call(READER_FONT_FAMILIES, cleaned)
                         ? cleaned
                         : READER_FONT_FAMILY_DEFAULT;
@@ -3417,7 +3427,7 @@
 
                 function updateRecenterButtonVisibility() {
                     if (!subtitleRecenterBtn) return;
-                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    const isMobileLayout = isEffectiveMobileLayout();
                     syncRecenterButtonMount(isMobileLayout);
                     const show = isReadingMode && subtitleFollowLocked;
                     if (!show) {
@@ -3441,10 +3451,10 @@
                     updateRecenterButtonVisibility();
                 }
 
-                function syncRecenterButtonMount(isMobileLayout = window.matchMedia('(max-width: 768px)').matches) {
+                function syncRecenterButtonMount(isMobileLayout = isEffectiveMobileLayout()) {
                     if (!subtitleRecenterBtn) return;
 
-                    if (isBlaetternLayoutActive()) {
+                    if (!isMobileLayout || isBlaetternLayoutActive()) {
                         if (subtitleRecenterBtn.parentElement !== document.body) {
                             document.body.appendChild(subtitleRecenterBtn);
                         }
@@ -3452,32 +3462,16 @@
                         return;
                     }
 
-                    if (isMobileLayout) {
-                        if (subtitleRecenterBtn.parentElement !== document.body) {
-                            // Mobile keeps viewport-fixed placement.
-                            document.body.appendChild(subtitleRecenterBtn);
-                        }
-                        subtitleRecenterBtn.style.position = 'fixed';
-                        return;
+                    if (subtitleRecenterBtn.parentElement !== document.body) {
+                        // Mobile keeps viewport-fixed placement.
+                        document.body.appendChild(subtitleRecenterBtn);
                     }
-
-                    const desktopHost = document.getElementById('audioControls');
-                    if (desktopHost) {
-                        if (subtitleRecenterBtn.parentElement !== desktopHost) {
-                            // Desktop: reuse the same flex flow as the existing control icons.
-                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
-                        } else if (desktopHost.firstElementChild !== subtitleRecenterBtn) {
-                            desktopHost.insertBefore(subtitleRecenterBtn, desktopHost.firstChild);
-                        }
-                    }
-                    subtitleRecenterBtn.style.position = 'static';
-                    subtitleRecenterBtn.style.left = '';
-                    subtitleRecenterBtn.style.top = '';
+                    subtitleRecenterBtn.style.position = 'fixed';
                 }
 
                 function isMobileRecenterZoneActive() {
                     if (!subtitleRecenterBtn) return false;
-                    if (!window.matchMedia('(max-width: 768px)').matches) return false;
+                    if (!isEffectiveMobileLayout()) return false;
                     const btnStyle = window.getComputedStyle(subtitleRecenterBtn);
                     return btnStyle.display !== 'none' && isReadingMode && subtitleFollowLocked;
                 }
@@ -3507,13 +3501,14 @@
                 function positionRecenterButton() {
                     if (!subtitleRecenterBtn || subtitleRecenterBtn.style.display === 'none') return;
 
-                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    const isMobileLayout = isEffectiveMobileLayout();
                     syncRecenterButtonMount(isMobileLayout);
                     const isBlaetternLayout = isBlaetternLayoutActive();
+                    const isDesktopLayout = !isMobileLayout;
                     const btnRect = subtitleRecenterBtn.getBoundingClientRect();
                     const gap = 10;
 
-                    if (isBlaetternLayout) {
+                    if (isBlaetternLayout || isDesktopLayout) {
                         const subtitleRect = subtitleContainer.getBoundingClientRect();
                         const controlsRect = audioControlsEl ? audioControlsEl.getBoundingClientRect() : null;
                         let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
@@ -3600,7 +3595,7 @@
                     if (now - lastRecenterActivationAt < 260) return;
                     lastRecenterActivationAt = now;
                     // Avoid delayed mobile ghost clicks hitting subtitle lines after recenter tap.
-                    const isMobileLayout = window.matchMedia('(max-width: 768px)').matches;
+                    const isMobileLayout = isEffectiveMobileLayout();
                     suppressSubtitleClickUntil = isMobileLayout ? now + 600 : now;
                     recenterToCurrentTimestamp();
                 }
@@ -3803,6 +3798,29 @@
                         if (isBlaetternLayoutActive()) bumpBlaetternControlsAutoHide('controls-click');
                     });
                 }
+                let lastDesktopBlaetternMousemoveAt = 0;
+                let lastDesktopBlaetternMouseX = NaN;
+                let lastDesktopBlaetternMouseY = NaN;
+                document.addEventListener('mousemove', (event) => {
+                    if (!isBlaetternLayoutActive()) return;
+                    if (!isDesktopPointerLayout()) return;
+                    const x = Number(event.clientX);
+                    const y = Number(event.clientY);
+                    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+
+                    const movedEnough =
+                        !Number.isFinite(lastDesktopBlaetternMouseX) ||
+                        !Number.isFinite(lastDesktopBlaetternMouseY) ||
+                        Math.hypot(x - lastDesktopBlaetternMouseX, y - lastDesktopBlaetternMouseY) >= 2;
+                    if (!movedEnough) return;
+
+                    const now = Date.now();
+                    if (now - lastDesktopBlaetternMousemoveAt < 120) return;
+                    lastDesktopBlaetternMousemoveAt = now;
+                    lastDesktopBlaetternMouseX = x;
+                    lastDesktopBlaetternMouseY = y;
+                    bumpBlaetternControlsAutoHide('desktop-mousemove');
+                });
 
                 // Auto-Resume when Lore ends or Transition
                 // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
