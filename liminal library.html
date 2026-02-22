@@ -5048,11 +5048,12 @@
                 const segments = [];
                 // const segmentPool = []; // REMOVED: Proper recycling uses the active list directly
                 const segmentLength = config.segmentLength;
+                const MIN_ACTIVE_SEGMENTS = 5;
 
                 function updateSegments(playerZ) {
-                    // Ensure we have 4 segments initially (handled by preload) but check just in case
-                    if (segments.length < 4) {
-                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 10;
+                    // Keep one additional front segment loaded for smoother forward visibility.
+                    if (segments.length < MIN_ACTIVE_SEGMENTS) {
+                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 20;
                         addSegment(lastZ - segmentLength);
                         return;
                     }
@@ -5595,8 +5596,8 @@
 
                 // 1. Initial Segments Preload
                 let loadedSegments = 0;
-                // User Request: Start at Meter 3.00 -> Need segment at +10 to cover start (Range 0 to 10)
-                const initialZ = [10, 0, -10, -20];
+                // Preload one extra segment in front to avoid visible pop-in at start.
+                const initialZ = [20, 10, 0, -10, -20];
                 const totalToLoad = initialZ.length;
 
                 function checkPreloadComplete() {
