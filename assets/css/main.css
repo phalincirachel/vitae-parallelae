@@ -578,6 +578,33 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
         0 0 8px rgba(255, 255, 255, 0.66);
 }
 
+/* Adaptive readability cloud (JS-controlled; only enabled in bright scene mode). */
+#audioPlayerUI.reading-mode .subtitle-line.adaptive-readability-cloud {
+    position: relative;
+    isolation: isolate;
+}
+
+#audioPlayerUI.reading-mode .subtitle-line.adaptive-readability-cloud::before {
+    content: '';
+    position: absolute;
+    inset: -0.18em -0.42em;
+    border-radius: 999px;
+    pointer-events: none;
+    z-index: -1;
+    transform-origin: 50% 58%;
+    transform: scale(var(--adaptive-cloud-scale, 1));
+    filter: blur(var(--adaptive-cloud-blur, 0px));
+    background:
+        radial-gradient(120% 130% at 50% 58%,
+            rgba(18, 21, 26, calc(var(--adaptive-cloud-alpha, 0) * 0.96)) 0%,
+            rgba(18, 21, 26, calc(var(--adaptive-cloud-alpha, 0) * 0.62)) 56%,
+            rgba(18, 21, 26, 0) 100%);
+}
+
+body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line.adaptive-readability-cloud::before {
+    content: none;
+}
+
 /* Soft Edges Mask for Reading Mode Container */
 #audioPlayerUI.reading-mode #subtitleContainer {
     justify-content: flex-start;
