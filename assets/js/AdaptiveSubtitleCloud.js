@@ -1,6 +1,11 @@
 /**
  * Adaptive subtitle readability cloud.
- * Adds a soft, dark "cloud" behind bright-background subtitle lines in reading mode.
+ * Adds a soft, dark cloud behind bright-background subtitle lines in reading mode.
+ *
+ * Strategy:
+ * - Sample background brightness from the scene canvas.
+ * - Compute cloud intensity per horizontal band (not per word/letter).
+ * - Apply temporal smoothing and hysteresis to avoid flicker.
  */
 (function initAdaptiveSubtitleCloud() {
     const CLOUD_CLASS = 'adaptive-readability-cloud';
@@ -26,10 +31,12 @@
         if (!colorText || typeof colorText !== 'string') return fallback;
         const match = colorText.match(/rgba?\(([^)]+)\)/i);
         if (!match) return fallback;
+
         const parts = match[1].split(',').map((p) => parseFloat(p.trim()));
         if (!Number.isFinite(parts[0]) || !Number.isFinite(parts[1]) || !Number.isFinite(parts[2])) {
             return fallback;
         }
+
         const alpha = Number.isFinite(parts[3]) ? clamp(parts[3], 0, 1) : 1;
         return {
             luma: lumaFromRgb(parts[0], parts[1], parts[2]),
@@ -54,6 +61,17 @@
         return el.getClientRects().length > 0;
     }
 
+    function createRect(left, top, right, bottom) {
+        return {
+            left,
+            top,
+            right,
+            bottom,
+            width: Math.max(0, right - left),
+            height: Math.max(0, bottom - top)
+        };
+    }
+
     function createController(options = {}) {
         const subtitleContainer = options.subtitleContainer || document.getElementById('subtitleContainer');
         if (!subtitleContainer) return null;
@@ -63,26 +81,46 @@
         const sceneOverlay = options.sceneOverlay || document.getElementById('sceneDimmerOverlay');
 
         const config = {
-            activeIntervalMs: Math.max(80, Number(options.activeIntervalMs) || 140),
-            inactiveIntervalMs: Math.max(300, Number(options.inactiveIntervalMs) || 900),
-            maxVisibleLines: Math.max(8, Number(options.maxVisibleLines) || 42),
+            activeIntervalMs: Math.max(110, Number(options.activeIntervalMs) || 170),
+            inactiveIntervalMs: Math.max(320, Number(options.inactiveIntervalMs) || 1000),
+            maxVisibleLines: Math.max(10, Number(options.maxVisibleLines) || 48),
+
             sampleScale: clamp(Number(options.sampleScale) || 0.34, 0.16, 1),
             thresholdLuma: clamp(Number(options.thresholdLuma) || 0.72, 0.5, 0.95),
             fullLuma: clamp(Number(options.fullLuma) || 0.94, 0.6, 1),
-            minAlpha: clamp(Number(options.minAlpha) || 0.05, 0, 1),
-            maxAlpha: clamp(Number(options.maxAlpha) || 0.72, 0, 1)
+            minAlpha: clamp(Number(options.minAlpha) || 0.04, 0, 1),
+            maxAlpha: clamp(Number(options.maxAlpha) || 0.72, 0, 1),
+
+            minBands: Math.max(3, Number(options.minBands) || 4),
+            maxBands: Math.max(4, Number(options.maxBands) || 7),
+            bandVerticalPaddingPx: Math.max(0, Number(options.bandVerticalPaddingPx) || 22),
+            bandHorizontalInsetPx: Math.max(0, Number(options.bandHorizontalInsetPx) || 32),
+
+            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.34, 0.05, 1),
+            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.16, 0.05, 1),
+            activationAlpha: clamp(Number(options.activationAlpha) || 0.08, 0, 1),
+            deactivationAlpha: clamp(Number(options.deactivationAlpha) || 0.05, 0, 1),
+            alphaQuantStep: clamp(Number(options.alphaQuantStep) || 0.015, 0.001, 0.25)
         };
+
+        if (config.deactivationAlpha > config.activationAlpha) {
+            config.deactivationAlpha = Math.max(0, config.activationAlpha * 0.7);
+        }
 
         const state = {
             running: false,
             rafId: 0,
             lastUpdateTs: 0,
             activeLines: new Set(),
+            bandAlphaMap: new Map(),
+
             sampleCanvas: null,
             sampleCtx: null,
+
             mutationObserver: null,
             modeObserver: null,
             dimmerUnsubscribe: null,
+
             onScroll: null,
             onResize: null,
             onVisibility: null,
@@ -138,6 +176,7 @@
 
         function captureSceneFrame(sceneCanvas, sceneRect) {
             if (!sceneCanvas || !sceneRect || !sceneRect.width || !sceneRect.height) return null;
+
             const sampleWidth = Math.max(16, Math.round(sceneRect.width * config.sampleScale));
             const sampleHeight = Math.max(16, Math.round(sceneRect.height * config.sampleScale));
             if (!ensureSampleCanvas(sampleWidth, sampleHeight)) return null;
@@ -168,6 +207,7 @@
 
         function sampleLuma(frame, sceneRect, viewportX, viewportY) {
             if (!frame || !sceneRect) return 0;
+
             const relX = (viewportX - sceneRect.left) / sceneRect.width;
             const relY = (viewportY - sceneRect.top) / sceneRect.height;
             if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return 0;
@@ -178,70 +218,29 @@
             return lumaFromRgb(frame.data[idx], frame.data[idx + 1], frame.data[idx + 2]);
         }
 
-        function getLineTextRects(lineEl, containerRect) {
-            const rects = [];
-            if (!lineEl) return rects;
+        function sampleAreaLuma(frame, sceneRect, areaRect) {
+            if (!frame || !sceneRect || !areaRect || areaRect.width <= 0 || areaRect.height <= 0) return 0;
 
-            const walker = document.createTreeWalker(
-                lineEl,
-                NodeFilter.SHOW_TEXT,
-                {
-                    acceptNode(node) {
-                        if (!(node.nodeValue || '').trim()) return NodeFilter.FILTER_REJECT;
-                        const parent = node.parentElement;
-                        if (!parent) return NodeFilter.FILTER_REJECT;
-                        if (parent.closest && parent.closest('.bookmark-btn')) return NodeFilter.FILTER_REJECT;
-                        return NodeFilter.FILTER_ACCEPT;
-                    }
-                }
-            );
-
-            while (walker.nextNode()) {
-                const textNode = walker.currentNode;
-                const range = document.createRange();
-                range.selectNodeContents(textNode);
-                const nodeRects = range.getClientRects();
-                for (let i = 0; i < nodeRects.length; i++) {
-                    const rect = nodeRects[i];
-                    if (rect.width <= 0 || rect.height <= 0) continue;
-                    if (!intersects(rect, containerRect, 18)) continue;
-                    rects.push(rect);
-                }
-            }
-
-            if (!rects.length) {
-                const fallback = lineEl.getBoundingClientRect();
-                if (fallback.width > 0 && fallback.height > 0 && intersects(fallback, containerRect, 18)) {
-                    rects.push(fallback);
-                }
-            }
-            return rects;
-        }
-
-        function sampleRectMaxLuma(frame, sceneRect, rects) {
+            const cols = 6;
+            const rows = 4;
+            let sum = 0;
             let maxLuma = 0;
-            const points = [
-                [0.5, 0.5],
-                [0.2, 0.5],
-                [0.8, 0.5],
-                [0.5, 0.2],
-                [0.5, 0.8]
-            ];
+            let count = 0;
 
-            for (let i = 0; i < rects.length; i++) {
-                const rect = rects[i];
-                const width = Math.max(1, rect.width);
-                const height = Math.max(1, rect.height);
-                for (let p = 0; p < points.length; p++) {
-                    const fx = points[p][0];
-                    const fy = points[p][1];
-                    const x = rect.left + (width * fx);
-                    const y = rect.top + (height * fy);
+            for (let yi = 0; yi < rows; yi++) {
+                const y = areaRect.top + (((yi + 0.5) / rows) * areaRect.height);
+                for (let xi = 0; xi < cols; xi++) {
+                    const x = areaRect.left + (((xi + 0.5) / cols) * areaRect.width);
                     const luma = sampleLuma(frame, sceneRect, x, y);
+                    sum += luma;
                     if (luma > maxLuma) maxLuma = luma;
+                    count += 1;
                 }
             }
-            return maxLuma;
+
+            if (!count) return 0;
+            const avg = sum / count;
+            return (avg * 0.72) + (maxLuma * 0.28);
         }
 
         function computeCloudAlpha(sceneLuma, textLuma, textAlpha) {
@@ -251,10 +250,49 @@
             return clamp(sceneFactor * lightTextFactor * config.maxAlpha, 0, config.maxAlpha);
         }
 
+        function quantizeAlpha(alpha) {
+            const clamped = clamp(alpha, 0, config.maxAlpha);
+            return Math.round(clamped / config.alphaQuantStep) * config.alphaQuantStep;
+        }
+
+        function smoothBandAlpha(bandKey, targetAlpha) {
+            const prev = state.bandAlphaMap.get(bandKey) || 0;
+            const rise = targetAlpha > prev;
+            const rate = rise ? config.alphaRiseSmoothing : config.alphaFallSmoothing;
+            let next = prev + ((targetAlpha - prev) * rate);
+
+            const wasActive = prev >= config.activationAlpha;
+            if (wasActive) {
+                if (next < config.deactivationAlpha && targetAlpha < config.deactivationAlpha) {
+                    next = 0;
+                }
+            } else if (next < config.activationAlpha && targetAlpha < config.activationAlpha) {
+                next = 0;
+            }
+
+            next = quantizeAlpha(next);
+            state.bandAlphaMap.set(bandKey, next);
+            return next;
+        }
+
+        function decayStaleBandAlphas(activeBandKeys) {
+            for (const [bandKey, value] of state.bandAlphaMap.entries()) {
+                if (activeBandKeys.has(bandKey)) continue;
+                const decayed = quantizeAlpha(value * (1 - config.alphaFallSmoothing));
+                if (decayed < config.deactivationAlpha) {
+                    state.bandAlphaMap.delete(bandKey);
+                } else {
+                    state.bandAlphaMap.set(bandKey, decayed);
+                }
+            }
+        }
+
         function clearCloud(lineEl) {
             if (!lineEl) return;
             lineEl.classList.remove(CLOUD_CLASS);
-            STYLE_KEYS.forEach((key) => lineEl.style.removeProperty(key));
+            for (let i = 0; i < STYLE_KEYS.length; i++) {
+                lineEl.style.removeProperty(STYLE_KEYS[i]);
+            }
         }
 
         function applyCloud(lineEl, alpha) {
@@ -265,8 +303,8 @@
             }
 
             const t = clamp(a / Math.max(0.001, config.maxAlpha), 0, 1);
-            const blur = 7 + (14 * t);
-            const scale = 1 + (0.18 * t);
+            const blur = 7 + (13 * t);
+            const scale = 1 + (0.16 * t);
 
             lineEl.classList.add(CLOUD_CLASS);
             lineEl.style.setProperty('--adaptive-cloud-alpha', a.toFixed(3));
@@ -280,73 +318,159 @@
                 if (lineEl && lineEl.isConnected) clearCloud(lineEl);
             });
             state.activeLines.clear();
-            subtitleContainer.querySelectorAll(`.subtitle-line.${CLOUD_CLASS}`).forEach((lineEl) => clearCloud(lineEl));
+
+            subtitleContainer.querySelectorAll(`.subtitle-line.${CLOUD_CLASS}`).forEach((lineEl) => {
+                clearCloud(lineEl);
+            });
         }
 
         function collectVisibleLines(sceneRect) {
             const lines = subtitleContainer.querySelectorAll('.subtitle-line');
-            if (!lines.length) return [];
+            if (!lines.length) {
+                return { visibleLines: [], containerRect: subtitleContainer.getBoundingClientRect(), bandCount: 0, bandHeight: 0 };
+            }
 
             const containerRect = subtitleContainer.getBoundingClientRect();
-            const visible = [];
+            const dynamicBandCount = clamp(
+                Math.round((containerRect.height || 1) / 145),
+                config.minBands,
+                config.maxBands
+            );
+            const bandHeight = Math.max(1, (containerRect.height || 1) / dynamicBandCount);
+            const visibleLines = [];
 
             for (let i = 0; i < lines.length; i++) {
-                if (visible.length >= config.maxVisibleLines) break;
+                if (visibleLines.length >= config.maxVisibleLines) break;
+
                 const lineEl = lines[i];
                 if (!lineEl || !lineEl.isConnected) continue;
+
                 const lineRect = lineEl.getBoundingClientRect();
                 if (lineRect.width <= 0 || lineRect.height <= 0) continue;
                 if (!intersects(lineRect, containerRect, 18)) continue;
-                if (!intersects(lineRect, sceneRect, 18)) continue;
+                if (!intersects(lineRect, sceneRect, 16)) continue;
 
-                const rects = getLineTextRects(lineEl, containerRect).filter((rect) => intersects(rect, sceneRect, 10));
-                if (!rects.length) continue;
-                visible.push({ lineEl, rects });
+                const centerY = lineRect.top + (lineRect.height * 0.5);
+                const bandIndex = clamp(
+                    Math.floor((centerY - containerRect.top) / bandHeight),
+                    0,
+                    dynamicBandCount - 1
+                );
+
+                visibleLines.push({
+                    lineEl,
+                    lineRect,
+                    bandIndex
+                });
             }
 
-            return visible;
+            return {
+                visibleLines,
+                containerRect,
+                bandCount: dynamicBandCount,
+                bandHeight
+            };
+        }
+
+        function buildBandSampleRect(containerRect, sceneRect, bandIndex, bandHeight) {
+            if (!containerRect || !sceneRect || !(bandHeight > 0)) return null;
+
+            let left = containerRect.left + config.bandHorizontalInsetPx;
+            let right = containerRect.right - config.bandHorizontalInsetPx;
+            if ((right - left) < 80) {
+                left = containerRect.left + 8;
+                right = containerRect.right - 8;
+            }
+
+            const top = (containerRect.top + (bandIndex * bandHeight)) - config.bandVerticalPaddingPx;
+            const bottom = (containerRect.top + ((bandIndex + 1) * bandHeight)) + config.bandVerticalPaddingPx;
+
+            const clipLeft = Math.max(left, sceneRect.left);
+            const clipRight = Math.min(right, sceneRect.right);
+            const clipTop = Math.max(top, sceneRect.top);
+            const clipBottom = Math.min(bottom, sceneRect.bottom);
+
+            const rect = createRect(clipLeft, clipTop, clipRight, clipBottom);
+            if (rect.width <= 1 || rect.height <= 1) return null;
+            return rect;
         }
 
         function renderClouds() {
             if (!isActiveMode()) {
                 clearAllClouds();
+                state.bandAlphaMap.clear();
                 return;
             }
 
             const sceneCanvas = resolveSceneCanvas();
             if (!(sceneCanvas instanceof HTMLCanvasElement)) {
                 clearAllClouds();
+                state.bandAlphaMap.clear();
                 return;
             }
 
             const sceneRect = sceneCanvas.getBoundingClientRect();
             if (!sceneRect.width || !sceneRect.height) {
                 clearAllClouds();
+                state.bandAlphaMap.clear();
                 return;
             }
 
             const frame = captureSceneFrame(sceneCanvas, sceneRect);
             if (!frame) {
                 clearAllClouds();
+                state.bandAlphaMap.clear();
                 return;
             }
 
-            const nextActive = new Set();
-            const visibleLines = collectVisibleLines(sceneRect);
-
-            for (let i = 0; i < visibleLines.length; i++) {
-                const { lineEl, rects } = visibleLines[i];
-                const colorInfo = parseCssColorLuma(window.getComputedStyle(lineEl).color);
-                const sceneLuma = sampleRectMaxLuma(frame, sceneRect, rects);
-                const alpha = computeCloudAlpha(sceneLuma, colorInfo.luma, colorInfo.alpha);
-                const isActive = applyCloud(lineEl, alpha);
-                if (isActive) nextActive.add(lineEl);
+            const { visibleLines, containerRect, bandCount, bandHeight } = collectVisibleLines(sceneRect);
+            if (!visibleLines.length) {
+                clearAllClouds();
+                decayStaleBandAlphas(new Set());
+                return;
             }
 
+            const baseTextColor = parseCssColorLuma(window.getComputedStyle(visibleLines[0].lineEl).color);
+
+            const linesByBand = new Map();
+            for (let i = 0; i < visibleLines.length; i++) {
+                const item = visibleLines[i];
+                const key = `${item.bandIndex}/${bandCount}`;
+                if (!linesByBand.has(key)) {
+                    linesByBand.set(key, {
+                        bandIndex: item.bandIndex,
+                        lines: []
+                    });
+                }
+                linesByBand.get(key).lines.push(item);
+            }
+
+            const activeBandKeys = new Set();
+            const nextActiveLines = new Set();
+
+            for (const [bandKey, band] of linesByBand.entries()) {
+                const bandRect = buildBandSampleRect(containerRect, sceneRect, band.bandIndex, bandHeight);
+                if (!bandRect) continue;
+
+                const sceneLuma = sampleAreaLuma(frame, sceneRect, bandRect);
+                const targetAlpha = computeCloudAlpha(sceneLuma, baseTextColor.luma, baseTextColor.alpha);
+                const smoothAlpha = smoothBandAlpha(bandKey, targetAlpha);
+
+                activeBandKeys.add(bandKey);
+
+                for (let i = 0; i < band.lines.length; i++) {
+                    const lineEl = band.lines[i].lineEl;
+                    const isActive = applyCloud(lineEl, smoothAlpha);
+                    if (isActive) nextActiveLines.add(lineEl);
+                }
+            }
+
+            decayStaleBandAlphas(activeBandKeys);
+
             state.activeLines.forEach((lineEl) => {
-                if (!nextActive.has(lineEl)) clearCloud(lineEl);
+                if (!nextActiveLines.has(lineEl)) clearCloud(lineEl);
             });
-            state.activeLines = nextActive;
+            state.activeLines = nextActiveLines;
         }
 
         function schedule() {
@@ -359,11 +483,13 @@
 
         function tick(ts) {
             if (!state.running) return;
+
             const interval = desiredIntervalMs();
             if (!state.lastUpdateTs || (ts - state.lastUpdateTs) >= interval) {
                 state.lastUpdateTs = ts;
                 renderClouds();
             }
+
             state.rafId = window.requestAnimationFrame(tick);
         }
 
@@ -430,6 +556,7 @@
                 state.rafId = 0;
             }
             clearAllClouds();
+            state.bandAlphaMap.clear();
         }
 
         function destroy() {
@@ -454,6 +581,7 @@
         if (defaultController) return;
         const subtitleContainer = document.getElementById('subtitleContainer');
         if (!subtitleContainer) return;
+
         defaultController = createController({ subtitleContainer });
         if (defaultController) defaultController.start();
     }

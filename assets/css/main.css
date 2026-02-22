@@ -594,10 +594,13 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     transform-origin: 50% 58%;
     transform: scale(var(--adaptive-cloud-scale, 1));
     filter: blur(var(--adaptive-cloud-blur, 0px));
+    opacity: var(--adaptive-cloud-alpha, 0);
+    transition: opacity 300ms ease, filter 320ms ease, transform 320ms ease;
+    will-change: opacity, filter, transform;
     background:
         radial-gradient(120% 130% at 50% 58%,
-            rgba(18, 21, 26, calc(var(--adaptive-cloud-alpha, 0) * 0.96)) 0%,
-            rgba(18, 21, 26, calc(var(--adaptive-cloud-alpha, 0) * 0.62)) 56%,
+            rgba(18, 21, 26, 0.92) 0%,
+            rgba(18, 21, 26, 0.62) 56%,
             rgba(18, 21, 26, 0) 100%);
 }
 
