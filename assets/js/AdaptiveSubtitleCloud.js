@@ -394,8 +394,8 @@
             }
 
             const t = clamp(a / Math.max(0.001, config.maxAlpha), 0, 1);
-            const blur = 7 + (13 * t);
-            const scale = 1 + (0.16 * t);
+            const blur = 11 + (18 * t);
+            const scale = 1.14 + (0.28 * t);
 
             lineEl.classList.add(CLOUD_CLASS);
             lineEl.style.setProperty('--adaptive-cloud-alpha', a.toFixed(3));

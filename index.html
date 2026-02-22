@@ -1921,7 +1921,12 @@
             const targetY = worldY - spriteH / 2;
 
             clickWalkPath = findPathAStar(player.x, player.y, targetX, targetY);
-            moveTarget = null; // deactivate legacy mode
+            if (clickWalkPath.length === 0) {
+                // Return to legacy point-to-point if unreachable
+                moveTarget = { x: targetX, y: targetY };
+            } else {
+                moveTarget = null;
+            }
         }
 
         canvas.addEventListener('click', e => {
@@ -2571,8 +2576,8 @@
                 const tdy = target.y - player.y;
                 const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
 
-                // Ziel erreicht? (Großzügigerer Radius für Wegpunkte, kleiner für letztes Element)
-                const reachRadius = clickWalkPath.length === 1 ? 3 : 8;
+                // Ziel erreicht? (Sehr genau: Radius 2, um Eckenkollision zu vermeiden)
+                const reachRadius = clickWalkPath.length === 1 ? 2 : 2;
 
                 if (tdist < reachRadius) {
                     clickWalkPath.shift(); // remove reached point
@@ -2818,6 +2823,34 @@
             } else {
                 screenShake = 0;
             }
+
+            // --- STUCK DETECTION FOR AUTO-MOVEMENT ---
+            if (player.isMoving && (clickWalkPath.length > 0 || moveTarget) && !isReadingMode) {
+                if (typeof player.lastX === 'number') {
+                    const actualDist = Math.hypot(player.x - player.lastX, player.y - player.lastY);
+                    const intendedDist = player.speed * dt;
+                    if (actualDist < intendedDist * 0.1) {
+                        player.stuckTime = (player.stuckTime || 0) + dt;
+                        if (player.stuckTime > 0.15) { // 150ms stuck
+                            if (clickWalkPath.length > 0) {
+                                clickWalkPath.shift();
+                                console.log("Pathfinding: Stuck at corner, skipping waypoint.");
+                            } else if (moveTarget) {
+                                moveTarget = null;
+                                console.log("Pathfinding: Reached impossible wall, stopping.");
+                            }
+                            player.stuckTime = 0;
+                        }
+                    } else {
+                        player.stuckTime = 0;
+                    }
+                }
+            } else {
+                player.stuckTime = 0;
+            }
+            player.lastX = player.x;
+            player.lastY = player.y;
+
         }
 
         // ============================================
