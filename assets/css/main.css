@@ -615,7 +615,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     line-height: inherit;
     padding-left: 0;
     padding-right: 0;
-    margin-right: var(--flat-timestamp-gap);
+    margin-right: var(--timestamp-gap, var(--flat-timestamp-gap));
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
@@ -698,7 +698,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line {
     display: inline;
     line-height: inherit;
-    margin-right: 0.22em;
+    margin-right: var(--timestamp-gap, 0.22em);
     padding: 0;
     text-align: justify;
 }

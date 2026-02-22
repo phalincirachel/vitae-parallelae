@@ -248,6 +248,55 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         lineEl.style.setProperty('--flat-leading-comp', `${compensationPx}px`);
     }
 
+    _getTimestampBoundaryGapEm(currentText, nextText, options = {}) {
+        if (!nextText) return 0;
+        const baseEm = Number(options.baseEm) || 0.12;
+        const minorEm = Number(options.minorEm) || baseEm;
+        const sentenceEm = Number(options.sentenceEm) || Math.max(minorEm, baseEm);
+        const text = (currentText || '').trim();
+        if (!text) return baseEm;
+
+        const closingTrail = String.raw`(?:["'»“”‘’)\]])*`;
+        const sentencePattern = new RegExp(`[.!?…]${closingTrail}$`);
+        const weakSentencePattern = new RegExp(`[:;]${closingTrail}$`);
+        const pausePattern = new RegExp(`[,]${closingTrail}$`);
+
+        if (sentencePattern.test(text)) {
+            const nextTrimmed = (nextText || '').trim();
+            if (/^[\"'»“”‘’(\[]*[a-zäöüß]/.test(nextTrimmed)) {
+                return Math.max(minorEm, baseEm + 0.02);
+            }
+            return sentenceEm;
+        }
+        if (weakSentencePattern.test(text)) return Math.max(minorEm, baseEm + 0.03);
+        if (pausePattern.test(text)) return minorEm;
+        return baseEm;
+    }
+
+    _applyFlatTimestampBoundaryGap(lineEl, index) {
+        if (!lineEl) return;
+        if (!this.container || !this.container.classList.contains('reader-layout-flat')) {
+            lineEl.style.removeProperty('--timestamp-gap');
+            return;
+        }
+        if (!Array.isArray(this.subtitleTracks) || index < 0 || index >= this.subtitleTracks.length) {
+            lineEl.style.removeProperty('--timestamp-gap');
+            return;
+        }
+        const currentText = this.subtitleTracks[index] && typeof this.subtitleTracks[index].text === 'string'
+            ? this.subtitleTracks[index].text
+            : '';
+        const nextText = this.subtitleTracks[index + 1] && typeof this.subtitleTracks[index + 1].text === 'string'
+            ? this.subtitleTracks[index + 1].text
+            : '';
+        const gapEm = this._getTimestampBoundaryGapEm(currentText, nextText, {
+            baseEm: 0.12,
+            minorEm: 0.16,
+            sentenceEm: 0.24
+        });
+        lineEl.style.setProperty('--timestamp-gap', `${gapEm.toFixed(3)}em`);
+    }
+
     renderLines(centerIndex) {
         if (!this.container) return;
 
@@ -269,6 +318,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                     div.className = 'subtitle-line';
                     div.innerText = this.subtitleTracks[i].text;
                     div.dataset.index = String(i);
+                    this._applyFlatTimestampBoundaryGap(div, i);
 
                     div.style.cursor = 'pointer';
                     div.title = 'Springe zu dieser Stelle';

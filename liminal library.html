@@ -430,6 +430,9 @@
                 const BLAETTERN_SWIPE_SETTLE_MS = 220;
                 const BLAETTERN_BOOKMARK_LABEL = 'Lesezeichen';
                 const BLAETTERN_BOOKMARK_SAVED_LABEL = 'Gespeichert';
+                const BLAETTERN_TIMESTAMP_GAP_BASE_EM = 0.22;
+                const BLAETTERN_TIMESTAMP_GAP_MINOR_EM = 0.28;
+                const BLAETTERN_TIMESTAMP_GAP_SENTENCE_EM = 0.34;
                 let blaetternPages = [];
                 let blaetternPageIndex = 0;
                 let blaetternPaginationDirty = true;
@@ -1919,12 +1922,69 @@
                     return clamped;
                 }
 
+                function getTimestampBoundaryGapEm(currentText, nextText, options = {}) {
+                    if (!nextText) return 0;
+                    const baseEm = Number(options.baseEm) || 0.12;
+                    const minorEm = Number(options.minorEm) || baseEm;
+                    const sentenceEm = Number(options.sentenceEm) || Math.max(minorEm, baseEm);
+                    const text = (currentText || '').trim();
+                    if (!text) return baseEm;
+
+                    const closingTrail = String.raw`(?:["'»“”‘’)\]])*`;
+                    const sentencePattern = new RegExp(`[.!?…]${closingTrail}$`);
+                    const weakSentencePattern = new RegExp(`[:;]${closingTrail}$`);
+                    const pausePattern = new RegExp(`[,]${closingTrail}$`);
+
+                    if (sentencePattern.test(text)) {
+                        const nextTrimmed = (nextText || '').trim();
+                        if (/^[\"'»“”‘’(\[]*[a-zäöüß]/.test(nextTrimmed)) {
+                            return Math.max(minorEm, baseEm + 0.02);
+                        }
+                        return sentenceEm;
+                    }
+                    if (weakSentencePattern.test(text)) return Math.max(minorEm, baseEm + 0.03);
+                    if (pausePattern.test(text)) return minorEm;
+                    return baseEm;
+                }
+
+                function applyBlaetternTimestampBoundaryGap(lineEl, index) {
+                    if (!lineEl) return;
+                    const tracks = getBlaetternTracks();
+                    if (!Array.isArray(tracks) || index < 0 || index >= tracks.length) {
+                        lineEl.style.removeProperty('--timestamp-gap');
+                        return;
+                    }
+                    const currentText = tracks[index] && typeof tracks[index].text === 'string'
+                        ? tracks[index].text
+                        : '';
+                    const nextText = tracks[index + 1] && typeof tracks[index + 1].text === 'string'
+                        ? tracks[index + 1].text
+                        : '';
+                    const gapEm = getTimestampBoundaryGapEm(currentText, nextText, {
+                        baseEm: BLAETTERN_TIMESTAMP_GAP_BASE_EM,
+                        minorEm: BLAETTERN_TIMESTAMP_GAP_MINOR_EM,
+                        sentenceEm: BLAETTERN_TIMESTAMP_GAP_SENTENCE_EM
+                    });
+                    lineEl.style.setProperty('--timestamp-gap', `${gapEm.toFixed(3)}em`);
+                }
+
+                function getBlaetternLineBoundaryGapPx(elements) {
+                    if (!Array.isArray(elements) || elements.length <= 1) return 0;
+                    let total = 0;
+                    for (let i = 0; i < elements.length - 1; i++) {
+                        const style = window.getComputedStyle(elements[i]);
+                        total += parseFloat(style.marginRight) || 0;
+                    }
+                    return total;
+                }
+
                 function createBlaetternLineElement(index, options = {}) {
                     const track = getBlaetternTracks()[index];
                     const span = document.createElement('span');
                     span.className = 'subtitle-line blaettern-line';
                     span.dataset.index = String(index);
                     span.innerText = track ? track.text : '';
+                    applyBlaetternTimestampBoundaryGap(span, index);
                     if (!options.forMeasure) {
                         span.title = 'Tippen zum Abspielen';
                         span.style.cursor = 'pointer';
@@ -1953,9 +2013,6 @@
                     const paddingRight = parseFloat(layerStyle.paddingRight) || 0;
                     const innerWidth = Math.max(1, layer.clientWidth - paddingLeft - paddingRight);
                     if (innerWidth <= 20) return;
-                    const sampleLine = lineElements[0];
-                    const sampleLineStyle = sampleLine ? window.getComputedStyle(sampleLine) : null;
-                    const timestampGapPx = sampleLineStyle ? (parseFloat(sampleLineStyle.marginRight) || 0) : 0;
 
                     const elementRectCount = new Map();
                     const linesByTop = new Map();
@@ -1995,7 +2052,8 @@
 
                         const lineWidth = Math.max(0, line.right - line.left);
                         const boundaryCount = Math.max(0, elements.length - 1);
-                        const lineVisualWidth = lineWidth + (boundaryCount * timestampGapPx);
+                        const boundaryGapPx = getBlaetternLineBoundaryGapPx(elements);
+                        const lineVisualWidth = lineWidth + boundaryGapPx;
                         const slack = innerWidth - lineVisualWidth;
                         if (slack < 4 || slack > (innerWidth * 0.24)) continue;
 
