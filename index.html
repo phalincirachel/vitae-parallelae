@@ -1332,8 +1332,14 @@
             frame: 0,         // 0-3 fÃ¼r Animation
             animTimer: 0,
             isMoving: false,
-            isBehindForeground: false
+            isBehindForeground: false,
+            stuckTime: 0,
+            repathCooldown: 0,
+            embedTime: 0,
+            lastFootX: NaN,
+            lastFootY: NaN
         };
+        const FOOT_OFFSET_Y = 15;
 
         const keys = {};
 
@@ -1711,6 +1717,7 @@
             // Tastendruck bricht Click-to-Move ab
             moveTarget = null;
             clickWalkPath = [];
+            clickWalkGoal = null;
         });
 
         window.addEventListener('keyup', e => {
@@ -1722,21 +1729,133 @@
         // PATHFINDING (A*)
         // ============================================
         let navGrid = [];
+        let navPenaltyGrid = [];
         const NAV_GRID_SIZE = 8;
+        const NAV_COLLISION_PADDING_X = 1;
+        const NAV_COLLISION_PADDING_Y = 1;
+        const NAV_MAX_GOAL_SEARCH_CELLS = 72;
+        const NAV_MAX_START_SEARCH_CELLS = 28;
         let navGridW = 0, navGridH = 0;
         let clickWalkPath = [];
+        let clickWalkGoal = null;
+
+        function getCurrentSpriteSize() {
+            return {
+                w: spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16,
+                h: spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20
+            };
+        }
+
+        function getPlayerFootPosition(px = player.x, py = player.y) {
+            const size = getCurrentSpriteSize();
+            return {
+                x: px + size.w / 2,
+                y: py + size.h + FOOT_OFFSET_Y
+            };
+        }
+
+        function setPlayerFromFootPosition(fx, fy) {
+            const size = getCurrentSpriteSize();
+            player.x = fx - size.w / 2;
+            player.y = fy - size.h - FOOT_OFFSET_Y;
+        }
+
+        function clampPointToMap(x, y) {
+            return {
+                x: Math.max(0, Math.min(Math.round(x), mapW - 1)),
+                y: Math.max(0, Math.min(Math.round(y), mapH - 1))
+            };
+        }
 
         class PriorityQueue {
             constructor() { this.elements = []; }
             enqueue(element, priority) {
                 this.elements.push({ element, priority });
-                this.elements.sort((a, b) => a.priority - b.priority);
+                this.bubbleUp(this.elements.length - 1);
             }
-            dequeue() { return this.elements.shift().element; }
+            bubbleUp(index) {
+                while (index > 0) {
+                    const parent = (index - 1) >> 1;
+                    if (this.elements[parent].priority <= this.elements[index].priority) break;
+                    [this.elements[parent], this.elements[index]] = [this.elements[index], this.elements[parent]];
+                    index = parent;
+                }
+            }
+            bubbleDown(index) {
+                const len = this.elements.length;
+                while (true) {
+                    let smallest = index;
+                    const left = index * 2 + 1;
+                    const right = left + 1;
+                    if (left < len && this.elements[left].priority < this.elements[smallest].priority) {
+                        smallest = left;
+                    }
+                    if (right < len && this.elements[right].priority < this.elements[smallest].priority) {
+                        smallest = right;
+                    }
+                    if (smallest === index) break;
+                    [this.elements[index], this.elements[smallest]] = [this.elements[smallest], this.elements[index]];
+                    index = smallest;
+                }
+            }
+            dequeue() {
+                if (this.elements.length === 0) return null;
+                const top = this.elements[0];
+                const last = this.elements.pop();
+                if (this.elements.length > 0) {
+                    this.elements[0] = last;
+                    this.bubbleDown(0);
+                }
+                return top.element;
+            }
             isEmpty() { return this.elements.length === 0; }
         }
 
-        function generateNavGrid() { }
+        function generateNavGrid() {
+            if (!mapW || !mapH || !collisionData || collisionData.length === 0) {
+                navGrid = [];
+                navPenaltyGrid = [];
+                navGridW = 0;
+                navGridH = 0;
+                return;
+            }
+
+            navGridW = Math.max(1, Math.ceil(mapW / NAV_GRID_SIZE));
+            navGridH = Math.max(1, Math.ceil(mapH / NAV_GRID_SIZE));
+            navGrid = new Array(navGridH).fill(null).map(() => new Array(navGridW).fill(true));
+            navPenaltyGrid = new Array(navGridH).fill(null).map(() => new Array(navGridW).fill(0));
+
+            for (let gy = 0; gy < navGridH; gy++) {
+                for (let gx = 0; gx < navGridW; gx++) {
+                    const px = Math.min(mapW - 1, gx * NAV_GRID_SIZE);
+                    const py = Math.min(mapH - 1, gy * NAV_GRID_SIZE);
+                    navGrid[gy][gx] = isFootSolid(px, py, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y);
+                }
+            }
+
+            for (let gy = 0; gy < navGridH; gy++) {
+                for (let gx = 0; gx < navGridW; gx++) {
+                    if (navGrid[gy][gx]) {
+                        navPenaltyGrid[gy][gx] = 1.0;
+                        continue;
+                    }
+                    let blockedNeighbors = 0;
+                    for (let oy = -1; oy <= 1; oy++) {
+                        for (let ox = -1; ox <= 1; ox++) {
+                            if (ox === 0 && oy === 0) continue;
+                            const nx = gx + ox;
+                            const ny = gy + oy;
+                            if (nx < 0 || ny < 0 || nx >= navGridW || ny >= navGridH || navGrid[ny][nx]) {
+                                blockedNeighbors++;
+                            }
+                        }
+                    }
+                    navPenaltyGrid[gy][gx] = blockedNeighbors * 0.12;
+                }
+            }
+
+            console.log(`[Pathfinding] NavGrid ready: ${navGridW}x${navGridH}`);
+        }
         function generateNavGridOld() {
             if (!mapW || !mapH) return;
             navGridW = Math.ceil(mapW / NAV_GRID_SIZE);
@@ -1941,7 +2060,7 @@
 
         // Click-to-Move fÃ¼r Mobile
         function handleClickMove(screenX, screenY) {
-            if (!gameReady) return;
+            if (!gameReady || isReadingMode) return;
 
             // Berechne Welt-Koordinaten aus Screen-Koordinaten
             const rect = canvas.getBoundingClientRect();
@@ -1955,29 +2074,43 @@
             const worldX = canvasX + camX;
             const worldY = canvasY + camY;
 
-            // Setze Ziel (Spieler-Mitte soll dort hin)
-            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
-            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-            const FOOT_OFFSET_Y = 15;
+            const startFoot = getPlayerFootPosition(player.x, player.y);
+            const goal = clampPointToMap(worldX, worldY);
 
-            const startFootX = player.x + spriteW / 2;
-            const startFootY = player.y + spriteH + FOOT_OFFSET_Y;
-
-            clickWalkPath = findPathAStar(startFootX, startFootY, worldX, worldY);
+            clickWalkGoal = goal;
+            clickWalkPath = findPathAStar(startFoot.x, startFoot.y, goal.x, goal.y);
             moveTarget = null;
+
+            if (clickWalkPath.length === 0) {
+                const fallback = getFurthestValidPoint(startFoot.x, startFoot.y, goal.x, goal.y);
+                if (Math.hypot(fallback.x - startFoot.x, fallback.y - startFoot.y) > 1) {
+                    clickWalkPath = [fallback];
+                } else {
+                    clickWalkGoal = null;
+                }
+            }
         }
 
         // ============================================
         // PATHFINDING v2 (PIXEL-PERFECT FOOT BASED)
         // ============================================
 
-        function isFootSolid(fx, fy) {
+        function isFootSolid(fx, fy, extraHalfWidth = 0, extraVerticalPad = 0) {
             fx = Math.floor(fx);
             fy = Math.floor(fy);
-            // Foot width buffer is -4 to +4 for an 8px wide sweep
-            if (isSolid(fx - 4, fy)) return true;
-            if (isSolid(fx + 4, fy)) return true;
-            if (isSolid(fx, fy)) return true;
+
+            const halfWidth = 4 + Math.max(0, extraHalfWidth);
+            const verticalPad = Math.max(0, extraVerticalPad);
+            const left = fx - halfWidth;
+            const right = fx + halfWidth;
+            const top = fy - verticalPad;
+            const bottom = fy + verticalPad;
+
+            for (let y = top; y <= bottom; y++) {
+                for (let x = left; x <= right; x++) {
+                    if (isSolid(x, y)) return true;
+                }
+            }
             return false;
         }
 
@@ -1993,7 +2126,7 @@
                 let t = i / steps;
                 let px = Math.round(x0 + t * dx);
                 let py = Math.round(y0 + t * dy);
-                if (isFootSolid(px, py)) return false;
+                if (isFootSolid(px, py, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) return false;
             }
             return true;
         }
@@ -2013,7 +2146,7 @@
                 let py = Math.round(y0 + t * dy);
 
                 // Add a small safety buffer for corners so we don't stick right to the wall
-                if (isFootSolid(px, py) || isFootSolid(px, py - 1) || isFootSolid(px, py + 1)) {
+                if (isFootSolid(px, py, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) {
                     break;
                 }
                 lastValid = { x: px, y: py };
@@ -2021,124 +2154,254 @@
             return lastValid;
         }
 
+        function isNavBlocked(gx, gy) {
+            if (gx < 0 || gy < 0 || gx >= navGridW || gy >= navGridH) return true;
+            return navGrid[gy][gx];
+        }
+
+        function getNavPenalty(gx, gy) {
+            if (gx < 0 || gy < 0 || gx >= navGridW || gy >= navGridH) return 1.0;
+            return navPenaltyGrid[gy][gx];
+        }
+
+        function toNavCell(fx, fy) {
+            return {
+                x: Math.max(0, Math.min(navGridW - 1, Math.round(fx / NAV_GRID_SIZE))),
+                y: Math.max(0, Math.min(navGridH - 1, Math.round(fy / NAV_GRID_SIZE)))
+            };
+        }
+
+        function toWorldFromNav(cell) {
+            return {
+                x: Math.max(0, Math.min(mapW - 1, cell.x * NAV_GRID_SIZE)),
+                y: Math.max(0, Math.min(mapH - 1, cell.y * NAV_GRID_SIZE))
+            };
+        }
+
+        function findNearestWalkableCell(origin, maxRadiusCells) {
+            if (!isNavBlocked(origin.x, origin.y)) return { x: origin.x, y: origin.y };
+
+            for (let r = 1; r <= maxRadiusCells; r++) {
+                let best = null;
+                let bestDistSq = Infinity;
+
+                for (let dy = -r; dy <= r; dy++) {
+                    for (let dx = -r; dx <= r; dx++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const nx = origin.x + dx;
+                        const ny = origin.y + dy;
+                        if (isNavBlocked(nx, ny)) continue;
+
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < bestDistSq) {
+                            bestDistSq = dSq;
+                            best = { x: nx, y: ny };
+                        }
+                    }
+                }
+
+                if (best) return best;
+            }
+
+            return null;
+        }
+
+        function findNearestFreeFootPoint(fx, fy, maxRadiusPx = 96) {
+            const clamped = clampPointToMap(fx, fy);
+            if (!isFootSolid(clamped.x, clamped.y)) return clamped;
+
+            for (let r = 1; r <= maxRadiusPx; r++) {
+                let best = null;
+                let bestDistSq = Infinity;
+
+                for (let dy = -r; dy <= r; dy++) {
+                    for (let dx = -r; dx <= r; dx++) {
+                        if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+                        const px = clamped.x + dx;
+                        const py = clamped.y + dy;
+                        if (px < 0 || py < 0 || px >= mapW || py >= mapH) continue;
+                        if (isFootSolid(px, py, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) continue;
+
+                        const dSq = dx * dx + dy * dy;
+                        if (dSq < bestDistSq) {
+                            bestDistSq = dSq;
+                            best = { x: px, y: py };
+                        }
+                    }
+                }
+
+                if (best) return best;
+            }
+
+            return null;
+        }
+
+        function octileHeuristic(ax, ay, bx, by) {
+            const dx = Math.abs(ax - bx);
+            const dy = Math.abs(ay - by);
+            const diagonal = Math.min(dx, dy);
+            const straight = dx + dy;
+            return straight + (Math.SQRT2 - 2) * diagonal;
+        }
+
         function findPathAStar(sFx, sFy, gFx, gFy) {
-            sFx = Math.round(sFx); sFy = Math.round(sFy);
-            gFx = Math.round(gFx); gFy = Math.round(gFy);
+            if (!gameReady || !mapW || !mapH) return [];
+            if (navGrid.length === 0 || navGridW === 0 || navGridH === 0) {
+                generateNavGrid();
+            }
+            if (navGrid.length === 0 || navGridW === 0 || navGridH === 0) return [];
 
-            if (!gameReady || !mapW) return [];
+            let start = clampPointToMap(sFx, sFy);
+            let goal = clampPointToMap(gFx, gFy);
 
-            // Start inside wall, allow manual escape without generating ghost paths
-            if (isFootSolid(sFx, sFy)) return [];
-
-            // Goal inside wall? Fallback to furthest visible point
-            if (isFootSolid(gFx, gFy)) {
-                let fallback = getFurthestValidPoint(sFx, sFy, gFx, gFy);
-                gFx = fallback.x;
-                gFy = fallback.y;
+            if (isFootSolid(start.x, start.y, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) {
+                const escapedStart = findNearestFreeFootPoint(
+                    start.x,
+                    start.y,
+                    NAV_GRID_SIZE * NAV_MAX_START_SEARCH_CELLS
+                );
+                if (!escapedStart) return [];
+                start = escapedStart;
             }
 
-            // Direct line of sight available? Instantly return
-            if (checkFootLineOfSight(sFx, sFy, gFx, gFy)) {
-                return [{ x: gFx, y: gFy }];
+            if (isFootSolid(goal.x, goal.y, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) {
+                goal = getFurthestValidPoint(start.x, start.y, goal.x, goal.y);
+                if (isFootSolid(goal.x, goal.y, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) {
+                    const escapedGoal = findNearestFreeFootPoint(
+                        goal.x,
+                        goal.y,
+                        NAV_GRID_SIZE * NAV_MAX_START_SEARCH_CELLS
+                    );
+                    if (escapedGoal) goal = escapedGoal;
+                }
             }
 
-            const STEP = 8;
-            const startG = { x: Math.round(sFx / STEP), y: Math.round(sFy / STEP) };
-            const goalG = { x: Math.round(gFx / STEP), y: Math.round(gFy / STEP) };
+            if (checkFootLineOfSight(start.x, start.y, goal.x, goal.y)) {
+                return [{ x: goal.x, y: goal.y }];
+            }
+
+            const startCellRaw = toNavCell(start.x, start.y);
+            const goalCellRaw = toNavCell(goal.x, goal.y);
+            const startCell = findNearestWalkableCell(startCellRaw, NAV_MAX_START_SEARCH_CELLS);
+            const goalCell = findNearestWalkableCell(goalCellRaw, NAV_MAX_GOAL_SEARCH_CELLS);
+
+            if (!startCell || !goalCell) {
+                const fallback = getFurthestValidPoint(start.x, start.y, goal.x, goal.y);
+                if (fallback.x === start.x && fallback.y === start.y) return [];
+                return [fallback];
+            }
+
+            if (startCell.x === goalCell.x && startCell.y === goalCell.y) {
+                return [{ x: goal.x, y: goal.y }];
+            }
 
             const frontier = new PriorityQueue();
-            frontier.enqueue(startG, 0);
+            const startKey = `${startCell.x},${startCell.y}`;
+            const goalKey = `${goalCell.x},${goalCell.y}`;
+            frontier.enqueue(startCell, 0);
 
             const cameFrom = new Map();
             const costSoFar = new Map();
-            const startKey = `${startG.x},${startG.y}`;
+            const closed = new Set();
             cameFrom.set(startKey, null);
             costSoFar.set(startKey, 0);
 
-            const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+            const dirs = [
+                { dx: 1, dy: 0, cost: 1.0 },
+                { dx: -1, dy: 0, cost: 1.0 },
+                { dx: 0, dy: 1, cost: 1.0 },
+                { dx: 0, dy: -1, cost: 1.0 },
+                { dx: 1, dy: 1, cost: Math.SQRT2 },
+                { dx: 1, dy: -1, cost: Math.SQRT2 },
+                { dx: -1, dy: 1, cost: Math.SQRT2 },
+                { dx: -1, dy: -1, cost: Math.SQRT2 }
+            ];
 
             let iterations = 0;
-            let closestNode = startG;
-            let minH = Math.hypot(goalG.x - startG.x, goalG.y - startG.y);
+            const maxIterations = Math.min(Math.max(8000, navGridW * navGridH), 120000);
+            let bestKey = startKey;
+            let bestH = octileHeuristic(startCell.x, startCell.y, goalCell.x, goalCell.y);
             let reachedGoal = false;
 
-            while (!frontier.isEmpty()) {
-                if (++iterations > 2000) break;
-
+            while (!frontier.isEmpty() && iterations < maxIterations) {
+                iterations++;
                 const current = frontier.dequeue();
-                if (current.x === goalG.x && current.y === goalG.y) {
+                if (!current) break;
+                const currentKey = `${current.x},${current.y}`;
+                if (closed.has(currentKey)) continue;
+                closed.add(currentKey);
+
+                if (currentKey === goalKey) {
                     reachedGoal = true;
+                    bestKey = currentKey;
                     break;
                 }
 
-                const currentKey = `${current.x},${current.y}`;
+                const currentCost = costSoFar.get(currentKey);
 
-                for (const [dx, dy] of dirs) {
-                    const next = { x: current.x + dx, y: current.y + dy };
+                for (const dir of dirs) {
+                    const nx = current.x + dir.dx;
+                    const ny = current.y + dir.dy;
+                    if (isNavBlocked(nx, ny)) continue;
 
-                    const px = next.x * STEP;
-                    const py = next.y * STEP;
-                    if (px < 0 || px >= mapW || py < 0 || py >= mapH) continue;
-
-                    if (isFootSolid(px, py)) continue;
-
-                    // Prevent diagonal corner squeezing
-                    if (dx !== 0 && dy !== 0) {
-                        if (isFootSolid(current.x * STEP + dx * STEP, current.y * STEP) &&
-                            isFootSolid(current.x * STEP, current.y * STEP + dy * STEP)) {
+                    // Prevent diagonal corner squeeze.
+                    if (dir.dx !== 0 && dir.dy !== 0) {
+                        if (isNavBlocked(current.x + dir.dx, current.y) || isNavBlocked(current.x, current.y + dir.dy)) {
                             continue;
                         }
                     }
 
-                    const nextKey = `${next.x},${next.y}`;
-                    const cost = (dx !== 0 && dy !== 0) ? 1.414 : 1.0;
+                    const nextKey = `${nx},${ny}`;
+                    if (closed.has(nextKey)) continue;
 
-                    // Wall penalty to encourage wide turns (1 tile away from wall)
-                    let penalty = 0;
-                    if (isFootSolid(px - STEP, py) || isFootSolid(px + STEP, py) || isFootSolid(px, py - STEP) || isFootSolid(px, py + STEP)) {
-                        penalty = 0.5;
+                    const tentativeCost = currentCost + dir.cost + getNavPenalty(nx, ny);
+                    if (costSoFar.has(nextKey) && tentativeCost >= costSoFar.get(nextKey)) continue;
+
+                    costSoFar.set(nextKey, tentativeCost);
+                    cameFrom.set(nextKey, current);
+                    const h = octileHeuristic(nx, ny, goalCell.x, goalCell.y);
+                    if (h < bestH) {
+                        bestH = h;
+                        bestKey = nextKey;
                     }
-
-                    const newCost = costSoFar.get(currentKey) + cost + penalty;
-
-                    if (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)) {
-                        costSoFar.set(nextKey, newCost);
-                        const h = Math.hypot(goalG.x - next.x, goalG.y - next.y);
-                        if (h < minH) {
-                            minH = h;
-                            closestNode = next;
-                        }
-                        const priority = newCost + h;
-                        frontier.enqueue(next, priority);
-                        cameFrom.set(nextKey, current);
-                    }
+                    frontier.enqueue({ x: nx, y: ny }, tentativeCost + h);
                 }
             }
 
-            let curr = reachedGoal ? goalG : closestNode;
-
-            if (curr.x === startG.x && curr.y === startG.y) {
-                let fallback = getFurthestValidPoint(sFx, sFy, gFx, gFy);
-                if (fallback.x === sFx && fallback.y === sFy) return [];
+            if (bestKey === startKey) {
+                const fallback = getFurthestValidPoint(start.x, start.y, goal.x, goal.y);
+                if (fallback.x === start.x && fallback.y === start.y) return [];
                 return [fallback];
             }
 
+            let currentNode = reachedGoal ? goalCell : (function () {
+                const parts = bestKey.split(',');
+                return { x: parseInt(parts[0], 10), y: parseInt(parts[1], 10) };
+            })();
+
             const path = [];
-            while (curr !== null) {
-                path.push(curr);
-                curr = cameFrom.get(`${curr.x},${curr.y}`);
+            while (currentNode !== null) {
+                path.push(currentNode);
+                currentNode = cameFrom.get(`${currentNode.x},${currentNode.y}`) || null;
             }
             path.reverse();
 
-            const pixelPath = path.map(p => ({ x: p.x * STEP, y: p.y * STEP }));
-
-            // Re-pin start and end to exact pixel feet coordinates
-            pixelPath[0] = { x: sFx, y: sFy };
+            const pixelPath = path.map(node => toWorldFromNav(node));
+            pixelPath[0] = { x: start.x, y: start.y };
             if (reachedGoal) {
-                pixelPath[pixelPath.length - 1] = { x: gFx, y: gFy };
+                pixelPath[pixelPath.length - 1] = { x: goal.x, y: goal.y };
             }
 
             return smoothFootPath(pixelPath);
+        }
+
+        function replanClickPathFromPlayer() {
+            if (!clickWalkGoal) return false;
+            const foot = getPlayerFootPosition(player.x, player.y);
+            const newPath = findPathAStar(foot.x, foot.y, clickWalkGoal.x, clickWalkGoal.y);
+            if (!newPath || newPath.length === 0) return false;
+            clickWalkPath = newPath;
+            return true;
         }
 
         function smoothFootPath(pixelPath) {
@@ -2453,7 +2716,6 @@
                         }
 
                         const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-                        const FOOT_OFFSET_Y = 15; // Must match checkCollisionAt
 
                         player.x = spawnPixel.x - 8; // Center horizontally
                         player.y = spawnPixel.y - spriteH - FOOT_OFFSET_Y; // Feet at spawnPixel.y
@@ -2795,6 +3057,33 @@
                 SPRITE.scale = SPRITE.baseScale * depthFactor;
             }
 
+            const currentFoot = getPlayerFootPosition(player.x, player.y);
+            if (isFootSolid(currentFoot.x, currentFoot.y, NAV_COLLISION_PADDING_X, NAV_COLLISION_PADDING_Y)) {
+                player.embedTime = (player.embedTime || 0) + dt;
+                if (player.embedTime > 0.12) {
+                    const escapeFoot = findNearestFreeFootPoint(
+                        currentFoot.x,
+                        currentFoot.y,
+                        NAV_GRID_SIZE * NAV_MAX_START_SEARCH_CELLS
+                    );
+                    if (escapeFoot) {
+                        setPlayerFromFootPosition(escapeFoot.x, escapeFoot.y);
+                        if (clickWalkGoal) {
+                            clickWalkPath = findPathAStar(escapeFoot.x, escapeFoot.y, clickWalkGoal.x, clickWalkGoal.y);
+                            if (clickWalkPath.length === 0) clickWalkGoal = null;
+                        } else {
+                            clickWalkPath = [];
+                        }
+                    } else {
+                        clickWalkPath = [];
+                        clickWalkGoal = null;
+                    }
+                    player.embedTime = 0;
+                }
+            } else {
+                player.embedTime = 0;
+            }
+
             let dx = 0, dy = 0;
             player.isMoving = false;
 
@@ -2807,18 +3096,34 @@
             // Tastatur Bewegung bricht Pathfinding ab
             if (dx !== 0 || dy !== 0) {
                 clickWalkPath = [];
+                clickWalkGoal = null;
                 moveTarget = null;
             }
 
             // Click-to-Move Pathfinding (A*)
             // Fix: Movement allowed during Lore (unless Reading Mode active)
             if (dx === 0 && dy === 0 && clickWalkPath.length > 0 && !isReadingMode) {
+                while (
+                    clickWalkPath.length > 0 &&
+                    isFootSolid(
+                        clickWalkPath[0].x,
+                        clickWalkPath[0].y,
+                        NAV_COLLISION_PADDING_X,
+                        NAV_COLLISION_PADDING_Y
+                    )
+                ) {
+                    clickWalkPath.shift();
+                }
+
+                if (clickWalkPath.length === 0) {
+                    clickWalkGoal = null;
+                }
+
+                if (clickWalkPath.length > 0) {
                 const target = clickWalkPath[0];
-                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
-                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-                const FOOT_OFFSET_Y = 15;
-                const footX = player.x + spriteW / 2;
-                const footY = player.y + spriteH + FOOT_OFFSET_Y;
+                const foot = getPlayerFootPosition(player.x, player.y);
+                const footX = foot.x;
+                const footY = foot.y;
 
                 const tdx = target.x - footX;
                 const tdy = target.y - footY;
@@ -2829,6 +3134,7 @@
 
                 if (tdist < reachRadius) {
                     clickWalkPath.shift(); // remove reached point
+                    if (clickWalkPath.length === 0) clickWalkGoal = null;
                 } else {
                     dx = tdx / tdist;
                     dy = tdy / tdist;
@@ -2838,6 +3144,7 @@
                     } else {
                         player.dir = tdy > 0 ? 0 : 1;
                     }
+                }
                 }
             }
 
@@ -2854,7 +3161,7 @@
                 const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
                 const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
                 const footX = player.x + spriteW / 2;
-                const footY = player.y + spriteH + 15;
+                const footY = player.y + spriteH + FOOT_OFFSET_Y;
 
                 // Target logic
                 let target = autoWalkPath[autoWalkIndex];
@@ -3021,7 +3328,6 @@
             {
                 const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
                 const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-                const FOOT_OFFSET_Y = 15;
                 player.x = Math.max(0, Math.min(player.x, mapW - spriteW));
                 player.y = Math.max(0, Math.min(player.y, mapH - spriteH - FOOT_OFFSET_Y));
             }
@@ -3051,31 +3357,44 @@
             }
 
             // --- STUCK DETECTION FOR AUTO-MOVEMENT ---
-            if (player.isMoving && (clickWalkPath.length > 0 || moveTarget) && !isReadingMode) {
-                if (typeof player.lastX === 'number') {
-                    const actualDist = Math.hypot(player.x - player.lastX, player.y - player.lastY);
-                    const intendedDist = player.speed * dt;
-                    if (actualDist < intendedDist * 0.3) {
+            if (player.repathCooldown > 0) {
+                player.repathCooldown = Math.max(0, player.repathCooldown - dt);
+            }
+
+            if (clickWalkPath.length > 0 && !isReadingMode) {
+                const foot = getPlayerFootPosition(player.x, player.y);
+                if (Number.isFinite(player.lastFootX) && Number.isFinite(player.lastFootY)) {
+                    const actualDist = Math.hypot(foot.x - player.lastFootX, foot.y - player.lastFootY);
+                    const intendedDist = Math.max(0.01, player.speed * dt * 0.55);
+                    if (actualDist < intendedDist * 0.25) {
                         player.stuckTime = (player.stuckTime || 0) + dt;
-                        if (player.stuckTime > 0.25) { // 250ms stuck
-                            if (clickWalkPath.length > 0) {
+                        if (player.stuckTime > 0.28) {
+                            let recovered = false;
+                            if (clickWalkGoal && player.repathCooldown <= 0) {
+                                recovered = replanClickPathFromPlayer();
+                                player.repathCooldown = 0.18;
+                            }
+
+                            if (!recovered && clickWalkPath.length > 0) {
                                 clickWalkPath.shift();
-                                console.log("Pathfinding: Stuck at corner, skipping waypoint.");
-                            } else if (moveTarget) {
-                                moveTarget = null;
-                                console.log("Pathfinding: Reached impossible wall, stopping.");
+                                if (clickWalkPath.length === 0) {
+                                    clickWalkGoal = null;
+                                }
                             }
                             player.stuckTime = 0;
                         }
                     } else {
-                        player.stuckTime = 0;
+                        player.stuckTime = Math.max(0, player.stuckTime - dt * 2);
                     }
                 }
+                player.lastFootX = foot.x;
+                player.lastFootY = foot.y;
             } else {
                 player.stuckTime = 0;
+                const foot = getPlayerFootPosition(player.x, player.y);
+                player.lastFootX = foot.x;
+                player.lastFootY = foot.y;
             }
-            player.lastX = player.x;
-            player.lastY = player.y;
 
         }
 
@@ -3083,33 +3402,8 @@
         // KOLLISIONSPRÃœFUNG - ROBUST (Ecken-Check)
         // ============================================
         function checkCollisionAt(px, py) {
-            const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
-            const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-
-            // Definition der FuÃŸ-Kollisionsbox relative zum Sprite-Ursprung (px, py)
-            // Sprite ist ca 16x20. FÃ¼ÃŸe sind unten.
-            // Wir definieren eine schmale Box mittig unten.
-
-            const boxWidth = 8; // Schmaler als Sprite (damit man nicht an Ecken hÃ¤ngen bleibt)
-            const boxHeight = 6;
-
-            const centerX = px + spriteW / 2;
-            const bottomY = py + spriteH + 15; // +15 wie bisher (visueller Offset)
-
-            // PrÃ¼fpunkte:
-            // 1. Unten Links
-            // 2. Unten Rechts
-            // (Optional auch Oben, wenn man eine tiefe Box hat, aber fÃ¼r RPG reicht meist eine 'Grundlinie')
-
-            const left = Math.floor(centerX - boxWidth / 2);
-            const right = Math.floor(centerX + boxWidth / 2);
-            const yFn = Math.floor(bottomY);
-
-            // PrÃ¼fe beide Ecken
-            if (isSolid(left, yFn)) return true;
-            if (isSolid(right, yFn)) return true;
-
-            return false;
+            const foot = getPlayerFootPosition(px, py);
+            return isFootSolid(foot.x, foot.y);
         }
 
         function isSolid(x, y) {
@@ -7146,6 +7440,8 @@
 
             syncModeToggleButton();
             moveTarget = null;
+            clickWalkPath = [];
+            clickWalkGoal = null;
             renderSubtitleLines(Math.max(0, currentSubtitleIndex));
 
             uiContainer.classList.add('mode-switching');
@@ -7187,7 +7483,7 @@
             const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
             const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
             const footX = player.x + spriteW / 2;
-            const footY = player.y + spriteH + 15;
+            const footY = player.y + spriteH + FOOT_OFFSET_Y;
 
             // Find closest index
             let closestIdx = 0;
@@ -7995,6 +8291,8 @@
                 activeLoreId = id;
                 isMenuTriggeredLore = !!fromMenu;
                 moveTarget = null;
+                clickWalkPath = [];
+                clickWalkGoal = null;
                 applySceneAudioMix('start-lore:mode');
 
                 if (isReadingMode) {
