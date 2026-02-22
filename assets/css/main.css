@@ -2,8 +2,57 @@
  * Heidelberg RPG - Main Stylesheet
  * Extracted from index.html during refactoring
  */
-@import url('https://fonts.bunny.net/css?family=ibm-plex-sans:400,500|eb-garamond:400,500|libre-baskerville:400,700|bodoni-moda:400,500&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500&family=EB+Garamond:wght@400;500&family=Libre+Baskerville:wght@400;700&family=Bodoni+Moda:opsz,wght@6..96,400;500&display=swap');
+@font-face {
+    font-family: "Reader Grotesk";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src:
+        local("IBM Plex Sans"),
+        local("Roboto"),
+        url("../fonts/reader-grotesk.woff2") format("woff2"),
+        url("https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2"),
+        url("https://unpkg.com/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Reader Renaissance";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src:
+        local("EB Garamond"),
+        local("Noto Serif"),
+        url("../fonts/reader-renaissance.woff2") format("woff2"),
+        url("https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2") format("woff2"),
+        url("https://unpkg.com/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Reader Baroque";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src:
+        local("Libre Baskerville"),
+        local("Noto Serif"),
+        url("../fonts/reader-baroque.woff2") format("woff2"),
+        url("https://cdn.jsdelivr.net/npm/@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2") format("woff2"),
+        url("https://unpkg.com/@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "Reader Neoclassical";
+    font-style: normal;
+    font-weight: 400;
+    font-display: swap;
+    src:
+        local("Bodoni Moda"),
+        local("Noto Serif"),
+        url("../fonts/reader-neoclassical.woff2") format("woff2"),
+        url("https://cdn.jsdelivr.net/npm/@fontsource/bodoni-moda/files/bodoni-moda-latin-400-normal.woff2") format("woff2"),
+        url("https://unpkg.com/@fontsource/bodoni-moda/files/bodoni-moda-latin-400-normal.woff2") format("woff2");
+}
 
 /* ==========================================
    BASE RESET & BODY
@@ -1492,19 +1541,19 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
 }
 
 .reader-font-sample-grotesk {
-    font-family: "IBM Plex Sans", "Roboto", "Noto Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif;
+    font-family: "Reader Grotesk", "IBM Plex Sans", "Roboto", "Noto Sans", "Segoe UI", "Franklin Gothic Book", "Gill Sans MT", "Trebuchet MS", system-ui, sans-serif;
 }
 
 .reader-font-sample-renaissance {
-    font-family: "EB Garamond", "Noto Serif", "Droid Serif", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+    font-family: "Reader Renaissance", "EB Garamond", "Noto Serif", "Droid Serif", "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif;
 }
 
 .reader-font-sample-baroque {
-    font-family: "Libre Baskerville", "Noto Serif Display", "Noto Serif", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif;
+    font-family: "Reader Baroque", "Libre Baskerville", "Noto Serif Display", "Noto Serif", "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif;
 }
 
 .reader-font-sample-neoclassical {
-    font-family: "Bodoni Moda", "Noto Serif", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif;
+    font-family: "Reader Neoclassical", "Bodoni Moda", "Noto Serif", "Bodoni MT", Didot, "Modern No. 20", "Times New Roman", Times, serif;
 }
 
 .reader-volume-row {
