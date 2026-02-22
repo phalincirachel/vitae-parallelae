@@ -1093,11 +1093,11 @@
         // EVENT LISTENERS FOR ARCHIVE
         document.getElementById('bookBtn').addEventListener('click', () => {
             renderArchive();
-            const hasSeenPrimaryArchiveView = localStorage.getItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY) === '1';
+            const hasSeenPrimaryArchiveView = localStorage.getItem('gameboy_archive_primary_seen_v1') === '1';
             if (!hasSeenPrimaryArchiveView) {
                 const inhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
                 if (inhaltBtn) inhaltBtn.click();
-                localStorage.setItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY, '1');
+                localStorage.setItem('gameboy_archive_primary_seen_v1', '1');
             }
             document.getElementById('archiveModal').classList.add('visible');
         });
@@ -2498,6 +2498,9 @@
                 foregroundImage = null;
                 collisionData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false)); // Safe init
                 gameReady = true;
+                if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
+                const lsFallback = document.getElementById('loading-screen');
+                if (lsFallback) lsFallback.style.display = 'none';
                 startGameLoop();
             }
         }
@@ -2710,6 +2713,12 @@
             if (window.visualFreezeActive) return;
             window.gameLoopRunning = true;
             lastTime = 0;
+            if (gameReady) {
+                const loadingScreen = document.getElementById('loading-screen');
+                if (loadingScreen) loadingScreen.style.display = 'none';
+                const processingInfoEl = document.getElementById('processingInfo');
+                if (processingInfoEl) processingInfoEl.style.display = 'none';
+            }
             console.log("startGameLoop");
             requestAnimationFrame(gameLoop);
         }
@@ -3696,7 +3705,6 @@
         const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
         const READER_FONT_FAMILY_STORAGE_KEY = 'gameboy_reader_font_family';
         const READER_TEXT_ALIGN_STORAGE_KEY = 'gameboy_reader_text_align';
-        const ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY = 'gameboy_archive_primary_seen_v1';
         const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
         const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
         const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
