@@ -4042,6 +4042,8 @@
         let subtitleFollowLocked = false;
         let suppressFollowLockUntil = 0;
         let manualBackgroundDimLevel = 0;
+        const MODE_DIM_LEVEL_GAME = 0;
+        const MODE_DIM_LEVEL_READING = 50;
 
         if (document.fonts && typeof document.fonts.load === 'function') {
             [
@@ -4245,6 +4247,27 @@
 
             const mixed = mixHexColors(base, readerBgColor, 0.5);
             overlay.style.backgroundColor = mixed;
+        }
+
+        function getModeDimLevel() {
+            return isReadingMode ? MODE_DIM_LEVEL_READING : MODE_DIM_LEVEL_GAME;
+        }
+
+        function syncModeDimmerLevel(options = {}) {
+            if (!globalVisualDimmer) return;
+            if (globalVisualDimmer.isFrozen()) return;
+
+            const targetLevel = getModeDimLevel();
+            const currentLevel = globalVisualDimmer.getLevel();
+            if (!options.force && currentLevel === targetLevel) {
+                manualBackgroundDimLevel = currentLevel;
+                applyReaderDimmerTint();
+                return;
+            }
+
+            globalVisualDimmer.setLevel(targetLevel);
+            manualBackgroundDimLevel = targetLevel;
+            applyReaderDimmerTint();
         }
 
         let flatCompMeasureCanvas = null;
@@ -5866,6 +5889,10 @@
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
                 applyReaderDimmerTint();
+                if (!frozen && level !== getModeDimLevel()) {
+                    syncModeDimmerLevel({ force: true });
+                    level = manualBackgroundDimLevel;
+                }
                 dimmerResumeToken += 1;
                 const changeToken = dimmerResumeToken;
 
@@ -7435,6 +7462,7 @@
                 }
                 uiContainer.classList.remove('reading-mode');
             }
+            syncModeDimmerLevel({ force: true });
             markBlaetternPaginationDirty();
             syncBlaetternUiState(`mode-switch:${reason}`);
 
@@ -7464,6 +7492,7 @@
             setReadingMode(true, 'dimmer-freeze-init');
             pendingForceReadingFromFreeze = false;
         }
+        syncModeDimmerLevel({ force: true });
 
         modeToggleBtn.addEventListener('click', () => {
             // In frozen mode: reset dimmer to off + switch to game mode
