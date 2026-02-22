@@ -646,7 +646,11 @@
         (async function initGameState() {
             try {
                 const module = await import('./assets/js/GameState.js');
-                GameState = module.GameState;
+                // Support both module-export and legacy global assignment variants.
+                GameState = module.GameState || module.default || window.GameState || null;
+                if (!GameState || typeof GameState.init !== 'function') {
+                    throw new Error('GameState module loaded, but no usable GameState API found');
+                }
                 window.GameState = GameState; // Global Ref
                 await GameState.init();
                 console.log("[Index] GameState Loaded & Initialized");
@@ -937,41 +941,41 @@
             const list = document.getElementById('loreList');
             list.innerHTML = '';
 
-            if (!window.GameState) return;
+            if (window.GameState) {
+                const db = window.GameState.getAllLore();
+                const collectedIds = window.GameState.state.collectedLore;
 
-            const db = window.GameState.getAllLore();
-            const collectedIds = window.GameState.state.collectedLore;
+                if (collectedIds.length > 0) {
+                    collectedIds.sort((a, b) => a - b).forEach(id => {
+                        const content = db[id];
+                        if (!content) return;
 
-            if (collectedIds.length > 0) {
-                collectedIds.sort((a, b) => a - b).forEach(id => {
-                    const content = db[id];
-                    if (!content) return;
+                        const item = document.createElement('div');
+                        item.className = 'menu-item';
 
-                    const item = document.createElement('div');
-                    item.className = 'menu-item';
+                        if (isLoreMode && activeLoreId === id) {
+                            item.classList.add('active');
+                        }
 
-                    if (isLoreMode && activeLoreId === id) {
-                        item.classList.add('active');
-                    }
+                        const mainText = document.createElement('div');
+                        mainText.className = 'item-main-text';
+                        mainText.innerText = content.title;
 
-                    const mainText = document.createElement('div');
-                    mainText.className = 'item-main-text';
-                    mainText.innerText = content.title;
+                        const subText = document.createElement('div');
+                        subText.className = 'item-sub-text';
+                        subText.innerText = content.duration;
 
-                    const subText = document.createElement('div');
-                    subText.className = 'item-sub-text';
-                    subText.innerText = content.duration;
+                        item.appendChild(mainText);
+                        item.appendChild(subText);
 
-                    item.appendChild(mainText);
-                    item.appendChild(subText);
-
-                    item.addEventListener('click', async () => {
-                        document.getElementById('archiveModal').classList.remove('visible');
-                        await waitForContentSwitchIdle(`menu:lore:${id}`);
-                        await startLoreMode(id, true);
+                        item.addEventListener('click', async () => {
+                            document.getElementById('archiveModal').classList.remove('visible');
+                            await waitForContentSwitchIdle(`menu:lore:${id}`);
+                            await startLoreMode(id, true);
+                        });
+                        list.appendChild(item);
                     });
-                    list.appendChild(item);
-                });
+                }
             }
             // (Chapter Logic continues inside renderArchive)
 
