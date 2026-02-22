@@ -253,6 +253,29 @@
                         </div>
                     </div>
                     <div class="reader-settings-group">
+                        <div class="reader-settings-title">Schriftart</div>
+                        <div class="reader-font-picker" role="group" aria-label="Schriftart ausw&auml;hlen">
+                            <button type="button" class="reader-font-option is-active" data-font="segoe"
+                                aria-label="Segoe UI" aria-pressed="true">
+                                <span class="reader-font-sample reader-font-sample-segoe" aria-hidden="true">AaBbCc</span>
+                            </button>
+                            <button type="button" class="reader-font-option" data-font="times"
+                                aria-label="Times New Roman" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-times"
+                                    aria-hidden="true">AaBbCc</span>
+                            </button>
+                            <button type="button" class="reader-font-option" data-font="arial" aria-label="Arial"
+                                aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-arial" aria-hidden="true">AaBbCc</span>
+                            </button>
+                            <button type="button" class="reader-font-option" data-font="constantia"
+                                aria-label="Constantia" aria-pressed="false">
+                                <span class="reader-font-sample reader-font-sample-constantia"
+                                    aria-hidden="true">AaBbCc</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="reader-settings-group">
                         <div class="reader-settings-title">Lautst&auml;rke</div>
                         <div class="reader-volume-row">
                             <label class="reader-volume-label" for="readerTextVolumeRange">Text</label>
@@ -367,6 +390,7 @@
                 let isReadingMode = false;
                 const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
                 const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
+                const READER_FONT_FAMILY_STORAGE_KEY = 'gameboy_reader_font_family';
                 const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
                 const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
                 const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
@@ -377,9 +401,21 @@
                 const READER_FONT_SIZE_MIN = 14;
                 const READER_FONT_SIZE_MAX = 30;
                 const READER_FONT_SIZE_DEFAULT = 18;
+                const READER_FONT_FAMILY_DEFAULT = 'segoe';
+                const READER_FONT_FAMILIES = Object.freeze({
+                    segoe: '"Segoe UI", "Trebuchet MS", system-ui, sans-serif',
+                    times: '"Times New Roman", Times, serif',
+                    arial: '"Arial", "Helvetica Neue", Helvetica, sans-serif',
+                    constantia: '"Constantia", "Palatino Linotype", "Book Antiqua", Palatino, serif'
+                });
                 const READER_VOLUME_DEFAULT = 1;
                 let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
                 let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
+                const storedReaderFontFamilyKey = localStorage.getItem(READER_FONT_FAMILY_STORAGE_KEY);
+                let readerFontFamilyKey = normalizeReaderFontFamilyKey(storedReaderFontFamilyKey);
+                if (!storedReaderFontFamilyKey || storedReaderFontFamilyKey !== readerFontFamilyKey) {
+                    localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
+                }
                 let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
                 let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
                 let readerTextVolume = normalizeReaderVolume(localStorage.getItem(READER_TEXT_VOLUME_STORAGE_KEY));
@@ -1371,6 +1407,20 @@
                     return Math.max(READER_FONT_SIZE_MIN, Math.min(READER_FONT_SIZE_MAX, rounded));
                 }
 
+                function normalizeReaderFontFamilyKey(value) {
+                    if (typeof value !== 'string') return READER_FONT_FAMILY_DEFAULT;
+                    const cleaned = value.trim().toLowerCase();
+                    if (cleaned === 'georgia') return 'times';
+                    return Object.prototype.hasOwnProperty.call(READER_FONT_FAMILIES, cleaned)
+                        ? cleaned
+                        : READER_FONT_FAMILY_DEFAULT;
+                }
+
+                function getReaderFontFamilyStack(value) {
+                    const normalized = normalizeReaderFontFamilyKey(value);
+                    return READER_FONT_FAMILIES[normalized] || READER_FONT_FAMILIES[READER_FONT_FAMILY_DEFAULT];
+                }
+
                 function normalizeReaderVolume(value) {
                     if (value === null || value === undefined) return READER_VOLUME_DEFAULT;
                     if (typeof value === 'string' && !value.trim()) return READER_VOLUME_DEFAULT;
@@ -1445,6 +1495,7 @@
                     subtitleContainer.classList.toggle('reader-layout-blaettern', isBlaetternLayout);
                     subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout && !isBlaetternLayout);
                     subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
+                    subtitleContainer.style.setProperty('--reader-font-family', getReaderFontFamilyStack(readerFontFamilyKey));
                     applyReaderColorSettings();
                     markBlaetternPaginationDirty();
                     syncBlaetternUiState('reader-settings');
@@ -1475,6 +1526,12 @@
                     const valueAsText = String(readerFontSizePx);
                     if (rangeInput) rangeInput.value = valueAsText;
                     if (numberInput) numberInput.value = valueAsText;
+                    const fontOptionButtons = document.querySelectorAll('.reader-font-option');
+                    fontOptionButtons.forEach((button) => {
+                        const isActive = button.dataset.font === readerFontFamilyKey;
+                        button.classList.toggle('is-active', isActive);
+                        button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                    });
 
                     const textVolumeRange = document.getElementById('readerTextVolumeRange');
                     const textVolumeNumber = document.getElementById('readerTextVolumeNumber');
@@ -1513,6 +1570,17 @@
                     if (!options.force && normalized === readerFontSizePx) return;
                     readerFontSizePx = normalized;
                     localStorage.setItem(READER_FONT_SIZE_STORAGE_KEY, String(readerFontSizePx));
+                    applyReaderTextSettings({
+                        rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
+                    });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderFontFamily(nextFont, options = {}) {
+                    const normalized = normalizeReaderFontFamilyKey(nextFont);
+                    if (!options.force && normalized === readerFontFamilyKey) return;
+                    readerFontFamilyKey = normalized;
+                    localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
                     applyReaderTextSettings({
                         rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
                     });
@@ -2690,6 +2758,14 @@
                         input.addEventListener('change', () => {
                             if (!input.checked) return;
                             setReaderSentenceLayout(input.value);
+                        });
+                    });
+                    const fontButtons = document.querySelectorAll('.reader-font-option');
+                    fontButtons.forEach((button) => {
+                        button.addEventListener('click', () => {
+                            const nextFont = button.dataset.font;
+                            if (!nextFont) return;
+                            setReaderFontFamily(nextFont);
                         });
                     });
 
