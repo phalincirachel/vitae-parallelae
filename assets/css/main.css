@@ -671,6 +671,8 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.blaettern-line-smart {
     word-spacing: var(--blaettern-smart-word-spacing, normal);
     letter-spacing: var(--blaettern-smart-letter-spacing, normal);
+    font-stretch: var(--blaettern-smart-stretch, 100%);
+    font-variation-settings: "wdth" var(--blaettern-smart-wdth, 100);
     font-kerning: normal;
 }
 
@@ -1492,9 +1494,10 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
 }
 
 .reader-font-sample {
-    font-size: 24px;
+    font-size: clamp(18px, 2.15vw, 23px);
     line-height: 1;
-    letter-spacing: 0.02em;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
     user-select: none;
     pointer-events: none;
 }
@@ -1503,6 +1506,19 @@ body.scene-dimmer-light-mode .archive-footer-btn:hover {
     font-family: "Segoe UI", "Trebuchet MS", system-ui, sans-serif;
 }
 
+.reader-font-sample-renaissance {
+    font-family: "Garamond", "Palatino Linotype", "Book Antiqua", Palatino, serif;
+}
+
+.reader-font-sample-baroque {
+    font-family: "Baskerville Old Face", Baskerville, "Times New Roman", Times, serif;
+}
+
+.reader-font-sample-neoclassical {
+    font-family: "Didot", "Bodoni MT", "Bodoni 72", "Times New Roman", serif;
+}
+
+/* Backward-compatible aliases for current font option keys in markup. */
 .reader-font-sample-times {
     font-family: "Times New Roman", Times, serif;
 }

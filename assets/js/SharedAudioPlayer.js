@@ -1,4 +1,4 @@
-export class SharedAudioPlayer {
+window.SharedAudioPlayer = class SharedAudioPlayer {
     constructor(audioUrl, textUrl, options = {}) {
         // SC Integration: Nutze Adapter und konvertiere URL
         const scUrl = typeof getSCUrl === 'function' ? getSCUrl(audioUrl) : audioUrl;

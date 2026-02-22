@@ -3227,7 +3227,12 @@
         const READER_VOLUME_DEFAULT = 1;
         let readerSentenceLayout = normalizeReaderSentenceLayout(localStorage.getItem(READER_LAYOUT_STORAGE_KEY));
         let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
-        let readerFontFamilyKey = normalizeReaderFontFamilyKey(localStorage.getItem(READER_FONT_FAMILY_STORAGE_KEY));
+        const storedReaderFontFamilyKey = localStorage.getItem(READER_FONT_FAMILY_STORAGE_KEY);
+        let readerFontFamilyKey = normalizeReaderFontFamilyKey(storedReaderFontFamilyKey);
+        // Keep Grotesk as explicit default on first launch and normalize legacy values.
+        if (!storedReaderFontFamilyKey || storedReaderFontFamilyKey !== readerFontFamilyKey) {
+            localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
+        }
         let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
         let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
         let readerTextVolume = normalizeReaderVolume(localStorage.getItem(READER_TEXT_VOLUME_STORAGE_KEY));
@@ -3997,13 +4002,20 @@
                 if (totalGapUnits < 3 && slack > 18) continue;
 
                 const sparseLine = totalGapUnits < 6;
-                const wordShare = sparseLine ? 0.88 : 0.82;
-                const letterShare = sparseLine ? 0.10 : 0.15;
+                const wordShare = sparseLine ? 0.86 : 0.80;
+                const letterShare = sparseLine ? 0.11 : 0.15;
+                const stretchShare = sparseLine ? 0.03 : 0.05;
 
                 const addWord = Math.min(0.92, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
                 const addLetter = Math.min(0.05, Math.max(0, (slack * letterShare) / Math.max(44, letters)));
+                const usedSlack = (addWord * totalGapUnits) + (addLetter * letters);
+                const remainingSlack = Math.max(0, slack - usedSlack);
+                const stretchScale = 1 + Math.min(0.012, (remainingSlack * stretchShare) / Math.max(260, lineVisualWidth));
+                const stretchPercent = stretchScale * 100;
+                const wdthValue = stretchPercent;
+                const hasStretch = stretchScale > 1.001;
 
-                if (addWord < 0.03 && addLetter < 0.004) continue;
+                if (addWord < 0.03 && addLetter < 0.004 && !hasStretch) continue;
 
                 const baselineGeometry = captureBlaetternLineGeometry(elements, layerRect);
                 if (baselineGeometry.size !== elements.length) continue;
@@ -4012,6 +4024,13 @@
                     el.classList.add('blaettern-line-smart');
                     el.style.setProperty('--blaettern-smart-word-spacing', `${addWord.toFixed(3)}px`);
                     el.style.setProperty('--blaettern-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
+                    if (hasStretch) {
+                        el.style.setProperty('--blaettern-smart-stretch', `${stretchPercent.toFixed(2)}%`);
+                        el.style.setProperty('--blaettern-smart-wdth', wdthValue.toFixed(2));
+                    } else {
+                        el.style.removeProperty('--blaettern-smart-stretch');
+                        el.style.removeProperty('--blaettern-smart-wdth');
+                    }
                 });
 
                 // Guard: keep style only if glyph flow stays on the same visual line.

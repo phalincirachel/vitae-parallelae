@@ -11,6 +11,8 @@
     <script src="assets/js/SoundCloudURLs.js"></script>
 
     <!-- Shared Game Systems -->
+    <script src="assets/js/SharedAudioPlayer.js"></script>
+    <script src="assets/js/GameState.js"></script>
     <script src="assets/js/PlayerStateManager.js"></script>
     <script src="assets/js/ChapterAutoplayIntent.js"></script>
     <script src="assets/js/AudioVisibilityManager.js"></script>
@@ -350,15 +352,14 @@
                     document.body.style.backgroundColor = '#050505';
                 }
 
-                // 2. Load Audio Player
-                const { SharedAudioPlayer } = await import('./assets/js/SharedAudioPlayer.js?v=20260220-1');
-                console.log("DEBUG: SharedAudioPlayer Loaded");
+                // 2. Audio Player is loaded globally via script tag
+                console.log("DEBUG: SharedAudioPlayer Available");
 
-                // 3. Load GameState
-                const { GameState } = await import('./assets/js/GameState.js');
-                await GameState.init();
-                window.GameState = GameState;
-                console.log("DEBUG: GameState Loaded");
+                // 3. Init GameState (loaded via script tag)
+                if (window.GameState && typeof window.GameState.init === 'function') {
+                    await window.GameState.init();
+                }
+                console.log("DEBUG: GameState Initialized");
 
                 // --- GLOBALS ---
                 let isLoreMode = false;
@@ -4190,6 +4191,8 @@
                 }
                 let woodMaterial, floorMaterial, wallMaterial, bookMat, bulbMat, cordMat;
                 let sharedPlaneGeo, sharedShelfGeo, sharedPlankGeo, sharedBookGeo, sharedBulbGeo, sharedCordGeo;
+                let sharedShelfGeoLeft, sharedShelfGeoRight;
+                let sharedPlankGeoLeft, sharedPlankGeoRight;
 
                 if (!window.fallback2DMode && THREE) {
                     woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
@@ -4199,8 +4202,7 @@
                     bulbMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 });
                     cordMat = new THREE.MeshBasicMaterial({ color: 0x111 });
 
-                    let sharedShelfGeoLeft, sharedShelfGeoRight;
-                    let sharedPlankGeoLeft, sharedPlankGeoRight;
+                    // variables declared in outer scope
 
                     // --- SHARED GEOMETRIES (Performance Fix) ---
                     sharedPlaneGeo = new THREE.PlaneGeometry(config.roomWidth, config.segmentLength);

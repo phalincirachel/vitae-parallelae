@@ -1,4 +1,4 @@
-export const GameState = {
+window.GameState = {
     // STATIC DATA
     CONTENT_DB: {
         1: {
