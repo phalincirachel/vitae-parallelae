@@ -93,6 +93,41 @@
         darkenDelayMs: 780,
         minDisplayHoldMs: 360
     };
+    const PANEL_ID = 'adaptiveCloudSettingsPanel';
+    const PANEL_SLIDER_DEFS = [
+        { key: 'cloudInsetXEm', label: 'Wolke Breite', unit: 'em' },
+        { key: 'cloudInsetYEm', label: 'Wolke Hoehe', unit: 'em' },
+        { key: 'cloudBlurBasePx', label: 'Blur Basis', unit: 'px' },
+        { key: 'cloudBlurRangePx', label: 'Blur Dynamik', unit: 'px' },
+        { key: 'thresholdLuma', label: 'Schwelle Hell', unit: '' },
+        { key: 'maxAlpha', label: 'Wolke Staerke', unit: '' },
+        { key: 'activeIntervalMs', label: 'Check Intervall', unit: 'ms' },
+        { key: 'brightenDelayMs', label: 'Ein Latenz', unit: 'ms' },
+        { key: 'darkenDelayMs', label: 'Aus Latenz', unit: 'ms' },
+        { key: 'alphaDeadband', label: 'Toleranz', unit: '' }
+    ];
+    const PANEL_PRESETS = {
+        responsive: {
+            thresholdLuma: 0.62,
+            fullLuma: 0.86,
+            maxAlpha: 0.86,
+            activeIntervalMs: 190,
+            eventLatencyMs: 70,
+            brightenDelayMs: 140,
+            darkenDelayMs: 460,
+            alphaDeadband: 0.01
+        },
+        large: {
+            cloudInsetXEm: 2.05,
+            cloudInsetYEm: 0.98,
+            cloudFlatInsetXEm: 2.35,
+            cloudFlatInsetYEm: 1.12,
+            cloudBlurBasePx: 13,
+            cloudBlurRangePx: 22,
+            cloudScaleBase: 1.2,
+            cloudScaleRange: 0.36
+        }
+    };
 
     function clamp(value, min, max) {
         const num = Number(value);
@@ -110,6 +145,19 @@
         } catch (_) {
             return clonePlainObject(obj);
         }
+    }
+
+    function decimalsFromStep(stepValue) {
+        const text = String(stepValue);
+        const dot = text.indexOf('.');
+        return dot >= 0 ? (text.length - dot - 1) : 0;
+    }
+
+    function formatForInput(value, decimals) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return '';
+        if (!decimals) return String(Math.round(num));
+        return num.toFixed(decimals);
     }
 
     function getRangeForKey(key) {
@@ -885,6 +933,169 @@
         };
     }
 
+    function mountTuningPanel(controller) {
+        if (!controller || typeof controller.getTuning !== 'function') return;
+        if (document.getElementById(PANEL_ID)) return;
+
+        const host = document.querySelector('.reader-settings-panel');
+        if (!host) return;
+
+        const ranges = (typeof controller.getTuningRanges === 'function')
+            ? controller.getTuningRanges()
+            : deepCloneJsonSafe(TUNING_RANGES);
+
+        const group = document.createElement('div');
+        group.id = PANEL_ID;
+        group.className = 'reader-settings-group adaptive-cloud-settings-group';
+
+        const title = document.createElement('div');
+        title.className = 'reader-settings-title';
+        title.textContent = 'Textschutz-Wolke';
+        group.appendChild(title);
+
+        const note = document.createElement('div');
+        note.className = 'adaptive-cloud-settings-note';
+        note.textContent = 'Regler fuer Groesse und Reaktionsverhalten der Schutzwolke.';
+        group.appendChild(note);
+
+        const controlsWrap = document.createElement('div');
+        controlsWrap.className = 'adaptive-cloud-controls';
+        group.appendChild(controlsWrap);
+
+        const controlMap = new Map();
+        let syncing = false;
+
+        function syncFromTuning(tuning) {
+            if (!tuning || typeof tuning !== 'object') return;
+            syncing = true;
+            for (const [key, refs] of controlMap.entries()) {
+                const value = Number(tuning[key]);
+                if (!Number.isFinite(value)) continue;
+                refs.range.value = String(value);
+                refs.number.value = formatForInput(value, refs.decimals);
+            }
+            syncing = false;
+        }
+
+        function setPartial(key, rawValue) {
+            if (syncing) return;
+            const partial = {};
+            partial[key] = rawValue;
+            const next = controller.setTuning(partial);
+            syncFromTuning(next);
+        }
+
+        PANEL_SLIDER_DEFS.forEach((def, idx) => {
+            const range = ranges[def.key];
+            if (!range) return;
+            const decimals = decimalsFromStep(range.step);
+
+            const row = document.createElement('div');
+            row.className = 'reader-volume-row adaptive-cloud-row';
+
+            const label = document.createElement('label');
+            label.className = 'reader-volume-label';
+            label.setAttribute('for', `adaptiveCloudRange_${def.key}`);
+            label.textContent = def.label;
+
+            const rangeInput = document.createElement('input');
+            rangeInput.id = `adaptiveCloudRange_${def.key}`;
+            rangeInput.type = 'range';
+            rangeInput.className = 'adaptive-cloud-range';
+            rangeInput.min = String(range.min);
+            rangeInput.max = String(range.max);
+            rangeInput.step = String(range.step);
+
+            const numberInput = document.createElement('input');
+            numberInput.id = `adaptiveCloudNumber_${def.key}`;
+            numberInput.type = 'number';
+            numberInput.className = 'adaptive-cloud-number';
+            numberInput.min = String(range.min);
+            numberInput.max = String(range.max);
+            numberInput.step = String(range.step);
+
+            const unit = document.createElement('span');
+            unit.className = 'reader-size-unit';
+            unit.textContent = def.unit || '';
+
+            rangeInput.addEventListener('input', () => {
+                numberInput.value = formatForInput(rangeInput.value, decimals);
+                setPartial(def.key, rangeInput.value);
+            });
+            numberInput.addEventListener('input', () => {
+                setPartial(def.key, numberInput.value);
+            });
+            numberInput.addEventListener('change', () => {
+                setPartial(def.key, numberInput.value);
+            });
+
+            row.appendChild(label);
+            row.appendChild(rangeInput);
+            row.appendChild(numberInput);
+            row.appendChild(unit);
+            controlsWrap.appendChild(row);
+
+            controlMap.set(def.key, {
+                range: rangeInput,
+                number: numberInput,
+                decimals
+            });
+
+            // Visual spacer for better scanning.
+            if (idx === 3 || idx === 5) {
+                const separator = document.createElement('div');
+                separator.className = 'adaptive-cloud-separator';
+                controlsWrap.appendChild(separator);
+            }
+        });
+
+        const actions = document.createElement('div');
+        actions.className = 'adaptive-cloud-actions';
+
+        const btnResponsive = document.createElement('button');
+        btnResponsive.type = 'button';
+        btnResponsive.className = 'reader-color-reset-btn adaptive-cloud-action-btn';
+        btnResponsive.textContent = 'Preset Reaktiv';
+        btnResponsive.addEventListener('click', () => {
+            const next = controller.setTuning(PANEL_PRESETS.responsive);
+            syncFromTuning(next);
+        });
+
+        const btnLarge = document.createElement('button');
+        btnLarge.type = 'button';
+        btnLarge.className = 'reader-color-reset-btn adaptive-cloud-action-btn';
+        btnLarge.textContent = 'Preset Gross';
+        btnLarge.addEventListener('click', () => {
+            const next = controller.setTuning(PANEL_PRESETS.large);
+            syncFromTuning(next);
+        });
+
+        const btnReset = document.createElement('button');
+        btnReset.type = 'button';
+        btnReset.className = 'reader-color-reset-btn adaptive-cloud-action-btn';
+        btnReset.textContent = 'Werte Zuruecksetzen';
+        btnReset.addEventListener('click', () => {
+            const next = controller.resetTuning();
+            syncFromTuning(next);
+        });
+
+        actions.appendChild(btnResponsive);
+        actions.appendChild(btnLarge);
+        actions.appendChild(btnReset);
+        group.appendChild(actions);
+
+        host.appendChild(group);
+        syncFromTuning(controller.getTuning());
+    }
+
+    function shouldMountTuningPanelOnThisPage() {
+        const rawPath = (window.location && window.location.pathname ? window.location.pathname : '');
+        const path = String(rawPath).toLowerCase().replace(/\\/g, '/');
+        const cleanPath = path.split('?')[0].split('#')[0];
+        const file = cleanPath.split('/').pop() || '';
+        return file === '' || file === 'index.html';
+    }
+
     let defaultController = null;
 
     function autoInit() {
@@ -893,7 +1104,12 @@
         if (!subtitleContainer) return;
 
         defaultController = createController({ subtitleContainer });
-        if (defaultController) defaultController.start();
+        if (defaultController) {
+            defaultController.start();
+            if (shouldMountTuningPanelOnThisPage()) {
+                mountTuningPanel(defaultController);
+            }
+        }
     }
 
     window.AdaptiveSubtitleCloud = {

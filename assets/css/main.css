@@ -1809,8 +1809,79 @@ input[type="range"]:focus {
     cursor: pointer;
 }
 
+.adaptive-cloud-settings-group {
+    margin-top: 6px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.adaptive-cloud-settings-note {
+    font-size: 12px;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.adaptive-cloud-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.adaptive-cloud-row .reader-volume-label {
+    min-width: 128px;
+    font-size: 13px;
+}
+
+.adaptive-cloud-range {
+    flex: 1;
+}
+
+.adaptive-cloud-number {
+    width: 70px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.95);
+    padding: 4px 6px;
+}
+
+.adaptive-cloud-separator {
+    height: 1px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.adaptive-cloud-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.adaptive-cloud-action-btn {
+    margin-top: 0;
+}
+
 body.scene-dimmer-light-mode .reader-settings-title {
     color: rgba(0, 0, 0, 0.50);
+}
+
+body.scene-dimmer-light-mode .adaptive-cloud-settings-group {
+    border-top-color: rgba(0, 0, 0, 0.14);
+}
+
+body.scene-dimmer-light-mode .adaptive-cloud-settings-note {
+    color: rgba(0, 0, 0, 0.56);
+}
+
+body.scene-dimmer-light-mode .adaptive-cloud-number {
+    border-color: rgba(0, 0, 0, 0.35);
+    background: rgba(0, 0, 0, 0.05);
+    color: rgba(0, 0, 0, 0.92);
+}
+
+body.scene-dimmer-light-mode .adaptive-cloud-separator {
+    background: rgba(0, 0, 0, 0.12);
 }
 
 body.scene-dimmer-light-mode .reader-radio-option {

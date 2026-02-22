@@ -1726,15 +1726,16 @@
                 for (let gx = 0; gx < navGridW; gx++) {
                     const px = gx * NAV_GRID_SIZE;
                     const py = gy * NAV_GRID_SIZE;
-                    if (
-                        checkCollisionAt(px, py) ||
-                        checkCollisionAt(px + NAV_GRID_SIZE, py) ||
-                        checkCollisionAt(px, py + NAV_GRID_SIZE) ||
-                        checkCollisionAt(px + NAV_GRID_SIZE, py + NAV_GRID_SIZE) ||
-                        checkCollisionAt(px + NAV_GRID_SIZE / 2, py + NAV_GRID_SIZE / 2)
-                    ) {
-                        navGrid[gy][gx] = true;
+                    let isWall = false;
+                    for (let dy = 0; dy < NAV_GRID_SIZE; dy++) {
+                        for (let dx = 0; dx < NAV_GRID_SIZE; dx++) {
+                            if (isSolid(px + dx, py + dy)) {
+                                isWall = true; break;
+                            }
+                        }
+                        if (isWall) break;
                     }
+                    navGrid[gy][gx] = isWall;
                 }
             }
 
@@ -1790,6 +1791,26 @@
                     if (found) break;
                 }
                 if (!found) return [];
+            }
+
+            if (navGrid[startG.y][startG.x]) {
+                let found = false;
+                for (let r = 1; r <= 3; r++) {
+                    for (let dy = -r; dy <= r; dy++) {
+                        for (let dx = -r; dx <= r; dx++) {
+                            if (Math.abs(dx) === r || Math.abs(dy) === r) {
+                                let nx = startG.x + dx, ny = startG.y + dy;
+                                if (nx >= 0 && nx < navGridW && ny >= 0 && ny < navGridH && !navGrid[ny][nx]) {
+                                    startG = { x: nx, y: ny };
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (found) break;
+                    }
+                    if (found) break;
+                }
             }
 
             if (startG.x === goalG.x && startG.y === goalG.y) {
@@ -1916,14 +1937,15 @@
             // Setze Ziel (Spieler-Mitte soll dort hin)
             const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
             const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+            const FOOT_OFFSET_Y = 15;
 
-            const targetX = worldX - spriteW / 2;
-            const targetY = worldY - spriteH / 2;
+            const startFootX = player.x + spriteW / 2;
+            const startFootY = player.y + spriteH + FOOT_OFFSET_Y;
 
-            clickWalkPath = findPathAStar(player.x, player.y, targetX, targetY);
+            clickWalkPath = findPathAStar(startFootX, startFootY, worldX, worldY);
             if (clickWalkPath.length === 0) {
                 // Return to legacy point-to-point if unreachable
-                moveTarget = { x: targetX, y: targetY };
+                moveTarget = { x: worldX, y: worldY, footX: worldX, footY: worldY }; // Store foot coordinates
             } else {
                 moveTarget = null;
             }
@@ -2572,33 +2594,43 @@
             // Fix: Movement allowed during Lore (unless Reading Mode active)
             if (dx === 0 && dy === 0 && clickWalkPath.length > 0 && !isReadingMode) {
                 const target = clickWalkPath[0];
-                const tdx = target.x - player.x;
-                const tdy = target.y - player.y;
+                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+                const FOOT_OFFSET_Y = 15;
+                const footX = player.x + spriteW / 2;
+                const footY = player.y + spriteH + FOOT_OFFSET_Y;
+
+                const tdx = target.x - footX;
+                const tdy = target.y - footY;
                 const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
 
-                // Ziel erreicht? (Sehr genau: Radius 2, um Eckenkollision zu vermeiden)
-                const reachRadius = clickWalkPath.length === 1 ? 2 : 2;
+                // Ziel erreicht? (Sehr genau: Radius 2 für Ende, Radius 8 für Wegpunkte)
+                const reachRadius = clickWalkPath.length === 1 ? 2 : 8;
 
                 if (tdist < reachRadius) {
                     clickWalkPath.shift(); // remove reached point
                 } else {
-                    // Richtung zum Ziel
                     dx = tdx / tdist;
                     dy = tdy / tdist;
 
-                    // Blickrichtung setzen
                     if (Math.abs(tdx) > Math.abs(tdy)) {
-                        player.dir = tdx > 0 ? 3 : 2; // Rechts oder Links
+                        player.dir = tdx > 0 ? 3 : 2;
                     } else {
-                        player.dir = tdy > 0 ? 0 : 1; // Unten oder Oben
+                        player.dir = tdy > 0 ? 0 : 1;
                     }
                 }
             }
 
             // Fallback für Legacy moveTarget (zur Sicherheit)
             if (dx === 0 && dy === 0 && moveTarget && !isReadingMode) {
-                const tdx = moveTarget.x - player.x;
-                const tdy = moveTarget.y - player.y;
+                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
+                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
+                const FOOT_OFFSET_Y = 15;
+                const footX = player.x + spriteW / 2;
+                const footY = player.y + spriteH + FOOT_OFFSET_Y;
+
+                const tdx = moveTarget.footX - footX; // Compare against footX
+                const tdy = moveTarget.footY - footY; // Compare against footY
                 const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
 
                 if (tdist < 3) {
@@ -2829,9 +2861,9 @@
                 if (typeof player.lastX === 'number') {
                     const actualDist = Math.hypot(player.x - player.lastX, player.y - player.lastY);
                     const intendedDist = player.speed * dt;
-                    if (actualDist < intendedDist * 0.1) {
+                    if (actualDist < intendedDist * 0.3) {
                         player.stuckTime = (player.stuckTime || 0) + dt;
-                        if (player.stuckTime > 0.15) { // 150ms stuck
+                        if (player.stuckTime > 0.25) { // 250ms stuck
                             if (clickWalkPath.length > 0) {
                                 clickWalkPath.shift();
                                 console.log("Pathfinding: Stuck at corner, skipping waypoint.");
