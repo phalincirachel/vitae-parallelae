@@ -1,11 +1,11 @@
-# Local Reader Fonts (Optional, preferred)
+# Local Reader Fonts
 
-For adblock-proof font loading, place these files in this folder:
+This folder now contains the reader fonts used by the app:
 
-- `reader-grotesk.woff2`
-- `reader-renaissance.woff2`
-- `reader-baroque.woff2`
-- `reader-neoclassical.woff2`
+- `reader-grotesk-segoeui.ttf`
+- `reader-renaissance-palatino.ttf`
+- `reader-baroque-baskerville.ttf`
+- `reader-neoclassical-bodoni.ttf`
 
-The CSS in `assets/css/main.css` will use these local files first.
-If they are missing, it falls back to multiple external woff2 CDNs.
+`assets/css/main.css` loads these local files directly via `@font-face`.
+No external font CDN is required for the reader typography anymore.

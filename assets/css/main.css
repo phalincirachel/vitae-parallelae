@@ -8,11 +8,8 @@
     font-weight: 400;
     font-display: swap;
     src:
-        local("IBM Plex Sans"),
-        local("Roboto"),
-        url("../fonts/reader-grotesk.woff2") format("woff2"),
-        url("https://cdn.jsdelivr.net/npm/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2"),
-        url("https://unpkg.com/@fontsource/ibm-plex-sans/files/ibm-plex-sans-latin-400-normal.woff2") format("woff2");
+        local("Segoe UI"),
+        url("../fonts/reader-grotesk-segoeui.ttf") format("truetype");
 }
 
 @font-face {
@@ -21,11 +18,9 @@
     font-weight: 400;
     font-display: swap;
     src:
-        local("EB Garamond"),
-        local("Noto Serif"),
-        url("../fonts/reader-renaissance.woff2") format("woff2"),
-        url("https://cdn.jsdelivr.net/npm/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2") format("woff2"),
-        url("https://unpkg.com/@fontsource/eb-garamond/files/eb-garamond-latin-400-normal.woff2") format("woff2");
+        local("Palatino Linotype"),
+        local("Book Antiqua"),
+        url("../fonts/reader-renaissance-palatino.ttf") format("truetype");
 }
 
 @font-face {
@@ -34,11 +29,9 @@
     font-weight: 400;
     font-display: swap;
     src:
-        local("Libre Baskerville"),
-        local("Noto Serif"),
-        url("../fonts/reader-baroque.woff2") format("woff2"),
-        url("https://cdn.jsdelivr.net/npm/@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2") format("woff2"),
-        url("https://unpkg.com/@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2") format("woff2");
+        local("Baskerville"),
+        local("Baskerville Old Face"),
+        url("../fonts/reader-baroque-baskerville.ttf") format("truetype");
 }
 
 @font-face {
@@ -47,11 +40,9 @@
     font-weight: 400;
     font-display: swap;
     src:
-        local("Bodoni Moda"),
-        local("Noto Serif"),
-        url("../fonts/reader-neoclassical.woff2") format("woff2"),
-        url("https://cdn.jsdelivr.net/npm/@fontsource/bodoni-moda/files/bodoni-moda-latin-400-normal.woff2") format("woff2"),
-        url("https://unpkg.com/@fontsource/bodoni-moda/files/bodoni-moda-latin-400-normal.woff2") format("woff2");
+        local("Bodoni MT"),
+        local("Bodoni 72"),
+        url("../fonts/reader-neoclassical-bodoni.ttf") format("truetype");
 }
 
 /* ==========================================
