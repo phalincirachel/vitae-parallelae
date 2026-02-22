@@ -18,9 +18,12 @@
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script>
     <script src="assets/js/GlobalVisualDimmer.js"></script>
-    <script src="assets/js/AdaptiveSubtitleCloud.js"></script>
 
     <!-- Stylesheets -->
+    <link rel="preload" href="assets/fonts/reader-grotesk-segoeui.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-renaissance-palatino.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/liminal.css">
     <style>
@@ -277,6 +280,17 @@
                         </div>
                     </div>
                     <div class="reader-settings-group">
+                        <div class="reader-settings-title">Ausrichtung</div>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerTextAlign" value="justify" checked>
+                            <span>Blocksatz</span>
+                        </label>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerTextAlign" value="left">
+                            <span>Flattersatz</span>
+                        </label>
+                    </div>
+                    <div class="reader-settings-group">
                         <div class="reader-settings-title">Lautst&auml;rke</div>
                         <div class="reader-volume-row">
                             <label class="reader-volume-label" for="readerTextVolumeRange">Text</label>
@@ -392,6 +406,8 @@
                 const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
                 const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
                 const READER_FONT_FAMILY_STORAGE_KEY = 'gameboy_reader_font_family';
+                const READER_TEXT_ALIGN_STORAGE_KEY = 'gameboy_reader_text_align';
+                const ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY = 'gameboy_archive_primary_seen_v1';
                 const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
                 const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
                 const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
@@ -399,6 +415,9 @@
                 const READER_LAYOUT_TIMESTAMPS = 'timestamps';
                 const READER_LAYOUT_FLAT = 'flat';
                 const READER_LAYOUT_BLAETTERN = 'blaettern';
+                const READER_TEXT_ALIGN_JUSTIFY = 'justify';
+                const READER_TEXT_ALIGN_LEFT = 'left';
+                const READER_TEXT_ALIGN_DEFAULT = READER_TEXT_ALIGN_JUSTIFY;
                 const READER_FONT_SIZE_MIN = 14;
                 const READER_FONT_SIZE_MAX = 30;
                 const READER_FONT_SIZE_DEFAULT = 18;
@@ -414,8 +433,13 @@
                 let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
                 const storedReaderFontFamilyKey = localStorage.getItem(READER_FONT_FAMILY_STORAGE_KEY);
                 let readerFontFamilyKey = normalizeReaderFontFamilyKey(storedReaderFontFamilyKey);
+                const storedReaderTextAlign = localStorage.getItem(READER_TEXT_ALIGN_STORAGE_KEY);
+                let readerTextAlign = normalizeReaderTextAlign(storedReaderTextAlign);
                 if (!storedReaderFontFamilyKey || storedReaderFontFamilyKey !== readerFontFamilyKey) {
                     localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
+                }
+                if (!storedReaderTextAlign || storedReaderTextAlign !== readerTextAlign) {
+                    localStorage.setItem(READER_TEXT_ALIGN_STORAGE_KEY, readerTextAlign);
                 }
                 let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
                 let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
@@ -424,6 +448,17 @@
                 const readerColorWheelSync = { bg: null, text: null };
                 const readerColorPopoverState = { activeKey: null };
                 let manualBackgroundDimLevel = 0;
+
+                if (document.fonts && typeof document.fonts.load === 'function') {
+                    [
+                        '400 20px "Reader Grotesk"',
+                        '400 20px "Reader Renaissance"',
+                        '400 20px "Reader Baroque"',
+                        '400 20px "Reader Neoclassical"'
+                    ].forEach((spec) => {
+                        document.fonts.load(spec).catch(() => { });
+                    });
+                }
                 const BLAETTERN_CONTROLS_HIDE_DELAY_MS = 10000;
                 const BLAETTERN_LONG_PRESS_DELAY_MS = 600;
                 const BLAETTERN_SWIPE_TURN_RATIO = 0.18;
@@ -1412,6 +1447,14 @@
                     return READER_LAYOUT_BLAETTERN;
                 }
 
+                function normalizeReaderTextAlign(value) {
+                    if (typeof value !== 'string') return READER_TEXT_ALIGN_DEFAULT;
+                    const cleaned = value.trim().toLowerCase();
+                    if (cleaned === 'blocksatz' || cleaned === READER_TEXT_ALIGN_JUSTIFY) return READER_TEXT_ALIGN_JUSTIFY;
+                    if (cleaned === 'flattersatz' || cleaned === READER_TEXT_ALIGN_LEFT) return READER_TEXT_ALIGN_LEFT;
+                    return READER_TEXT_ALIGN_DEFAULT;
+                }
+
                 function normalizeReaderFontSize(value) {
                     const parsed = Number(value);
                     if (!Number.isFinite(parsed)) return READER_FONT_SIZE_DEFAULT;
@@ -1504,12 +1547,16 @@
                     const rerender = options.rerender !== false;
                     const isFlatLayout = readerSentenceLayout === READER_LAYOUT_FLAT;
                     const isBlaetternLayout = readerSentenceLayout === READER_LAYOUT_BLAETTERN;
+                    const isLeftAlignedText = readerTextAlign === READER_TEXT_ALIGN_LEFT;
 
                     subtitleContainer.classList.toggle('reader-layout-flat', isFlatLayout);
                     subtitleContainer.classList.toggle('reader-layout-blaettern', isBlaetternLayout);
                     subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout && !isBlaetternLayout);
+                    subtitleContainer.classList.toggle('reader-text-left', isLeftAlignedText);
+                    subtitleContainer.classList.toggle('reader-text-justify', !isLeftAlignedText);
                     subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
                     subtitleContainer.style.setProperty('--reader-font-family', getReaderFontFamilyStack(readerFontFamilyKey));
+                    subtitleContainer.style.setProperty('--reader-text-align', isLeftAlignedText ? READER_TEXT_ALIGN_LEFT : READER_TEXT_ALIGN_JUSTIFY);
                     applyReaderColorSettings();
                     markBlaetternPaginationDirty();
                     syncBlaetternUiState('reader-settings');
@@ -1533,6 +1580,10 @@
                     const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
                     layoutInputs.forEach((input) => {
                         input.checked = input.value === readerSentenceLayout;
+                    });
+                    const alignInputs = document.querySelectorAll('input[name="readerTextAlign"]');
+                    alignInputs.forEach((input) => {
+                        input.checked = input.value === readerTextAlign;
                     });
 
                     const rangeInput = document.getElementById('readerFontSizeRange');
@@ -1595,6 +1646,17 @@
                     if (!options.force && normalized === readerFontFamilyKey) return;
                     readerFontFamilyKey = normalized;
                     localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
+                    applyReaderTextSettings({
+                        rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
+                    });
+                    syncReaderSettingsUi();
+                }
+
+                function setReaderTextAlign(nextAlign, options = {}) {
+                    const normalized = normalizeReaderTextAlign(nextAlign);
+                    if (!options.force && normalized === readerTextAlign) return;
+                    readerTextAlign = normalized;
+                    localStorage.setItem(READER_TEXT_ALIGN_STORAGE_KEY, readerTextAlign);
                     applyReaderTextSettings({
                         rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
                     });
@@ -2827,6 +2889,13 @@
                         input.addEventListener('change', () => {
                             if (!input.checked) return;
                             setReaderSentenceLayout(input.value);
+                        });
+                    });
+                    const alignInputs = document.querySelectorAll('input[name="readerTextAlign"]');
+                    alignInputs.forEach((input) => {
+                        input.addEventListener('change', () => {
+                            if (!input.checked) return;
+                            setReaderTextAlign(input.value);
                         });
                     });
                     const fontButtons = document.querySelectorAll('.reader-font-option');
@@ -6116,6 +6185,12 @@
                 if (bookBtn) {
                     bookBtn.addEventListener('click', () => {
                         if (typeof renderArchive === 'function') renderArchive();
+                        const hasSeenPrimaryArchiveView = localStorage.getItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY) === '1';
+                        if (!hasSeenPrimaryArchiveView) {
+                            const inhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+                            if (inhaltBtn) inhaltBtn.click();
+                            localStorage.setItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY, '1');
+                        }
                         archiveModal.classList.add('visible');
                     });
                 }

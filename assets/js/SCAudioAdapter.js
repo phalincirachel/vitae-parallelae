@@ -348,8 +348,19 @@ class SCAudioAdapter {
             this._pendingSeek = undefined;
             this._scCurrentTime = seekVal;
             setTimeout(() => {
-                this.widget.seekTo(seekVal * 1000);
-            }, 500); // Small delay to ensure widget is ready
+                if (this.mode !== 'sc' || !this.widget) return;
+                try {
+                    this.widget.getPosition((ms) => {
+                        const currentPos = (Number(ms) || 0) / 1000;
+                        this._scCurrentTime = currentPos;
+                        if (Math.abs(currentPos - seekVal) > 0.45) {
+                            this.widget.seekTo(seekVal * 1000);
+                        }
+                    });
+                } catch (_) {
+                    this.widget.seekTo(seekVal * 1000);
+                }
+            }, 220); // Keep short; avoid audible micro-restart while still fixing missed paused seeks.
         }
     }
 

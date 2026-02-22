@@ -4,3 +4,5 @@ out/
 release/
 *.log
 .env
+__tmp_index_inline.js
+__tmp_liminal_inline.js

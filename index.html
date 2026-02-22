@@ -14,8 +14,11 @@
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
     <script src="assets/js/GlobalVisualDimmer.js"></script>
-    <script src="assets/js/AdaptiveSubtitleCloud.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
+    <link rel="preload" href="assets/fonts/reader-grotesk-segoeui.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-renaissance-palatino.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="assets/css/main.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
     <style>
@@ -373,6 +376,17 @@
                                     aria-hidden="true">apfoe</span>
                             </button>
                         </div>
+                    </div>
+                    <div class="reader-settings-group">
+                        <div class="reader-settings-title">Ausrichtung</div>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerTextAlign" value="justify" checked>
+                            <span>Blocksatz</span>
+                        </label>
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerTextAlign" value="left">
+                            <span>Flattersatz</span>
+                        </label>
                     </div>
                     <div class="reader-settings-group">
                         <div class="reader-settings-title">Lautst&auml;rke</div>
@@ -1079,6 +1093,12 @@
         // EVENT LISTENERS FOR ARCHIVE
         document.getElementById('bookBtn').addEventListener('click', () => {
             renderArchive();
+            const hasSeenPrimaryArchiveView = localStorage.getItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY) === '1';
+            if (!hasSeenPrimaryArchiveView) {
+                const inhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+                if (inhaltBtn) inhaltBtn.click();
+                localStorage.setItem(ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY, '1');
+            }
             document.getElementById('archiveModal').classList.add('visible');
         });
 
@@ -1716,7 +1736,8 @@
             isEmpty() { return this.elements.length === 0; }
         }
 
-        function generateNavGrid() {
+        function generateNavGrid() { }
+        function generateNavGridOld() {
             if (!mapW || !mapH) return;
             navGridW = Math.ceil(mapW / NAV_GRID_SIZE);
             navGridH = Math.ceil(mapH / NAV_GRID_SIZE);
@@ -1759,7 +1780,7 @@
             console.log("NavGrid generated for A*!");
         }
 
-        function findPathAStar(startX, startY, goalX, goalY) {
+        function findPathAStarOld(startX, startY, goalX, goalY) {
             if (!gameReady || navGrid.length === 0) return [];
 
             const startG = { x: Math.floor(startX / NAV_GRID_SIZE), y: Math.floor(startY / NAV_GRID_SIZE) };
@@ -1866,7 +1887,7 @@
             return smoothPath(path, startX, startY, goalX, goalY);
         }
 
-        function lineOfSight(x0, y0, x1, y1) {
+        function lineOfSightOld(x0, y0, x1, y1) {
             let dx = Math.abs(x1 - x0);
             let dy = Math.abs(y1 - y0);
             let x = x0;
@@ -1891,7 +1912,7 @@
             return true;
         }
 
-        function smoothPath(gridPath, realStartX, realStartY, realGoalX, realGoalY) {
+        function smoothPathOld(gridPath, realStartX, realStartY, realGoalX, realGoalY) {
             if (gridPath.length <= 2) return [{ x: realGoalX, y: realGoalY }];
 
             const smoothed = [gridPath[0]];
@@ -1940,15 +1961,206 @@
             const FOOT_OFFSET_Y = 15;
 
             const startFootX = player.x + spriteW / 2;
+            const startFootX = player.x + spriteW / 2;
             const startFootY = player.y + spriteH + FOOT_OFFSET_Y;
 
             clickWalkPath = findPathAStar(startFootX, startFootY, worldX, worldY);
-            if (clickWalkPath.length === 0) {
-                // Return to legacy point-to-point if unreachable
-                moveTarget = { x: worldX, y: worldY, footX: worldX, footY: worldY }; // Store foot coordinates
-            } else {
-                moveTarget = null;
+            moveTarget = null;
+        }
+
+        // ============================================
+        // PATHFINDING v2 (PIXEL-PERFECT FOOT BASED)
+        // ============================================
+
+        function isFootSolid(fx, fy) {
+            fx = Math.floor(fx);
+            fy = Math.floor(fy);
+            // Foot width buffer is -4 to +4 for an 8px wide sweep
+            if (isSolid(fx - 4, fy)) return true;
+            if (isSolid(fx + 4, fy)) return true;
+            if (isSolid(fx, fy)) return true;
+            return false;
+        }
+
+        function checkFootLineOfSight(x0, y0, x1, y1) {
+            x0 = Math.floor(x0); y0 = Math.floor(y0);
+            x1 = Math.floor(x1); y1 = Math.floor(y1);
+            let dx = x1 - x0, dy = y1 - y0;
+            let dist = Math.hypot(dx, dy);
+            let steps = Math.ceil(dist / 2); // Check every 2 pixels
+            if (steps === 0) return true;
+
+            for (let i = 0; i <= steps; i++) {
+                let t = i / steps;
+                let px = Math.round(x0 + t * dx);
+                let py = Math.round(y0 + t * dy);
+                if (isFootSolid(px, py)) return false;
             }
+            return true;
+        }
+
+        function getFurthestValidPoint(x0, y0, x1, y1) {
+            x0 = Math.floor(x0); y0 = Math.floor(y0);
+            x1 = Math.floor(x1); y1 = Math.floor(y1);
+            let dx = x1 - x0, dy = y1 - y0;
+            let dist = Math.hypot(dx, dy);
+            let steps = Math.ceil(dist);
+            if (steps === 0) return { x: x0, y: y0 };
+
+            let lastValid = { x: x0, y: y0 };
+            for (let i = 1; i <= steps; i++) {
+                let t = i / steps;
+                let px = Math.round(x0 + t * dx);
+                let py = Math.round(y0 + t * dy);
+
+                // Add a small safety buffer for corners so we don't stick right to the wall
+                if (isFootSolid(px, py) || isFootSolid(px, py - 1) || isFootSolid(px, py + 1)) {
+                    break;
+                }
+                lastValid = { x: px, y: py };
+            }
+            return lastValid;
+        }
+
+        function findPathAStar(sFx, sFy, gFx, gFy) {
+            sFx = Math.round(sFx); sFy = Math.round(sFy);
+            gFx = Math.round(gFx); gFy = Math.round(gFy);
+
+            if (!gameReady || !mapW) return [];
+
+            // Start inside wall, allow manual escape without generating ghost paths
+            if (isFootSolid(sFx, sFy)) return [];
+
+            // Goal inside wall? Fallback to furthest visible point
+            if (isFootSolid(gFx, gFy)) {
+                let fallback = getFurthestValidPoint(sFx, sFy, gFx, gFy);
+                gFx = fallback.x;
+                gFy = fallback.y;
+            }
+
+            // Direct line of sight available? Instantly return
+            if (checkFootLineOfSight(sFx, sFy, gFx, gFy)) {
+                return [{ x: gFx, y: gFy }];
+            }
+
+            const STEP = 8;
+            const startG = { x: Math.round(sFx / STEP), y: Math.round(sFy / STEP) };
+            const goalG = { x: Math.round(gFx / STEP), y: Math.round(gFy / STEP) };
+
+            const frontier = new PriorityQueue();
+            frontier.enqueue(startG, 0);
+
+            const cameFrom = new Map();
+            const costSoFar = new Map();
+            const startKey = `${startG.x},${startG.y}`;
+            cameFrom.set(startKey, null);
+            costSoFar.set(startKey, 0);
+
+            const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+            let iterations = 0;
+            let closestNode = startG;
+            let minH = Math.hypot(goalG.x - startG.x, goalG.y - startG.y);
+            let reachedGoal = false;
+
+            while (!frontier.isEmpty()) {
+                if (++iterations > 2000) break;
+
+                const current = frontier.dequeue();
+                if (current.x === goalG.x && current.y === goalG.y) {
+                    reachedGoal = true;
+                    break;
+                }
+
+                const currentKey = `${current.x},${current.y}`;
+
+                for (const [dx, dy] of dirs) {
+                    const next = { x: current.x + dx, y: current.y + dy };
+
+                    const px = next.x * STEP;
+                    const py = next.y * STEP;
+                    if (px < 0 || px >= mapW || py < 0 || py >= mapH) continue;
+
+                    if (isFootSolid(px, py)) continue;
+
+                    // Prevent diagonal corner squeezing
+                    if (dx !== 0 && dy !== 0) {
+                        if (isFootSolid(current.x * STEP + dx * STEP, current.y * STEP) &&
+                            isFootSolid(current.x * STEP, current.y * STEP + dy * STEP)) {
+                            continue;
+                        }
+                    }
+
+                    const nextKey = `${next.x},${next.y}`;
+                    const cost = (dx !== 0 && dy !== 0) ? 1.414 : 1.0;
+
+                    // Wall penalty to encourage wide turns (1 tile away from wall)
+                    let penalty = 0;
+                    if (isFootSolid(px - STEP, py) || isFootSolid(px + STEP, py) || isFootSolid(px, py - STEP) || isFootSolid(px, py + STEP)) {
+                        penalty = 0.5;
+                    }
+
+                    const newCost = costSoFar.get(currentKey) + cost + penalty;
+
+                    if (!costSoFar.has(nextKey) || newCost < costSoFar.get(nextKey)) {
+                        costSoFar.set(nextKey, newCost);
+                        const h = Math.hypot(goalG.x - next.x, goalG.y - next.y);
+                        if (h < minH) {
+                            minH = h;
+                            closestNode = next;
+                        }
+                        const priority = newCost + h;
+                        frontier.enqueue(next, priority);
+                        cameFrom.set(nextKey, current);
+                    }
+                }
+            }
+
+            let curr = reachedGoal ? goalG : closestNode;
+
+            if (curr.x === startG.x && curr.y === startG.y) {
+                let fallback = getFurthestValidPoint(sFx, sFy, gFx, gFy);
+                if (fallback.x === sFx && fallback.y === sFy) return [];
+                return [fallback];
+            }
+
+            const path = [];
+            while (curr !== null) {
+                path.push(curr);
+                curr = cameFrom.get(`${curr.x},${curr.y}`);
+            }
+            path.reverse();
+
+            const pixelPath = path.map(p => ({ x: p.x * STEP, y: p.y * STEP }));
+
+            // Re-pin start and end to exact pixel feet coordinates
+            pixelPath[0] = { x: sFx, y: sFy };
+            if (reachedGoal) {
+                pixelPath[pixelPath.length - 1] = { x: gFx, y: gFy };
+            }
+
+            return smoothFootPath(pixelPath);
+        }
+
+        function smoothFootPath(pixelPath) {
+            if (pixelPath.length <= 2) return pixelPath.slice(1);
+
+            const smoothed = [pixelPath[0]];
+            let currentIndex = 0;
+
+            while (currentIndex < pixelPath.length - 1) {
+                let lookAhead = pixelPath.length - 1;
+                while (lookAhead > currentIndex + 1) {
+                    if (checkFootLineOfSight(pixelPath[currentIndex].x, pixelPath[currentIndex].y, pixelPath[lookAhead].x, pixelPath[lookAhead].y)) {
+                        break;
+                    }
+                    lookAhead--;
+                }
+                smoothed.push(pixelPath[lookAhead]);
+                currentIndex = lookAhead;
+            }
+
+            return smoothed.slice(1);
         }
 
         canvas.addEventListener('click', e => {
@@ -2618,56 +2830,6 @@
                     } else {
                         player.dir = tdy > 0 ? 0 : 1;
                     }
-                }
-            }
-
-            // Fallback für Legacy moveTarget (zur Sicherheit - läuft in Wand und stoppt/gleitet)
-            if (dx === 0 && dy === 0 && moveTarget && !isReadingMode) {
-                const spriteW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
-                const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
-                const FOOT_OFFSET_Y = 15;
-                const footX = player.x + spriteW / 2;
-                const footY = player.y + spriteH + FOOT_OFFSET_Y;
-
-                const tdx = moveTarget.footX - footX; // Compare against footX
-                const tdy = moveTarget.footY - footY; // Compare against footY
-                const tdist = Math.sqrt(tdx * tdx + tdy * tdy);
-
-                if (tdist < 3) {
-                    moveTarget = null;
-                } else {
-                    dx = tdx / tdist;
-                    dy = tdy / tdist;
-
-                    if (Math.abs(tdx) > Math.abs(tdy)) {
-                        player.dir = tdx > 0 ? 3 : 2;
-                    } else {
-                        player.dir = tdy > 0 ? 0 : 1;
-                    }
-
-                    // Collision Override for Fallback (simulate keypress move so it slides and stops)
-                    player.isMoving = true;
-                    const amount = player.speed * dt;
-                    const vx = dx * amount;
-                    const vy = dy * amount;
-                    const targetX = player.x + vx;
-                    const targetY = player.y + vy;
-
-                    if (!checkCollisionAt(targetX, targetY)) {
-                        player.x = targetX;
-                        player.y = targetY;
-                    } else {
-                        if (!checkCollisionAt(targetX, player.y)) player.x = targetX;
-                        else if (!checkCollisionAt(player.x, targetY)) player.y = targetY;
-                        else {
-                            // Completely stuck in both directions
-                            moveTarget = null; // abort fallback
-                        }
-                    }
-
-                    // Reset dx/dy to prevent double-applying in MANUAL MOVEMENT block below
-                    dx = 0;
-                    dy = 0;
                 }
             }
 
@@ -3534,6 +3696,8 @@
         const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
         const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
         const READER_FONT_FAMILY_STORAGE_KEY = 'gameboy_reader_font_family';
+        const READER_TEXT_ALIGN_STORAGE_KEY = 'gameboy_reader_text_align';
+        const ARCHIVE_PRIMARY_DEFAULT_SEEN_KEY = 'gameboy_archive_primary_seen_v1';
         const READER_BG_COLOR_STORAGE_KEY = 'gameboy_reader_bg_color';
         const READER_TEXT_COLOR_STORAGE_KEY = 'gameboy_reader_text_color';
         const READER_TEXT_VOLUME_STORAGE_KEY = 'gameboy_reader_text_volume';
@@ -3541,6 +3705,9 @@
         const READER_LAYOUT_TIMESTAMPS = 'timestamps';
         const READER_LAYOUT_FLAT = 'flat';
         const READER_LAYOUT_BLAETTERN = 'blaettern';
+        const READER_TEXT_ALIGN_JUSTIFY = 'justify';
+        const READER_TEXT_ALIGN_LEFT = 'left';
+        const READER_TEXT_ALIGN_DEFAULT = READER_TEXT_ALIGN_JUSTIFY;
         const READER_FONT_SIZE_MIN = 14;
         const READER_FONT_SIZE_MAX = 30;
         const READER_FONT_SIZE_DEFAULT = 18;
@@ -3556,9 +3723,14 @@
         let readerFontSizePx = normalizeReaderFontSize(localStorage.getItem(READER_FONT_SIZE_STORAGE_KEY));
         const storedReaderFontFamilyKey = localStorage.getItem(READER_FONT_FAMILY_STORAGE_KEY);
         let readerFontFamilyKey = normalizeReaderFontFamilyKey(storedReaderFontFamilyKey);
+        const storedReaderTextAlign = localStorage.getItem(READER_TEXT_ALIGN_STORAGE_KEY);
+        let readerTextAlign = normalizeReaderTextAlign(storedReaderTextAlign);
         // Keep Grotesk as explicit default on first launch and normalize legacy values.
         if (!storedReaderFontFamilyKey || storedReaderFontFamilyKey !== readerFontFamilyKey) {
             localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
+        }
+        if (!storedReaderTextAlign || storedReaderTextAlign !== readerTextAlign) {
+            localStorage.setItem(READER_TEXT_ALIGN_STORAGE_KEY, readerTextAlign);
         }
         let readerBgColor = normalizeReaderHexColor(localStorage.getItem(READER_BG_COLOR_STORAGE_KEY), null);
         let readerTextColor = normalizeReaderHexColor(localStorage.getItem(READER_TEXT_COLOR_STORAGE_KEY), null);
@@ -3569,6 +3741,17 @@
         let subtitleFollowLocked = false;
         let suppressFollowLockUntil = 0;
         let manualBackgroundDimLevel = 0;
+
+        if (document.fonts && typeof document.fonts.load === 'function') {
+            [
+                '400 20px "Reader Grotesk"',
+                '400 20px "Reader Renaissance"',
+                '400 20px "Reader Baroque"',
+                '400 20px "Reader Neoclassical"'
+            ].forEach((spec) => {
+                document.fonts.load(spec).catch(() => { });
+            });
+        }
 
         audioPlayer.volume = readerTextVolume;
 
@@ -3675,6 +3858,14 @@
             if (value === READER_LAYOUT_BLAETTERN) return READER_LAYOUT_BLAETTERN;
             if (value === READER_LAYOUT_FLAT) return READER_LAYOUT_FLAT;
             return READER_LAYOUT_BLAETTERN;
+        }
+
+        function normalizeReaderTextAlign(value) {
+            if (typeof value !== 'string') return READER_TEXT_ALIGN_DEFAULT;
+            const cleaned = value.trim().toLowerCase();
+            if (cleaned === 'blocksatz' || cleaned === READER_TEXT_ALIGN_JUSTIFY) return READER_TEXT_ALIGN_JUSTIFY;
+            if (cleaned === 'flattersatz' || cleaned === READER_TEXT_ALIGN_LEFT) return READER_TEXT_ALIGN_LEFT;
+            return READER_TEXT_ALIGN_DEFAULT;
         }
 
         function normalizeReaderFontSize(value) {
@@ -3861,12 +4052,16 @@
             const rerender = options.rerender !== false;
             const isFlatLayout = readerSentenceLayout === READER_LAYOUT_FLAT;
             const isBlaetternLayout = readerSentenceLayout === READER_LAYOUT_BLAETTERN;
+            const isLeftAlignedText = readerTextAlign === READER_TEXT_ALIGN_LEFT;
 
             subtitleContainer.classList.toggle('reader-layout-flat', isFlatLayout);
             subtitleContainer.classList.toggle('reader-layout-blaettern', isBlaetternLayout);
             subtitleContainer.classList.toggle('reader-layout-timestamps', !isFlatLayout && !isBlaetternLayout);
+            subtitleContainer.classList.toggle('reader-text-left', isLeftAlignedText);
+            subtitleContainer.classList.toggle('reader-text-justify', !isLeftAlignedText);
             subtitleContainer.style.setProperty('--reader-font-size', `${readerFontSizePx}px`);
             subtitleContainer.style.setProperty('--reader-font-family', getReaderFontFamilyStack(readerFontFamilyKey));
+            subtitleContainer.style.setProperty('--reader-text-align', isLeftAlignedText ? READER_TEXT_ALIGN_LEFT : READER_TEXT_ALIGN_JUSTIFY);
             applyReaderColorSettings();
             markBlaetternPaginationDirty();
             syncBlaetternUiState('reader-settings');
@@ -3887,6 +4082,10 @@
             const layoutInputs = document.querySelectorAll('input[name="readerSentenceLayout"]');
             layoutInputs.forEach((input) => {
                 input.checked = input.value === readerSentenceLayout;
+            });
+            const alignInputs = document.querySelectorAll('input[name="readerTextAlign"]');
+            alignInputs.forEach((input) => {
+                input.checked = input.value === readerTextAlign;
             });
 
             const rangeInput = document.getElementById('readerFontSizeRange');
@@ -3950,6 +4149,17 @@
             readerFontFamilyKey = normalized;
             localStorage.setItem(READER_FONT_FAMILY_STORAGE_KEY, readerFontFamilyKey);
             flatCompMeasureCache.clear();
+            applyReaderTextSettings({
+                rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
+            });
+            syncReaderSettingsUi();
+        }
+
+        function setReaderTextAlign(nextAlign, options = {}) {
+            const normalized = normalizeReaderTextAlign(nextAlign);
+            if (!options.force && normalized === readerTextAlign) return;
+            readerTextAlign = normalized;
+            localStorage.setItem(READER_TEXT_ALIGN_STORAGE_KEY, readerTextAlign);
             applyReaderTextSettings({
                 rerender: readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_BLAETTERN
             });
@@ -4802,12 +5012,18 @@
             if (Date.now() < blaetternSuppressTapUntil) return;
             const track = subtitleTracks[lineIndex];
             if (!track) return;
+            if (isDuplicateSubtitleSeek('blaettern', lineIndex, track.time)) return;
+            const wasPlayingBeforeSeek = (typeof audioPlayer.isProbablyPlaying === 'function')
+                ? audioPlayer.isProbablyPlaying()
+                : !audioPlayer.paused;
             setSubtitleFollowLocked(false, 'blaettern-tap');
             await seekAndSyncSubtitle(track.time, `blaettern-click:${lineIndex}`);
-            try {
-                await audioPlayer.play();
-            } catch (_) {
-                // ignore autoplay restrictions
+            if (!wasPlayingBeforeSeek || audioPlayer.paused) {
+                try {
+                    await audioPlayer.play();
+                } catch (_) {
+                    // ignore autoplay restrictions
+                }
             }
             bumpBlaetternControlsAutoHide('blaettern-tap');
         }
@@ -5177,6 +5393,13 @@
                 input.addEventListener('change', () => {
                     if (!input.checked) return;
                     setReaderSentenceLayout(input.value);
+                });
+            });
+            const alignInputs = document.querySelectorAll('input[name="readerTextAlign"]');
+            alignInputs.forEach((input) => {
+                input.addEventListener('change', () => {
+                    if (!input.checked) return;
+                    setReaderTextAlign(input.value);
                 });
             });
             const fontButtons = document.querySelectorAll('.reader-font-option');
@@ -5897,16 +6120,25 @@
                                 indexTrace('ui:timestamp:blocked', { reason: 'bookmark-btn', index: i, targetTime: track.time });
                                 return;
                             }
+                            if (isDuplicateSubtitleSeek('reading', i, track.time)) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'duplicate-seek', index: i, targetTime: track.time });
+                                return;
+                            }
+                            const wasPlayingBeforeSeek = (typeof audioPlayer.isProbablyPlaying === 'function')
+                                ? audioPlayer.isProbablyPlaying()
+                                : !audioPlayer.paused;
                             setSubtitleFollowLocked(false, 'timestamp-click');
                             console.log(`Seek to ${track.time}s`);
                             indexTrace('ui:timestamp:seek', { index: i, targetTime: track.time });
                             await seekAndSyncSubtitle(track.time, `reading-click:${i}`);
-                            try {
-                                await audioPlayer.play();
-                                indexTrace('ui:timestamp:autoplay-ok', { index: i, targetTime: track.time });
-                            } catch (_) {
-                                // ignore autoplay gesture restrictions
-                                indexTrace('ui:timestamp:autoplay-failed', { index: i, targetTime: track.time });
+                            if (!wasPlayingBeforeSeek || audioPlayer.paused) {
+                                try {
+                                    await audioPlayer.play();
+                                    indexTrace('ui:timestamp:autoplay-ok', { index: i, targetTime: track.time });
+                                } catch (_) {
+                                    // ignore autoplay gesture restrictions
+                                    indexTrace('ui:timestamp:autoplay-failed', { index: i, targetTime: track.time });
+                                }
                             }
                             // Smooth scroll to clicked element
                             smoothScrollToElement(subtitleContainer, div);
@@ -7424,6 +7656,32 @@
 
         function wait(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        const SUBTITLE_SEEK_DEDUPE_MS = 420;
+        const subtitleSeekGuard = {
+            mode: '',
+            index: -1,
+            target: NaN,
+            at: 0
+        };
+
+        function isDuplicateSubtitleSeek(mode, index, targetTime) {
+            const now = Date.now();
+            const safeTarget = Number(targetTime) || 0;
+            const isDuplicate =
+                subtitleSeekGuard.mode === mode
+                && subtitleSeekGuard.index === index
+                && Math.abs((subtitleSeekGuard.target || 0) - safeTarget) < 0.001
+                && (now - subtitleSeekGuard.at) < SUBTITLE_SEEK_DEDUPE_MS;
+
+            if (!isDuplicate) {
+                subtitleSeekGuard.mode = mode;
+                subtitleSeekGuard.index = index;
+                subtitleSeekGuard.target = safeTarget;
+                subtitleSeekGuard.at = now;
+            }
+            return isDuplicate;
         }
 
         async function waitForContentSwitchIdle(reason, timeoutMs = 2200) {

@@ -23,6 +23,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this._flatCompMeasureCanvas = null;
         this._flatCompMeasureCtx = null;
         this._flatCompMeasureCache = new Map();
+        this._seekGuard = { index: -1, target: NaN, at: 0 };
 
         // Default volumes
         const requestedVolume = Number(options.volume ?? 1.0);
@@ -87,6 +88,22 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         return new Promise(resolve => setTimeout(resolve, Math.max(0, ms || 0)));
     }
 
+    _isDuplicateSeekRequest(index, targetSec, maxAgeMs = 420) {
+        const now = Date.now();
+        const safeTarget = Number(targetSec) || 0;
+        const isDuplicate =
+            this._seekGuard.index === index
+            && Math.abs((this._seekGuard.target || 0) - safeTarget) < 0.001
+            && (now - this._seekGuard.at) < Math.max(80, Number(maxAgeMs) || 0);
+
+        if (!isDuplicate) {
+            this._seekGuard.index = index;
+            this._seekGuard.target = safeTarget;
+            this._seekGuard.at = now;
+        }
+        return isDuplicate;
+    }
+
     async seekToTime(targetSec, options = {}) {
         if (this.canSeek && !this.canSeek()) {
             return {
@@ -99,6 +116,9 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         }
         const target = Math.max(0, Number(targetSec) || 0);
         const autoplay = options.autoplay !== false;
+        const wasPlayingBeforeSeek = (typeof this.audio.isProbablyPlaying === 'function')
+            ? this.audio.isProbablyPlaying()
+            : !this.audio.paused;
         let result = { ok: false, target, position: this.audio.currentTime || 0, attempts: 0 };
 
         try {
@@ -129,7 +149,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this.currentSubtitleIndex = this.subtitleTracks.length ? this.findSubtitleIndexForTime(effectiveTime) : 0;
         this.renderLines(this.currentSubtitleIndex);
 
-        if (autoplay) {
+        if (autoplay && (!wasPlayingBeforeSeek || this.audio.paused)) {
             try {
                 await this.audio.play();
             } catch (e) {
@@ -332,6 +352,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                             typeof event.target.closest === 'function' &&
                             event.target.closest('.bookmark-btn')
                         ) return;
+                        if (this._isDuplicateSeekRequest(i, this.subtitleTracks[i].time)) return;
 
                         await this.seekToTime(this.subtitleTracks[i].time, { autoplay: true });
                         this.smoothScrollTo(div);
