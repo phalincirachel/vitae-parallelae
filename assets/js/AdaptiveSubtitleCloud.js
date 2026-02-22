@@ -81,8 +81,10 @@
         const sceneOverlay = options.sceneOverlay || document.getElementById('sceneDimmerOverlay');
 
         const config = {
-            activeIntervalMs: Math.max(110, Number(options.activeIntervalMs) || 170),
-            inactiveIntervalMs: Math.max(320, Number(options.inactiveIntervalMs) || 1000),
+            activeIntervalMs: Math.max(220, Number(options.activeIntervalMs) || 320),
+            inactiveIntervalMs: Math.max(600, Number(options.inactiveIntervalMs) || 1400),
+            eventLatencyMs: Math.max(0, Number(options.eventLatencyMs) || 220),
+            eventMinIntervalMs: Math.max(140, Number(options.eventMinIntervalMs) || 260),
             maxVisibleLines: Math.max(10, Number(options.maxVisibleLines) || 48),
 
             sampleScale: clamp(Number(options.sampleScale) || 0.34, 0.16, 1),
@@ -96,11 +98,18 @@
             bandVerticalPaddingPx: Math.max(0, Number(options.bandVerticalPaddingPx) || 22),
             bandHorizontalInsetPx: Math.max(0, Number(options.bandHorizontalInsetPx) || 32),
 
-            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.34, 0.05, 1),
-            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.16, 0.05, 1),
+            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.24, 0.05, 1),
+            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.12, 0.05, 1),
             activationAlpha: clamp(Number(options.activationAlpha) || 0.08, 0, 1),
             deactivationAlpha: clamp(Number(options.deactivationAlpha) || 0.05, 0, 1),
-            alphaQuantStep: clamp(Number(options.alphaQuantStep) || 0.015, 0.001, 0.25)
+            alphaQuantStep: clamp(Number(options.alphaQuantStep) || 0.015, 0.001, 0.25),
+
+            lumaRiseSmoothing: clamp(Number(options.lumaRiseSmoothing) || 0.26, 0.03, 1),
+            lumaFallSmoothing: clamp(Number(options.lumaFallSmoothing) || 0.12, 0.03, 1),
+            alphaDeadband: clamp(Number(options.alphaDeadband) || 0.03, 0.001, 0.2),
+            brightenDelayMs: Math.max(0, Number(options.brightenDelayMs) || 650),
+            darkenDelayMs: Math.max(0, Number(options.darkenDelayMs) || 1100),
+            minDisplayHoldMs: Math.max(0, Number(options.minDisplayHoldMs) || 520)
         };
 
         if (config.deactivationAlpha > config.activationAlpha) {
@@ -111,8 +120,10 @@
             running: false,
             rafId: 0,
             lastUpdateTs: 0,
+            forceUpdateAtTs: 0,
             activeLines: new Set(),
             bandAlphaMap: new Map(),
+            bandMetaMap: new Map(),
 
             sampleCanvas: null,
             sampleCtx: null,
@@ -255,6 +266,64 @@
             return Math.round(clamped / config.alphaQuantStep) * config.alphaQuantStep;
         }
 
+        function getBandMeta(bandKey) {
+            let meta = state.bandMetaMap.get(bandKey);
+            if (meta) return meta;
+            meta = {
+                smoothedLuma: 0,
+                committedAlpha: 0,
+                candidateAlpha: 0,
+                candidateSinceTs: 0,
+                lastCommitTs: 0
+            };
+            state.bandMetaMap.set(bandKey, meta);
+            return meta;
+        }
+
+        function resolveBandTargetAlpha(bandKey, rawSceneLuma, textColor, nowTs) {
+            const meta = getBandMeta(bandKey);
+
+            const riseLuma = rawSceneLuma > meta.smoothedLuma;
+            const lumaRate = riseLuma ? config.lumaRiseSmoothing : config.lumaFallSmoothing;
+            meta.smoothedLuma += (rawSceneLuma - meta.smoothedLuma) * lumaRate;
+
+            const rawAlpha = quantizeAlpha(
+                computeCloudAlpha(meta.smoothedLuma, textColor.luma, textColor.alpha)
+            );
+            const committed = meta.committedAlpha || 0;
+            const delta = rawAlpha - committed;
+
+            if (Math.abs(delta) <= config.alphaDeadband) {
+                meta.candidateSinceTs = 0;
+                meta.candidateAlpha = committed;
+                return committed;
+            }
+
+            const elapsedSinceCommit = nowTs - (meta.lastCommitTs || 0);
+            if ((meta.lastCommitTs || 0) > 0 && elapsedSinceCommit < config.minDisplayHoldMs) {
+                return committed;
+            }
+
+            const directionUp = delta > 0;
+            const delayMs = directionUp ? config.brightenDelayMs : config.darkenDelayMs;
+            const candidateChanged = Math.abs(rawAlpha - (meta.candidateAlpha || 0)) > config.alphaDeadband;
+
+            if (!meta.candidateSinceTs || candidateChanged) {
+                meta.candidateSinceTs = nowTs;
+                meta.candidateAlpha = rawAlpha;
+                return committed;
+            }
+
+            if ((nowTs - meta.candidateSinceTs) < delayMs) {
+                return committed;
+            }
+
+            meta.committedAlpha = rawAlpha;
+            meta.lastCommitTs = nowTs;
+            meta.candidateSinceTs = 0;
+            return rawAlpha;
+        }
+
         function smoothBandAlpha(bandKey, targetAlpha) {
             const prev = state.bandAlphaMap.get(bandKey) || 0;
             const rise = targetAlpha > prev;
@@ -281,8 +350,21 @@
                 const decayed = quantizeAlpha(value * (1 - config.alphaFallSmoothing));
                 if (decayed < config.deactivationAlpha) {
                     state.bandAlphaMap.delete(bandKey);
+                    state.bandMetaMap.delete(bandKey);
                 } else {
                     state.bandAlphaMap.set(bandKey, decayed);
+                    const meta = state.bandMetaMap.get(bandKey);
+                    if (meta) {
+                        meta.committedAlpha = Math.min(meta.committedAlpha || 0, decayed);
+                        meta.candidateSinceTs = 0;
+                    }
+                }
+            }
+
+            for (const bandKey of state.bandMetaMap.keys()) {
+                if (activeBandKeys.has(bandKey)) continue;
+                if (!state.bandAlphaMap.has(bandKey)) {
+                    state.bandMetaMap.delete(bandKey);
                 }
             }
         }
@@ -395,10 +477,11 @@
             return rect;
         }
 
-        function renderClouds() {
+        function renderClouds(nowTs = (typeof performance !== 'undefined' ? performance.now() : Date.now())) {
             if (!isActiveMode()) {
                 clearAllClouds();
                 state.bandAlphaMap.clear();
+                state.bandMetaMap.clear();
                 return;
             }
 
@@ -406,6 +489,7 @@
             if (!(sceneCanvas instanceof HTMLCanvasElement)) {
                 clearAllClouds();
                 state.bandAlphaMap.clear();
+                state.bandMetaMap.clear();
                 return;
             }
 
@@ -413,6 +497,7 @@
             if (!sceneRect.width || !sceneRect.height) {
                 clearAllClouds();
                 state.bandAlphaMap.clear();
+                state.bandMetaMap.clear();
                 return;
             }
 
@@ -420,6 +505,7 @@
             if (!frame) {
                 clearAllClouds();
                 state.bandAlphaMap.clear();
+                state.bandMetaMap.clear();
                 return;
             }
 
@@ -453,7 +539,7 @@
                 if (!bandRect) continue;
 
                 const sceneLuma = sampleAreaLuma(frame, sceneRect, bandRect);
-                const targetAlpha = computeCloudAlpha(sceneLuma, baseTextColor.luma, baseTextColor.alpha);
+                const targetAlpha = resolveBandTargetAlpha(bandKey, sceneLuma, baseTextColor, nowTs);
                 const smoothAlpha = smoothBandAlpha(bandKey, targetAlpha);
 
                 activeBandKeys.add(bandKey);
@@ -474,7 +560,9 @@
         }
 
         function schedule() {
-            state.lastUpdateTs = 0;
+            const now = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+            const at = now + config.eventLatencyMs;
+            state.forceUpdateAtTs = at;
         }
 
         function desiredIntervalMs() {
@@ -485,9 +573,16 @@
             if (!state.running) return;
 
             const interval = desiredIntervalMs();
-            if (!state.lastUpdateTs || (ts - state.lastUpdateTs) >= interval) {
+            const elapsed = state.lastUpdateTs ? (ts - state.lastUpdateTs) : Number.POSITIVE_INFINITY;
+            const forcedReady =
+                !!state.forceUpdateAtTs
+                && ts >= state.forceUpdateAtTs
+                && elapsed >= config.eventMinIntervalMs;
+
+            if (!state.lastUpdateTs || elapsed >= interval || forcedReady) {
                 state.lastUpdateTs = ts;
-                renderClouds();
+                state.forceUpdateAtTs = 0;
+                renderClouds(ts);
             }
 
             state.rafId = window.requestAnimationFrame(tick);
@@ -545,6 +640,8 @@
         function start() {
             if (state.running) return;
             state.running = true;
+            state.lastUpdateTs = 0;
+            state.forceUpdateAtTs = 0;
             schedule();
             state.rafId = window.requestAnimationFrame(tick);
         }
@@ -555,8 +652,10 @@
                 window.cancelAnimationFrame(state.rafId);
                 state.rafId = 0;
             }
+            state.forceUpdateAtTs = 0;
             clearAllClouds();
             state.bandAlphaMap.clear();
+            state.bandMetaMap.clear();
         }
 
         function destroy() {
