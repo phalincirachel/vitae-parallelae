@@ -10,11 +10,166 @@
 (function initAdaptiveSubtitleCloud() {
     const CLOUD_CLASS = 'adaptive-readability-cloud';
     const STYLE_KEYS = ['--adaptive-cloud-alpha', '--adaptive-cloud-blur', '--adaptive-cloud-scale'];
+    const TUNING_STORAGE_KEY = 'gb_adaptive_cloud_tuning_v1';
+    const TUNING_RANGES = {
+        // Size and shape
+        cloudInsetXEm: { min: 0.4, max: 3.4, step: 0.05 },
+        cloudInsetYEm: { min: 0.2, max: 1.8, step: 0.05 },
+        cloudFlatInsetXEm: { min: 0.5, max: 3.8, step: 0.05 },
+        cloudFlatInsetYEm: { min: 0.2, max: 2.0, step: 0.05 },
+        cloudRadiusEm: { min: 0.4, max: 3.0, step: 0.05 },
+        cloudGradientWidthPct: { min: 110, max: 280, step: 5 },
+        cloudGradientHeightPct: { min: 120, max: 300, step: 5 },
+        cloudBlurBasePx: { min: 2, max: 28, step: 0.5 },
+        cloudBlurRangePx: { min: 2, max: 44, step: 0.5 },
+        cloudScaleBase: { min: 0.9, max: 1.9, step: 0.01 },
+        cloudScaleRange: { min: 0.05, max: 0.9, step: 0.01 },
+
+        // Responsiveness and thresholds
+        activeIntervalMs: { min: 120, max: 900, step: 10 },
+        inactiveIntervalMs: { min: 300, max: 2800, step: 50 },
+        eventLatencyMs: { min: 0, max: 900, step: 10 },
+        eventMinIntervalMs: { min: 80, max: 700, step: 10 },
+        thresholdLuma: { min: 0.45, max: 0.9, step: 0.01 },
+        fullLuma: { min: 0.62, max: 1.0, step: 0.01 },
+        maxAlpha: { min: 0.2, max: 1.0, step: 0.01 },
+        minAlpha: { min: 0, max: 0.25, step: 0.005 },
+        activationAlpha: { min: 0.01, max: 0.3, step: 0.005 },
+        deactivationAlpha: { min: 0.005, max: 0.25, step: 0.005 },
+        alphaQuantStep: { min: 0.001, max: 0.08, step: 0.001 },
+        alphaRiseSmoothing: { min: 0.05, max: 0.9, step: 0.01 },
+        alphaFallSmoothing: { min: 0.05, max: 0.7, step: 0.01 },
+        lumaRiseSmoothing: { min: 0.03, max: 0.95, step: 0.01 },
+        lumaFallSmoothing: { min: 0.03, max: 0.85, step: 0.01 },
+        alphaDeadband: { min: 0.001, max: 0.12, step: 0.001 },
+        brightenDelayMs: { min: 0, max: 1800, step: 10 },
+        darkenDelayMs: { min: 0, max: 2600, step: 10 },
+        minDisplayHoldMs: { min: 0, max: 2200, step: 10 },
+
+        // Layout helpers
+        maxVisibleLines: { min: 8, max: 120, step: 1 },
+        sampleScale: { min: 0.16, max: 1.0, step: 0.01 },
+        minBands: { min: 2, max: 12, step: 1 },
+        maxBands: { min: 3, max: 16, step: 1 },
+        bandVerticalPaddingPx: { min: 0, max: 120, step: 1 },
+        bandHorizontalInsetPx: { min: 0, max: 220, step: 1 }
+    };
+    const DEFAULT_TUNING = {
+        cloudInsetXEm: 1.28,
+        cloudInsetYEm: 0.62,
+        cloudFlatInsetXEm: 1.45,
+        cloudFlatInsetYEm: 0.72,
+        cloudRadiusEm: 1.4,
+        cloudGradientWidthPct: 165,
+        cloudGradientHeightPct: 180,
+        cloudBlurBasePx: 11,
+        cloudBlurRangePx: 18,
+        cloudScaleBase: 1.14,
+        cloudScaleRange: 0.28,
+
+        activeIntervalMs: 260,
+        inactiveIntervalMs: 1400,
+        eventLatencyMs: 140,
+        eventMinIntervalMs: 200,
+        maxVisibleLines: 48,
+        sampleScale: 0.34,
+        thresholdLuma: 0.66,
+        fullLuma: 0.89,
+        minAlpha: 0.03,
+        maxAlpha: 0.78,
+        minBands: 4,
+        maxBands: 7,
+        bandVerticalPaddingPx: 22,
+        bandHorizontalInsetPx: 32,
+        alphaRiseSmoothing: 0.28,
+        alphaFallSmoothing: 0.14,
+        activationAlpha: 0.065,
+        deactivationAlpha: 0.04,
+        alphaQuantStep: 0.015,
+        lumaRiseSmoothing: 0.34,
+        lumaFallSmoothing: 0.16,
+        alphaDeadband: 0.018,
+        brightenDelayMs: 320,
+        darkenDelayMs: 780,
+        minDisplayHoldMs: 360
+    };
 
     function clamp(value, min, max) {
         const num = Number(value);
         if (!Number.isFinite(num)) return min;
         return Math.max(min, Math.min(max, num));
+    }
+
+    function clonePlainObject(obj) {
+        return Object.assign({}, obj || {});
+    }
+
+    function deepCloneJsonSafe(obj) {
+        try {
+            return JSON.parse(JSON.stringify(obj));
+        } catch (_) {
+            return clonePlainObject(obj);
+        }
+    }
+
+    function getRangeForKey(key) {
+        return TUNING_RANGES[key] || null;
+    }
+
+    function sanitizeTuningValue(key, value, fallback) {
+        const range = getRangeForKey(key);
+        if (!range) {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : fallback;
+        }
+        const raw = Number(value);
+        if (!Number.isFinite(raw)) return fallback;
+        const clamped = clamp(raw, range.min, range.max);
+        const step = Number(range.step);
+        if (!Number.isFinite(step) || step <= 0) return clamped;
+        return Math.round(clamped / step) * step;
+    }
+
+    function normalizeTuning(input = {}) {
+        const out = {};
+        const src = input && typeof input === 'object' ? input : {};
+        Object.keys(DEFAULT_TUNING).forEach((key) => {
+            out[key] = sanitizeTuningValue(key, src[key], DEFAULT_TUNING[key]);
+        });
+        if (out.deactivationAlpha > out.activationAlpha) {
+            out.deactivationAlpha = Math.max(0, out.activationAlpha * 0.7);
+        }
+        if (out.maxBands < out.minBands) {
+            out.maxBands = out.minBands;
+        }
+        return out;
+    }
+
+    function readStoredTuning() {
+        try {
+            const raw = localStorage.getItem(TUNING_STORAGE_KEY);
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    function writeStoredTuning(tuning) {
+        try {
+            localStorage.setItem(TUNING_STORAGE_KEY, JSON.stringify(tuning));
+        } catch (_) {
+            // Ignore storage errors.
+        }
+    }
+
+    function clearStoredTuning() {
+        try {
+            localStorage.removeItem(TUNING_STORAGE_KEY);
+        } catch (_) {
+            // Ignore storage errors.
+        }
     }
 
     function remap01(value, from, to) {
@@ -80,47 +235,23 @@
         const dimmerButton = options.dimmerButton || document.getElementById('sceneDimmerToggleBtn');
         const sceneOverlay = options.sceneOverlay || document.getElementById('sceneDimmerOverlay');
 
-        const config = {
-            activeIntervalMs: Math.max(180, Number(options.activeIntervalMs) || 260),
-            inactiveIntervalMs: Math.max(600, Number(options.inactiveIntervalMs) || 1400),
-            eventLatencyMs: Math.max(0, Number(options.eventLatencyMs) || 140),
-            eventMinIntervalMs: Math.max(120, Number(options.eventMinIntervalMs) || 200),
-            maxVisibleLines: Math.max(10, Number(options.maxVisibleLines) || 48),
-
-            sampleScale: clamp(Number(options.sampleScale) || 0.34, 0.16, 1),
-            thresholdLuma: clamp(Number(options.thresholdLuma) || 0.66, 0.5, 0.95),
-            fullLuma: clamp(Number(options.fullLuma) || 0.89, 0.6, 1),
-            minAlpha: clamp(Number(options.minAlpha) || 0.03, 0, 1),
-            maxAlpha: clamp(Number(options.maxAlpha) || 0.78, 0, 1),
-
-            minBands: Math.max(3, Number(options.minBands) || 4),
-            maxBands: Math.max(4, Number(options.maxBands) || 7),
-            bandVerticalPaddingPx: Math.max(0, Number(options.bandVerticalPaddingPx) || 22),
-            bandHorizontalInsetPx: Math.max(0, Number(options.bandHorizontalInsetPx) || 32),
-
-            alphaRiseSmoothing: clamp(Number(options.alphaRiseSmoothing) || 0.28, 0.05, 1),
-            alphaFallSmoothing: clamp(Number(options.alphaFallSmoothing) || 0.14, 0.05, 1),
-            activationAlpha: clamp(Number(options.activationAlpha) || 0.065, 0, 1),
-            deactivationAlpha: clamp(Number(options.deactivationAlpha) || 0.04, 0, 1),
-            alphaQuantStep: clamp(Number(options.alphaQuantStep) || 0.015, 0.001, 0.25),
-
-            lumaRiseSmoothing: clamp(Number(options.lumaRiseSmoothing) || 0.34, 0.03, 1),
-            lumaFallSmoothing: clamp(Number(options.lumaFallSmoothing) || 0.16, 0.03, 1),
-            alphaDeadband: clamp(Number(options.alphaDeadband) || 0.018, 0.001, 0.2),
-            brightenDelayMs: Math.max(0, Number(options.brightenDelayMs) || 320),
-            darkenDelayMs: Math.max(0, Number(options.darkenDelayMs) || 780),
-            minDisplayHoldMs: Math.max(0, Number(options.minDisplayHoldMs) || 360)
-        };
-
-        if (config.deactivationAlpha > config.activationAlpha) {
-            config.deactivationAlpha = Math.max(0, config.activationAlpha * 0.7);
+        const optionTuningOverrides = {};
+        Object.keys(DEFAULT_TUNING).forEach((key) => {
+            if (options[key] !== undefined) optionTuningOverrides[key] = options[key];
+        });
+        if (options.tuning && typeof options.tuning === 'object') {
+            Object.assign(optionTuningOverrides, options.tuning);
         }
+
+        const initialTuning = normalizeTuning(Object.assign({}, readStoredTuning(), optionTuningOverrides));
+        const config = clonePlainObject(initialTuning);
 
         const state = {
             running: false,
             rafId: 0,
             lastUpdateTs: 0,
             forceUpdateAtTs: 0,
+            tuning: initialTuning,
             activeLines: new Set(),
             bandAlphaMap: new Map(),
             bandMetaMap: new Map(),
@@ -168,6 +299,72 @@
             if (document.body && document.body.classList.contains('scene-dimmer-light-mode')) return false;
             return isBrightestMode();
         }
+
+        function applyTuningToConfig(tuning) {
+            Object.keys(DEFAULT_TUNING).forEach((key) => {
+                config[key] = tuning[key];
+            });
+            if (config.deactivationAlpha > config.activationAlpha) {
+                config.deactivationAlpha = Math.max(0, config.activationAlpha * 0.7);
+            }
+            if (config.maxBands < config.minBands) {
+                config.maxBands = config.minBands;
+            }
+        }
+
+        function applyTuningCssVariables(tuning) {
+            if (!subtitleContainer || !subtitleContainer.style) return;
+            subtitleContainer.style.setProperty('--adaptive-cloud-inset-x', `${tuning.cloudInsetXEm.toFixed(2)}em`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-inset-y', `${tuning.cloudInsetYEm.toFixed(2)}em`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-flat-inset-x', `${tuning.cloudFlatInsetXEm.toFixed(2)}em`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-flat-inset-y', `${tuning.cloudFlatInsetYEm.toFixed(2)}em`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-radius', `${tuning.cloudRadiusEm.toFixed(2)}em`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-grad-w', `${Math.round(tuning.cloudGradientWidthPct)}%`);
+            subtitleContainer.style.setProperty('--adaptive-cloud-grad-h', `${Math.round(tuning.cloudGradientHeightPct)}%`);
+        }
+
+        function getTuning() {
+            return clonePlainObject(state.tuning);
+        }
+
+        function setTuning(nextPartial = {}, options = {}) {
+            const merged = Object.assign({}, state.tuning, (nextPartial && typeof nextPartial === 'object') ? nextPartial : {});
+            const normalized = normalizeTuning(merged);
+            state.tuning = normalized;
+            applyTuningToConfig(normalized);
+            applyTuningCssVariables(normalized);
+
+            // Reset temporal caches so new values take effect immediately.
+            state.bandAlphaMap.clear();
+            state.bandMetaMap.clear();
+            clearAllClouds();
+
+            if (!options.skipPersist) {
+                writeStoredTuning(normalized);
+            }
+            schedule();
+            return getTuning();
+        }
+
+        function resetTuning(options = {}) {
+            const normalized = normalizeTuning(DEFAULT_TUNING);
+            state.tuning = normalized;
+            applyTuningToConfig(normalized);
+            applyTuningCssVariables(normalized);
+            state.bandAlphaMap.clear();
+            state.bandMetaMap.clear();
+            clearAllClouds();
+
+            if (!options.skipPersist) {
+                if (options.clearStorage) clearStoredTuning();
+                else writeStoredTuning(normalized);
+            }
+            schedule();
+            return getTuning();
+        }
+
+        applyTuningToConfig(state.tuning);
+        applyTuningCssVariables(state.tuning);
 
         function ensureSampleCanvas(width, height) {
             if (!(width > 0 && height > 0)) return false;
@@ -394,8 +591,8 @@
             }
 
             const t = clamp(a / Math.max(0.001, config.maxAlpha), 0, 1);
-            const blur = 11 + (18 * t);
-            const scale = 1.14 + (0.28 * t);
+            const blur = config.cloudBlurBasePx + (config.cloudBlurRangePx * t);
+            const scale = config.cloudScaleBase + (config.cloudScaleRange * t);
 
             lineEl.classList.add(CLOUD_CLASS);
             lineEl.style.setProperty('--adaptive-cloud-alpha', a.toFixed(3));
@@ -679,7 +876,12 @@
             stop,
             destroy,
             schedule,
-            update: renderClouds
+            update: renderClouds,
+            getTuning,
+            setTuning,
+            resetTuning,
+            getTuningRanges: () => deepCloneJsonSafe(TUNING_RANGES),
+            getDefaultTuning: () => clonePlainObject(DEFAULT_TUNING)
         };
     }
 
@@ -702,6 +904,45 @@
         },
         getDefaultController() {
             return defaultController;
+        },
+        getTuningRanges() {
+            return deepCloneJsonSafe(TUNING_RANGES);
+        },
+        getRegler() {
+            return deepCloneJsonSafe(TUNING_RANGES);
+        },
+        getDefaultTuning() {
+            return clonePlainObject(DEFAULT_TUNING);
+        },
+        getTuning() {
+            return defaultController && typeof defaultController.getTuning === 'function'
+                ? defaultController.getTuning()
+                : normalizeTuning(readStoredTuning());
+        },
+        setTuning(partial = {}) {
+            if (defaultController && typeof defaultController.setTuning === 'function') {
+                return defaultController.setTuning(partial);
+            }
+            const merged = normalizeTuning(Object.assign({}, readStoredTuning(), partial || {}));
+            writeStoredTuning(merged);
+            return merged;
+        },
+        setRegler(partial = {}) {
+            return this.setTuning(partial);
+        },
+        resetTuning(options = {}) {
+            if (defaultController && typeof defaultController.resetTuning === 'function') {
+                return defaultController.resetTuning(options);
+            }
+            if (options && options.clearStorage) {
+                clearStoredTuning();
+            } else {
+                writeStoredTuning(normalizeTuning(DEFAULT_TUNING));
+            }
+            return normalizeTuning(DEFAULT_TUNING);
+        },
+        resetRegler(options = {}) {
+            return this.resetTuning(options);
         }
     };
 
