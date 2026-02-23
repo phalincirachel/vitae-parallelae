@@ -9,6 +9,8 @@
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
     <script src="assets/js/SoundCloudURLs.js"></script>
+    <script src="assets/js/SubtitleInfoLibrary.js"></script>
+    <script src="assets/js/SubtitleRichText.js"></script>
 
     <!-- Shared Game Systems -->
     <script src="assets/js/SharedAudioPlayer.js"></script>
@@ -2046,7 +2048,15 @@
                     const span = document.createElement('span');
                     span.className = 'subtitle-line blaettern-line';
                     span.dataset.index = String(index);
-                    span.innerText = track ? track.text : '';
+                    if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
+                        window.SubtitleRichText.renderTrackInto(span, track || { text: '' }, {
+                            container: subtitleContainer,
+                            isDesktopPointer: () => isDesktopPointerLayout(),
+                            disableInfoLinks: !!options.forMeasure
+                        });
+                    } else {
+                        span.innerText = track ? track.text : '';
+                    }
                     applyBlaetternTimestampBoundaryGap(span, index);
                     if (!options.forMeasure) {
                         span.title = 'Tippen zum Abspielen';
@@ -3202,9 +3212,19 @@
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
                             if (!lineEl) return rects;
-                            for (const node of lineEl.childNodes) {
-                                if (node.nodeType !== Node.TEXT_NODE) continue;
-                                if (!(node.textContent || '').trim()) continue;
+                            const walker = document.createTreeWalker(
+                                lineEl,
+                                NodeFilter.SHOW_TEXT,
+                                {
+                                    acceptNode(node) {
+                                        return (node && (node.textContent || '').trim())
+                                            ? NodeFilter.FILTER_ACCEPT
+                                            : NodeFilter.FILTER_REJECT;
+                                    }
+                                }
+                            );
+                            while (walker.nextNode()) {
+                                const node = walker.currentNode;
                                 const range = document.createRange();
                                 range.selectNodeContents(node);
                                 for (const rect of range.getClientRects()) {

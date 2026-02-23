@@ -8,6 +8,8 @@
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
     <script src="assets/js/SoundCloudURLs.js"></script>
+    <script src="assets/js/SubtitleInfoLibrary.js"></script>
+    <script src="assets/js/SubtitleRichText.js"></script>
     <script src="assets/js/shared-game-systems.js"></script>
     <script src="assets/js/PlayerStateManager.js"></script>
     <script src="assets/js/ChapterAutoplayIntent.js"></script>
@@ -4080,6 +4082,13 @@
             document.body.appendChild(subtitleRecenterMobileRadius);
         }
 
+        if (window.SubtitleRichText && typeof window.SubtitleRichText.initOverlay === 'function') {
+            window.SubtitleRichText.initOverlay({
+                container: subtitleContainer,
+                isDesktopPointer: () => isDesktopPointerLayout()
+            });
+        }
+
         const BLAETTERN_CONTROLS_HIDE_DELAY_MS = 10000;
         const BLAETTERN_LONG_PRESS_DELAY_MS = 600;
         const BLAETTERN_SWIPE_TURN_RATIO = 0.18;
@@ -4358,8 +4367,26 @@
                     baseEm: FLAT_TIMESTAMP_GAP_BASE_EM,
                     minorEm: FLAT_TIMESTAMP_GAP_MINOR_EM,
                     sentenceEm: FLAT_TIMESTAMP_GAP_SENTENCE_EM
-                });
+            });
             lineEl.style.setProperty('--timestamp-gap', `${gapEm.toFixed(3)}em`);
+        }
+
+        function renderSubtitleTrackContent(lineEl, track, options = {}) {
+            if (!lineEl) return;
+            const safeTrack = track || { text: '' };
+
+            if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
+                window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
+                    container: subtitleContainer,
+                    isDesktopPointer: () => isDesktopPointerLayout(),
+                    disableInfoLinks: !!options.disableInfoLinks
+                });
+                return;
+            }
+
+            lineEl.textContent = safeTrack && typeof safeTrack.text === 'string'
+                ? safeTrack.text
+                : '';
         }
 
         function applyReaderColorSettings() {
@@ -4805,7 +4832,7 @@
             const span = document.createElement('span');
             span.className = 'subtitle-line blaettern-line';
             span.dataset.index = String(index);
-            span.innerText = track ? track.text : '';
+            renderSubtitleTrackContent(span, track || { text: '' }, { disableInfoLinks: !!options.forMeasure });
             applyTimestampBoundaryGap(span, index, subtitleTracks, 'blaettern');
             if (!options.forMeasure) {
                 span.title = 'Tippen zum Abspielen';
@@ -6413,7 +6440,7 @@
                     subtitleTracks.forEach((track, i) => {
                         const div = document.createElement('div');
                         div.className = 'subtitle-line';
-                        div.innerText = track.text;
+                        renderSubtitleTrackContent(div, track);
                         div.dataset.index = i;
                         applyTimestampBoundaryGap(div, i, subtitleTracks, 'flat');
 
@@ -6610,9 +6637,19 @@
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
                             if (!lineEl) return rects;
-                            for (const node of lineEl.childNodes) {
-                                if (node.nodeType !== Node.TEXT_NODE) continue;
-                                if (!(node.textContent || '').trim()) continue;
+                            const walker = document.createTreeWalker(
+                                lineEl,
+                                NodeFilter.SHOW_TEXT,
+                                {
+                                    acceptNode(node) {
+                                        return (node && (node.textContent || '').trim())
+                                            ? NodeFilter.FILTER_ACCEPT
+                                            : NodeFilter.FILTER_REJECT;
+                                    }
+                                }
+                            );
+                            while (walker.nextNode()) {
+                                const node = walker.currentNode;
                                 const range = document.createRange();
                                 range.selectNodeContents(node);
                                 for (const rect of range.getClientRects()) {
@@ -7013,7 +7050,7 @@
                     else if (distance >= 3) div.classList.add('fade-mid');
                 }
 
-                div.innerText = subtitleTracks[i].text;
+                renderSubtitleTrackContent(div, subtitleTracks[i]);
                 subtitleContainer.appendChild(div);
             }
         }
@@ -7068,9 +7105,19 @@
                     }
 
                     if (text && text.length > 0) {
+                        const rich = (window.SubtitleRichText && typeof window.SubtitleRichText.parse === 'function')
+                            ? window.SubtitleRichText.parse(text)
+                            : null;
+                        const plainText = rich ? String(rich.plainText || '') : text;
+                        const richTokens = rich && Array.isArray(rich.tokens) ? rich.tokens : null;
+
+                        if (!plainText) return;
+
                         subtitleTracks.push({
                             time: totalSeconds,
-                            text: text
+                            text: plainText,
+                            richTokens: richTokens,
+                            rawText: text
                         });
                     }
                 }

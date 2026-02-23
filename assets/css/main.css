@@ -540,6 +540,30 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     opacity: 1;
 }
 
+.subtitle-inline-mark {
+    display: inline;
+    color: inherit;
+    font: inherit;
+    line-height: inherit;
+}
+
+.subtitle-inline-underline {
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.12em;
+    text-decoration-skip-ink: auto;
+}
+
+.subtitle-inline-link {
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.subtitle-inline-link:hover,
+.subtitle-inline-link:focus-visible {
+    opacity: 1;
+}
+
 .subtitle-current {
     color: rgba(255, 255, 255, 0.95) !important;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
@@ -1053,6 +1077,126 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
 #transitionOverlay.active {
     opacity: 1;
     pointer-events: auto;
+}
+
+/* ==========================================
+   SUBTITLE INFO OVERLAY
+   ========================================== */
+#subtitleInfoOverlay {
+    position: fixed;
+    inset: 0;
+    z-index: 3500;
+    pointer-events: none;
+}
+
+#subtitleInfoOverlay.visible {
+    pointer-events: auto;
+}
+
+#subtitleInfoOverlay .subtitle-info-card {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) scale(0.82);
+    opacity: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 14px 16px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.32);
+    background: rgba(8, 10, 14, 0.88);
+    box-shadow: 0 18px 54px rgba(0, 0, 0, 0.6);
+    color: rgba(255, 255, 255, 0.96);
+    font-family: "Georgia", serif;
+    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
+    overflow: hidden auto;
+    pointer-events: auto;
+}
+
+#subtitleInfoOverlay.visible .subtitle-info-card {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+}
+
+#subtitleInfoOverlay .subtitle-info-close {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+#subtitleInfoOverlay .subtitle-info-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+#subtitleInfoOverlay .subtitle-info-media {
+    display: none;
+    width: 100%;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+#subtitleInfoOverlay .subtitle-info-card.has-image .subtitle-info-media {
+    display: block;
+}
+
+#subtitleInfoOverlay .subtitle-info-image {
+    width: 100%;
+    max-height: min(32vh, 240px);
+    object-fit: cover;
+    display: block;
+}
+
+#subtitleInfoOverlay .subtitle-info-body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#subtitleInfoOverlay .subtitle-info-title {
+    margin: 0;
+    font-size: 18px;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+#subtitleInfoOverlay .subtitle-info-text {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+}
+
+body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-card {
+    background: rgba(240, 233, 222, 0.94);
+    border-color: rgba(0, 0, 0, 0.25);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.22);
+    color: rgba(0, 0, 0, 0.9);
+}
+
+body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-close {
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(0, 0, 0, 0.82);
+}
+
+body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-close:hover {
+    background: rgba(0, 0, 0, 0.18);
+}
+
+body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-media {
+    border-color: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.08);
 }
 
 /* ==========================================
@@ -2151,6 +2295,20 @@ body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
     .audio-btn:focus,
     .audio-btn:focus-visible {
         outline: none !important;
+    }
+
+    #subtitleInfoOverlay .subtitle-info-card {
+        padding: 12px 12px 14px;
+        border-radius: 9px;
+    }
+
+    #subtitleInfoOverlay .subtitle-info-title {
+        font-size: 16px;
+    }
+
+    #subtitleInfoOverlay .subtitle-info-text {
+        font-size: 13px;
+        line-height: 1.45;
     }
 
     #skipBackBtn {

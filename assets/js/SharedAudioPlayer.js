@@ -15,6 +15,11 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this.renderVersion = 0;
         this.currentScrollAnimation = null;
         this.container = options.container || document.getElementById('subtitleContainer');
+        if (this.container && window.SubtitleRichText && typeof window.SubtitleRichText.initOverlay === 'function') {
+            window.SubtitleRichText.initOverlay({
+                container: this.container
+            });
+        }
         this.isReadingMode = options.isReadingMode || false;
         this.onLineRender = options.onLineRender || null;
         this.canSeek = (typeof options.canSeek === 'function') ? options.canSeek : null;
@@ -199,7 +204,20 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 }
 
                 if (text) {
-                    this.subtitleTracks.push({ time: totalSeconds, text });
+                    const rich = (window.SubtitleRichText && typeof window.SubtitleRichText.parse === 'function')
+                        ? window.SubtitleRichText.parse(text)
+                        : null;
+                    const plainText = rich ? String(rich.plainText || '') : text;
+                    const richTokens = rich && Array.isArray(rich.tokens) ? rich.tokens : null;
+
+                    if (!plainText) return;
+
+                    this.subtitleTracks.push({
+                        time: totalSeconds,
+                        text: plainText,
+                        richTokens,
+                        rawText: text
+                    });
                 }
             }
         });
@@ -226,6 +244,18 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         }
         // Custom Hook
         if (this.onUpdate) this.onUpdate(t);
+    }
+
+    _renderSubtitleTrackContent(lineEl, track) {
+        if (!lineEl) return;
+        const safeTrack = track || { text: '' };
+        if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
+            window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
+                container: this.container
+            });
+            return;
+        }
+        lineEl.textContent = safeTrack.text || '';
     }
 
     _getFlatLeadingCompensationPx(text, sampleEl) {
@@ -336,7 +366,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 for (let i = 0; i < this.subtitleTracks.length; i++) {
                     const div = document.createElement('div');
                     div.className = 'subtitle-line';
-                    div.innerText = this.subtitleTracks[i].text;
+                    this._renderSubtitleTrackContent(div, this.subtitleTracks[i]);
                     div.dataset.index = String(i);
                     this._applyFlatTimestampBoundaryGap(div, i);
 
@@ -401,7 +431,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 if (dist >= 4) div.classList.add('fade-far');
                 else if (dist >= 2) div.classList.add('fade-mid');
             }
-            div.textContent = this.subtitleTracks[i].text;
+            this._renderSubtitleTrackContent(div, this.subtitleTracks[i]);
             this.container.appendChild(div);
         }
     }
