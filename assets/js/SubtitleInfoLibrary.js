@@ -9,6 +9,21 @@
     'use strict';
 
     const entries = {
+        demo_rundbrief: {
+            title: 'Rundbrief-Konsortium (fiktiv)',
+            image: 'assets/platz3.png',
+            text: 'Ein geheimer Verteilerkreis aus Chronisten, die verlorene Stadtprotokolle als private Rundbriefe zirkulieren lassen.'
+        },
+        demo_schuttarchiv: {
+            title: 'Schuttarchiv 2069 (fiktiv)',
+            image: 'assets/platz2.png',
+            text: 'Unter den Truemmern der Altstadt sollen versiegelte Mini-Archive liegen, die nur von Eingeweihten geortet werden koennen.'
+        },
+        demo_zigzag: {
+            title: 'ZIGZAG-Protokoll (fiktiv)',
+            image: 'assets/platz.png',
+            text: 'Ein postklassisches Nachrichtensystem mit fragmentierten Kanalpfaden. Nachrichten erscheinen zeitversetzt in mehreren Fassungen.'
+        },
         antiquariat_hannrath: {
             title: 'Antiquariat Hannrath',
             image: 'assets/platz.png',
