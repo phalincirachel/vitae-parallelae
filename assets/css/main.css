@@ -1097,7 +1097,8 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     position: fixed;
     left: 50%;
     top: 50%;
-    transform: translate(-50%, -50%) scale(0.82);
+    transform: scale(0.82);
+    transform-origin: center center;
     opacity: 0;
     display: flex;
     flex-direction: column;
@@ -1115,7 +1116,7 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
 }
 
 #subtitleInfoOverlay.visible .subtitle-info-card {
-    transform: translate(-50%, -50%) scale(1);
+    transform: scale(1);
     opacity: 1;
 }
 
