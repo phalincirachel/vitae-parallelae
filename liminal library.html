@@ -5306,12 +5306,12 @@
                 // IMPORTANT:
                 // Do NOT reduce the active segment count for "performance savings".
                 // Lower values make segment spawning visibly pop into view.
-                const MIN_ACTIVE_SEGMENTS = 6;
+                const MIN_ACTIVE_SEGMENTS = 7;
 
                 function updateSegments(playerZ) {
                     // Keep one additional front segment loaded for smoother forward visibility.
                     if (segments.length < MIN_ACTIVE_SEGMENTS) {
-                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 30;
+                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 40;
                         addSegment(lastZ - segmentLength);
                         return;
                     }
@@ -5865,7 +5865,7 @@
                 // IMPORTANT:
                 // Do NOT shrink this preload list for performance reasons.
                 // If reduced, players can see new hallway segments spawning in front of them.
-                const initialZ = [30, 20, 10, 0, -10, -20];
+                const initialZ = [40, 30, 20, 10, 0, -10, -20];
                 const totalToLoad = initialZ.length;
 
                 function checkPreloadComplete() {
