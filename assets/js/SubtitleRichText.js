@@ -162,22 +162,41 @@
     function placeOverlay(anchorEl) {
         if (!state.card) return;
 
-        const margin = 12;
+        const viewportMargin = 12;
+        const minCardWidth = 220;
+        const minCardHeight = 180;
         const containerRect = state.container && typeof state.container.getBoundingClientRect === 'function'
             ? state.container.getBoundingClientRect()
             : null;
         const hasContainerRect = !!(containerRect && containerRect.width > 80 && containerRect.height > 80);
+        const containerInset = hasContainerRect
+            ? clamp(Math.round(Math.min(20, Math.max(10, containerRect.width * 0.02))), 10, 20)
+            : 0;
 
+        const viewportMaxWidth = Math.max(minCardWidth, window.innerWidth - (viewportMargin * 2));
+        const containerMaxWidth = hasContainerRect
+            ? Math.max(minCardWidth, containerRect.width - (containerInset * 2))
+            : viewportMaxWidth;
+        const preferredWidth = hasContainerRect
+            ? containerRect.width * 0.90
+            : window.innerWidth * 0.88;
         const width = clamp(
-            hasContainerRect ? containerRect.width * 0.96 : window.innerWidth * 0.88,
-            280,
-            Math.max(280, Math.min(760, window.innerWidth - (margin * 2)))
+            preferredWidth,
+            minCardWidth,
+            Math.min(760, viewportMaxWidth, containerMaxWidth)
         );
 
+        const viewportMaxHeight = Math.max(minCardHeight, window.innerHeight - (viewportMargin * 2));
+        const containerMaxHeight = hasContainerRect
+            ? Math.max(minCardHeight, containerRect.height - (containerInset * 2))
+            : viewportMaxHeight;
+        const preferredHeight = hasContainerRect
+            ? containerRect.height * 0.86
+            : window.innerHeight * 0.68;
         const maxHeight = clamp(
-            hasContainerRect ? containerRect.height * 0.92 : window.innerHeight * 0.68,
-            220,
-            Math.max(220, window.innerHeight - (margin * 2))
+            preferredHeight,
+            minCardHeight,
+            Math.min(560, viewportMaxHeight, containerMaxHeight)
         );
 
         let left = hasContainerRect
@@ -198,15 +217,36 @@
             const preferBelow = anchorRect.bottom + 10;
             const preferAbove = anchorRect.top - maxHeight - 10;
 
-            if (preferBelow + maxHeight <= containerRect.bottom + margin) {
+            if (preferBelow + maxHeight <= containerRect.bottom - containerInset) {
                 top = preferBelow;
-            } else if (preferAbove >= containerRect.top - margin) {
+            } else if (preferAbove >= containerRect.top + containerInset) {
                 top = preferAbove;
             }
         }
 
-        left = clamp(left, margin, window.innerWidth - width - margin);
-        top = clamp(top, margin, window.innerHeight - maxHeight - margin);
+        let minLeft = viewportMargin;
+        let maxLeft = window.innerWidth - width - viewportMargin;
+        let minTop = viewportMargin;
+        let maxTop = window.innerHeight - maxHeight - viewportMargin;
+
+        if (hasContainerRect) {
+            minLeft = Math.max(minLeft, containerRect.left + containerInset);
+            maxLeft = Math.min(maxLeft, containerRect.right - containerInset - width);
+            minTop = Math.max(minTop, containerRect.top + containerInset);
+            maxTop = Math.min(maxTop, containerRect.bottom - containerInset - maxHeight);
+        }
+
+        if (maxLeft < minLeft) {
+            minLeft = viewportMargin;
+            maxLeft = window.innerWidth - width - viewportMargin;
+        }
+        if (maxTop < minTop) {
+            minTop = viewportMargin;
+            maxTop = window.innerHeight - maxHeight - viewportMargin;
+        }
+
+        left = clamp(left, minLeft, maxLeft);
+        top = clamp(top, minTop, maxTop);
 
         state.card.style.left = `${Math.round(left)}px`;
         state.card.style.top = `${Math.round(top)}px`;
