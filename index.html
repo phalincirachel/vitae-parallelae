@@ -4099,9 +4099,9 @@
         const FLAT_TIMESTAMP_GAP_BASE_EM = 0.12;
         const FLAT_TIMESTAMP_GAP_MINOR_EM = 0.16;
         const FLAT_TIMESTAMP_GAP_SENTENCE_EM = 0.24;
-        const BLAETTERN_TIMESTAMP_GAP_BASE_EM = 0.16;
-        const BLAETTERN_TIMESTAMP_GAP_MINOR_EM = 0.21;
-        const BLAETTERN_TIMESTAMP_GAP_SENTENCE_EM = 0.28;
+        const BLAETTERN_TIMESTAMP_GAP_BASE_EM = 0.22;
+        const BLAETTERN_TIMESTAMP_GAP_MINOR_EM = 0.28;
+        const BLAETTERN_TIMESTAMP_GAP_SENTENCE_EM = 0.34;
         let blaetternPages = [];
         let blaetternPageIndex = 0;
         let blaetternPaginationDirty = true;
@@ -4351,6 +4351,11 @@
                 lineEl.style.removeProperty('--timestamp-gap');
                 return;
             }
+            if (mode === 'blaettern' && isDesktopPointerLayout()) {
+                // Desktop blattern: keep boundaries neutral for justification quality.
+                lineEl.style.setProperty('--timestamp-gap', '0em');
+                return;
+            }
             const currentText = tracks[index] && typeof tracks[index].text === 'string'
                 ? tracks[index].text
                 : '';
@@ -4379,6 +4384,21 @@
                 window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
                     container: subtitleContainer,
                     isDesktopPointer: () => isDesktopPointerLayout(),
+                    isPlaybackRunning: () => {
+                        if (!audioPlayer) return false;
+                        if (typeof audioPlayer.isProbablyPlaying === 'function') {
+                            return audioPlayer.isProbablyPlaying();
+                        }
+                        return !audioPlayer.paused;
+                    },
+                    pausePlayback: () => {
+                        if (!audioPlayer || typeof audioPlayer.pause !== 'function') return;
+                        audioPlayer.pause();
+                    },
+                    resumePlayback: () => {
+                        if (!audioPlayer || typeof audioPlayer.play !== 'function') return Promise.resolve();
+                        return audioPlayer.play();
+                    },
                     disableInfoLinks: !!options.disableInfoLinks
                 });
                 return;
@@ -4842,6 +4862,25 @@
             return span;
         }
 
+        function shouldUseDesktopBlaetternWordSeparators() {
+            return isDesktopPointerLayout();
+        }
+
+        function appendBlaetternLineWithSeparator(parentEl, lineEl, addSeparator) {
+            if (!parentEl || !lineEl) return;
+            parentEl.appendChild(lineEl);
+            if (!addSeparator) return;
+            parentEl.appendChild(document.createTextNode(' '));
+        }
+
+        function removeTrailingBlaetternSeparator(parentEl) {
+            if (!parentEl) return;
+            const lastNode = parentEl.lastChild;
+            if (!lastNode || lastNode.nodeType !== Node.TEXT_NODE) return;
+            if (lastNode.textContent !== ' ') return;
+            parentEl.removeChild(lastNode);
+        }
+
         function clearBlaetternSmartLineStyle(lineEl) {
             if (!lineEl) return;
             lineEl.classList.remove('blaettern-line-smart');
@@ -4897,6 +4936,10 @@
             if (!layer || layer.classList.contains('blaettern-page-empty')) return;
             const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
             if (!lineElements.length) return;
+            if (isDesktopPointerLayout()) {
+                lineElements.forEach((lineEl) => clearBlaetternSmartLineStyle(lineEl));
+                return;
+            }
 
             const layerRect = layer.getBoundingClientRect();
             const layerStyle = window.getComputedStyle(layer);
@@ -5054,11 +5097,14 @@
             while (startIndex < subtitleTracks.length) {
                 measureLayer.replaceChildren();
                 let endIndex = startIndex - 1;
+                const useDesktopSeparators = shouldUseDesktopBlaetternWordSeparators();
 
                 for (let i = startIndex; i < subtitleTracks.length; i++) {
                     const node = createBlaetternLineElement(i, { forMeasure: true });
-                    measureLayer.appendChild(node);
+                    const addSeparator = useDesktopSeparators && i < (subtitleTracks.length - 1);
+                    appendBlaetternLineWithSeparator(measureLayer, node, addSeparator);
                     if (measureLayer.scrollHeight > (measureLayer.clientHeight + 1)) {
+                        if (addSeparator) removeTrailingBlaetternSeparator(measureLayer);
                         measureLayer.removeChild(node);
                         break;
                     }
@@ -5067,7 +5113,11 @@
 
                 if (endIndex < startIndex) {
                     endIndex = startIndex;
-                    measureLayer.appendChild(createBlaetternLineElement(startIndex, { forMeasure: true }));
+                    appendBlaetternLineWithSeparator(
+                        measureLayer,
+                        createBlaetternLineElement(startIndex, { forMeasure: true }),
+                        false
+                    );
                 }
 
                 computedPages.push({ startIndex, endIndex });
@@ -5098,8 +5148,10 @@
 
             layer.classList.remove('blaettern-page-empty');
             const page = blaetternPages[pageIdx];
+            const useDesktopSeparators = shouldUseDesktopBlaetternWordSeparators();
             for (let i = page.startIndex; i <= page.endIndex; i++) {
-                layer.appendChild(createBlaetternLineElement(i));
+                const addSeparator = useDesktopSeparators && i < page.endIndex;
+                appendBlaetternLineWithSeparator(layer, createBlaetternLineElement(i), addSeparator);
             }
             applyBlaetternSmartJustification(layer);
         }

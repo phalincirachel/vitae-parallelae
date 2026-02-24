@@ -19,6 +19,11 @@
         pinned: false,
         hover: false,
         hideTimer: 0,
+        playbackIsRunning: null,
+        playbackPause: null,
+        playbackResume: null,
+        playbackPausedByOverlay: false,
+        playbackShouldResumeOnClose: false,
         isDesktopPointer: () => {
             if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
             return window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -136,6 +141,61 @@
             if (state.hover || state.pinned) return;
             closeOverlay(true);
         }, Math.max(40, Number(delayMs) || DEFAULT_HIDE_DELAY_MS));
+    }
+
+    function setPlaybackHooks(options = {}) {
+        if (typeof options.isPlaybackRunning === 'function') {
+            state.playbackIsRunning = options.isPlaybackRunning;
+        }
+        if (typeof options.pausePlayback === 'function') {
+            state.playbackPause = options.pausePlayback;
+        }
+        if (typeof options.resumePlayback === 'function') {
+            state.playbackResume = options.resumePlayback;
+        }
+    }
+
+    function isPlaybackRunning() {
+        if (typeof state.playbackIsRunning !== 'function') return false;
+        try {
+            return !!state.playbackIsRunning();
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function pausePlaybackForPinnedOverlay() {
+        if (state.playbackPausedByOverlay) return;
+        if (typeof state.playbackPause !== 'function') return;
+
+        const wasRunning = isPlaybackRunning();
+        state.playbackShouldResumeOnClose = wasRunning;
+        if (!wasRunning) return;
+
+        try {
+            state.playbackPause();
+            state.playbackPausedByOverlay = true;
+        } catch (_) {
+            state.playbackPausedByOverlay = false;
+            state.playbackShouldResumeOnClose = false;
+        }
+    }
+
+    function resumePlaybackAfterOverlayClose() {
+        const shouldResume = state.playbackPausedByOverlay && state.playbackShouldResumeOnClose;
+        state.playbackPausedByOverlay = false;
+        state.playbackShouldResumeOnClose = false;
+        if (!shouldResume) return;
+        if (typeof state.playbackResume !== 'function') return;
+
+        try {
+            const result = state.playbackResume();
+            if (result && typeof result.catch === 'function') {
+                result.catch(() => { });
+            }
+        } catch (_) {
+            // Ignore resume errors to avoid overlay-close regressions.
+        }
     }
 
     function setOverlayContent(entry, key) {
@@ -264,6 +324,7 @@
         state.activeKey = '';
         state.pinned = false;
         state.hover = false;
+        resumePlaybackAfterOverlayClose();
     }
 
     function openOverlay(key, anchorEl, options = {}) {
@@ -278,6 +339,9 @@
 
         state.activeKey = lookupKey;
         state.pinned = !!options.pinned;
+        if (state.pinned) {
+            pausePlaybackForPinnedOverlay();
+        }
         setOverlayContent(entry, lookupKey);
         placeOverlay(anchorEl || null);
 
@@ -305,6 +369,7 @@
         if (typeof options.isDesktopPointer === 'function') {
             state.isDesktopPointer = options.isDesktopPointer;
         }
+        setPlaybackHooks(options);
 
         if (state.overlay) return state.overlay;
 

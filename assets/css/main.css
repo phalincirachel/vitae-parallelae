@@ -1087,10 +1087,23 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     inset: 0;
     z-index: 3500;
     pointer-events: none;
+    opacity: 0;
+    background: rgba(4, 6, 10, 0);
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    transition:
+        opacity 0.2s ease,
+        background-color 0.2s ease,
+        backdrop-filter 0.2s ease,
+        -webkit-backdrop-filter 0.2s ease;
 }
 
 #subtitleInfoOverlay.visible {
     pointer-events: auto;
+    opacity: 1;
+    background: rgba(4, 6, 10, 0.28);
+    backdrop-filter: blur(7px);
+    -webkit-backdrop-filter: blur(7px);
 }
 
 #subtitleInfoOverlay .subtitle-info-card {
@@ -1202,6 +1215,10 @@ body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-close:hover {
 body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-media {
     border-color: rgba(0, 0, 0, 0.2);
     background: rgba(0, 0, 0, 0.08);
+}
+
+body.scene-dimmer-light-mode #subtitleInfoOverlay.visible {
+    background: rgba(245, 238, 225, 0.24);
 }
 
 /* ==========================================

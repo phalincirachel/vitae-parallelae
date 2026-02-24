@@ -251,7 +251,22 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const safeTrack = track || { text: '' };
         if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
             window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
-                container: this.container
+                container: this.container,
+                isPlaybackRunning: () => {
+                    if (!this.audio) return false;
+                    if (typeof this.audio.isProbablyPlaying === 'function') {
+                        return this.audio.isProbablyPlaying();
+                    }
+                    return !this.audio.paused;
+                },
+                pausePlayback: () => {
+                    if (!this.audio || typeof this.audio.pause !== 'function') return;
+                    this.audio.pause();
+                },
+                resumePlayback: () => {
+                    if (!this.audio || typeof this.audio.play !== 'function') return Promise.resolve();
+                    return this.audio.play();
+                }
             });
             return;
         }
