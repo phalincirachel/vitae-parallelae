@@ -2432,9 +2432,12 @@
             return smoothed.slice(1);
         }
 
+        let suppressCanvasClickUntil = 0;
+
         canvas.addEventListener('click', e => {
             // Guard: Ignore if clicking UI buttons (propagated events)
             if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
+            if (performance.now() < suppressCanvasClickUntil) return;
             handleClickMove(e.clientX, e.clientY);
         });
 
@@ -2442,6 +2445,7 @@
             // Guard: Ignore if touching UI
             if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
             e.preventDefault();
+            suppressCanvasClickUntil = performance.now() + 420;
             if (e.touches.length > 0) {
                 handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
             }
@@ -7397,7 +7401,7 @@
         }
 
         const handleDown = (e) => {
-            if (isBlaetternLayoutActive()) return;
+            if (!isReadingMode || isBlaetternLayoutActive()) return;
             cancelMomentum();
             isDown = true;
             subtitleContainer.dataset.isDragging = 'false';
@@ -7413,7 +7417,7 @@
         };
 
         const handleMove = (e) => {
-            if (isBlaetternLayoutActive()) return;
+            if (!isReadingMode || isBlaetternLayoutActive()) return;
             if (!isDown) return;
             e.preventDefault(); // Prevent text selection
             const pageY = e.pageY || e.touches[0].pageY;
@@ -7443,7 +7447,7 @@
         };
 
         const handleUp = () => {
-            if (isBlaetternLayoutActive()) return;
+            if (!isReadingMode || isBlaetternLayoutActive()) return;
             isDown = false;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.style.cursor = 'auto';

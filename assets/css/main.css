@@ -555,6 +555,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     color: inherit;
     font: inherit;
     line-height: inherit;
+    pointer-events: none;
 }
 
 .subtitle-inline-underline {

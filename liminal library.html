@@ -4324,7 +4324,7 @@
                 }
 
                 const handleDown = (e) => {
-                    if (isBlaetternLayoutActive()) return;
+                    if (!isReadingMode || isBlaetternLayoutActive()) return;
                     cancelMomentum();
                     isDown = true;
                     subtitleContainer.dataset.isDragging = 'false';
@@ -4339,7 +4339,7 @@
                 };
 
                 const handleMove = (e) => {
-                    if (isBlaetternLayoutActive()) return;
+                    if (!isReadingMode || isBlaetternLayoutActive()) return;
                     if (!isDown) return;
                     e.preventDefault();
                     const pageY = e.pageY || e.touches[0].pageY;
@@ -4367,7 +4367,7 @@
                 };
 
                 const handleUp = () => {
-                    if (isBlaetternLayoutActive()) return;
+                    if (!isReadingMode || isBlaetternLayoutActive()) return;
                     isDown = false;
                     subtitleContainer.dataset.isDragging = subtitleFollowLocked ? 'true' : 'false';
                     subtitleContainer.style.cursor = 'auto';
@@ -5303,12 +5303,15 @@
                 const segments = [];
                 // const segmentPool = []; // REMOVED: Proper recycling uses the active list directly
                 const segmentLength = config.segmentLength;
-                const MIN_ACTIVE_SEGMENTS = 5;
+                // IMPORTANT:
+                // Do NOT reduce the active segment count for "performance savings".
+                // Lower values make segment spawning visibly pop into view.
+                const MIN_ACTIVE_SEGMENTS = 6;
 
                 function updateSegments(playerZ) {
                     // Keep one additional front segment loaded for smoother forward visibility.
                     if (segments.length < MIN_ACTIVE_SEGMENTS) {
-                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 20;
+                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 30;
                         addSegment(lastZ - segmentLength);
                         return;
                     }
@@ -5859,8 +5862,10 @@
 
                 // 1. Initial Segments Preload
                 let loadedSegments = 0;
-                // Preload one extra segment in front to avoid visible pop-in at start.
-                const initialZ = [20, 10, 0, -10, -20];
+                // IMPORTANT:
+                // Do NOT shrink this preload list for performance reasons.
+                // If reduced, players can see new hallway segments spawning in front of them.
+                const initialZ = [30, 20, 10, 0, -10, -20];
                 const totalToLoad = initialZ.length;
 
                 function checkPreloadComplete() {
