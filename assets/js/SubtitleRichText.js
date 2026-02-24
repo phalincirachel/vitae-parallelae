@@ -225,10 +225,21 @@
         const viewportMargin = 12;
         const minCardWidth = 220;
         const minCardHeight = 180;
-        const containerRect = state.container && typeof state.container.getBoundingClientRect === 'function'
+        const rawContainerRect = state.container && typeof state.container.getBoundingClientRect === 'function'
             ? state.container.getBoundingClientRect()
             : null;
-        const hasContainerRect = !!(containerRect && containerRect.width > 80 && containerRect.height > 80);
+        const uiRoot = state.container && typeof state.container.closest === 'function'
+            ? state.container.closest('#audioPlayerUI')
+            : null;
+        const useContainerBounds = !!(
+            rawContainerRect
+            && rawContainerRect.width > 80
+            && rawContainerRect.height > 80
+            && uiRoot
+            && uiRoot.classList.contains('reading-mode')
+        );
+        const containerRect = useContainerBounds ? rawContainerRect : null;
+        const hasContainerRect = !!containerRect;
         const containerInset = hasContainerRect
             ? clamp(Math.round(Math.min(20, Math.max(10, containerRect.width * 0.02))), 10, 20)
             : 0;

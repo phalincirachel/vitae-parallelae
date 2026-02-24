@@ -544,6 +544,10 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
 #audioPlayerUI:not(.reading-mode) .subtitle-line {
     text-align: left !important;
     text-justify: auto !important;
+    word-spacing: normal !important;
+    letter-spacing: normal !important;
+    font-stretch: normal !important;
+    font-variation-settings: normal !important;
 }
 
 .subtitle-inline-mark {
@@ -1033,10 +1037,10 @@ body.scene-dimmer-light-mode #bookBtn img {
    NEXT CHAPTER BUTTON
    ========================================== */
 #nextChapterBtn {
-    position: absolute;
-    bottom: 120px;
+    position: fixed;
+    top: var(--next-btn-top, calc(100vh - 190px));
     left: 50%;
-    transform: translateX(-50%);
+    transform: translateX(-50%) translateY(12px) scale(0.985);
     padding: 12px 30px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.4);
@@ -1049,19 +1053,24 @@ body.scene-dimmer-light-mode #bookBtn img {
     backdrop-filter: blur(5px);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.5s ease, transform 0.2s ease;
+    transition:
+        opacity 1s cubic-bezier(0.22, 1, 0.36, 1),
+        transform 1s cubic-bezier(0.22, 1, 0.36, 1),
+        background-color 0.24s ease;
     z-index: 2000;
     text-transform: uppercase;
+    will-change: opacity, transform, top;
 }
 
 #nextChapterBtn:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: translateX(-50%) scale(1.05);
+    transform: translateX(-50%) translateY(0) scale(1.04);
 }
 
 #nextChapterBtn.visible {
     opacity: 1;
     pointer-events: auto;
+    transform: translateX(-50%) translateY(0) scale(1);
 }
 
 body.scene-dimmer-light-mode #nextChapterBtn {

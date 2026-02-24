@@ -249,7 +249,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
     _renderSubtitleTrackContent(lineEl, track) {
         if (!lineEl) return;
         const safeTrack = track || { text: '' };
-        const disableInfoLinks = !this.isReadingMode;
+        const disableInfoLinks = false;
         if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
             window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
                 container: this.container,
