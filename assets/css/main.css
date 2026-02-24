@@ -1112,12 +1112,13 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     font-family: "Georgia", serif;
     transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
     overflow: hidden auto;
-    pointer-events: auto;
+    pointer-events: none;
 }
 
 #subtitleInfoOverlay.visible .subtitle-info-card {
     transform: scale(1);
     opacity: 1;
+    pointer-events: auto;
 }
 
 #subtitleInfoOverlay .subtitle-info-close {
