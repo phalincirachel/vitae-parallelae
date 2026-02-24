@@ -540,6 +540,12 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     opacity: 1;
 }
 
+/* Game mode: avoid stretched gaps in short subtitle lines. */
+#audioPlayerUI:not(.reading-mode) .subtitle-line {
+    text-align: left !important;
+    text-justify: auto !important;
+}
+
 .subtitle-inline-mark {
     display: inline;
     color: inherit;
@@ -956,11 +962,19 @@ body.scene-dimmer-light-mode .audio-btn svg {
     width: 24px;
     height: 24px;
     display: block;
-    filter: brightness(0) invert(1) drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
+    filter:
+        brightness(0) invert(1)
+        drop-shadow(0 0 0.55px rgba(255, 255, 255, 0.95))
+        drop-shadow(0 0 1px rgba(255, 255, 255, 0.72))
+        drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
 }
 
 body.scene-dimmer-light-mode #bookBtn img {
-    filter: brightness(0) invert(0) drop-shadow(2px 2px 6px rgba(255, 255, 255, 0.9));
+    filter:
+        brightness(0) invert(0)
+        drop-shadow(0 0 0.55px rgba(0, 0, 0, 0.92))
+        drop-shadow(0 0 1px rgba(0, 0, 0, 0.66))
+        drop-shadow(2px 2px 6px rgba(255, 255, 255, 0.9));
 }
 
 #readingModeBtn {
@@ -1010,7 +1024,9 @@ body.scene-dimmer-light-mode #bookBtn img {
     opacity: 0;
     pointer-events: none;
     z-index: 900;
-    transition: opacity 0.2s linear, background-color 0.2s linear;
+    transition:
+        opacity 2s cubic-bezier(0.22, 1, 0.36, 1),
+        background-color 2s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ==========================================
@@ -1092,18 +1108,18 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     backdrop-filter: blur(0px);
     -webkit-backdrop-filter: blur(0px);
     transition:
-        opacity 0.2s ease,
-        background-color 0.2s ease,
-        backdrop-filter 0.2s ease,
-        -webkit-backdrop-filter 0.2s ease;
+        opacity 0.42s ease,
+        background-color 0.42s ease,
+        backdrop-filter 0.42s ease,
+        -webkit-backdrop-filter 0.42s ease;
 }
 
 #subtitleInfoOverlay.visible {
     pointer-events: auto;
     opacity: 1;
-    background: rgba(4, 6, 10, 0.28);
-    backdrop-filter: blur(7px);
-    -webkit-backdrop-filter: blur(7px);
+    background: rgba(4, 6, 10, 0.24);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
 }
 
 #subtitleInfoOverlay .subtitle-info-card {
@@ -1123,7 +1139,7 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     box-shadow: 0 18px 54px rgba(0, 0, 0, 0.6);
     color: rgba(255, 255, 255, 0.96);
     font-family: "Georgia", serif;
-    transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease;
+    transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s ease;
     overflow: hidden auto;
     pointer-events: none;
     box-sizing: border-box;
@@ -1218,7 +1234,7 @@ body.scene-dimmer-light-mode #subtitleInfoOverlay .subtitle-info-media {
 }
 
 body.scene-dimmer-light-mode #subtitleInfoOverlay.visible {
-    background: rgba(245, 238, 225, 0.24);
+    background: rgba(245, 238, 225, 0.2);
 }
 
 /* ==========================================

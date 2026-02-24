@@ -4379,6 +4379,7 @@
         function renderSubtitleTrackContent(lineEl, track, options = {}) {
             if (!lineEl) return;
             const safeTrack = track || { text: '' };
+            const disableInfoLinks = !!options.disableInfoLinks || !isReadingMode;
 
             if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
                 window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
@@ -4399,7 +4400,7 @@
                         if (!audioPlayer || typeof audioPlayer.play !== 'function') return Promise.resolve();
                         return audioPlayer.play();
                     },
-                    disableInfoLinks: !!options.disableInfoLinks
+                    disableInfoLinks
                 });
                 return;
             }
@@ -7552,6 +7553,9 @@
             } else {
                 clearBlaetternPaginationRetryTimer();
                 setSubtitleFollowLocked(false, 'mode-off');
+                if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {
+                    window.SubtitleRichText.closeOverlay(true);
+                }
                 if (isLoreMode && !isMenuTriggeredLore) {
                     endLoreMode();
                 }

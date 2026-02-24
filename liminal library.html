@@ -3999,6 +3999,9 @@
                     } else {
                         clearBlaetternPaginationRetryTimer();
                         setSubtitleFollowLocked(false);
+                        if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {
+                            window.SubtitleRichText.closeOverlay(true);
+                        }
                         uiContainer.classList.remove('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'false');
                     }

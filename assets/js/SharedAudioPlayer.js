@@ -249,6 +249,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
     _renderSubtitleTrackContent(lineEl, track) {
         if (!lineEl) return;
         const safeTrack = track || { text: '' };
+        const disableInfoLinks = !this.isReadingMode;
         if (window.SubtitleRichText && typeof window.SubtitleRichText.renderTrackInto === 'function') {
             window.SubtitleRichText.renderTrackInto(lineEl, safeTrack, {
                 container: this.container,
@@ -266,7 +267,8 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 resumePlayback: () => {
                     if (!this.audio || typeof this.audio.play !== 'function') return Promise.resolve();
                     return this.audio.play();
-                }
+                },
+                disableInfoLinks
             });
             return;
         }
