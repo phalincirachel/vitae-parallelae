@@ -637,6 +637,7 @@
                 mainText.appendChild(badge);
             }
 
+            mainText.classList.add('with-progress');
             const progress = getChapterProgressForScene(sceneName);
             badge.textContent = `${progress.collected}/${progress.total}`;
             badge.setAttribute('aria-label', `Lorefortschritt ${progress.collected} von ${progress.total}`);
@@ -1763,6 +1764,7 @@
 
             // Always show UI
             if (typeof uiContainer !== 'undefined' && uiContainer) uiContainer.style.display = 'flex';
+            refreshLoreProgressUi();
             if (isReadingMode && isBlaetternLayoutSelected()) {
                 scheduleBlaetternPaginationRetry('ui-visible');
             }

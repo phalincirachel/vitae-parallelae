@@ -579,6 +579,9 @@
                 }
 
                 let isCenteringCamera = false;
+                let moveTarget = null;
+                let cameraLookTarget = null; // 3D point camera should smoothly look at
+                let isLookingAtClickTarget = false; // True when camera should rotate toward click
                 let activeLightId = null;
                 // window.subtitleTracks removed
 
@@ -651,6 +654,7 @@
                         mainText.appendChild(badge);
                     }
 
+                    mainText.classList.add('with-progress');
                     const progress = getChapterProgressForScene(sceneName);
                     badge.textContent = `${progress.collected}/${progress.total}`;
                     badge.setAttribute('aria-label', `Lorefortschritt ${progress.collected} von ${progress.total}`);
@@ -1528,6 +1532,7 @@
                         if (loadingScreen) loadingScreen.style.display = 'none';
                         const uiContainer = document.getElementById('audioPlayerUI');
                         if (uiContainer) uiContainer.style.display = 'flex';
+                        refreshLoreProgressUi();
                     }
                 } // end if (!window.fallback2DMode)
 
@@ -4145,6 +4150,53 @@
                     nextChapterPromptTrackbackReference = current;
                 }
 
+                let modeSwitchSubtitleRenderToken = 0;
+                let modeSwitchMotionSyncToken = 0;
+
+                function scheduleModeSwitchSubtitleRender() {
+                    const token = ++modeSwitchSubtitleRenderToken;
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            if (token !== modeSwitchSubtitleRenderToken) return;
+                            if (!window.audioPlayer || typeof window.audioPlayer.renderLines !== 'function') return;
+                            const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                                ? window.audioPlayer.currentSubtitleIndex
+                                : 0;
+                            window.audioPlayer.renderLines(Math.max(0, idx));
+                        });
+                    });
+                }
+
+                function scheduleModeSwitchMotionSync(nextReadingMode) {
+                    const token = ++modeSwitchMotionSyncToken;
+                    const runSync = () => {
+                        if (token !== modeSwitchMotionSyncToken) return;
+                        try {
+                            moveTarget = null;
+                            cameraLookTarget = null;
+                            isLookingAtClickTarget = false;
+                            if (velocity && typeof velocity.set === 'function') velocity.set(0, 0, 0);
+                            if (move) {
+                                move.f = false;
+                                move.b = false;
+                                move.l = false;
+                                move.r = false;
+                            }
+                            if (!nextReadingMode) {
+                                isCenteringCamera = false;
+                            }
+                            if (typeof syncLookTargetsToCamera === 'function') syncLookTargetsToCamera();
+                        } catch (_) {
+                            // Variables may not be initialized yet during early boot.
+                        }
+                    };
+                    if (typeof queueMicrotask === 'function') {
+                        queueMicrotask(runSync);
+                    } else {
+                        Promise.resolve().then(runSync);
+                    }
+                }
+
                 function updateReadingModeUI() {
                     if (!isReadingMode && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                         isReadingMode = true;
@@ -4159,9 +4211,6 @@
                         uiContainer.classList.add('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'true');
                         isCenteringCamera = true;
-                        cameraLookTarget = null;
-                        isLookingAtClickTarget = false;
-                        if (typeof syncLookTargetsToCamera === 'function') syncLookTargetsToCamera();
                         hideNextChapterPrompt('reading-mode-on');
                     } else {
                         clearBlaetternPaginationRetryTimer();
@@ -4181,12 +4230,8 @@
                     }
                     markBlaetternPaginationDirty();
                     syncBlaetternUiState(`mode-switch:${isReadingMode ? 'reading' : 'game'}`);
-                    if (window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
-                        const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
-                            ? window.audioPlayer.currentSubtitleIndex
-                            : 0;
-                        window.audioPlayer.renderLines(Math.max(0, idx));
-                    }
+                    scheduleModeSwitchSubtitleRender();
+                    scheduleModeSwitchMotionSync(isReadingMode);
                     updateRecenterButtonVisibility();
                     updateLoreProgressHud();
                 }
@@ -4262,7 +4307,10 @@
                         isReadingMode = !isReadingMode;
                     }
                     updateReadingModeUI();
-                    markUiInteraction(isReadingMode ? 'btn:reading-mode' : 'btn:game-mode');
+                    markUiInteraction(
+                        isReadingMode ? 'btn:reading-mode' : 'btn:game-mode',
+                        { keepCentering: isReadingMode }
+                    );
                 });
 
                 document.querySelectorAll('#audioControls button, #nextChapterBtn, #chapterMenu .menu-item').forEach(el => {
@@ -4594,7 +4642,6 @@
                 const mouse = { x: 0, y: 0 };
                 let targetMouseX = 0; // Target look direction (screen X normalized)
                 let targetMouseY = 0; // Target look direction (screen Y normalized)
-                let isLookingAtClickTarget = false; // True when camera should rotate toward click
                 // let isCenteringCamera = false; // Moved to global scope
 
                 function syncLookTargetsToCamera() {
@@ -5494,8 +5541,6 @@
 
 
                 // Click-to-Move State
-                let moveTarget = null;
-                let cameraLookTarget = null; // 3D point camera should smoothly look at
                 let raycaster = null;
                 let groundPlane = null;
                 if (!window.fallback2DMode && THREE) {
@@ -5532,13 +5577,15 @@
                     return !!(target.nodeType === 1 && renderer.domElement.contains(target));
                 }
 
-                function markUiInteraction(reason = 'ui') {
+                function markUiInteraction(reason = 'ui', options = {}) {
                     lastUiInteractionAt = performance.now();
                     suppressWorldInputUntil = lastUiInteractionAt + UI_CLICK_SUPPRESS_MS;
                     uiInteractionStarted = true;
                     cameraLookTarget = null;
                     isLookingAtClickTarget = false;
-                    isCenteringCamera = false;
+                    if (!options.keepCentering) {
+                        isCenteringCamera = false;
+                    }
                     isTouchDragging = false;
                     touchMovedForTap = false;
                     touchStartedOnUi = true;
@@ -5988,6 +6035,7 @@
 
                     // Show Game UI immediately
                     if (uiContainer) uiContainer.style.display = 'flex';
+                    refreshLoreProgressUi();
                     if (isReadingMode && isBlaetternLayoutSelected()) {
                         scheduleBlaetternPaginationRetry('ui-visible');
                     }
@@ -6162,39 +6210,6 @@
                                 cameraLookTarget = null;
                                 isLookingAtClickTarget = false;
                                 syncLookTargetsToCamera();
-                            } else if (cameraLookTarget) {
-                                // Calculate direction from camera to 3D target point
-                                const lookDir = new THREE.Vector3();
-                                lookDir.subVectors(cameraLookTarget, camera.position).normalize();
-
-                                // Calculate target yaw and pitch from direction
-                                // Forward is -Z, so yaw = atan2(x, -z)
-                                const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
-                                const targetPitch = Math.asin(-lookDir.y);
-
-                                // Get current camera angles
-                                euler.setFromQuaternion(camera.quaternion);
-
-                                // EXTREMELY SLOW interpolation for gentle pan
-                                const lookEase = 0.1 * delta;
-                                euler.y += (targetYaw - euler.y) * lookEase;
-                                euler.x += (targetPitch - euler.x) * lookEase;
-                                euler.z = 0;
-
-                                // Apply rotation
-                                camera.quaternion.setFromEuler(euler);
-
-                                // Update mouse.x/y to match current camera direction
-                                // So swipe continues from current orientation
-                                mouse.x = -euler.y / 1.5;
-                                mouse.y = -euler.x / 0.5;
-                                targetMouseX = mouse.x;
-                                targetMouseY = mouse.y;
-
-                                // Stop when close enough to target
-                                if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
-                                    cameraLookTarget = null;
-                                }
                             } else if (isCenteringCamera) {
                                 // Mobile Reading Mode Recenter
                                 // Smoothly interpolate X to 0 and Yaw to 0
@@ -6232,6 +6247,39 @@
                                     targetMouseX = 0;
                                     targetMouseY = 0;
                                     isCenteringCamera = false;
+                                }
+                            } else if (cameraLookTarget) {
+                                // Calculate direction from camera to 3D target point
+                                const lookDir = new THREE.Vector3();
+                                lookDir.subVectors(cameraLookTarget, camera.position).normalize();
+
+                                // Calculate target yaw and pitch from direction
+                                // Forward is -Z, so yaw = atan2(x, -z)
+                                const targetYaw = Math.atan2(lookDir.x, -lookDir.z);
+                                const targetPitch = Math.asin(-lookDir.y);
+
+                                // Get current camera angles
+                                euler.setFromQuaternion(camera.quaternion);
+
+                                // EXTREMELY SLOW interpolation for gentle pan
+                                const lookEase = 0.1 * delta;
+                                euler.y += (targetYaw - euler.y) * lookEase;
+                                euler.x += (targetPitch - euler.x) * lookEase;
+                                euler.z = 0;
+
+                                // Apply rotation
+                                camera.quaternion.setFromEuler(euler);
+
+                                // Update mouse.x/y to match current camera direction
+                                // So swipe continues from current orientation
+                                mouse.x = -euler.y / 1.5;
+                                mouse.y = -euler.x / 0.5;
+                                targetMouseX = mouse.x;
+                                targetMouseY = mouse.y;
+
+                                // Stop when close enough to target
+                                if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
+                                    cameraLookTarget = null;
                                 }
                             } else {
                                 // Normal mouse/swipe-based camera control

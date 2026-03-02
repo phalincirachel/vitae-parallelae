@@ -1542,6 +1542,14 @@ body.scene-dimmer-light-mode .archive-primary-btn.active {
     font-weight: normal;
 }
 
+.item-main-text.with-progress {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 8px;
+}
+
 body.scene-dimmer-light-mode .item-main-text {
     color: rgba(0, 0, 0, 0.9);
 }
@@ -1560,7 +1568,7 @@ body.scene-dimmer-light-mode .item-sub-text {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-left: 8px;
+    margin-left: auto;
     font-size: 10px;
     letter-spacing: 0.08em;
     color: rgba(255, 225, 140, 0.9);
