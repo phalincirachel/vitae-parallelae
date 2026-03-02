@@ -448,6 +448,95 @@ body {
 }
 
 /* ==========================================
+   LORE PROGRESS HUD (GAME MODE)
+   ========================================== */
+#loreProgressHud {
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top));
+    right: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 12px 7px 10px;
+    border-radius: 999px;
+    background: rgba(0, 0, 0, 0.36);
+    border: 1px solid rgba(255, 224, 128, 0.32);
+    box-shadow:
+        0 6px 24px rgba(0, 0, 0, 0.34),
+        inset 0 0 12px rgba(255, 224, 120, 0.08);
+    backdrop-filter: blur(5px);
+    z-index: 1800;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+    transition: opacity 0.24s ease, transform 0.24s ease;
+    will-change: opacity, transform;
+}
+
+#loreProgressHud.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+#loreProgressHud.is-hidden {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.97);
+}
+
+.lore-progress-light {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 42% 38%,
+            rgba(255, 255, 238, 0.98) 0%,
+            rgba(255, 233, 139, 0.95) 34%,
+            rgba(255, 209, 74, 0.74) 62%,
+            rgba(255, 176, 29, 0.08) 100%);
+    box-shadow:
+        0 0 12px rgba(255, 226, 120, 0.78),
+        0 0 24px rgba(255, 203, 79, 0.42);
+    animation: loreProgressPulse 2.45s ease-in-out infinite;
+}
+
+#loreProgressText {
+    font-family: "Georgia", serif;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 246, 217, 0.92);
+    text-shadow: 0 1px 5px rgba(0, 0, 0, 0.62);
+    white-space: nowrap;
+}
+
+@keyframes loreProgressPulse {
+    0%,
+    100% {
+        transform: scale(0.92);
+        opacity: 0.76;
+        filter: saturate(0.95);
+    }
+
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+        filter: saturate(1.18);
+    }
+}
+
+body.scene-dimmer-light-mode #loreProgressHud {
+    background: rgba(255, 255, 255, 0.62);
+    border-color: rgba(122, 90, 0, 0.35);
+    box-shadow:
+        0 6px 24px rgba(0, 0, 0, 0.14),
+        inset 0 0 14px rgba(123, 92, 11, 0.08);
+}
+
+body.scene-dimmer-light-mode #loreProgressText {
+    color: rgba(40, 28, 0, 0.82);
+    text-shadow: 0 1px 5px rgba(255, 255, 255, 0.76);
+}
+
+/* ==========================================
    SUBTITLE CONTAINER
    ========================================== */
 #subtitleContainer {
@@ -1456,6 +1545,38 @@ body.scene-dimmer-light-mode .item-sub-text {
     color: rgba(0, 0, 0, 0.55);
 }
 
+.chapter-progress-count {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    color: rgba(255, 225, 140, 0.9);
+    text-transform: uppercase;
+    font-style: normal;
+}
+
+.chapter-progress-count::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 42% 38%,
+            rgba(255, 255, 238, 0.98) 0%,
+            rgba(255, 233, 139, 0.92) 36%,
+            rgba(255, 202, 66, 0.7) 72%,
+            rgba(255, 176, 29, 0.06) 100%);
+    box-shadow:
+        0 0 7px rgba(255, 225, 122, 0.68),
+        0 0 16px rgba(255, 203, 79, 0.32);
+    animation: loreProgressPulse 2.45s ease-in-out infinite;
+}
+
+body.scene-dimmer-light-mode .chapter-progress-count {
+    color: rgba(59, 41, 0, 0.75);
+}
+
 /* Active State (current chapter) */
 .menu-item.active .item-main-text {
     color: #ffd700;
@@ -2399,6 +2520,18 @@ body.scene-dimmer-light-mode .bookmark-btn-flat-overlay {
         flex-direction: column !important;
         align-items: flex-start !important;
         transform: none !important;
+    }
+
+    #loreProgressHud {
+        top: calc(10px + env(safe-area-inset-top));
+        right: 12px;
+        padding: 6px 10px 6px 9px;
+        gap: 8px;
+    }
+
+    #loreProgressText {
+        font-size: 11px;
+        letter-spacing: 0.06em;
     }
 
     /* SUBTITLE CONTAINER - Above Controls */

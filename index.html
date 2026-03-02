@@ -264,6 +264,10 @@
         </div>
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
+    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true">
+        <span class="lore-progress-light" aria-hidden="true"></span>
+        <span id="loreProgressText">0 von 5</span>
+    </div>
 
     <!-- ARCHIVE MODAL (INHALT) -->
     <div id="archiveModal">
@@ -299,18 +303,21 @@
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
                         <div class="item-sub-text">Marktplatz</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
 
                     <!-- Chapter 1b -->
                     <div class="menu-item" id="chapter1bBtn">
                         <div class="item-main-text">Kapitel 1b</div>
                         <div class="item-sub-text">Antiquariat Hannrath</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
 
                     <!-- Chapter 1c -->
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
                         <div class="item-sub-text">Steingasse</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
                 </div>
             </div>
@@ -537,6 +544,12 @@
         const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
 
         const SCENE_NAME = LEVEL.sceneName;
+        const LORE_PROGRESS_DEFAULT_TOTAL = 5;
+        const CHAPTER_PROGRESS_SCENE_BY_BUTTON = Object.freeze({
+            chapter1Btn: 'marktplatz',
+            chapter1bBtn: 'liminal_library',
+            chapter1cBtn: 'steingasse'
+        });
         let bgImage = null;
         let foregroundImage = null;
         let spriteReady = false;
@@ -591,6 +604,75 @@
             text: {},
             resumeTimes: {}
         };
+
+        function getChapterProgressForScene(sceneName) {
+            if (window.GameState && typeof window.GameState.getChapterProgress === 'function') {
+                return window.GameState.getChapterProgress(sceneName);
+            }
+
+            const fallbackLights = window.GameState
+                && window.GameState.state
+                && window.GameState.state.collectedLights
+                && Array.isArray(window.GameState.state.collectedLights[sceneName])
+                ? window.GameState.state.collectedLights[sceneName]
+                : [];
+
+            const collected = Math.min(fallbackLights.length, LORE_PROGRESS_DEFAULT_TOTAL);
+            return {
+                sceneName,
+                chapterTitle: sceneName,
+                collected,
+                total: LORE_PROGRESS_DEFAULT_TOTAL
+            };
+        }
+
+        function ensureChapterProgressBadge(menuItem, sceneName) {
+            if (!menuItem) return;
+            let badge = menuItem.querySelector('.chapter-progress-count');
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.className = 'chapter-progress-count';
+                menuItem.appendChild(badge);
+            }
+
+            const progress = getChapterProgressForScene(sceneName);
+            badge.textContent = `${progress.collected}/${progress.total}`;
+            badge.setAttribute('aria-label', `Lorefortschritt ${progress.collected} von ${progress.total}`);
+        }
+
+        function updateChapterProgressIndicators() {
+            Object.entries(CHAPTER_PROGRESS_SCENE_BY_BUTTON).forEach(([buttonId, sceneName]) => {
+                const menuItem = document.getElementById(buttonId);
+                if (!menuItem) return;
+                ensureChapterProgressBadge(menuItem, sceneName);
+            });
+        }
+
+        function updateLoreProgressHud(options = {}) {
+            const hud = document.getElementById('loreProgressHud');
+            const label = document.getElementById('loreProgressText');
+            if (!hud || !label) return;
+
+            const progress = getChapterProgressForScene(SCENE_NAME);
+            label.textContent = `${progress.collected} von ${progress.total}`;
+
+            const ui = document.getElementById('audioPlayerUI');
+            const readingModeActive = !!(ui && ui.classList.contains('reading-mode'));
+            const uiVisible = !!(ui && ui.style.display !== 'none');
+            const shouldShow = options.forceVisible === true
+                ? true
+                : options.forceHidden === true
+                    ? false
+                    : (!readingModeActive && uiVisible);
+
+            hud.classList.toggle('is-visible', shouldShow);
+            hud.classList.toggle('is-hidden', !shouldShow);
+        }
+
+        function refreshLoreProgressUi() {
+            updateChapterProgressIndicators();
+            updateLoreProgressHud();
+        }
 
         // ============================================
         // DEBUG (disabled in production UI)
@@ -693,6 +775,7 @@
                         console.warn(`[Init] Could not pre-load text for lore ${id}:`, e);
                     }
                 }
+                refreshLoreProgressUi();
             } catch (e) {
                 console.error("Failed to load GameState:", e);
             }
@@ -963,6 +1046,7 @@
         function renderArchive() {
             const list = document.getElementById('loreList');
             list.innerHTML = '';
+            updateChapterProgressIndicators();
 
             if (window.GameState) {
                 const db = window.GameState.getAllLore();
@@ -1091,6 +1175,8 @@
                     window.location.href = 'index.html?chapter=kapitel1c';
                 });
             }
+
+            updateChapterProgressIndicators();
         }
 
         // LEGACY - DEACTIVATED
@@ -7671,6 +7757,7 @@
             );
             applySceneAudioMix(`mode-switch:${reason}`);
             updateRecenterButtonVisibility();
+            updateLoreProgressHud();
         }
 
         syncModeToggleButton();
@@ -7680,6 +7767,7 @@
             pendingForceReadingFromFreeze = false;
         }
         syncModeDimmerLevel({ force: true });
+        refreshLoreProgressUi();
 
         modeToggleBtn.addEventListener('click', () => {
             // In frozen mode: reset dimmer to off + switch to game mode
@@ -8006,6 +8094,7 @@
                 // Use GameState for unified persistence (syncs with YellowLight.draw check)
                 if (window.GameState) {
                     window.GameState.collectLight(sc, nearestId).then(unlockedLoreId => {
+                        refreshLoreProgressUi();
                         if (unlockedLoreId) {
                             console.log("[GameState] Collected Light -> Unlocked Lore:", unlockedLoreId);
                             // Refresh archive menu so new lore appears immediately
@@ -8013,7 +8102,7 @@
                             // Start lore mode with the UNLOCKED lore ID (not the light ID!)
                             startLoreMode(unlockedLoreId);
                         } else {
-                            console.log("[GameState] Light collected but all lore already unlocked.");
+                            console.log("[GameState] Light collected without new chapter lore unlock.");
                         }
                     });
                 } else {

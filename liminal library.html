@@ -177,6 +177,10 @@
 
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
+    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true">
+        <span class="lore-progress-light" aria-hidden="true"></span>
+        <span id="loreProgressText">0 von 5</span>
+    </div>
 
     <!-- ARCHIVE MODAL -->
     <div id="archiveModal">
@@ -209,14 +213,17 @@
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
                         <div class="item-sub-text">Marktplatz</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
                     <div class="menu-item active" id="chapter1bBtn">
                         <div class="item-main-text">Kapitel 1b</div>
                         <div class="item-sub-text">Antiquariat Hannrath (Hier)</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
                         <div class="item-sub-text">Steingasse</div>
+                        <div class="chapter-progress-count">0/5</div>
                     </div>
                 </div>
             </div>
@@ -583,9 +590,16 @@
 
                 // Content switching + resume helpers
                 const MAIN_CONTENT_KEY = 'liminal_library';
+                const CURRENT_SCENE_NAME = 'liminal_library';
                 const CURRENT_PAGE = 'liminal library.html';
                 const CURRENT_CHAPTER = '1b';
                 const CURRENT_CHAPTER_TITLE = 'Antiquariat Hannrath';
+                const LORE_PROGRESS_DEFAULT_TOTAL = 5;
+                const CHAPTER_PROGRESS_SCENE_BY_BUTTON = Object.freeze({
+                    chapter1Btn: 'marktplatz',
+                    chapter1bBtn: 'liminal_library',
+                    chapter1cBtn: 'steingasse'
+                });
                 const BOOKMARK_PAGE_KEY_MAP = {
                     'index.html': 'kapitel1',
                     'liminal library.html': 'liminal_library',
@@ -604,6 +618,74 @@
                         return;
                     }
                     window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
+                }
+
+                function getChapterProgressForScene(sceneName) {
+                    if (window.GameState && typeof window.GameState.getChapterProgress === 'function') {
+                        return window.GameState.getChapterProgress(sceneName);
+                    }
+
+                    const fallbackLights = window.GameState
+                        && window.GameState.state
+                        && window.GameState.state.collectedLights
+                        && Array.isArray(window.GameState.state.collectedLights[sceneName])
+                        ? window.GameState.state.collectedLights[sceneName]
+                        : [];
+                    const collected = Math.min(fallbackLights.length, LORE_PROGRESS_DEFAULT_TOTAL);
+                    return {
+                        sceneName,
+                        chapterTitle: sceneName,
+                        collected,
+                        total: LORE_PROGRESS_DEFAULT_TOTAL
+                    };
+                }
+
+                function ensureChapterProgressBadge(menuItem, sceneName) {
+                    if (!menuItem) return;
+                    let badge = menuItem.querySelector('.chapter-progress-count');
+                    if (!badge) {
+                        badge = document.createElement('div');
+                        badge.className = 'chapter-progress-count';
+                        menuItem.appendChild(badge);
+                    }
+
+                    const progress = getChapterProgressForScene(sceneName);
+                    badge.textContent = `${progress.collected}/${progress.total}`;
+                    badge.setAttribute('aria-label', `Lorefortschritt ${progress.collected} von ${progress.total}`);
+                }
+
+                function updateChapterProgressIndicators() {
+                    Object.entries(CHAPTER_PROGRESS_SCENE_BY_BUTTON).forEach(([buttonId, sceneName]) => {
+                        const menuItem = document.getElementById(buttonId);
+                        if (!menuItem) return;
+                        ensureChapterProgressBadge(menuItem, sceneName);
+                    });
+                }
+
+                function updateLoreProgressHud(options = {}) {
+                    const hud = document.getElementById('loreProgressHud');
+                    const label = document.getElementById('loreProgressText');
+                    if (!hud || !label) return;
+
+                    const progress = getChapterProgressForScene(CURRENT_SCENE_NAME);
+                    label.textContent = `${progress.collected} von ${progress.total}`;
+
+                    const ui = document.getElementById('audioPlayerUI');
+                    const readingModeActive = !!(ui && ui.classList.contains('reading-mode'));
+                    const uiVisible = !!(ui && ui.style.display !== 'none');
+                    const shouldShow = options.forceVisible === true
+                        ? true
+                        : options.forceHidden === true
+                            ? false
+                            : (!readingModeActive && uiVisible);
+
+                    hud.classList.toggle('is-visible', shouldShow);
+                    hud.classList.toggle('is-hidden', !shouldShow);
+                }
+
+                function refreshLoreProgressUi() {
+                    updateChapterProgressIndicators();
+                    updateLoreProgressHud();
                 }
 
                 // ============================================
@@ -4101,6 +4183,7 @@
                         window.audioPlayer.renderLines(Math.max(0, idx));
                     }
                     updateRecenterButtonVisibility();
+                    updateLoreProgressHud();
                 }
 
                 function isPlayerTransportPaused() {
@@ -4296,6 +4379,7 @@
                 // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
                 // ALWAYS update UI to sync player state
                 updateReadingModeUI();
+                refreshLoreProgressUi();
 
                 // --- DRAG TO SCROLL LOGIC ---
 
@@ -4812,7 +4896,7 @@
                 }
 
                 // --- GLOWING LORE BOOK STATE ---
-                // Note: We use GameState.state.collectedLore.length for global tracking, not a local counter
+                // Spawn logic uses current chapter progress from GameState.
                 let glowingBookCounter = 0;       // ID generator
                 const activeGlowingBooks = [];    // Currently spawned books
                 const SHIMMER_BASE_VOLUME = 0.4;
@@ -4840,12 +4924,11 @@
                     return !primaryPlaying && !contentSwitchInProgress && !document.hidden;
                 }
 
-                // Helper function to get global collected lore count
-                function getGlobalCollectedLoreCount() {
-                    if (window.GameState && window.GameState.state && window.GameState.state.collectedLore) {
-                        return window.GameState.state.collectedLore.length;
+                function getCurrentChapterProgress() {
+                    if (window.GameState && typeof window.GameState.getChapterProgress === 'function') {
+                        return window.GameState.getChapterProgress(CURRENT_SCENE_NAME);
                     }
-                    return 0;
+                    return { collected: 0, total: LORE_PROGRESS_DEFAULT_TOTAL };
                 }
 
                 // Material for glowing books
@@ -5053,8 +5136,8 @@
                         const segmentIndex = Math.abs(Math.round(zStart / length));
                         // Count uncollected active books
                         const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
-                        const globalLoreCount = getGlobalCollectedLoreCount();
-                        if (segmentIndex % 5 === 0 && segmentIndex > 0 && globalLoreCount < 5 && uncollectedBooks < 1) {
+                        const chapterProgress = getCurrentChapterProgress();
+                        if (segmentIndex % 5 === 0 && segmentIndex > 0 && chapterProgress.collected < chapterProgress.total && uncollectedBooks < 1) {
                             const side = Math.random() > 0.5 ? 'left' : 'right';
                             this.glowingBook = new GlowingBook(zStart - length / 2, side);
                             this.meshGroup.add(this.glowingBook.mesh);
@@ -5091,8 +5174,8 @@
                         }
 
                         // Try to spawn a new glowing book (same logic as constructor)
-                        const globalLoreCount = getGlobalCollectedLoreCount();
-                        if (!this.glowingBook && globalLoreCount < 5) {
+                        const chapterProgress = getCurrentChapterProgress();
+                        if (!this.glowingBook && chapterProgress.collected < chapterProgress.total) {
                             const segmentIndex = Math.abs(Math.round(newZStart / this.length));
                             const uncollectedBooks = activeGlowingBooks.filter(b => !b.collected && !b.missed).length;
                             if (segmentIndex % 5 === 0 && segmentIndex > 0 && uncollectedBooks < 1) {
@@ -6326,12 +6409,12 @@
                                         if (distZ < 1.5 && distX < 1.0 && !alreadyCollected) {
                                             // Collect!
                                             book.collect();
-                                            // Collect - use GameState for global lore tracking!
-                                            // DON'T increment local counter - GameState handles which lore is next globally
+                                            // Collect - use GameState for chapter-bound lore tracking.
 
-                                            // Register in GameState (GLOBAL - same logic as marketplace)
+                                            // Register in GameState and unlock chapter-assigned lore if available.
                                             if (window.GameState && window.GameState.collectLight) {
                                                 window.GameState.collectLight(SCENE_NAME, book.id).then(newLoreId => {
+                                                    refreshLoreProgressUi();
                                                     if (newLoreId) {
                                                         const now = Date.now();
                                                         if (now - lastShimmerAt > 400) {
@@ -6345,11 +6428,10 @@
                                                         console.log("[GameState] Collected Book -> Unlocked Lore:", newLoreId);
                                                         // Refresh archive menu so new lore appears immediately
                                                         if (typeof renderArchive === 'function') renderArchive();
-                                                        // Start lore audio with the GLOBAL lore ID (not local counter!)
+                                                        // Start lore audio with the unlocked chapter lore ID.
                                                         startLoreMode(newLoreId);
                                                     } else {
-                                                        // All lore already unlocked
-                                                        console.log("All lore already unlocked");
+                                                        console.log("Book collected without new chapter lore unlock");
                                                     }
                                                 });
                                             }
@@ -6379,8 +6461,8 @@
                             // Update Debug HUD
                             const debugEl = document.getElementById('debugHUD');
                             if (debugEl) {
-                                const globalLore = getGlobalCollectedLoreCount();
-                                debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${globalLore}/5`;
+                                const chapterProgress = getCurrentChapterProgress();
+                                debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${chapterProgress.collected}/${chapterProgress.total}`;
                             }
 
                         } // end if (!window.fallback2DMode)
@@ -6679,6 +6761,7 @@
                 function renderArchive() {
                     const list = document.getElementById('loreList');
                     list.innerHTML = '';
+                    updateChapterProgressIndicators();
 
                     if (!window.GameState) return;
 
@@ -6716,6 +6799,8 @@
                             list.appendChild(item);
                         });
                     }
+
+                    updateChapterProgressIndicators();
                 }
 
                 // --- RESIZE HANDLER (Fixes Fullscreen FOV) ---
