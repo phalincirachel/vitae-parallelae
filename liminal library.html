@@ -4155,6 +4155,11 @@
                 let modeSwitchDeferredReadingRenderPending = false;
                 let modeSwitchDeferredReadingRenderTimer = null;
 
+                function setReadingRenderPending(active) {
+                    if (!uiContainer) return;
+                    uiContainer.classList.toggle('reading-render-pending', !!active);
+                }
+
                 function clearModeSwitchDeferredReadingRenderTimer() {
                     if (!modeSwitchDeferredReadingRenderTimer) return;
                     clearTimeout(modeSwitchDeferredReadingRenderTimer);
@@ -4166,6 +4171,7 @@
                     if (!isReadingMode) {
                         modeSwitchDeferredReadingRenderPending = false;
                         clearModeSwitchDeferredReadingRenderTimer();
+                        setReadingRenderPending(false);
                         return;
                     }
                     modeSwitchDeferredReadingRenderPending = false;
@@ -4174,9 +4180,13 @@
                     const token = ++modeSwitchSubtitleRenderToken;
                     const run = () => {
                         if (token !== modeSwitchSubtitleRenderToken) return;
-                        if (!isReadingMode || !window.audioPlayer) return;
+                        if (!isReadingMode || !window.audioPlayer) {
+                            setReadingRenderPending(false);
+                            return;
+                        }
                         if (typeof window.audioPlayer.setReadingMode === 'function') {
                             window.audioPlayer.setReadingMode(true);
+                            setReadingRenderPending(false);
                             return;
                         }
                         window.audioPlayer.isReadingMode = true;
@@ -4186,6 +4196,7 @@
                                 : 0;
                             window.audioPlayer.renderLines(Math.max(0, idx));
                         }
+                        setReadingRenderPending(false);
                     };
 
                     if (typeof requestIdleCallback === 'function') {
@@ -4201,6 +4212,7 @@
                 function queueDeferredReadingModeRender(reason = 'mode-switch') {
                     modeSwitchDeferredReadingRenderPending = true;
                     clearModeSwitchDeferredReadingRenderTimer();
+                    setReadingRenderPending(true);
                     const tick = () => {
                         modeSwitchDeferredReadingRenderTimer = null;
                         if (!modeSwitchDeferredReadingRenderPending || !isReadingMode) return;
@@ -4262,6 +4274,7 @@
                     } else {
                         modeSwitchDeferredReadingRenderPending = false;
                         clearModeSwitchDeferredReadingRenderTimer();
+                        setReadingRenderPending(false);
                         clearBlaetternPaginationRetryTimer();
                         setSubtitleFollowLocked(false);
                         if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {

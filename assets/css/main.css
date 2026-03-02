@@ -447,6 +447,16 @@ body {
     pointer-events: none;
 }
 
+/* While reading render is deferred, hide intermediate game-mode lines. */
+#audioPlayerUI.reading-mode.reading-render-pending #subtitleContainer {
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+
+#audioPlayerUI.reading-mode.reading-render-pending #subtitleContainer * {
+    pointer-events: none !important;
+}
+
 /* ==========================================
    LORE PROGRESS HUD (GAME MODE)
    ========================================== */
