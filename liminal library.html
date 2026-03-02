@@ -177,9 +177,9 @@
 
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
-    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true">
+    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true" title="Zu den Funden">
         <span class="lore-progress-light" aria-hidden="true"></span>
-        <span id="loreProgressText">0 von 5</span>
+        <span id="loreProgressText">0/5</span>
     </div>
 
     <!-- ARCHIVE MODAL -->
@@ -213,17 +213,14 @@
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
                         <div class="item-sub-text">Marktplatz</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
                     <div class="menu-item active" id="chapter1bBtn">
                         <div class="item-main-text">Kapitel 1b</div>
                         <div class="item-sub-text">Antiquariat Hannrath (Hier)</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
                         <div class="item-sub-text">Steingasse</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
                 </div>
             </div>
@@ -642,11 +639,16 @@
 
                 function ensureChapterProgressBadge(menuItem, sceneName) {
                     if (!menuItem) return;
-                    let badge = menuItem.querySelector('.chapter-progress-count');
+                    const mainText = menuItem.querySelector('.item-main-text');
+                    if (!mainText) return;
+
+                    menuItem.querySelectorAll('.chapter-progress-count').forEach((legacyEl) => legacyEl.remove());
+
+                    let badge = mainText.querySelector('.chapter-progress-inline');
                     if (!badge) {
-                        badge = document.createElement('div');
-                        badge.className = 'chapter-progress-count';
-                        menuItem.appendChild(badge);
+                        badge = document.createElement('span');
+                        badge.className = 'chapter-progress-inline';
+                        mainText.appendChild(badge);
                     }
 
                     const progress = getChapterProgressForScene(sceneName);
@@ -668,7 +670,7 @@
                     if (!hud || !label) return;
 
                     const progress = getChapterProgressForScene(CURRENT_SCENE_NAME);
-                    label.textContent = `${progress.collected} von ${progress.total}`;
+                    label.textContent = `${progress.collected}/${progress.total}`;
 
                     const ui = document.getElementById('audioPlayerUI');
                     const readingModeActive = !!(ui && ui.classList.contains('reading-mode'));
@@ -4157,6 +4159,9 @@
                         uiContainer.classList.add('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'true');
                         isCenteringCamera = true;
+                        cameraLookTarget = null;
+                        isLookingAtClickTarget = false;
+                        if (typeof syncLookTargetsToCamera === 'function') syncLookTargetsToCamera();
                         hideNextChapterPrompt('reading-mode-on');
                     } else {
                         clearBlaetternPaginationRetryTimer();
@@ -6216,7 +6221,16 @@
                                 targetMouseY = 0;
 
                                 // Stop if close
-                                if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05) {
+                                if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05 && Math.abs(euler.x) < 0.05) {
+                                    camera.position.x = 0;
+                                    euler.x = 0;
+                                    euler.y = 0;
+                                    euler.z = 0;
+                                    camera.quaternion.setFromEuler(euler);
+                                    mouse.x = 0;
+                                    mouse.y = 0;
+                                    targetMouseX = 0;
+                                    targetMouseY = 0;
                                     isCenteringCamera = false;
                                 }
                             } else {
@@ -6560,6 +6574,18 @@
                 if (closeArchiveBtn) {
                     closeArchiveBtn.addEventListener('click', () => {
                         closeArchiveModal('close-btn');
+                    });
+                }
+                const loreProgressHudEl = document.getElementById('loreProgressHud');
+                if (loreProgressHudEl) {
+                    loreProgressHudEl.addEventListener('click', () => {
+                        if (typeof renderArchive === 'function') renderArchive();
+                        setArchiveModalVisible(true, 'lore-hud');
+                        const inhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+                        if (inhaltBtn && !inhaltBtn.classList.contains('active')) inhaltBtn.click();
+                        const loreTab = document.querySelector('.archive-tab[data-tab="lore"]');
+                        if (loreTab) loreTab.click();
+                        markUiInteraction('btn:lore-hud');
                     });
                 }
                 if (chapter1Btn) {

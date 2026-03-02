@@ -466,21 +466,32 @@ body {
         inset 0 0 12px rgba(255, 224, 120, 0.08);
     backdrop-filter: blur(5px);
     z-index: 1800;
-    pointer-events: none;
+    pointer-events: auto;
+    cursor: pointer;
+    user-select: none;
     opacity: 0;
     transform: translateY(-8px) scale(0.97);
     transition: opacity 0.24s ease, transform 0.24s ease;
     will-change: opacity, transform;
 }
 
+#loreProgressHud:hover {
+    border-color: rgba(255, 227, 132, 0.54);
+    box-shadow:
+        0 6px 24px rgba(0, 0, 0, 0.4),
+        inset 0 0 16px rgba(255, 224, 120, 0.14);
+}
+
 #loreProgressHud.is-visible {
     opacity: 1;
     transform: translateY(0) scale(1);
+    pointer-events: auto;
 }
 
 #loreProgressHud.is-hidden {
     opacity: 0;
     transform: translateY(-8px) scale(0.97);
+    pointer-events: none;
 }
 
 .lore-progress-light {
@@ -1545,19 +1556,20 @@ body.scene-dimmer-light-mode .item-sub-text {
     color: rgba(0, 0, 0, 0.55);
 }
 
-.chapter-progress-count {
+.chapter-progress-inline {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-top: 2px;
+    margin-left: 8px;
     font-size: 10px;
     letter-spacing: 0.08em;
     color: rgba(255, 225, 140, 0.9);
     text-transform: uppercase;
     font-style: normal;
+    vertical-align: middle;
 }
 
-.chapter-progress-count::before {
+.chapter-progress-inline::before {
     content: "";
     width: 8px;
     height: 8px;
@@ -1573,7 +1585,7 @@ body.scene-dimmer-light-mode .item-sub-text {
     animation: loreProgressPulse 2.45s ease-in-out infinite;
 }
 
-body.scene-dimmer-light-mode .chapter-progress-count {
+body.scene-dimmer-light-mode .chapter-progress-inline {
     color: rgba(59, 41, 0, 0.75);
 }
 

@@ -264,9 +264,9 @@
         </div>
     </div>
     <div id="sceneDimmerOverlay" aria-hidden="true"></div>
-    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true">
+    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true" title="Zu den Funden">
         <span class="lore-progress-light" aria-hidden="true"></span>
-        <span id="loreProgressText">0 von 5</span>
+        <span id="loreProgressText">0/5</span>
     </div>
 
     <!-- ARCHIVE MODAL (INHALT) -->
@@ -303,21 +303,18 @@
                     <div class="menu-item" id="chapter1Btn">
                         <div class="item-main-text">Kapitel 1</div>
                         <div class="item-sub-text">Marktplatz</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
 
                     <!-- Chapter 1b -->
                     <div class="menu-item" id="chapter1bBtn">
                         <div class="item-main-text">Kapitel 1b</div>
                         <div class="item-sub-text">Antiquariat Hannrath</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
 
                     <!-- Chapter 1c -->
                     <div class="menu-item" id="chapter1cBtn">
                         <div class="item-main-text">Kapitel 1c</div>
                         <div class="item-sub-text">Steingasse</div>
-                        <div class="chapter-progress-count">0/5</div>
                     </div>
                 </div>
             </div>
@@ -628,11 +625,16 @@
 
         function ensureChapterProgressBadge(menuItem, sceneName) {
             if (!menuItem) return;
-            let badge = menuItem.querySelector('.chapter-progress-count');
+            const mainText = menuItem.querySelector('.item-main-text');
+            if (!mainText) return;
+
+            menuItem.querySelectorAll('.chapter-progress-count').forEach((legacyEl) => legacyEl.remove());
+
+            let badge = mainText.querySelector('.chapter-progress-inline');
             if (!badge) {
-                badge = document.createElement('div');
-                badge.className = 'chapter-progress-count';
-                menuItem.appendChild(badge);
+                badge = document.createElement('span');
+                badge.className = 'chapter-progress-inline';
+                mainText.appendChild(badge);
             }
 
             const progress = getChapterProgressForScene(sceneName);
@@ -654,7 +656,7 @@
             if (!hud || !label) return;
 
             const progress = getChapterProgressForScene(SCENE_NAME);
-            label.textContent = `${progress.collected} von ${progress.total}`;
+            label.textContent = `${progress.collected}/${progress.total}`;
 
             const ui = document.getElementById('audioPlayerUI');
             const readingModeActive = !!(ui && ui.classList.contains('reading-mode'));
@@ -1182,6 +1184,20 @@
         // LEGACY - DEACTIVATED
         // LEGACY REMOVED
 
+        function openArchiveLoreTabFromHud() {
+            renderArchive();
+            const modal = document.getElementById('archiveModal');
+            if (modal) modal.classList.add('visible');
+
+            const inhaltBtn = document.getElementById('archivePrimaryInhaltBtn');
+            if (inhaltBtn && !inhaltBtn.classList.contains('active')) {
+                inhaltBtn.click();
+            }
+
+            const loreTab = document.querySelector('.archive-tab[data-tab="lore"]');
+            if (loreTab) loreTab.click();
+        }
+
         // EVENT LISTENERS FOR ARCHIVE
         document.getElementById('bookBtn').addEventListener('click', () => {
             renderArchive();
@@ -1197,6 +1213,11 @@
         document.getElementById('closeArchiveBtn').addEventListener('click', () => {
             document.getElementById('archiveModal').classList.remove('visible');
         });
+
+        const loreProgressHudEl = document.getElementById('loreProgressHud');
+        if (loreProgressHudEl) {
+            loreProgressHudEl.addEventListener('click', openArchiveLoreTabFromHud);
+        }
 
         // SAVE / LOAD LOGIC
         const btnSave = document.getElementById('btnSaveData');
