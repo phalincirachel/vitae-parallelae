@@ -4199,6 +4199,12 @@
                         setReadingRenderPending(false);
                     };
 
+                    // For entering reading mode we render early (during camera centering).
+                    if (reason === 'mode-enter-reading') {
+                        requestAnimationFrame(run);
+                        return;
+                    }
+
                     if (typeof requestIdleCallback === 'function') {
                         requestIdleCallback(() => requestAnimationFrame(run), { timeout: 220 });
                     } else {
@@ -4216,13 +4222,11 @@
                     const tick = () => {
                         modeSwitchDeferredReadingRenderTimer = null;
                         if (!modeSwitchDeferredReadingRenderPending || !isReadingMode) return;
-                        if (!window.fallback2DMode && camera && isCenteringCamera) {
-                            modeSwitchDeferredReadingRenderTimer = setTimeout(tick, 120);
-                            return;
-                        }
                         flushDeferredReadingModeRender(reason);
                     };
-                    modeSwitchDeferredReadingRenderTimer = setTimeout(tick, (window.fallback2DMode || !camera) ? 60 : 280);
+                    // Keep a tiny defer so old game-mode lines are never flashed,
+                    // but show reading text while centering is still running.
+                    modeSwitchDeferredReadingRenderTimer = setTimeout(tick, (window.fallback2DMode || !camera) ? 40 : 90);
                 }
 
                 function scheduleModeSwitchMotionSync(nextReadingMode) {
