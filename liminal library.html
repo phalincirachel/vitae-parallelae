@@ -4152,19 +4152,65 @@
 
                 let modeSwitchSubtitleRenderToken = 0;
                 let modeSwitchMotionSyncToken = 0;
+                let modeSwitchDeferredReadingRenderPending = false;
+                let modeSwitchDeferredReadingRenderTimer = null;
 
-                function scheduleModeSwitchSubtitleRender() {
+                function clearModeSwitchDeferredReadingRenderTimer() {
+                    if (!modeSwitchDeferredReadingRenderTimer) return;
+                    clearTimeout(modeSwitchDeferredReadingRenderTimer);
+                    modeSwitchDeferredReadingRenderTimer = null;
+                }
+
+                function flushDeferredReadingModeRender(reason = 'mode-switch') {
+                    if (!modeSwitchDeferredReadingRenderPending) return;
+                    if (!isReadingMode) {
+                        modeSwitchDeferredReadingRenderPending = false;
+                        clearModeSwitchDeferredReadingRenderTimer();
+                        return;
+                    }
+                    modeSwitchDeferredReadingRenderPending = false;
+                    clearModeSwitchDeferredReadingRenderTimer();
+
                     const token = ++modeSwitchSubtitleRenderToken;
-                    requestAnimationFrame(() => {
-                        requestAnimationFrame(() => {
-                            if (token !== modeSwitchSubtitleRenderToken) return;
-                            if (!window.audioPlayer || typeof window.audioPlayer.renderLines !== 'function') return;
+                    const run = () => {
+                        if (token !== modeSwitchSubtitleRenderToken) return;
+                        if (!isReadingMode || !window.audioPlayer) return;
+                        if (typeof window.audioPlayer.setReadingMode === 'function') {
+                            window.audioPlayer.setReadingMode(true);
+                            return;
+                        }
+                        window.audioPlayer.isReadingMode = true;
+                        if (typeof window.audioPlayer.renderLines === 'function') {
                             const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
                                 ? window.audioPlayer.currentSubtitleIndex
                                 : 0;
                             window.audioPlayer.renderLines(Math.max(0, idx));
-                        });
-                    });
+                        }
+                    };
+
+                    if (typeof requestIdleCallback === 'function') {
+                        requestIdleCallback(() => requestAnimationFrame(run), { timeout: 220 });
+                    } else {
+                        modeSwitchDeferredReadingRenderTimer = setTimeout(() => {
+                            modeSwitchDeferredReadingRenderTimer = null;
+                            requestAnimationFrame(run);
+                        }, reason === 'center-complete' ? 70 : 100);
+                    }
+                }
+
+                function queueDeferredReadingModeRender(reason = 'mode-switch') {
+                    modeSwitchDeferredReadingRenderPending = true;
+                    clearModeSwitchDeferredReadingRenderTimer();
+                    const tick = () => {
+                        modeSwitchDeferredReadingRenderTimer = null;
+                        if (!modeSwitchDeferredReadingRenderPending || !isReadingMode) return;
+                        if (!window.fallback2DMode && camera && isCenteringCamera) {
+                            modeSwitchDeferredReadingRenderTimer = setTimeout(tick, 120);
+                            return;
+                        }
+                        flushDeferredReadingModeRender(reason);
+                    };
+                    modeSwitchDeferredReadingRenderTimer = setTimeout(tick, (window.fallback2DMode || !camera) ? 60 : 280);
                 }
 
                 function scheduleModeSwitchMotionSync(nextReadingMode) {
@@ -4203,20 +4249,26 @@
                     }
 
                     // Sync with Shared Player
-                    if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
-                        window.audioPlayer.setReadingMode(isReadingMode);
+                    if (window.audioPlayer) {
+                        window.audioPlayer.isReadingMode = isReadingMode;
                     }
 
                     if (isReadingMode) {
                         uiContainer.classList.add('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'true');
                         isCenteringCamera = true;
+                        queueDeferredReadingModeRender('mode-enter-reading');
                         hideNextChapterPrompt('reading-mode-on');
                     } else {
+                        modeSwitchDeferredReadingRenderPending = false;
+                        clearModeSwitchDeferredReadingRenderTimer();
                         clearBlaetternPaginationRetryTimer();
                         setSubtitleFollowLocked(false);
                         if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {
                             window.SubtitleRichText.closeOverlay(true);
+                        }
+                        if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
+                            window.audioPlayer.setReadingMode(false);
                         }
                         uiContainer.classList.remove('reading-mode');
                         localStorage.setItem('gameboy_reading_mode', 'false');
@@ -4230,7 +4282,6 @@
                     }
                     markBlaetternPaginationDirty();
                     syncBlaetternUiState(`mode-switch:${isReadingMode ? 'reading' : 'game'}`);
-                    scheduleModeSwitchSubtitleRender();
                     scheduleModeSwitchMotionSync(isReadingMode);
                     updateRecenterButtonVisibility();
                     updateLoreProgressHud();
@@ -6236,17 +6287,10 @@
                                 targetMouseY = 0;
 
                                 // Stop if close
-                                if (Math.abs(camera.position.x) < 0.05 && Math.abs(diff) < 0.05 && Math.abs(euler.x) < 0.05) {
-                                    camera.position.x = 0;
-                                    euler.x = 0;
-                                    euler.y = 0;
-                                    euler.z = 0;
-                                    camera.quaternion.setFromEuler(euler);
-                                    mouse.x = 0;
-                                    mouse.y = 0;
-                                    targetMouseX = 0;
-                                    targetMouseY = 0;
+                                if (Math.abs(camera.position.x) < 0.02 && Math.abs(diff) < 0.02 && Math.abs(euler.x) < 0.02) {
                                     isCenteringCamera = false;
+                                    syncLookTargetsToCamera();
+                                    flushDeferredReadingModeRender('center-complete');
                                 }
                             } else if (cameraLookTarget) {
                                 // Calculate direction from camera to 3D target point
