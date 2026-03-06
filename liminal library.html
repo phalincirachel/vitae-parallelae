@@ -700,6 +700,7 @@
                 const liminalDebug = {
                     lastSave: null
                 };
+                const LIMINAL_CORRIDOR_DEBUG_LOGS = false;
 
                 function liminalDebugNote() { }
 
@@ -4885,9 +4886,10 @@
                     const t = new THREE.CanvasTexture(canvas); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(4, 10); return t;
                 }
                 let woodMaterial, floorMaterial, wallMaterial, bookMat, bulbMat, cordMat;
-                let sharedPlaneGeo, sharedShelfGeo, sharedPlankGeo, sharedBookGeo, sharedBulbGeo, sharedCordGeo;
+                let sharedPlaneGeo, sharedShelfGeo, sharedPlankGeo, sharedBookGeo, sharedBulbGeo, sharedCordGeo, sharedGlowBookGeo;
                 let sharedShelfGeoLeft, sharedShelfGeoRight;
                 let sharedPlankGeoLeft, sharedPlankGeoRight;
+                let tmpLookDir, tmpMovementInput, tmpForwardDir, tmpRightDir, tmpMoveDir, tmpVelocityStep;
 
                 if (!window.fallback2DMode && THREE) {
                     woodMaterial = new THREE.MeshStandardMaterial({ map: createWoodTexture(), roughness: 0.8, color: 0x5c4033 });
@@ -4954,12 +4956,21 @@
 
                     sharedBulbGeo = new THREE.SphereGeometry(0.1, 16, 16);
                     sharedCordGeo = new THREE.CylinderGeometry(0.01, 0.01, 3);
+                    sharedGlowBookGeo = new THREE.BoxGeometry(0.6, 0.5, 0.08);
+
+                    tmpLookDir = new THREE.Vector3();
+                    tmpMovementInput = new THREE.Vector3();
+                    tmpForwardDir = new THREE.Vector3();
+                    tmpRightDir = new THREE.Vector3();
+                    tmpMoveDir = new THREE.Vector3();
+                    tmpVelocityStep = new THREE.Vector3();
                 }
 
                 // --- CLASSES ---
                 class YellowLight {
                     constructor(zPos) {
                         this.position = new THREE.Vector3(0, 3.5, zPos);
+                        this.worldPos = new THREE.Vector3();
                         this.group = new THREE.Group();
                         this.group.position.copy(this.position);
                         const bulb = new THREE.Mesh(sharedBulbGeo, bulbMat);
@@ -4978,9 +4989,8 @@
 
                         // Distance Fade Logic
                         // FIX: Use World Position for distance check
-                        const worldPos = new THREE.Vector3();
-                        this.group.getWorldPosition(worldPos);
-                        const dist = Math.abs(worldPos.z - playerZ);
+                        this.group.getWorldPosition(this.worldPos);
+                        const dist = Math.abs(this.worldPos.z - playerZ);
 
                         const fadeStart = 40; // Starts fading in at 40m
                         const fadeEnd = 20;   // Full brightness at 20m
@@ -5007,11 +5017,10 @@
                         this.light.intensity = 0; // Start off
                     }
                     dispose() {
-                        // Traverse to dispose geometries inside the group (bulb, cord)
-                        // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
-                        this.light.intensity = this.baseIntensity + flicker * 10 + boost;
-                        this.group.rotation.x = Math.cos(time * 0.3 + this.seed) * 0.03;
-                        this.group.rotation.z = Math.sin(time * 0.5 + this.seed) * 0.03;
+                        // Shared geometries/materials stay alive globally; only detach this light group.
+                        if (this.group.parent) {
+                            this.group.parent.remove(this.group);
+                        }
                     }
                 }
 
@@ -5066,10 +5075,10 @@
                         this.collected = false;
                         this.missed = false; // NEW: Track if player walked past without collecting
                         this.side = side; // 'left' or 'right'
+                        this.worldPos = new THREE.Vector3();
 
-                        // Book geometry (thin box for spine)
-                        const geo = new THREE.BoxGeometry(0.6, 0.5, 0.08);
-                        this.mesh = new THREE.Mesh(geo, glowBookMaterial.clone());
+                        // Reuse shared geometry; only the material instance is per-book.
+                        this.mesh = new THREE.Mesh(sharedGlowBookGeo, glowBookMaterial.clone());
 
                         // Position: eye level (camera at 1.6m), slightly higher for visibility
                         // X offset: just 5cm (0.05m) towards center so book pops out slightly
@@ -5085,14 +5094,13 @@
                         if (this.collected) return;
 
                         // FIX: Use world position (meshGroup may have moved)
-                        const worldPos = new THREE.Vector3();
-                        this.mesh.getWorldPosition(worldPos);
-                        const distZ = Math.abs(worldPos.z - playerZ);
-                        const distX = Math.abs(worldPos.x - playerX);
+                        this.mesh.getWorldPosition(this.worldPos);
+                        const distZ = Math.abs(this.worldPos.z - playerZ);
+                        const distX = Math.abs(this.worldPos.x - playerX);
 
                         // Debug: log position every 60 frames
-                        if (Math.random() < 0.016) { // ~1 per second at 60fps
-                            console.log(`Book ${this.id}: worldZ=${worldPos.z.toFixed(1)}, playerZ=${playerZ.toFixed(1)}, dist=${distZ.toFixed(1)}`);
+                        if (LIMINAL_CORRIDOR_DEBUG_LOGS && Math.random() < 0.016) { // ~1 per second at 60fps
+                            console.log(`Book ${this.id}: worldZ=${this.worldPos.z.toFixed(1)}, playerZ=${playerZ.toFixed(1)}, dist=${distZ.toFixed(1)}`);
                         }
 
                         // Proximity glow intensification
@@ -5118,6 +5126,12 @@
                         const xPos = newSide === 'left' ? -2.5 : 2.5;
                         this.mesh.position.set(xPos, 1.5, newZ);
                         this.mesh.material.emissiveIntensity = this.baseEmissive;
+                    }
+
+                    dispose() {
+                        if (this.mesh && this.mesh.material && this.mesh.material !== glowBookMaterial) {
+                            this.mesh.material.dispose();
+                        }
                     }
                 }
 
@@ -5290,6 +5304,7 @@
                             if (idx > -1) activeGlowingBooks.splice(idx, 1);
                             // Remove mesh
                             this.meshGroup.remove(this.glowingBook.mesh);
+                            this.glowingBook.dispose();
                             this.glowingBook = null;
                         }
 
@@ -5309,10 +5324,10 @@
                                 this.glowingBook.mesh.updateMatrixWorld(true);
                                 activeGlowingBooks.push(this.glowingBook);
 
-                                // Debug: log actual world position
-                                const debugPos = new THREE.Vector3();
-                                this.glowingBook.mesh.getWorldPosition(debugPos);
-                                console.log(`Spawned book: local=(${localZ}), world=(${debugPos.z.toFixed(1)}), target=(${(newZStart - this.length / 2).toFixed(1)})`);
+                                if (LIMINAL_CORRIDOR_DEBUG_LOGS) {
+                                    this.glowingBook.mesh.getWorldPosition(this.glowingBook.worldPos);
+                                    console.log(`Spawned book: local=(${localZ}), world=(${this.glowingBook.worldPos.z.toFixed(1)}), target=(${(newZStart - this.length / 2).toFixed(1)})`);
+                                }
                             }
                         }
 
@@ -5365,6 +5380,8 @@
 
                         // We need to allow restarting generation.
                         this.startBookGeneration = () => {
+                            this.bookBuildVersion = (this.bookBuildVersion || 0) + 1;
+                            const buildVersion = this.bookBuildVersion;
                             const dummy = new THREE.Object3D();
                             const color = new THREE.Color();
                             const bookColors = [0x4a3c31, 0x2f1e15, 0x6e2c2c, 0x1a2e1f, 0x0d0d0d, 0x5c5040];
@@ -5410,6 +5427,11 @@
                             };
 
                             const processBatch = () => {
+                                if (buildVersion !== this.bookBuildVersion) {
+                                    this.bookBuildRaf = null;
+                                    return;
+                                }
+
                                 // Keep preload alive even if coming from another page with freeze enabled.
                                 const freezeBypassDuringBoot = this.isPreload && !hasStartedGame;
                                 const shouldPauseForFreeze = window.visualFreezeActive && !freezeBypassDuringBoot;
@@ -5419,7 +5441,7 @@
                                     return;
                                 }
 
-                                // Stop if we are reset again? (version check?)
+                                // Version guard above prevents stale generators from continuing after reset.
                                 if (workQueue.length === 0 || globalIndex >= this.bookCount) {
                                     this.bookBuildPaused = false;
                                     this.bookBuildRaf = null;
@@ -5482,7 +5504,11 @@
                                 this.meshBooks.count = globalIndex;
                                 this.meshBooks.instanceMatrix.needsUpdate = true;
                                 if (this.meshBooks.instanceColor) this.meshBooks.instanceColor.needsUpdate = true;
-                                this.bookBuildRaf = requestAnimationFrame(processBatch);
+                                if (buildVersion === this.bookBuildVersion) {
+                                    this.bookBuildRaf = requestAnimationFrame(processBatch);
+                                } else {
+                                    this.bookBuildRaf = null;
+                                }
                             };
                             processBatch();
                         };
@@ -5491,8 +5517,27 @@
                     }
 
                     dispose() {
+                        if (typeof this.pauseBookGeneration === 'function') {
+                            this.pauseBookGeneration();
+                        }
+
                         // 1. Dispose Lights
                         this.lights.forEach(l => l.dispose());
+
+                        if (this.glowingBook) {
+                            const idx = activeGlowingBooks.indexOf(this.glowingBook);
+                            if (idx > -1) activeGlowingBooks.splice(idx, 1);
+                            this.meshGroup.remove(this.glowingBook.mesh);
+                            this.glowingBook.dispose();
+                            this.glowingBook = null;
+                        }
+
+                        if (this.dustMesh) {
+                            this.meshGroup.remove(this.dustMesh);
+                            this.dustMesh.geometry.dispose();
+                            this.dustMesh.material.dispose();
+                            this.dustMesh = null;
+                        }
 
                         // 2. Dispose Geometries
                         // FIX: DO NOT DISPOSE SHARED GEOMETRIES.
@@ -5508,13 +5553,15 @@
                 const segmentLength = config.segmentLength;
                 // IMPORTANT:
                 // Do NOT reduce the active segment count for "performance savings".
-                // Lower values make segment spawning visibly pop into view.
-                const MIN_ACTIVE_SEGMENTS = 7;
+                // The extra front-most segment is intentional and prevents visible hallway pop-in.
+                // Lower values make the recycled segment appear in view in front of the player.
+                const INITIAL_SEGMENT_START_Z = 40;
+                const MIN_ACTIVE_SEGMENTS = 8;
 
                 function updateSegments(playerZ) {
                     // Keep one additional front segment loaded for smoother forward visibility.
                     if (segments.length < MIN_ACTIVE_SEGMENTS) {
-                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : 40;
+                        const lastZ = segments.length > 0 ? segments[segments.length - 1].zStart : INITIAL_SEGMENT_START_Z;
                         addSegment(lastZ - segmentLength);
                         return;
                     }
@@ -6068,7 +6115,10 @@
                 // IMPORTANT:
                 // Do NOT shrink this preload list for performance reasons.
                 // If reduced, players can see new hallway segments spawning in front of them.
-                const initialZ = [40, 30, 20, 10, 0, -10, -20];
+                const initialZ = Array.from(
+                    { length: MIN_ACTIVE_SEGMENTS },
+                    (_, index) => INITIAL_SEGMENT_START_Z - index * segmentLength
+                );
                 const totalToLoad = initialZ.length;
 
                 function checkPreloadComplete() {
@@ -6252,7 +6302,9 @@
                     frameCount++;
                     fpsLogTimer += frameDelta;
                     if (fpsLogTimer > 3000) {
-                        console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
+                        if (LIMINAL_CORRIDOR_DEBUG_LOGS) {
+                            console.log(`[Performance] Avg FPS: ${(frameCount / 3).toFixed(1)}, Last Frame: ${frameDelta.toFixed(1)}ms`);
+                        }
                         frameCount = 0;
                         fpsLogTimer = 0;
                     }
@@ -6311,8 +6363,7 @@
                                 }
                             } else if (cameraLookTarget) {
                                 // Calculate direction from camera to 3D target point
-                                const lookDir = new THREE.Vector3();
-                                lookDir.subVectors(cameraLookTarget, camera.position).normalize();
+                                const lookDir = tmpLookDir.subVectors(cameraLookTarget, camera.position).normalize();
 
                                 // Calculate target yaw and pitch from direction
                                 // Forward is -Z, so yaw = atan2(x, -z)
@@ -6367,7 +6418,8 @@
 
                             const isReading = isReadingMode; // Use global state
 
-                            const input = new THREE.Vector3();
+                            const input = tmpMovementInput;
+                            input.set(0, 0, 0);
 
                             // 1. GLOBAL PHYSICS (Friction / Gravity) - Applied in BOTH modes
                             velocity.x -= velocity.x * 10.0 * delta;
@@ -6395,12 +6447,10 @@
                                 // 2. Input Vectors
 
                                 // 2. Input Vectors
-                                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                                const forward = tmpForwardDir.set(0, 0, -1).applyQuaternion(camera.quaternion);
                                 forward.y = 0; forward.normalize();
-                                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                                const right = tmpRightDir.set(1, 0, 0).applyQuaternion(camera.quaternion);
                                 right.y = 0; right.normalize();
-
-                                input.set(0, 0, 0);
                                 if (move.f) input.add(forward);
                                 // if (move.b) input.sub(forward); // Backwards disabled in general config
                                 if (move.r) input.add(right);
@@ -6443,7 +6493,7 @@
                                             velocity.set(0, 0, 0); // Full stop
                                             // Skip remaining movement logic this frame
                                         } else {
-                                            const moveDir = new THREE.Vector3(dx, 0, dz).normalize();
+                                            const moveDir = tmpMoveDir.set(dx, 0, dz).normalize();
 
                                             // UNIFIED SPEED: Use gameSpeed for click movement too.
                                             // Direct World Space addition (since velocity is World Space)
@@ -6480,7 +6530,7 @@
 
                             // Friction
                             velocity.multiplyScalar(1.0 - 5.0 * delta);
-                            camera.position.add(velocity.clone().multiplyScalar(delta));
+                            camera.position.add(tmpVelocityStep.copy(velocity).multiplyScalar(delta));
 
                             // HEAD BOBBING (Half speed, Half amplitude of previous)
                             // Previous: delta * 12, Amp 0.025
@@ -6516,9 +6566,8 @@
 
                                     // Proximity collection check (ALWAYS allow, even if lore is playing - chaining!)
                                     if (true) {
-                                        // FIX: Use WORLD position, not local position (meshGroup may have moved)
-                                        const worldPos = new THREE.Vector3();
-                                        book.mesh.getWorldPosition(worldPos);
+                                        // Reuse the world position calculated during `book.update`.
+                                        const worldPos = book.worldPos;
                                         const distZ = Math.abs(worldPos.z - camera.position.z);
                                         const distX = Math.abs(worldPos.x - camera.position.x);
                                         const SCENE_NAME = 'liminal_library';
@@ -6565,7 +6614,9 @@
                                             // Missed! Mark as missed but don't count towards collection
                                             book.missed = true;
                                             book.mesh.visible = false;
-                                            console.log(`Book ${book.id} missed (player walked past)`);
+                                            if (LIMINAL_CORRIDOR_DEBUG_LOGS) {
+                                                console.log(`Book ${book.id} missed (player walked past)`);
+                                            }
                                         }
                                     }
                                 }
