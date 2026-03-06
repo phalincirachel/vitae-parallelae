@@ -1439,18 +1439,6 @@
                     hallWidth: 6
                 };
 
-                // TEMP SEGMENT TEST MODE - REMOVE AFTER VISUAL SEGMENT CHECK
-                const TEMP_SEGMENT_TEST_MODE = true;
-                const TEMP_TEST_FOG_DENSITY = 0.012;
-                const TEMP_TEST_CAMERA_FAR = 220;
-                const TEMP_TEST_SCENE_BACKGROUND = 0x181410;
-                const TEMP_TEST_AMBIENT_INTENSITY = 1.9;
-                const TEMP_TEST_HEMISPHERE_INTENSITY = 1.25;
-                const LOOK_YAW_RANGE = TEMP_SEGMENT_TEST_MODE ? Math.PI : 1.5;
-
-                function getSceneBackgroundColor() {
-                    return TEMP_SEGMENT_TEST_MODE ? TEMP_TEST_SCENE_BACKGROUND : 0x050505;
-                }
 
                 // ============================================
                 // SCENE SETUP (THREE.JS)
@@ -1460,24 +1448,19 @@
 
                 if (!window.fallback2DMode && THREE) {
                     scene = new THREE.Scene();
-                    scene.fog = new THREE.FogExp2(getSceneBackgroundColor(), TEMP_SEGMENT_TEST_MODE ? TEMP_TEST_FOG_DENSITY : 0.06);
-                    scene.background = new THREE.Color(getSceneBackgroundColor());
+                    scene.fog = new THREE.FogExp2(0x050505, 0.06); // Denser fog, matches background
+                    scene.background = new THREE.Color(0x050505); // Black-ish background
 
-                    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, TEMP_SEGMENT_TEST_MODE ? TEMP_TEST_CAMERA_FAR : 100);
+                    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
                     camera.position.set(0, 1.6, 3.0);
                     euler = new THREE.Euler(0, 0, 0, 'YXZ');
 
-                    backgroundModeColor = TEMP_SEGMENT_TEST_MODE ? 0x15110d : 0x010101;
+                    backgroundModeColor = 0x010101;
                     lookTargetSphere = new THREE.Mesh(
                         new THREE.SphereGeometry(0.05, 8, 8),
                         new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true, transparent: true, opacity: 0.0 }) // Set opacity > 0 to debug
                     );
                     scene.add(lookTargetSphere);
-
-                    if (TEMP_SEGMENT_TEST_MODE) {
-                        scene.add(new THREE.AmbientLight(0xf2e7d0, TEMP_TEST_AMBIENT_INTENSITY));
-                        scene.add(new THREE.HemisphereLight(0xf4ead5, 0x120f0a, TEMP_TEST_HEMISPHERE_INTENSITY));
-                    }
                 }
 
                 // Helper to render Archive Content (Fixes ReferenceError)
@@ -1572,7 +1555,7 @@
                 syncViewport();
 
                 // Start animation with correct background color
-                if (scene) scene.background = new THREE.Color(isReadingMode ? backgroundModeColor : getSceneBackgroundColor());
+                if (scene) scene.background = new THREE.Color(isReadingMode ? backgroundModeColor : 0x050505);
                 const uiContainer = document.getElementById('audioPlayerUI');
                 const iconPlay = document.getElementById('iconPlay');
                 const iconPause = document.getElementById('iconPause');
@@ -4734,7 +4717,7 @@
                 function syncLookTargetsToCamera() {
                     if (!camera || !camera.quaternion) return;
                     euler.setFromQuaternion(camera.quaternion);
-                    mouse.x = Math.max(-1, Math.min(1, -euler.y / LOOK_YAW_RANGE));
+                    mouse.x = Math.max(-1, Math.min(1, -euler.y / 1.5));
                     mouse.y = Math.max(-1, Math.min(1, -euler.x / 0.5));
                     targetMouseX = mouse.x;
                     targetMouseY = mouse.y;
@@ -5576,32 +5559,6 @@
                 const INITIAL_SEGMENT_START_Z = 40;
                 const MIN_ACTIVE_SEGMENTS = 8;
 
-                function ensureTempSegmentDebugHud() {
-                    if (!TEMP_SEGMENT_TEST_MODE) return null;
-                    let hud = document.getElementById('debugHUD');
-                    if (hud) return hud;
-                    hud = document.createElement('div');
-                    hud.id = 'debugHUD';
-                    hud.style.cssText = 'position:fixed;top:12px;left:12px;z-index:5000;pointer-events:none;padding:8px 10px;border:1px solid rgba(255,236,190,0.35);background:rgba(0,0,0,0.72);color:#f4ecd5;font:12px/1.4 monospace;white-space:pre-line;text-shadow:0 0 4px rgba(0,0,0,0.9);';
-                    document.body.appendChild(hud);
-                    return hud;
-                }
-
-                function getSegmentDebugStats(playerZ) {
-                    let ahead = 0;
-                    let behind = 0;
-                    let current = 0;
-                    for (const seg of segments) {
-                        const segFront = seg.zStart;
-                        const segBack = seg.zStart - segmentLength;
-                        if (playerZ <= segFront && playerZ >= segBack) current++;
-                        else if (segFront < playerZ) ahead++;
-                        else behind++;
-                    }
-                    return { ahead, behind, current, total: segments.length };
-                }
-
-                ensureTempSegmentDebugHud();
 
                 function updateSegments(playerZ) {
                     // Keep one additional front segment loaded for smoother forward visibility.
@@ -6429,7 +6386,7 @@
 
                                 // Update mouse.x/y to match current camera direction
                                 // So swipe continues from current orientation
-                                mouse.x = -euler.y / LOOK_YAW_RANGE;
+                                mouse.x = -euler.y / 1.5;
                                 mouse.y = -euler.x / 0.5;
                                 targetMouseX = mouse.x;
                                 targetMouseY = mouse.y;
@@ -6441,7 +6398,7 @@
                             } else {
                                 // Normal mouse/swipe-based camera control
                                 const targetPitch = -mouse.y * 0.5;
-                                const targetYaw = -mouse.x * LOOK_YAW_RANGE;
+                                const targetYaw = -mouse.x * 1.5;
                                 const ease = 5.0 * delta;
                                 euler.setFromQuaternion(camera.quaternion);
                                 euler.x += (targetPitch - euler.x) * ease;
@@ -6681,15 +6638,7 @@
                             const debugEl = document.getElementById('debugHUD');
                             if (debugEl) {
                                 const chapterProgress = getCurrentChapterProgress();
-                                if (TEMP_SEGMENT_TEST_MODE) {
-                                    const segmentStats = getSegmentDebugStats(camera.position.z);
-                                    debugEl.innerText = `TEMP SEGMENT TEST
-Gesamt: ${segmentStats.total}
-Vor dir: ${segmentStats.ahead} | Bei dir: ${segmentStats.current} | Hinter dir: ${segmentStats.behind}
-Pos Z: ${camera.position.z.toFixed(2)} | Lore: ${chapterProgress.collected}/${chapterProgress.total}`;
-                                } else {
-                                    debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${chapterProgress.collected}/${chapterProgress.total}`;
-                                }
+                                debugEl.innerText = `Pos Z: ${camera.position.z.toFixed(2)} | Segments: ${segments.length} | Lore: ${chapterProgress.collected}/${chapterProgress.total}`;
                             }
 
                         } // end if (!window.fallback2DMode)
