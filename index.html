@@ -16,6 +16,8 @@
     <script src="assets/js/AudioVisibilityManager.js"></script>
     <script src="assets/js/SCAudioAdapter.js"></script> <!-- Adapter AFTER Managers so it can register itself -->
     <script src="assets/js/GlobalVisualDimmer.js"></script>
+    <script src="assets/js/LoadingTutorialCatalog.js"></script>
+    <script src="assets/js/LoadingTutorialOverlay.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
     <link rel="preload" href="assets/fonts/reader-grotesk-segoeui.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="assets/fonts/reader-renaissance-palatino.ttf" as="font" type="font/ttf" crossorigin>
@@ -98,6 +100,7 @@
             z-index: 2598;
         }
     </style>
+    <link rel="stylesheet" href="assets/css/loading-tutorial.css">
 </head>
 
 <body>
@@ -292,8 +295,8 @@
 
             <div class="archive-tabs">
                 <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
-                <button class="archive-tab" data-tab="lore">Funde</button>
-                <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
+                <button class="archive-tab" data-tab="lore" data-loading-tutorial="lore-tab">Funde</button>
+                <button class="archive-tab" data-tab="lesezeichen" data-loading-tutorial="bookmark-tab">Lesezeichen</button>
             </div>
 
             <div class="archive-tab-content active" data-tab="kapitel">
@@ -326,7 +329,7 @@
                 </div>
             </div>
 
-            <div class="archive-tab-content" data-tab="lesezeichen">
+            <div class="archive-tab-content" data-tab="lesezeichen" data-loading-tutorial="bookmark-list-tab">
                 <!-- LESEZEICHEN -->
                 <div id="bookmarkList" style="width:100%;">
                     <!-- Dynamisch gefÃ¼llt -->
@@ -335,7 +338,7 @@
 
             <div class="archive-tab-content" data-tab="einstellungen">
                 <div class="reader-settings-panel">
-                    <div class="reader-settings-group">
+                    <div class="reader-settings-group" data-loading-tutorial="layout-group">
                         <div class="reader-settings-title">Anordnung</div>
                         <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="blaettern" checked>
@@ -394,7 +397,7 @@
                             <span>Flattersatz</span>
                         </label>
                     </div>
-                    <div class="reader-settings-group">
+                    <div class="reader-settings-group" data-loading-tutorial="volume-group">
                         <div class="reader-settings-title">Lautst&auml;rke</div>
                         <div class="reader-volume-row">
                             <label class="reader-volume-label" for="readerTextVolumeRange">Text</label>
@@ -448,7 +451,7 @@
             </div>
 
             <!-- SAVE/LOAD FOOTER -->
-            <div class="archive-footer">
+            <div class="archive-footer" data-loading-tutorial="save-load-footer">
                 <button id="btnSaveData" class="archive-footer-btn">SAVE (Export)</button>
                 <button id="btnLoadData" class="archive-footer-btn">LOAD (Import)</button>
                 <input type="file" id="fileInputSave" style="display: none;" accept=".json">
@@ -541,6 +544,14 @@
         const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
 
         const SCENE_NAME = LEVEL.sceneName;
+        if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
+            window.LoadingTutorialOverlay.init({
+                pageKey: LEVEL.page,
+                sceneKey: LEVEL.sceneName,
+                chapterTitle: LEVEL.chapterTitle,
+                loadingScreenId: 'loading-screen'
+            });
+        }
         const LORE_PROGRESS_DEFAULT_TOTAL = 5;
         const CHAPTER_PROGRESS_SCENE_BY_BUTTON = Object.freeze({
             chapter1Btn: 'marktplatz',

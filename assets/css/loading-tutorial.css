@@ -1,0 +1,780 @@
+﻿#loading-screen.loading-tutorial-ready {
+    background: #000;
+    overflow: hidden;
+    align-items: stretch;
+    justify-content: flex-start;
+    color: rgba(245, 241, 233, 0.96);
+    font-family: var(--loading-tutorial-font, "Reader Grotesk", "Segoe UI", system-ui, sans-serif);
+}
+
+#loading-screen.loading-tutorial-ready > .spinner,
+#loading-screen.loading-tutorial-ready > p {
+    display: none !important;
+}
+
+.loading-tutorial-shell {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    font-family: var(--loading-tutorial-font, "Reader Grotesk", "Segoe UI", system-ui, sans-serif);
+}
+
+.loading-tutorial-shell * {
+    box-sizing: border-box;
+    pointer-events: none;
+}
+
+.loading-tutorial-shell.is-hidden {
+    display: none;
+}
+
+.loading-tutorial-measure-root {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    visibility: hidden;
+    opacity: 0;
+    z-index: -1;
+}
+
+.loading-tutorial-focus-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+}
+
+.loading-tutorial-copy {
+    position: absolute;
+    z-index: 5;
+    width: min(390px, calc(100vw - 32px));
+    padding: 18px 20px 20px;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(26, 26, 26, 0.94), rgba(10, 10, 10, 0.9));
+    border: 1px solid rgba(248, 242, 232, 0.16);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.loading-tutorial-kicker {
+    margin-bottom: 8px;
+    font-size: 11px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: rgba(216, 210, 198, 0.7);
+}
+
+.loading-tutorial-title {
+    margin: 0;
+    font-size: clamp(26px, 4.9vw, 42px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    color: rgba(250, 247, 242, 0.98);
+}
+
+.loading-tutorial-body {
+    margin: 12px 0 0;
+    font-size: clamp(14px, 2.45vw, 18px);
+    line-height: 1.52;
+    color: rgba(226, 221, 213, 0.84);
+}
+
+.loading-tutorial-connector {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 4;
+    opacity: 0;
+    overflow: visible;
+}
+
+.loading-tutorial-connector-path {
+    fill: none;
+    stroke: rgba(239, 236, 229, 0.84);
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    marker-end: url(#loadingTutorialArrowMarker);
+}
+
+.loading-tutorial-halo {
+    position: absolute;
+    z-index: 3;
+    border-radius: 28px;
+    border: 1px solid rgba(240, 236, 228, 0.28);
+    box-shadow:
+        0 0 0 1px rgba(240, 236, 228, 0.06),
+        0 0 34px rgba(243, 238, 229, 0.14),
+        inset 0 0 18px rgba(255, 248, 240, 0.08);
+    opacity: 0;
+    animation: loadingTutorialHaloPulse 2.7s ease-in-out infinite;
+}
+
+.loading-tutorial-progress {
+    position: absolute;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    background: rgba(9, 9, 9, 0.72);
+    border: 1px solid rgba(245, 238, 228, 0.14);
+    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.42);
+}
+
+.loading-tutorial-progress-label {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(223, 217, 208, 0.8);
+}
+
+.loading-tutorial-progress-track {
+    position: relative;
+    width: 100%;
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.loading-tutorial-progress-bar {
+    position: absolute;
+    top: 0;
+    left: -34%;
+    width: 34%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(246, 241, 233, 0.92), rgba(255, 255, 255, 0.18));
+    animation: loadingTutorialProgressSlide 1.75s ease-in-out infinite;
+}
+
+.loading-tutorial-ui-crop {
+    position: absolute;
+    overflow: hidden;
+    z-index: 2;
+}
+
+.loading-tutorial-ui-crop--single {
+    border-radius: 20px;
+}
+
+.loading-tutorial-ui-crop--group {
+    border-radius: 28px;
+}
+
+.loading-tutorial-stage,
+.loading-tutorial-stage-clone {
+    position: absolute;
+    inset: 0;
+}
+
+.loading-tutorial-stage-clone * {
+    transition: none !important;
+}
+
+.loading-tutorial-stage--hud #audioPlayerUI {
+    display: flex !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.loading-tutorial-stage--archive #archiveModal {
+    display: flex !important;
+}
+
+.loading-tutorial-stage--archive .archive-card,
+.loading-tutorial-stage--archive .archive-primary-btn,
+.loading-tutorial-stage--archive .archive-title,
+.loading-tutorial-stage--archive .archive-tab,
+.loading-tutorial-stage--archive .menu-item,
+.loading-tutorial-stage--archive .item-main-text,
+.loading-tutorial-stage--archive .item-sub-text,
+.loading-tutorial-stage--archive .reader-settings-title,
+.loading-tutorial-stage--archive .reader-radio-option,
+.loading-tutorial-stage--archive .reader-radio-option span,
+.loading-tutorial-stage--archive .reader-volume-label,
+.loading-tutorial-stage--archive .reader-size-unit,
+.loading-tutorial-stage--archive .bookmark-item,
+.loading-tutorial-stage--archive .bookmark-delete-btn,
+.loading-tutorial-stage--archive .archive-footer-btn {
+    color: rgba(255, 255, 255, 0.95) !important;
+}
+
+.loading-tutorial-stage--archive .archive-primary-btn,
+.loading-tutorial-stage--archive .archive-tab,
+.loading-tutorial-stage--archive .reader-radio-option span,
+.loading-tutorial-stage--archive .reader-volume-label,
+.loading-tutorial-stage--archive .reader-size-unit,
+.loading-tutorial-stage--archive .item-sub-text {
+    opacity: 1 !important;
+}
+
+.loading-tutorial-stage--archive input[type="number"] {
+    color: rgba(255, 255, 255, 0.92) !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.loading-tutorial-demo {
+    position: absolute;
+    left: 50%;
+    top: 44%;
+    width: min(56vw, 520px);
+    height: min(40vw, 320px);
+    min-width: 250px;
+    min-height: 170px;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+}
+
+.loading-tutorial-demo-frame {
+    position: absolute;
+    inset: 0;
+    border-radius: 30px;
+    border: 1px solid rgba(248, 242, 233, 0.18);
+    background:
+        radial-gradient(circle at 50% 24%, rgba(255, 255, 255, 0.06), transparent 42%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.02),
+        0 0 42px rgba(255, 255, 255, 0.04);
+}
+
+.loading-tutorial-demo-frame--map {
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 48px 48px,
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px) 0 0 / 48px 48px,
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.02));
+}
+
+.loading-tutorial-demo-frame--zoom {
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.08), transparent 46%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+}
+
+.loading-tutorial-demo-frame--corridor {
+    overflow: hidden;
+}
+
+.loading-tutorial-demo-frame--corridor::before,
+.loading-tutorial-demo-frame--corridor::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+.loading-tutorial-demo-frame--corridor::before {
+    background:
+        linear-gradient(115deg, transparent 37%, rgba(255, 255, 255, 0.22) 37.6%, transparent 38.3%) left center / 50% 100% no-repeat,
+        linear-gradient(245deg, transparent 37%, rgba(255, 255, 255, 0.22) 37.6%, transparent 38.3%) right center / 50% 100% no-repeat;
+    opacity: 0.48;
+}
+
+.loading-tutorial-demo-frame--corridor::after {
+    background:
+        radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.14), transparent 34%),
+        linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.04) 64%, rgba(255, 255, 255, 0.09) 100%);
+}
+
+.loading-tutorial-touch-dot,
+.loading-tutorial-target-point {
+    position: absolute;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: rgba(250, 247, 242, 0.94);
+    box-shadow: 0 0 18px rgba(255, 255, 255, 0.24);
+}
+
+.loading-tutorial-touch-dot::after,
+.loading-tutorial-target-point::after {
+    content: "";
+    position: absolute;
+    inset: -12px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 50%;
+    animation: loadingTutorialPulseRing 2s ease-out infinite;
+}
+
+.loading-tutorial-target-point {
+    width: 18px;
+    height: 18px;
+    background: rgba(255, 239, 181, 0.98);
+}
+
+.loading-tutorial-ripple {
+    position: absolute;
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    animation: loadingTutorialPulseRing 2.3s ease-out infinite;
+}
+
+.loading-tutorial-arrow {
+    position: absolute;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.08), rgba(244, 240, 232, 0.88), rgba(255, 255, 255, 0.08));
+    transform-origin: left center;
+    animation: loadingTutorialArrowDrift 2.1s ease-in-out infinite;
+}
+
+.loading-tutorial-arrow::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    right: -2px;
+    width: 10px;
+    height: 10px;
+    border-top: 2px solid rgba(244, 240, 232, 0.88);
+    border-right: 2px solid rgba(244, 240, 232, 0.88);
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.loading-tutorial-touch-dot--origin {
+    left: 18%;
+    bottom: 20%;
+}
+
+.loading-tutorial-touch-dot--drag {
+    left: 22%;
+    top: 46%;
+    animation: loadingTutorialDragDot 2.4s ease-in-out infinite;
+}
+
+.loading-tutorial-touch-dot--pinch-left {
+    left: 28%;
+    top: 48%;
+    animation: loadingTutorialPinchLeft 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-touch-dot--pinch-right {
+    right: 28%;
+    top: 48%;
+    animation: loadingTutorialPinchRight 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-touch-dot--swipe {
+    left: 24%;
+    top: 48%;
+    animation: loadingTutorialSwipeDot 2.25s ease-in-out infinite;
+}
+
+.loading-tutorial-touch-dot--tap-forward {
+    left: 50%;
+    bottom: 18%;
+    transform: translateX(-50%);
+}
+
+.loading-tutorial-target-point {
+    right: 22%;
+    top: 28%;
+}
+
+.loading-tutorial-ripple--target {
+    right: 18%;
+    top: 22%;
+}
+
+.loading-tutorial-ripple--forward {
+    left: 50%;
+    top: 18%;
+    transform: translateX(-50%);
+}
+
+.loading-tutorial-arrow--move-diagonal {
+    left: 23%;
+    top: 60%;
+    width: 48%;
+    transform: rotate(-28deg);
+}
+
+.loading-tutorial-arrow--drag {
+    left: 22%;
+    top: 50%;
+    width: 48%;
+}
+
+.loading-tutorial-arrow--pinch-left {
+    left: 37%;
+    top: 51%;
+    width: 15%;
+    transform: rotate(180deg);
+}
+
+.loading-tutorial-arrow--pinch-right {
+    right: 37%;
+    top: 51%;
+    width: 15%;
+}
+
+.loading-tutorial-arrow--swipe {
+    left: 28%;
+    top: 52%;
+    width: 45%;
+}
+
+.loading-tutorial-arrow--forward {
+    left: 50%;
+    top: 32%;
+    width: 2px;
+    height: 28%;
+    transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(244, 240, 232, 0.88), rgba(255, 255, 255, 0.08));
+}
+
+.loading-tutorial-arrow--forward::after {
+    top: auto;
+    bottom: -2px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%) rotate(135deg);
+}
+
+.loading-tutorial-demo-inner-frame {
+    position: absolute;
+    inset: 18% 22%;
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    animation: loadingTutorialZoomFrame 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-wasd-grid {
+    position: absolute;
+    left: 10%;
+    top: 20%;
+    display: grid;
+    grid-template-columns: repeat(3, 56px);
+    grid-template-rows: repeat(2, 56px);
+    gap: 10px;
+    width: 188px;
+}
+
+.loading-tutorial-key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(249, 246, 240, 0.96);
+    font-size: 24px;
+    font-weight: 600;
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.04);
+}
+
+.loading-tutorial-key--0 {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.loading-tutorial-key--1 {
+    grid-column: 1;
+    grid-row: 2;
+}
+
+.loading-tutorial-key--2 {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.loading-tutorial-key--3 {
+    grid-column: 3;
+    grid-row: 2;
+}
+
+.loading-tutorial-mouse {
+    position: absolute;
+    right: 12%;
+    top: 21%;
+    width: 110px;
+    height: 160px;
+    border-radius: 54px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+}
+
+.loading-tutorial-mouse-split {
+    position: absolute;
+    left: 50%;
+    top: 16px;
+    width: 1px;
+    height: 54px;
+    background: rgba(255, 255, 255, 0.16);
+    transform: translateX(-50%);
+}
+
+.loading-tutorial-mouse-arc {
+    position: absolute;
+    left: 50%;
+    bottom: -30px;
+    width: 120px;
+    height: 60px;
+    border: 2px solid rgba(244, 240, 232, 0.68);
+    border-color: rgba(244, 240, 232, 0.68) transparent transparent transparent;
+    border-radius: 60px 60px 0 0;
+    transform: translateX(-50%);
+    animation: loadingTutorialPulseArc 1.9s ease-in-out infinite;
+}
+
+.loading-tutorial-orb,
+.loading-tutorial-book {
+    position: absolute;
+    left: 16%;
+    top: 34%;
+}
+
+.loading-tutorial-orb {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, rgba(255, 255, 244, 0.98), rgba(255, 228, 138, 0.94) 35%, rgba(255, 187, 52, 0.76) 62%, rgba(255, 176, 30, 0.12) 100%);
+    box-shadow: 0 0 34px rgba(255, 216, 112, 0.52), 0 0 68px rgba(255, 204, 88, 0.22);
+    animation: loadingTutorialFloat 2.3s ease-in-out infinite;
+}
+
+.loading-tutorial-book {
+    width: 84px;
+    height: 60px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, rgba(250, 247, 241, 0.94), rgba(194, 182, 160, 0.86));
+    box-shadow: 0 0 30px rgba(255, 232, 174, 0.22), inset -10px 0 0 rgba(0, 0, 0, 0.12);
+    animation: loadingTutorialFloat 2.3s ease-in-out infinite;
+}
+
+.loading-tutorial-book::after {
+    content: "";
+    position: absolute;
+    inset: 7px 10px 7px 18px;
+    border-left: 2px solid rgba(0, 0, 0, 0.16);
+    border-radius: 9px;
+}
+
+.loading-tutorial-demo-link {
+    position: absolute;
+    left: 31%;
+    top: 50%;
+    width: 36%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(255, 229, 163, 0.08), rgba(244, 240, 232, 0.88), rgba(255, 229, 163, 0.08));
+}
+
+.loading-tutorial-demo-link::after {
+    content: "";
+    position: absolute;
+    right: -2px;
+    top: 50%;
+    width: 10px;
+    height: 10px;
+    border-top: 2px solid rgba(244, 240, 232, 0.88);
+    border-right: 2px solid rgba(244, 240, 232, 0.88);
+    transform: translateY(-50%) rotate(45deg);
+}
+
+.loading-tutorial-hud-chip {
+    position: absolute;
+    right: 12%;
+    top: 36%;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(14, 14, 14, 0.82);
+    border: 1px solid rgba(255, 229, 155, 0.24);
+    color: rgba(248, 244, 235, 0.94);
+}
+
+.loading-tutorial-hud-chip-light {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 254, 245, 0.98), rgba(255, 229, 145, 0.95) 42%, rgba(255, 196, 66, 0.3) 100%);
+}
+
+.loading-tutorial-bookmark-line {
+    position: absolute;
+    left: 12%;
+    right: 12%;
+    top: 34%;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(244, 241, 235, 0.92);
+}
+
+.loading-tutorial-bookmark-time {
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+
+.loading-tutorial-bookmark-text {
+    opacity: 0.82;
+}
+
+.loading-tutorial-hold-ring {
+    position: absolute;
+    left: 19%;
+    top: 20%;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    animation: loadingTutorialHoldRing 2.4s linear infinite;
+}
+
+.loading-tutorial-bookmark-pill {
+    position: absolute;
+    right: 16%;
+    top: 58%;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(255, 250, 242, 0.14);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: rgba(245, 241, 233, 0.96);
+    animation: loadingTutorialBookmarkPop 2.4s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-tutorial-fallback-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+    color: rgba(249, 245, 238, 0.96);
+    font-size: 42px;
+    font-weight: 700;
+    box-shadow: 0 0 32px rgba(255, 255, 255, 0.06);
+}
+
+@keyframes loadingTutorialProgressSlide {
+    0% { transform: translateX(0); }
+    50% { transform: translateX(220%); }
+    100% { transform: translateX(440%); }
+}
+
+@keyframes loadingTutorialHaloPulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(240, 236, 228, 0.06), 0 0 34px rgba(243, 238, 229, 0.14), inset 0 0 18px rgba(255, 248, 240, 0.08); }
+    50% { box-shadow: 0 0 0 1px rgba(240, 236, 228, 0.12), 0 0 48px rgba(243, 238, 229, 0.24), inset 0 0 24px rgba(255, 248, 240, 0.12); }
+}
+
+@keyframes loadingTutorialPulseRing {
+    0% { transform: scale(0.72); opacity: 0.72; }
+    100% { transform: scale(1.18); opacity: 0; }
+}
+
+@keyframes loadingTutorialArrowDrift {
+    0%, 100% { opacity: 0.68; transform-origin: left center; }
+    50% { opacity: 1; }
+}
+
+@keyframes loadingTutorialDragDot {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(140px); }
+}
+
+@keyframes loadingTutorialPinchLeft {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(42px); }
+}
+
+@keyframes loadingTutorialPinchRight {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-42px); }
+}
+
+@keyframes loadingTutorialSwipeDot {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(170px); }
+}
+
+@keyframes loadingTutorialZoomFrame {
+    0%, 100% { transform: scale(0.88); opacity: 0.72; }
+    50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes loadingTutorialPulseArc {
+    0%, 100% { opacity: 0.42; transform: translateX(-50%) scale(0.96); }
+    50% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+}
+
+@keyframes loadingTutorialFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+@keyframes loadingTutorialHoldRing {
+    0% { transform: scale(0.82); opacity: 0.22; }
+    45% { transform: scale(1); opacity: 0.92; }
+    100% { transform: scale(1.08); opacity: 0.08; }
+}
+
+@keyframes loadingTutorialBookmarkPop {
+    0%, 20%, 100% { transform: scale(0.92); opacity: 0.4; }
+    35%, 70% { transform: scale(1); opacity: 1; }
+}
+
+@media (max-width: 760px) {
+    .loading-tutorial-demo {
+        top: 38%;
+        width: min(84vw, 420px);
+        height: min(58vw, 260px);
+    }
+
+    .loading-tutorial-copy {
+        padding: 16px 16px 18px;
+        border-radius: 18px;
+    }
+
+    .loading-tutorial-wasd-grid {
+        left: 6%;
+        top: 18%;
+        transform: scale(0.8);
+        transform-origin: top left;
+    }
+
+    .loading-tutorial-mouse {
+        right: 6%;
+        top: 22%;
+        transform: scale(0.82);
+        transform-origin: top right;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-tutorial-halo,
+    .loading-tutorial-progress-bar,
+    .loading-tutorial-touch-dot::after,
+    .loading-tutorial-target-point::after,
+    .loading-tutorial-ripple,
+    .loading-tutorial-arrow,
+    .loading-tutorial-demo-inner-frame,
+    .loading-tutorial-touch-dot--drag,
+    .loading-tutorial-touch-dot--pinch-left,
+    .loading-tutorial-touch-dot--pinch-right,
+    .loading-tutorial-touch-dot--swipe,
+    .loading-tutorial-mouse-arc,
+    .loading-tutorial-orb,
+    .loading-tutorial-book,
+    .loading-tutorial-hold-ring,
+    .loading-tutorial-bookmark-pill {
+        animation: none !important;
+    }
+}
+
