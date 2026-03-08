@@ -1269,7 +1269,7 @@
 
         // YellowLight class - now loaded from assets/js/shared-game-systems.js
 
-        // Click-to-Move fÃ¼r Mobile
+// Click-to-Move fÃ¼r Mobile
         let moveTarget = null; // {x, y} oder null
 
         // ============================================
@@ -1428,6 +1428,139 @@
 
         let camX = 0, camY = 0;
         let targetCamX = 0, targetCamY = 0;
+        let cameraZoom = 1;
+        let cameraZoomTarget = 1;
+        let cameraPanOffsetX = 0;
+        let cameraPanOffsetY = 0;
+
+        const GAME_CAMERA_ZOOM_MIN_FLOOR = 0.85;
+        const GAME_CAMERA_ZOOM_MAX = 2.25;
+        const GAME_CAMERA_DRAG_THRESHOLD_PX = 10;
+        const GAME_CAMERA_PAN_RETURN_SPEED = 7.8;
+        const GAME_CAMERA_ACTIVE_LERP = 12.5;
+
+        const gameCanvasGesture = {
+            pointers: new Map(),
+            primaryPointerId: null,
+            dragStartCanvasX: 0,
+            dragStartCanvasY: 0,
+            dragBaseOffsetX: 0,
+            dragBaseOffsetY: 0,
+            dragMoved: false,
+            pinchActive: false,
+            pinchStartDistance: 0,
+            pinchStartZoom: 1,
+            pinchAnchorWorldX: 0,
+            pinchAnchorWorldY: 0,
+            suppressTap: false
+        };
+
+        function getCameraZoomClamped(nextZoom) {
+            const fitZoom = (mapW > 0 && mapH > 0)
+                ? Math.max(SCREEN_W / Math.max(1, mapW), SCREEN_H / Math.max(1, mapH))
+                : 1;
+            const minZoom = Math.max(GAME_CAMERA_ZOOM_MIN_FLOOR, fitZoom);
+            return Math.min(GAME_CAMERA_ZOOM_MAX, Math.max(minZoom, Number.isFinite(nextZoom) ? nextZoom : 1));
+        }
+
+        function getCameraViewWidth() {
+            return SCREEN_W / Math.max(0.0001, cameraZoom);
+        }
+
+        function getCameraViewHeight() {
+            return SCREEN_H / Math.max(0.0001, cameraZoom);
+        }
+
+        function clampCameraX(nextX) {
+            const maxX = Math.max(0, mapW - getCameraViewWidth());
+            return Math.max(0, Math.min(nextX, maxX));
+        }
+
+        function clampCameraY(nextY) {
+            const maxY = Math.max(0, mapH - getCameraViewHeight());
+            return Math.max(0, Math.min(nextY, maxY));
+        }
+
+        function getCameraFollowTargetX() {
+            return clampCameraX(player.x - (getCameraViewWidth() * 0.5) + 10);
+        }
+
+        function getCameraFollowTargetY() {
+            return clampCameraY(player.y - (getCameraViewHeight() * 0.30) + 10);
+        }
+
+        function getCanvasPointFromClient(clientX, clientY) {
+            if (!canvas || typeof canvas.getBoundingClientRect !== "function") return null;
+            const rect = canvas.getBoundingClientRect();
+            if (!rect.width || !rect.height) return null;
+            return {
+                canvasX: (clientX - rect.left) * (canvas.width / rect.width),
+                canvasY: (clientY - rect.top) * (canvas.height / rect.height)
+            };
+        }
+
+        function screenPointToWorld(clientX, clientY) {
+            const point = getCanvasPointFromClient(clientX, clientY);
+            if (!point) return null;
+            return {
+                canvasX: point.canvasX,
+                canvasY: point.canvasY,
+                worldX: camX + (point.canvasX / Math.max(0.0001, cameraZoom)),
+                worldY: camY + (point.canvasY / Math.max(0.0001, cameraZoom))
+            };
+        }
+
+        function getGameCameraPanLimitX() {
+            const mapSlack = Math.max(0, mapW - getCameraViewWidth());
+            return Math.max(0, Math.min(96, Math.min(getCameraViewWidth() * 0.24, mapSlack * 0.5)));
+        }
+
+        function getGameCameraPanLimitY() {
+            const mapSlack = Math.max(0, mapH - getCameraViewHeight());
+            return Math.max(0, Math.min(72, Math.min(getCameraViewHeight() * 0.2, mapSlack * 0.45)));
+        }
+
+        function applyGameCameraRubberBand(nextOffset, limit) {
+            if (!Number.isFinite(nextOffset) || limit <= 0) return 0;
+            const sign = nextOffset < 0 ? -1 : 1;
+            const distance = Math.abs(nextOffset);
+            if (distance <= limit) return nextOffset;
+            const overflow = distance - limit;
+            const stretched = limit + (overflow * 0.24);
+            return sign * Math.min(limit * 1.45, stretched);
+        }
+
+        function setGameCameraPanFromDrag(deltaX, deltaY, baseOffsetX = 0, baseOffsetY = 0) {
+            const zoom = Math.max(0.0001, cameraZoom);
+            cameraPanOffsetX = applyGameCameraRubberBand(baseOffsetX - (deltaX / zoom), getGameCameraPanLimitX());
+            cameraPanOffsetY = applyGameCameraRubberBand(baseOffsetY - (deltaY / zoom), getGameCameraPanLimitY());
+        }
+
+        function isGameCanvasGestureActive() {
+            return gameCanvasGesture.pointers.size > 0 || gameCanvasGesture.dragMoved || gameCanvasGesture.pinchActive;
+        }
+
+        function resetGameCanvasGestureState() {
+            gameCanvasGesture.pointers.clear();
+            gameCanvasGesture.primaryPointerId = null;
+            gameCanvasGesture.dragStartCanvasX = 0;
+            gameCanvasGesture.dragStartCanvasY = 0;
+            gameCanvasGesture.dragBaseOffsetX = 0;
+            gameCanvasGesture.dragBaseOffsetY = 0;
+            gameCanvasGesture.dragMoved = false;
+            gameCanvasGesture.pinchActive = false;
+            gameCanvasGesture.pinchStartDistance = 0;
+            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
+            gameCanvasGesture.pinchAnchorWorldX = 0;
+            gameCanvasGesture.pinchAnchorWorldY = 0;
+            gameCanvasGesture.suppressTap = false;
+        }
+
+        function syncCanvasTouchAction() {
+            if (!canvas) return;
+            canvas.style.touchAction = (!isReadingMode && window.PointerEvent) ? "none" : "";
+        }
+
 
         // Sprite Sheet Konfiguration
         const SPRITE = {
@@ -2174,24 +2307,15 @@
             return pixelPath.slice(1);
         }
 
-        // Click-to-Move fÃ¼r Mobile
+        // Click-to-Move / Camera Interaction
         function handleClickMove(screenX, screenY) {
             if (!gameReady || isReadingMode) return;
 
-            // Berechne Welt-Koordinaten aus Screen-Koordinaten
-            const rect = canvas.getBoundingClientRect();
-            // CSS-Pixel zu Canvas-Pixel Umrechnung
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const canvasX = (screenX - rect.left) * scaleX;
-            const canvasY = (screenY - rect.top) * scaleY;
-
-            // Welt-Position = Canvas-Position + Kamera-Offset
-            const worldX = canvasX + camX;
-            const worldY = canvasY + camY;
+            const point = screenPointToWorld(screenX, screenY);
+            if (!point) return;
 
             const startFoot = getPlayerFootPosition(player.x, player.y);
-            const goal = clampPointToMap(worldX, worldY);
+            const goal = clampPointToMap(point.worldX, point.worldY);
 
             clickWalkGoal = goal;
             clickWalkPath = findPathAStar(startFoot.x, startFoot.y, goal.x, goal.y);
@@ -2206,7 +2330,6 @@
                 }
             }
         }
-
         // ============================================
         // PATHFINDING v2 (PIXEL-PERFECT FOOT BASED)
         // ============================================
@@ -2541,25 +2664,198 @@
             return smoothed.slice(1);
         }
 
-        let suppressCanvasClickUntil = 0;
-
-        canvas.addEventListener('click', e => {
-            // Guard: Ignore if clicking UI buttons (propagated events)
-            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
-            if (performance.now() < suppressCanvasClickUntil) return;
-            handleClickMove(e.clientX, e.clientY);
-        });
-
-        canvas.addEventListener('touchstart', e => {
-            // Guard: Ignore if touching UI
-            if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
-            e.preventDefault();
-            suppressCanvasClickUntil = performance.now() + 420;
-            if (e.touches.length > 0) {
-                handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
+        function beginGameCanvasSinglePointerGesture(pointerInfo, options = {}) {
+            if (!pointerInfo) {
+                resetGameCanvasGestureState();
+                return;
             }
-        }, { passive: false });
+            gameCanvasGesture.primaryPointerId = pointerInfo.pointerId;
+            gameCanvasGesture.dragStartCanvasX = pointerInfo.canvasX;
+            gameCanvasGesture.dragStartCanvasY = pointerInfo.canvasY;
+            gameCanvasGesture.dragBaseOffsetX = cameraPanOffsetX;
+            gameCanvasGesture.dragBaseOffsetY = cameraPanOffsetY;
+            gameCanvasGesture.dragMoved = false;
+            gameCanvasGesture.pinchActive = false;
+            gameCanvasGesture.pinchStartDistance = 0;
+            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
+            gameCanvasGesture.pinchAnchorWorldX = 0;
+            gameCanvasGesture.pinchAnchorWorldY = 0;
+            gameCanvasGesture.suppressTap = !!options.suppressTap;
+        }
 
+        function beginGameCanvasPinchGesture() {
+            const pointers = Array.from(gameCanvasGesture.pointers.values());
+            if (pointers.length < 2) return;
+            const [first, second] = pointers;
+            const midX = (first.clientX + second.clientX) * 0.5;
+            const midY = (first.clientY + second.clientY) * 0.5;
+            const anchor = screenPointToWorld(midX, midY);
+            if (!anchor) return;
+            gameCanvasGesture.pinchActive = true;
+            gameCanvasGesture.dragMoved = true;
+            gameCanvasGesture.suppressTap = true;
+            gameCanvasGesture.pinchStartDistance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
+            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
+            gameCanvasGesture.pinchAnchorWorldX = anchor.worldX;
+            gameCanvasGesture.pinchAnchorWorldY = anchor.worldY;
+        }
+
+        function updateGameCanvasPinchGesture() {
+            const pointers = Array.from(gameCanvasGesture.pointers.values());
+            if (pointers.length < 2) return;
+            const [first, second] = pointers;
+            const distance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
+            const midX = (first.clientX + second.clientX) * 0.5;
+            const midY = (first.clientY + second.clientY) * 0.5;
+            const canvasPoint = getCanvasPointFromClient(midX, midY);
+            if (!canvasPoint) return;
+
+            cameraZoomTarget = getCameraZoomClamped(gameCanvasGesture.pinchStartZoom * (distance / Math.max(1, gameCanvasGesture.pinchStartDistance)));
+            cameraZoom = cameraZoomTarget;
+
+            const followX = getCameraFollowTargetX();
+            const followY = getCameraFollowTargetY();
+            const desiredCamX = gameCanvasGesture.pinchAnchorWorldX - (canvasPoint.canvasX / Math.max(0.0001, cameraZoom));
+            const desiredCamY = gameCanvasGesture.pinchAnchorWorldY - (canvasPoint.canvasY / Math.max(0.0001, cameraZoom));
+
+            cameraPanOffsetX = applyGameCameraRubberBand(desiredCamX - followX, getGameCameraPanLimitX());
+            cameraPanOffsetY = applyGameCameraRubberBand(desiredCamY - followY, getGameCameraPanLimitY());
+            camX = clampCameraX(followX + cameraPanOffsetX);
+            camY = clampCameraY(followY + cameraPanOffsetY);
+            targetCamX = camX;
+            targetCamY = camY;
+        }
+
+        if (window.PointerEvent) {
+            canvas.addEventListener('pointerdown', (event) => {
+                if (!gameReady || isReadingMode) return;
+                if (event.pointerType === 'mouse' && event.button !== 0) return;
+                if (event.target !== canvas && event.target.tagName !== 'CANVAS') return;
+                const point = getCanvasPointFromClient(event.clientX, event.clientY);
+                if (!point) return;
+
+                event.preventDefault();
+                if (typeof canvas.setPointerCapture === 'function') {
+                    try {
+                        canvas.setPointerCapture(event.pointerId);
+                    } catch (_) {
+                        // ignore pointer-capture failures
+                    }
+                }
+
+                gameCanvasGesture.pointers.set(event.pointerId, {
+                    pointerId: event.pointerId,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                    canvasX: point.canvasX,
+                    canvasY: point.canvasY
+                });
+
+                if (gameCanvasGesture.pointers.size === 1) {
+                    beginGameCanvasSinglePointerGesture(gameCanvasGesture.pointers.get(event.pointerId));
+                } else if (gameCanvasGesture.pointers.size >= 2) {
+                    beginGameCanvasPinchGesture();
+                }
+            });
+
+            canvas.addEventListener('pointermove', (event) => {
+                const pointer = gameCanvasGesture.pointers.get(event.pointerId);
+                if (!pointer) return;
+                const point = getCanvasPointFromClient(event.clientX, event.clientY);
+                if (!point) return;
+
+                pointer.clientX = event.clientX;
+                pointer.clientY = event.clientY;
+                pointer.canvasX = point.canvasX;
+                pointer.canvasY = point.canvasY;
+
+                if (!gameReady || isReadingMode) return;
+                event.preventDefault();
+
+                if (gameCanvasGesture.pinchActive && gameCanvasGesture.pointers.size >= 2) {
+                    updateGameCanvasPinchGesture();
+                    return;
+                }
+                if (event.pointerId !== gameCanvasGesture.primaryPointerId) return;
+
+                const deltaX = pointer.canvasX - gameCanvasGesture.dragStartCanvasX;
+                const deltaY = pointer.canvasY - gameCanvasGesture.dragStartCanvasY;
+                if (!gameCanvasGesture.dragMoved && Math.hypot(deltaX, deltaY) >= GAME_CAMERA_DRAG_THRESHOLD_PX) {
+                    gameCanvasGesture.dragMoved = true;
+                    gameCanvasGesture.suppressTap = true;
+                }
+                if (!gameCanvasGesture.dragMoved) return;
+
+                setGameCameraPanFromDrag(deltaX, deltaY, gameCanvasGesture.dragBaseOffsetX, gameCanvasGesture.dragBaseOffsetY);
+                const followX = getCameraFollowTargetX();
+                const followY = getCameraFollowTargetY();
+                camX = clampCameraX(followX + cameraPanOffsetX);
+                camY = clampCameraY(followY + cameraPanOffsetY);
+                targetCamX = camX;
+                targetCamY = camY;
+            });
+
+            const endGameCanvasPointerGesture = (event, cancelled = false) => {
+                const pointer = gameCanvasGesture.pointers.get(event.pointerId);
+                if (!pointer) return;
+
+                const hadSinglePointer = gameCanvasGesture.pointers.size === 1;
+                const wasPrimary = event.pointerId === gameCanvasGesture.primaryPointerId;
+                const wasPinchActive = gameCanvasGesture.pinchActive;
+                const wasDragGesture = gameCanvasGesture.dragMoved;
+                const suppressTap = gameCanvasGesture.suppressTap;
+
+                if (typeof canvas.releasePointerCapture === 'function') {
+                    try {
+                        canvas.releasePointerCapture(event.pointerId);
+                    } catch (_) {
+                        // ignore pointer-capture failures
+                    }
+                }
+
+                gameCanvasGesture.pointers.delete(event.pointerId);
+
+                if (!cancelled && hadSinglePointer && wasPrimary && !wasPinchActive && !wasDragGesture && !suppressTap) {
+                    handleClickMove(pointer.clientX, pointer.clientY);
+                }
+
+                if (gameCanvasGesture.pointers.size >= 2) {
+                    beginGameCanvasPinchGesture();
+                    return;
+                }
+
+                if (gameCanvasGesture.pointers.size === 1) {
+                    beginGameCanvasSinglePointerGesture(Array.from(gameCanvasGesture.pointers.values())[0], { suppressTap: true });
+                    return;
+                }
+
+                resetGameCanvasGestureState();
+            };
+
+            canvas.addEventListener('pointerup', (event) => {
+                endGameCanvasPointerGesture(event, false);
+            });
+            canvas.addEventListener('pointercancel', (event) => {
+                endGameCanvasPointerGesture(event, true);
+            });
+        } else {
+            let suppressCanvasClickUntil = 0;
+
+            canvas.addEventListener('click', e => {
+                if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
+                if (performance.now() < suppressCanvasClickUntil) return;
+                handleClickMove(e.clientX, e.clientY);
+            });
+
+            canvas.addEventListener('touchstart', e => {
+                if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
+                e.preventDefault();
+                suppressCanvasClickUntil = performance.now() + 420;
+                if (e.touches.length > 0) {
+                    handleClickMove(e.touches[0].clientX, e.touches[0].clientY);
+                }
+            }, { passive: false });
+        }
         // ============================================
         // MAP PROCESSING
         // ============================================
@@ -2847,8 +3143,12 @@
                     }
 
                     // Center Camera
-                    camX = targetCamX = Math.max(0, Math.min(player.x - SCREEN_W / 2 + 10, mapW - SCREEN_W));
-                    camY = targetCamY = Math.max(0, Math.min(player.y - SCREEN_H * 0.30 + 10, mapH - SCREEN_H));
+                    cameraZoomTarget = getCameraZoomClamped(cameraZoomTarget);
+                    cameraZoom = cameraZoomTarget;
+                    cameraPanOffsetX = 0;
+                    cameraPanOffsetY = 0;
+                    camX = targetCamX = getCameraFollowTargetX();
+                    camY = targetCamY = getCameraFollowTargetY();
 
                     // Init Extras
                     initParticles();
@@ -3456,13 +3756,28 @@
             player.isBehindForeground = checkForeground(player.x, player.y);
 
             // Smooth Camera (Time-based)
-            targetCamX = player.x - SCREEN_W / 2 + 10;
-            targetCamY = player.y - SCREEN_H * 0.30 + 10;
-            targetCamX = Math.max(0, Math.min(targetCamX, Math.max(0, mapW - SCREEN_W)));
-            targetCamY = Math.max(0, Math.min(targetCamY, Math.max(0, mapH - SCREEN_H)));
+            cameraZoomTarget = getCameraZoomClamped(cameraZoomTarget);
+            cameraZoom += (cameraZoomTarget - cameraZoom) * Math.min(1, 9.5 * dt);
 
-            camX += (targetCamX - camX) * 5.0 * dt;
-            camY += (targetCamY - camY) * 5.0 * dt;
+            const followCamX = getCameraFollowTargetX();
+            const followCamY = getCameraFollowTargetY();
+
+            if (!isGameCanvasGestureActive()) {
+                const spring = Math.min(1, GAME_CAMERA_PAN_RETURN_SPEED * dt);
+                cameraPanOffsetX += (0 - cameraPanOffsetX) * spring;
+                cameraPanOffsetY += (0 - cameraPanOffsetY) * spring;
+                if (Math.abs(cameraPanOffsetX) < 0.01) cameraPanOffsetX = 0;
+                if (Math.abs(cameraPanOffsetY) < 0.01) cameraPanOffsetY = 0;
+            }
+
+            const desiredCamX = clampCameraX(followCamX + cameraPanOffsetX);
+            const desiredCamY = clampCameraY(followCamY + cameraPanOffsetY);
+            const cameraStep = Math.min(1, (isGameCanvasGestureActive() ? GAME_CAMERA_ACTIVE_LERP : 5.0) * dt);
+
+            targetCamX = desiredCamX;
+            targetCamY = desiredCamY;
+            camX += (desiredCamX - camX) * cameraStep;
+            camY += (desiredCamY - camY) * cameraStep;
 
             // Update Particles
             nearbyLights = [];
@@ -3571,8 +3886,15 @@
             const shakeX = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
             const shakeY = screenShake > 0 ? (Math.random() - 0.5) * screenShake : 0;
 
-            // SMOOTH CAMERA: Use sub-pixel values (remove Math.floor)
-            ctx.translate(-camX + shakeX, -camY + shakeY);
+            // SMOOTH CAMERA: zoom and pan are applied through a single world transform.
+            ctx.setTransform(
+                cameraZoom,
+                0,
+                0,
+                cameraZoom,
+                shakeX - (camX * cameraZoom),
+                shakeY - (camY * cameraZoom)
+            );
 
             // screenShake decay moved to update(dt) for frame-rate independence
 
@@ -4535,6 +4857,7 @@
             if (hasCustomText) subtitleContainer.style.setProperty('--reader-custom-text', readerTextColor);
             else subtitleContainer.style.removeProperty('--reader-custom-text');
             applyReaderDimmerTint();
+            refreshVisibleBookmarkButtonsTheme();
         }
 
         function applyReaderTextSettings(options = {}) {
@@ -4776,86 +5099,98 @@
             else btn.innerText = label;
         }
 
+        function clampBookmarkColorChannel(value, delta = 0) {
+            return Math.max(0, Math.min(255, Math.round((Number(value) || 0) + delta)));
+        }
+
+        function rgbaStringFromBookmarkRgb(rgb, alpha = 1) {
+            if (!rgb) return `rgba(255, 255, 255, ${Math.max(0, Math.min(1, Number(alpha) || 0))})`;
+            const safeAlpha = Math.max(0, Math.min(1, Number(alpha) || 0));
+            return `rgba(${clampBookmarkColorChannel(rgb.r)}, ${clampBookmarkColorChannel(rgb.g)}, ${clampBookmarkColorChannel(rgb.b)}, ${safeAlpha})`;
+        }
+
+        function offsetBookmarkRgb(rgb, delta = 0) {
+            if (!rgb) return rgb;
+            return {
+                r: clampBookmarkColorChannel(rgb.r, delta),
+                g: clampBookmarkColorChannel(rgb.g, delta),
+                b: clampBookmarkColorChannel(rgb.b, delta)
+            };
+        }
+
+        function getBookmarkButtonThemeConfig() {
+            const lightMode = document.body.classList.contains('scene-dimmer-light-mode');
+            if (!isReadingMode) {
+                return {
+                    bg: lightMode ? 'rgba(252, 247, 239, 0.82)' : 'rgba(246, 241, 233, 0.72)',
+                    bgHover: lightMode ? 'rgba(255, 251, 245, 0.92)' : 'rgba(250, 246, 240, 0.82)',
+                    bgSaved: lightMode ? 'rgba(255, 252, 247, 0.96)' : 'rgba(252, 248, 243, 0.9)',
+                    border: lightMode ? 'rgba(79, 66, 49, 0.2)' : 'rgba(255, 248, 239, 0.34)',
+                    borderStrong: lightMode ? 'rgba(79, 66, 49, 0.34)' : 'rgba(255, 250, 243, 0.52)',
+                    text: 'rgba(26, 21, 16, 0.94)',
+                    shadow: lightMode ? '0 10px 24px rgba(0, 0, 0, 0.12)' : '0 14px 30px rgba(0, 0, 0, 0.24)',
+                    blur: '8px'
+                };
+            }
+
+            const baseHex = readerBgColor || getReaderFallbackBgColor();
+            const baseRgb = hexToRgb(baseHex) || (lightMode ? { r: 237, g: 230, b: 214 } : { r: 17, g: 22, b: 29 });
+            const luminance = ((baseRgb.r * 0.2126) + (baseRgb.g * 0.7152) + (baseRgb.b * 0.0722)) / 255;
+            const isLightBackground = luminance >= 0.58;
+            const hoverRgb = offsetBookmarkRgb(baseRgb, isLightBackground ? -10 : 10);
+            const savedRgb = offsetBookmarkRgb(baseRgb, isLightBackground ? -16 : 16);
+
+            return {
+                bg: rgbaStringFromBookmarkRgb(baseRgb, 0.94),
+                bgHover: rgbaStringFromBookmarkRgb(hoverRgb, 0.98),
+                bgSaved: rgbaStringFromBookmarkRgb(savedRgb, 1),
+                border: isLightBackground ? 'rgba(24, 19, 14, 0.28)' : 'rgba(255, 249, 241, 0.34)',
+                borderStrong: isLightBackground ? 'rgba(24, 19, 14, 0.42)' : 'rgba(255, 251, 245, 0.5)',
+                text: isLightBackground ? 'rgba(20, 16, 12, 0.94)' : 'rgba(245, 239, 230, 0.96)',
+                shadow: isLightBackground ? '0 8px 22px rgba(0, 0, 0, 0.14)' : '0 12px 28px rgba(0, 0, 0, 0.3)',
+                blur: '0px'
+            };
+        }
+
+        function setBookmarkButtonTheme(btn) {
+            if (!btn) return;
+            const theme = getBookmarkButtonThemeConfig();
+            btn.style.setProperty('--bookmark-bg', theme.bg);
+            btn.style.setProperty('--bookmark-bg-hover', theme.bgHover);
+            btn.style.setProperty('--bookmark-bg-saved', theme.bgSaved);
+            btn.style.setProperty('--bookmark-border', theme.border);
+            btn.style.setProperty('--bookmark-border-strong', theme.borderStrong);
+            btn.style.setProperty('--bookmark-text', theme.text);
+            btn.style.setProperty('--bookmark-shadow', theme.shadow);
+            btn.style.setProperty('--bookmark-blur', theme.blur);
+        }
+
+        function refreshVisibleBookmarkButtonsTheme() {
+            if (!subtitleContainer) return;
+            subtitleContainer.querySelectorAll('.bookmark-btn').forEach((btn) => {
+                setBookmarkButtonTheme(btn);
+            });
+        }
+
         function ensureBlaetternBookmarkButtonMode(btn) {
             if (!btn) return;
-            if (btn.dataset.flatOverlay === '1') {
-                btn.classList.add('bookmark-btn-flat-overlay');
-                return;
+            const currentLabel = (btn.textContent || '').trim() || BLAETTERN_BOOKMARK_LABEL;
+            if (btn.dataset.flatOverlay !== '1') {
+                btn.dataset.flatOverlay = '1';
+                btn.innerHTML = '';
+                const labelLayer = document.createElement('span');
+                labelLayer.className = 'bookmark-label';
+                labelLayer.textContent = currentLabel;
+                btn.appendChild(labelLayer);
+            } else if (!btn.querySelector('.bookmark-label')) {
+                btn.innerHTML = '';
+                const labelLayer = document.createElement('span');
+                labelLayer.className = 'bookmark-label';
+                labelLayer.textContent = currentLabel;
+                btn.appendChild(labelLayer);
             }
-
-            btn.dataset.flatOverlay = '1';
-            btn.innerHTML = '';
-            const mapLayer = document.createElement('span');
-            mapLayer.className = 'bookmark-map-layer';
-            const mapCanvas = document.createElement('canvas');
-            mapCanvas.className = 'bookmark-map-canvas';
-            mapCanvas.setAttribute('aria-hidden', 'true');
-            mapLayer.appendChild(mapCanvas);
-
-            const overlayLayer = document.createElement('span');
-            overlayLayer.className = 'bookmark-overlay-layer';
-            const labelLayer = document.createElement('span');
-            labelLayer.className = 'bookmark-label';
-            labelLayer.textContent = BLAETTERN_BOOKMARK_LABEL;
-
-            btn.appendChild(mapLayer);
-            btn.appendChild(overlayLayer);
-            btn.appendChild(labelLayer);
             btn.classList.add('bookmark-btn-flat-overlay');
-        }
-
-        function resolveBlaetternSceneCanvas() {
-            const gameCanvas = document.getElementById('gameCanvas');
-            if (gameCanvas instanceof HTMLCanvasElement) return gameCanvas;
-            const anyCanvas = document.querySelector('canvas');
-            return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
-        }
-
-        function drawBlaetternBookmarkMapLayer(btn) {
-            if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
-            const mapLayer = btn.querySelector('.bookmark-map-layer');
-            const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
-            if (!(mapCanvas instanceof HTMLCanvasElement)) return;
-            const drawCtx = mapCanvas.getContext('2d');
-            if (!drawCtx || !mapLayer) return;
-            const sceneCanvas = resolveBlaetternSceneCanvas();
-            if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
-                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-                return;
-            }
-            try {
-                const canvasRect = sceneCanvas.getBoundingClientRect();
-                const btnRect = btn.getBoundingClientRect();
-                if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
-                const dpr = Math.max(1, window.devicePixelRatio || 1);
-                const targetW = Math.max(1, Math.round(btnRect.width * dpr));
-                const targetH = Math.max(1, Math.round(btnRect.height * dpr));
-                if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
-                    mapCanvas.width = targetW;
-                    mapCanvas.height = targetH;
-                }
-                drawCtx.clearRect(0, 0, targetW, targetH);
-
-                const overlapLeft = Math.max(btnRect.left, canvasRect.left);
-                const overlapTop = Math.max(btnRect.top, canvasRect.top);
-                const overlapRight = Math.min(btnRect.right, canvasRect.right);
-                const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
-                if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
-
-                const scaleX = sceneCanvas.width / canvasRect.width;
-                const scaleY = sceneCanvas.height / canvasRect.height;
-                const srcX = (overlapLeft - canvasRect.left) * scaleX;
-                const srcY = (overlapTop - canvasRect.top) * scaleY;
-                const srcW = (overlapRight - overlapLeft) * scaleX;
-                const srcH = (overlapBottom - overlapTop) * scaleY;
-                const dstX = (overlapLeft - btnRect.left) * dpr;
-                const dstY = (overlapTop - btnRect.top) * dpr;
-                const dstW = (overlapRight - overlapLeft) * dpr;
-                const dstH = (overlapBottom - overlapTop) * dpr;
-                drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-            } catch (_) {
-                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-            }
+            setBookmarkButtonTheme(btn);
         }
 
         function stopBlaetternBookmarkMapLayerLoop(btn) {
@@ -4865,18 +5200,9 @@
         }
 
         function startBlaetternBookmarkMapLayerLoop(btn) {
-            if (!btn || btn._flatMapRaf) return;
-            const tick = () => {
-                if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
-                    btn._flatMapRaf = 0;
-                    return;
-                }
-                drawBlaetternBookmarkMapLayer(btn);
-                btn._flatMapRaf = requestAnimationFrame(tick);
-            };
-            tick();
+            stopBlaetternBookmarkMapLayerLoop(btn);
+            setBookmarkButtonTheme(btn);
         }
-
         function resetBlaetternInteractionState() {
             clearBlaetternLongPressTimer();
             clearBlaetternSwipeCommitTimer();
@@ -5389,7 +5715,6 @@
                 btn.style.left = `${Math.round(btn._flatLockedX)}px`;
                 btn.style.top = `${Math.round(btn._flatLockedY)}px`;
                 startBlaetternBookmarkMapLayerLoop(btn);
-                drawBlaetternBookmarkMapLayer(btn);
                 return;
             }
 
@@ -5406,7 +5731,6 @@
             btn.style.left = `${btn._flatLockedX}px`;
             btn.style.top = `${btn._flatLockedY}px`;
             startBlaetternBookmarkMapLayerLoop(btn);
-            drawBlaetternBookmarkMapLayer(btn);
         }
 
         function showBlaetternBookmarkButton(lineIndex, point = null) {
@@ -6700,21 +7024,18 @@
                             if (!btn) return;
                             if (useFlatOverlay) {
                                 if (btn.dataset.flatOverlay !== '1') {
+                                    const currentLabel = (btn.textContent || '').trim() || BOOKMARK_LABEL;
                                     btn.dataset.flatOverlay = '1';
                                     btn.innerHTML = '';
-                                    const mapLayer = document.createElement('span');
-                                    mapLayer.className = 'bookmark-map-layer';
-                                    const mapCanvas = document.createElement('canvas');
-                                    mapCanvas.className = 'bookmark-map-canvas';
-                                    mapCanvas.setAttribute('aria-hidden', 'true');
-                                    mapLayer.appendChild(mapCanvas);
-                                    const overlayLayer = document.createElement('span');
-                                    overlayLayer.className = 'bookmark-overlay-layer';
+                                    const labelLayer = document.createElement('span');
+                                    labelLayer.className = 'bookmark-label';
+                                    labelLayer.textContent = currentLabel;
+                                    btn.appendChild(labelLayer);
+                                } else if (!btn.querySelector('.bookmark-label')) {
+                                    btn.innerHTML = '';
                                     const labelLayer = document.createElement('span');
                                     labelLayer.className = 'bookmark-label';
                                     labelLayer.textContent = BOOKMARK_LABEL;
-                                    btn.appendChild(mapLayer);
-                                    btn.appendChild(overlayLayer);
                                     btn.appendChild(labelLayer);
                                 }
                                 btn.classList.add('bookmark-btn-flat-overlay');
@@ -6731,59 +7052,7 @@
                                     btn.replaceChildren(document.createTextNode(BOOKMARK_LABEL));
                                 }
                             }
-                        };
-                        const resolveSceneCanvas = () => {
-                            const gameCanvas = document.getElementById('gameCanvas');
-                            if (gameCanvas instanceof HTMLCanvasElement) return gameCanvas;
-                            const anyCanvas = document.querySelector('canvas');
-                            return anyCanvas instanceof HTMLCanvasElement ? anyCanvas : null;
-                        };
-                        const drawFlatBookmarkMapLayer = (btn) => {
-                            if (!btn || !btn.classList.contains('bookmark-btn-flat-overlay')) return;
-                            const mapLayer = btn.querySelector('.bookmark-map-layer');
-                            const mapCanvas = mapLayer ? mapLayer.querySelector('.bookmark-map-canvas') : null;
-                            if (!(mapCanvas instanceof HTMLCanvasElement)) return;
-                            const drawCtx = mapCanvas.getContext('2d');
-                            if (!drawCtx) return;
-                            if (!mapLayer) return;
-                            const sceneCanvas = resolveSceneCanvas();
-                            if (!sceneCanvas || typeof sceneCanvas.getBoundingClientRect !== 'function') {
-                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-                                return;
-                            }
-                            try {
-                                const canvasRect = sceneCanvas.getBoundingClientRect();
-                                const btnRect = btn.getBoundingClientRect();
-                                if (!canvasRect.width || !canvasRect.height || !btnRect.width || !btnRect.height) return;
-                                const dpr = Math.max(1, window.devicePixelRatio || 1);
-                                const targetW = Math.max(1, Math.round(btnRect.width * dpr));
-                                const targetH = Math.max(1, Math.round(btnRect.height * dpr));
-                                if (mapCanvas.width !== targetW || mapCanvas.height !== targetH) {
-                                    mapCanvas.width = targetW;
-                                    mapCanvas.height = targetH;
-                                }
-                                drawCtx.clearRect(0, 0, targetW, targetH);
-
-                                const overlapLeft = Math.max(btnRect.left, canvasRect.left);
-                                const overlapTop = Math.max(btnRect.top, canvasRect.top);
-                                const overlapRight = Math.min(btnRect.right, canvasRect.right);
-                                const overlapBottom = Math.min(btnRect.bottom, canvasRect.bottom);
-                                if (overlapRight <= overlapLeft || overlapBottom <= overlapTop) return;
-
-                                const scaleX = sceneCanvas.width / canvasRect.width;
-                                const scaleY = sceneCanvas.height / canvasRect.height;
-                                const srcX = (overlapLeft - canvasRect.left) * scaleX;
-                                const srcY = (overlapTop - canvasRect.top) * scaleY;
-                                const srcW = (overlapRight - overlapLeft) * scaleX;
-                                const srcH = (overlapBottom - overlapTop) * scaleY;
-                                const dstX = (overlapLeft - btnRect.left) * dpr;
-                                const dstY = (overlapTop - btnRect.top) * dpr;
-                                const dstW = (overlapRight - overlapLeft) * dpr;
-                                const dstH = (overlapBottom - overlapTop) * dpr;
-                                drawCtx.drawImage(sceneCanvas, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
-                            } catch (_) {
-                                drawCtx.clearRect(0, 0, mapCanvas.width || 0, mapCanvas.height || 0);
-                            }
+                            setBookmarkButtonTheme(btn);
                         };
                         const stopFlatBookmarkMapLayerLoop = (btn) => {
                             if (!btn || !btn._flatMapRaf) return;
@@ -6791,16 +7060,8 @@
                             btn._flatMapRaf = 0;
                         };
                         const startFlatBookmarkMapLayerLoop = (btn) => {
-                            if (!btn || btn._flatMapRaf) return;
-                            const tick = () => {
-                                if (!btn.isConnected || !btn.classList.contains('visible') || !btn.classList.contains('bookmark-btn-flat-overlay')) {
-                                    btn._flatMapRaf = 0;
-                                    return;
-                                }
-                                drawFlatBookmarkMapLayer(btn);
-                                btn._flatMapRaf = requestAnimationFrame(tick);
-                            };
-                            tick();
+                            stopFlatBookmarkMapLayerLoop(btn);
+                            setBookmarkButtonTheme(btn);
                         };
                         const collectLineTextRects = (lineEl, containerRect) => {
                             const rects = [];
@@ -6958,7 +7219,6 @@
                                     btn.style.left = `${Math.round(btn._flatLockedX)}px`;
                                     btn.style.top = `${Math.round(btn._flatLockedY)}px`;
                                     startFlatBookmarkMapLayerLoop(btn);
-                                    drawFlatBookmarkMapLayer(btn);
                                     return;
                                 }
                                 const lineTextRects = collectLineTextRects(div, containerRect);
@@ -6971,7 +7231,6 @@
                                 btn.style.left = `${btn._flatLockedX}px`;
                                 btn.style.top = `${btn._flatLockedY}px`;
                                 startFlatBookmarkMapLayerLoop(btn);
-                                drawFlatBookmarkMapLayer(btn);
                                 return;
                             }
 
@@ -7763,6 +8022,8 @@
             syncBlaetternUiState(`mode-switch:${reason}`);
 
             syncModeToggleButton();
+            syncCanvasTouchAction();
+            resetGameCanvasGestureState();
             moveTarget = null;
             clickWalkPath = [];
             clickWalkGoal = null;
@@ -7790,6 +8051,7 @@
             pendingForceReadingFromFreeze = false;
         }
         syncModeDimmerLevel({ force: true });
+        syncCanvasTouchAction();
         refreshLoreProgressUi();
 
         modeToggleBtn.addEventListener('click', () => {
@@ -7851,8 +8113,14 @@
                 canvas.height = SCREEN_H;
 
                 // Kamera neu zentrieren
-                camX = Math.max(0, Math.min(player.x - SCREEN_W / 2 + 10, mapW - SCREEN_W));
-                camY = Math.max(0, Math.min(player.y - SCREEN_H * 0.30 + 10, mapH - SCREEN_H));
+                cameraZoomTarget = getCameraZoomClamped(cameraZoomTarget);
+                cameraZoom = cameraZoomTarget;
+                cameraPanOffsetX = 0;
+                cameraPanOffsetY = 0;
+                camX = getCameraFollowTargetX();
+                camY = getCameraFollowTargetY();
+                targetCamX = camX;
+                targetCamY = camY;
             }
 
             // B) Untertitel Logic: Force Rebuild bei Resize
@@ -8717,3 +8985,12 @@
 </body>
 
 </html>
+
+
+
+
+
+
+
+
+
