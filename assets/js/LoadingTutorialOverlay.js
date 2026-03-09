@@ -797,9 +797,13 @@
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
         const focus = createElement('div', 'loading-tutorial-bookmark-focus');
+        const target = createElement('div', 'loading-tutorial-bookmark-target');
+        const textShell = createElement('span', 'loading-tutorial-bookmark-text');
+        textShell.appendChild(createElement('span', 'loading-tutorial-bookmark-text-label', 'Liebe Edna, die Zeit...'));
+        textShell.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        focus.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Edna, die Zeit...'));
-        focus.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
+        target.appendChild(textShell);
+        focus.appendChild(target);
         line.appendChild(focus);
         demo.appendChild(line);
         const pill = createElement('div', 'loading-tutorial-bookmark-pill');

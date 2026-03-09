@@ -1727,18 +1727,36 @@
     min-height: 58px;
 }
 
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-target {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0 6px;
+}
+
 .loading-tutorial-demo--hold .loading-tutorial-bookmark-text {
     position: relative;
     z-index: 2;
+    display: inline-block;
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    overflow: visible;
+    color: rgba(244, 241, 235, 0.96);
+    opacity: 1;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-text-label {
     display: block;
-    width: 100%;
+    max-width: 100%;
     min-width: 0;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: rgba(244, 241, 235, 0.96);
-    opacity: 1;
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-hold-ring {
