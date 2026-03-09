@@ -1,4 +1,4 @@
-﻿(function initLoadingTutorialOverlay() {
+(function initLoadingTutorialOverlay() {
     const STORAGE_KEY = 'gb_loading_tutorial_rotation_v1';
     const FONT_STORAGE_KEY = 'gameboy_reader_font_family';
     const MOBILE_BREAKPOINT = 900;
@@ -427,7 +427,7 @@
         if (measurementState === 'archive-lore') {
             const loreList = findSanitizedById(archiveRoot, 'loreList');
             if (loreList && !loreList.children.length) {
-                loreList.appendChild(createMockMenuItem('Das Fluestern', 'Zusaetzlicher Text', 'lore-item'));
+                loreList.appendChild(createMockMenuItem('Zusätzlicher Text', 'Aus den Funden', 'lore-item'));
             }
         }
         if (measurementState === 'archive-bookmarks') {
@@ -435,8 +435,8 @@
             if (bookmarkList && !bookmarkList.children.length) {
                 const item = createElement('div', 'menu-item bookmark-item');
                 item.setAttribute('data-loading-preview', 'bookmark-item');
-                item.appendChild(createElement('div', 'item-main-text', 'Antiquariat - 00:34'));
-                item.appendChild(createElement('div', 'item-sub-text', 'Markierte Stelle'));
+                item.appendChild(createElement('div', 'item-main-text', 'Lesezeichen'));
+                item.appendChild(createElement('div', 'item-sub-text', '00:34'));
                 const deleteBtn = createElement('button', 'bookmark-delete-btn', 'x');
                 item.appendChild(deleteBtn);
                 bookmarkList.appendChild(item);
@@ -510,33 +510,29 @@
         return null;
     }
 
-    function computeCropPlacement(card, cropRect) {
-        const isArchivePreview = !!(card && card.target && card.target.stage === 'archive');
-        if (!isArchivePreview) {
-            return {
-                left: Math.round(cropRect.left),
-                top: Math.round(cropRect.top),
-                width: Math.round(cropRect.width),
-                height: Math.round(cropRect.height),
-                scale: 1
-            };
-        }
-
-        const margin = window.innerWidth < 760 ? 22 : 28;
-        const maxWidth = Math.min(window.innerWidth - (margin * 2), window.innerWidth < 760 ? 390 : 560);
-        const maxHeight = Math.min(window.innerHeight * (window.innerWidth < 760 ? 0.28 : 0.32), window.innerWidth < 760 ? 240 : 320);
-        const scale = Math.min(1, maxWidth / cropRect.width, maxHeight / cropRect.height);
-        const width = Math.max(1, Math.round(cropRect.width * scale));
-        const height = Math.max(1, Math.round(cropRect.height * scale));
-        const left = Math.round((window.innerWidth - width) / 2);
-        const top = Math.round(clamp(window.innerHeight * (window.innerWidth < 760 ? 0.16 : 0.14), margin, Math.max(margin, window.innerHeight - height - 180)));
-
+    function collectTargetNodes(stageRoot, targetConfig) {
+        if (!stageRoot || !targetConfig) return null;
+        const selectors = Array.isArray(targetConfig.selectors)
+            ? targetConfig.selectors.slice()
+            : (targetConfig.selector ? [targetConfig.selector] : []);
+        const nodes = selectors
+            .map((selector) => stageRoot.querySelector(selector))
+            .filter(Boolean);
+        if (!nodes.length) return null;
+        const focusNode = targetConfig.focusSelector ? stageRoot.querySelector(targetConfig.focusSelector) : (nodes[0] || null);
         return {
-            left,
-            top,
-            width,
-            height,
-            scale
+            nodes,
+            focusNode
+        };
+    }
+
+    function computeHudCropPlacement(cropRect) {
+        return {
+            left: Math.round(cropRect.left),
+            top: Math.round(cropRect.top),
+            width: Math.round(cropRect.width),
+            height: Math.round(cropRect.height),
+            scale: 1
         };
     }
 
@@ -552,7 +548,58 @@
         };
     }
 
+    function buildArchivePreviewNode(card, selection) {
+        const preview = createElement('div', `loading-tutorial-archive-preview loading-tutorial-archive-preview--${card.previewLayout || 'group'}`);
+        const header = createElement('div', 'loading-tutorial-archive-preview-header', card.contextLabel || 'Kapitelmenü');
+        const body = createElement('div', 'loading-tutorial-archive-preview-body');
+        preview.appendChild(header);
+        preview.appendChild(body);
+
+        const layout = card.previewLayout || 'group';
+        if (layout === 'tab-item') {
+            const tabRow = createElement('div', 'loading-tutorial-archive-preview-tabrow');
+            if (selection.focusNode) {
+                tabRow.appendChild(selection.focusNode.cloneNode(true));
+            }
+            body.appendChild(tabRow);
+            selection.nodes
+                .filter((node) => node !== selection.focusNode)
+                .forEach((node) => {
+                    body.appendChild(node.cloneNode(true));
+                });
+        } else {
+            selection.nodes.forEach((node) => {
+                body.appendChild(node.cloneNode(true));
+            });
+        }
+
+        return preview;
+    }
+
+    function renderArchivePreviewCard(card) {
+        const stageRoot = buildArchiveStage(card.measurementState);
+        if (!stageRoot || !state.measureRoot) return null;
+        state.measureRoot.innerHTML = '';
+        state.measureRoot.appendChild(stageRoot);
+
+        const selection = collectTargetNodes(stageRoot, card.target);
+        if (!selection || !selection.nodes.length) return null;
+
+        const preview = buildArchivePreviewNode(card, selection);
+        state.focusLayer.appendChild(preview);
+
+        const previewRect = normalizeRect(preview.getBoundingClientRect());
+        return {
+            anchorRect: previewRect,
+            cropRect: previewRect
+        };
+    }
+
     function renderUiCloneCard(card) {
+        if (card && card.target && card.target.stage === 'archive') {
+            return renderArchivePreviewCard(card);
+        }
+
         const stageRoot = buildStageForCard(card);
         if (!stageRoot || !state.measureRoot) return null;
         state.measureRoot.innerHTML = '';
@@ -560,14 +607,11 @@
         const selection = resolveTargetSelection(stageRoot, card.target);
         if (!selection || !selection.cropRect) return null;
 
-        const placement = computeCropPlacement(card, selection.cropRect);
+        const placement = computeHudCropPlacement(selection.cropRect);
         const cropClassNames = [
             'loading-tutorial-ui-crop',
             card.mode === 'ui-clone-group' ? 'loading-tutorial-ui-crop--group' : 'loading-tutorial-ui-crop--single'
         ];
-        if (card.target && card.target.stage === 'archive') {
-            cropClassNames.push('loading-tutorial-ui-crop--preview');
-        }
         const crop = createElement('div', cropClassNames.join(' '));
         crop.style.left = `${placement.left}px`;
         crop.style.top = `${placement.top}px`;
@@ -579,7 +623,7 @@
         visibleClone.style.left = `${Math.round(-selection.cropRect.left)}px`;
         visibleClone.style.top = `${Math.round(-selection.cropRect.top)}px`;
         visibleClone.style.transformOrigin = 'top left';
-        visibleClone.style.transform = placement.scale !== 1 ? `scale(${placement.scale})` : 'none';
+        visibleClone.style.transform = 'none';
         crop.appendChild(visibleClone);
         state.focusLayer.appendChild(crop);
 
@@ -683,7 +727,7 @@
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Markierte Stelle.'));
+        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Textabschnitt'));
         demo.appendChild(line);
         demo.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
         demo.appendChild(createElement('div', 'loading-tutorial-bookmark-pill', 'Gespeichert'));
@@ -693,7 +737,8 @@
     function createFallbackDemo(card) {
         const demo = makeDemo();
         demo.classList.add('loading-tutorial-demo--fallback');
-        const fallbackLabel = card && card.copy && card.copy.title ? card.copy.title.charAt(0).toUpperCase() : '?';
+        const fallbackText = getCardCopyText(card) || '?';
+        const fallbackLabel = fallbackText.trim().charAt(0).toUpperCase() || '?';
         demo.appendChild(createElement('div', 'loading-tutorial-fallback-badge', fallbackLabel));
         return demo;
     }
@@ -748,61 +793,56 @@
         return appendDemoToFocus(createFallbackDemo(card));
     }
 
+    function getCardCopyText(card) {
+        if (!card) return '';
+        if (card.copy && typeof card.copy.body === 'string') return card.copy.body;
+        return typeof card.copy === 'string' ? card.copy : '';
+    }
+
     function setCopyContent(card) {
         if (!state.copyBox || !state.bodyEl) return;
         state.loadingScreen.style.setProperty('--loading-tutorial-font', getReaderFontStack());
-        const bodyText = card && card.copy && typeof card.copy.body === 'string'
-            ? card.copy.body
-            : (typeof card.copy === 'string' ? card.copy : '');
-        state.bodyEl.textContent = bodyText;
+        state.bodyEl.textContent = getCardCopyText(card);
     }
 
     function positionCopy(anchorRect, card) {
         const margin = window.innerWidth < 760 ? 18 : 24;
-        const width = window.innerWidth < 760
-            ? Math.min(window.innerWidth - (margin * 2), 360)
-            : Math.min(window.innerWidth - (margin * 2), 460);
+        const text = getCardCopyText(card);
+        const estimatedWidth = Math.round(clamp(text.length * (window.innerWidth < 760 ? 9.5 : 10.4), window.innerWidth < 760 ? 190 : 220, window.innerWidth < 760 ? 318 : 360));
+        const width = Math.min(window.innerWidth - (margin * 2), estimatedWidth);
 
         state.copyBox.style.width = `${Math.round(width)}px`;
         state.copyBox.style.maxWidth = `${Math.round(width)}px`;
         state.copyBox.style.left = '-9999px';
         state.copyBox.style.top = '-9999px';
-        const height = Math.max(56, Math.ceil(state.copyBox.offsetHeight || 72));
-        const left = Math.round(clamp((window.innerWidth - width) / 2, margin, Math.max(margin, window.innerWidth - width - margin)));
-        const topSlot = Math.round(margin + 10);
-        const bottomSlot = Math.round(window.innerHeight - height - 92);
-        const prefersBottom = !anchorRect || anchorRect.top < (window.innerHeight * 0.52);
+        const height = Math.max(46, Math.ceil(state.copyBox.offsetHeight || 56));
 
-        const candidates = prefersBottom
-            ? [{ left, top: bottomSlot, width, height }, { left, top: topSlot, width, height }]
-            : [{ left, top: topSlot, width, height }, { left, top: bottomSlot, width, height }];
+        const anchorMidX = anchorRect ? anchorRect.left + (anchorRect.width / 2) : (window.innerWidth / 2);
+        const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+        const left = Math.round(clamp(anchorMidX - (width / 2), margin, maxLeft));
+        const gap = card && card.mode === 'ui-clone-single' ? 18 : 14;
+        const bottomLimit = window.innerHeight - height - 86;
+        let top = anchorRect ? anchorRect.bottom + gap : margin + 20;
 
-        let chosen = candidates[0];
-        let bestScore = Number.NEGATIVE_INFINITY;
-        candidates.forEach(function (candidate, orderIndex) {
-            candidate.right = candidate.left + candidate.width;
-            candidate.bottom = candidate.top + candidate.height;
-            const overlapPenalty = rectIntersects(candidate, anchorRect) ? 1000 : 0;
-            const distance = anchorRect
-                ? Math.abs((candidate.top + (candidate.height / 2)) - (anchorRect.top + (anchorRect.height / 2)))
-                : 0;
-            const score = ((candidates.length - orderIndex) * 80) - overlapPenalty - (distance * 0.08);
-            if (score > bestScore) {
-                bestScore = score;
-                chosen = candidate;
-            }
-        });
+        if (top > bottomLimit) {
+            top = anchorRect ? anchorRect.top - height - gap : bottomLimit;
+        }
+        top = clamp(top, margin, bottomLimit);
 
-        chosen.left = left;
-        chosen.top = clamp(chosen.top, margin, Math.max(margin, window.innerHeight - height - margin));
-        chosen.right = chosen.left + chosen.width;
-        chosen.bottom = chosen.top + chosen.height;
+        const rect = {
+            left,
+            top: Math.round(top),
+            width,
+            height
+        };
+        rect.right = rect.left + rect.width;
+        rect.bottom = rect.top + rect.height;
 
-        state.copyBox.style.left = `${Math.round(chosen.left)}px`;
-        state.copyBox.style.top = `${Math.round(chosen.top)}px`;
-        state.copyBox.dataset.loadingTutorialPlacement = chosen.top > (window.innerHeight * 0.5) ? 'bottom' : 'top';
+        state.copyBox.style.left = `${rect.left}px`;
+        state.copyBox.style.top = `${rect.top}px`;
+        state.copyBox.dataset.loadingTutorialPlacement = rect.top > (window.innerHeight * 0.5) ? 'bottom' : 'top';
         state.copyBox.dataset.loadingTutorialMode = card ? card.mode : 'demo';
-        return chosen;
+        return rect;
     }
 
     function nearestPointOnRect(rect, point) {
@@ -815,7 +855,7 @@
                 { edge: 'right', value: Math.abs(point.x - rect.right) },
                 { edge: 'top', value: Math.abs(point.y - rect.top) },
                 { edge: 'bottom', value: Math.abs(point.y - rect.bottom) }
-            ].sort((left, right) => left.value - right.value);
+            ].sort((leftSide, rightSide) => leftSide.value - rightSide.value);
             switch (distances[0].edge) {
                 case 'left':
                     x = rect.left;
@@ -846,9 +886,22 @@
         };
         const start = nearestPointOnRect(copyRect, anchorCenter);
         const end = nearestPointOnRect(anchorRect, start);
-        const deltaX = Math.max(24, Math.abs(end.x - start.x) * 0.38);
-        const controlOffset = start.x <= end.x ? deltaX : -deltaX;
-        const pathData = `M ${start.x.toFixed(1)} ${start.y.toFixed(1)} C ${(start.x + controlOffset).toFixed(1)} ${start.y.toFixed(1)}, ${(end.x - controlOffset).toFixed(1)} ${end.y.toFixed(1)}, ${end.x.toFixed(1)} ${end.y.toFixed(1)}`;
+        const routeDistance = Math.abs(end.x - start.x) + Math.abs(end.y - start.y);
+        if (routeDistance < 64) {
+            state.connectorPath.setAttribute('d', '');
+            state.connectorSvg.style.opacity = '0';
+            return;
+        }
+        const travellingDown = end.y >= start.y;
+        const elbowY = travellingDown
+            ? start.y + Math.max(18, (end.y - start.y) * 0.55)
+            : start.y - Math.max(18, (start.y - end.y) * 0.55);
+        const pathData = [
+            `M ${start.x.toFixed(1)} ${start.y.toFixed(1)}`,
+            `L ${start.x.toFixed(1)} ${elbowY.toFixed(1)}`,
+            `L ${end.x.toFixed(1)} ${elbowY.toFixed(1)}`,
+            `L ${end.x.toFixed(1)} ${end.y.toFixed(1)}`
+        ].join(' ');
         state.connectorSvg.setAttribute('viewBox', `0 0 ${Math.max(1, window.innerWidth)} ${Math.max(1, window.innerHeight)}`);
         state.connectorPath.setAttribute('d', pathData);
         state.connectorSvg.style.opacity = '1';
@@ -856,16 +909,15 @@
 
     function positionHalo(cropRect, anchorRect, mode) {
         if (!state.haloEl) return;
-        const focusRect = mode === 'ui-clone-group' ? (cropRect || anchorRect) : anchorRect;
-        if (!focusRect) {
+        if (mode !== 'ui-clone-single' || !anchorRect) {
             state.haloEl.style.opacity = '0';
             return;
         }
-        const pad = mode === 'ui-clone-group' ? 12 : 8;
-        state.haloEl.style.left = `${Math.round(focusRect.left - pad)}px`;
-        state.haloEl.style.top = `${Math.round(focusRect.top - pad)}px`;
-        state.haloEl.style.width = `${Math.round(focusRect.width + (pad * 2))}px`;
-        state.haloEl.style.height = `${Math.round(focusRect.height + (pad * 2))}px`;
+        const pad = 10;
+        state.haloEl.style.left = `${Math.round(anchorRect.left - pad)}px`;
+        state.haloEl.style.top = `${Math.round(anchorRect.top - pad)}px`;
+        state.haloEl.style.width = `${Math.round(anchorRect.width + (pad * 2))}px`;
+        state.haloEl.style.height = `${Math.round(anchorRect.height + (pad * 2))}px`;
         state.haloEl.style.opacity = '1';
     }
 
@@ -1004,4 +1056,8 @@
         syncLayout
     };
 })();
+
+
+
+
 

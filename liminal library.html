@@ -387,6 +387,15 @@
             try {
                 console.log("DEBUG: Starting Imports...");
 
+                if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
+                    window.LoadingTutorialOverlay.init({
+                        pageKey: 'liminal library.html',
+                        sceneKey: 'liminal_library',
+                        chapterTitle: 'Antiquariat Hannrath',
+                        loadingScreenId: 'loading-screen'
+                    });
+                }
+
                 window.fallback2DMode = false;
                 let THREE = null;
 
@@ -6946,16 +6955,6 @@
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
             }
-                window.requestAnimationFrame(() => {
-                    if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
-                        window.LoadingTutorialOverlay.init({
-                            pageKey: 'liminal library.html',
-                            sceneKey: 'liminal_library',
-                            chapterTitle: 'Antiquariat Hannrath',
-                            loadingScreenId: 'loading-screen'
-                        });
-                    }
-                });
 
         })();
     </script>
