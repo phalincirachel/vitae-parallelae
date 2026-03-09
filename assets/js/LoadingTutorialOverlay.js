@@ -29,7 +29,8 @@
         bound: false,
         visible: false,
         resizeHandler: null,
-        viewportResizeHandler: null
+        viewportResizeHandler: null,
+        loadingObserver: null
     };
 
     function clamp(value, min, max) {
@@ -84,37 +85,58 @@
     }
 
     function getRotationState() {
-        const fallback = { buckets: {}, lastCardId: '' };
+        const fallback = { cursor: 0, lastCardId: '' };
         const value = safeReadJson(STORAGE_KEY, fallback);
         if (!value || typeof value !== 'object') return fallback;
-        if (!value.buckets || typeof value.buckets !== 'object') value.buckets = {};
-        if (typeof value.lastCardId !== 'string') value.lastCardId = '';
-        return value;
+        const cursor = Number(value.cursor);
+        return {
+            cursor: Number.isFinite(cursor) && cursor >= 0 ? cursor : 0,
+            lastCardId: typeof value.lastCardId === 'string' ? value.lastCardId : ''
+        };
+    }
+
+    function sortCards(cards) {
+        return (Array.isArray(cards) ? cards.slice() : []).sort(function (left, right) {
+            if (left.order !== right.order) return left.order - right.order;
+            return left.id.localeCompare(right.id);
+        });
+    }
+
+    function matchesScene(card, sceneKey) {
+        return !!(card && Array.isArray(card.scenes) && card.scenes.indexOf(sceneKey) >= 0);
+    }
+
+    function matchesDevice(card, deviceProfile) {
+        return !!(card && Array.isArray(card.devices) && card.devices.indexOf(deviceProfile) >= 0);
     }
 
     function pickCard(sceneKey, deviceProfile) {
         const catalog = window.LoadingTutorialCatalog;
-        if (!catalog || typeof catalog.getCards !== 'function') return null;
-        const candidates = catalog.getCards(sceneKey, deviceProfile);
-        if (!Array.isArray(candidates) || !candidates.length) return null;
+        const allCards = catalog ? sortCards(catalog.cards) : [];
+        if (!allCards.length) return null;
 
         const rotation = getRotationState();
-        const bucketKey = `${sceneKey}::${deviceProfile}`;
-        let index = Number(rotation.buckets[bucketKey]);
-        if (!Number.isFinite(index) || index < 0) index = 0;
-        index = index % candidates.length;
+        const startIndex = rotation.cursor % allCards.length;
 
-        let chosen = candidates[index];
-        let chosenIndex = index;
-        if (candidates.length > 1 && rotation.lastCardId === chosen.id) {
-            chosenIndex = (chosenIndex + 1) % candidates.length;
-            chosen = candidates[chosenIndex];
+        function resolveCandidate(avoidLastCard) {
+            for (let offset = 0; offset < allCards.length; offset += 1) {
+                const index = (startIndex + offset) % allCards.length;
+                const card = allCards[index];
+                if (!matchesScene(card, sceneKey) || !matchesDevice(card, deviceProfile)) continue;
+                if (avoidLastCard && rotation.lastCardId && rotation.lastCardId === card.id) continue;
+                return { card, index };
+            }
+            return null;
         }
 
-        rotation.buckets[bucketKey] = (chosenIndex + 1) % candidates.length;
-        rotation.lastCardId = chosen.id;
+        let resolved = resolveCandidate(true);
+        if (!resolved) resolved = resolveCandidate(false);
+        if (!resolved) return null;
+
+        rotation.cursor = (resolved.index + 1) % allCards.length;
+        rotation.lastCardId = resolved.card.id;
         safeWriteJson(STORAGE_KEY, rotation);
-        return chosen;
+        return resolved.card;
     }
 
     function ensureDom() {
@@ -126,11 +148,9 @@
         const focusLayer = createElement('div', 'loading-tutorial-focus-layer');
         const haloEl = createElement('div', 'loading-tutorial-halo');
         const copyBox = createElement('div', 'loading-tutorial-copy');
-        const kickerEl = createElement('div', 'loading-tutorial-kicker');
-        const titleEl = createElement('h2', 'loading-tutorial-title');
         const bodyEl = createElement('p', 'loading-tutorial-body');
         const progressEl = createElement('div', 'loading-tutorial-progress');
-        const progressLabelEl = createElement('span', 'loading-tutorial-progress-label', 'Kapitel wird geladen');
+        const progressLabelEl = createElement('span', 'loading-tutorial-progress-label', 'Laden');
         const progressTrack = createElement('div', 'loading-tutorial-progress-track');
         const progressBar = createElement('div', 'loading-tutorial-progress-bar');
 
@@ -160,9 +180,6 @@
         progressTrack.appendChild(progressBar);
         progressEl.appendChild(progressLabelEl);
         progressEl.appendChild(progressTrack);
-
-        copyBox.appendChild(kickerEl);
-        copyBox.appendChild(titleEl);
         copyBox.appendChild(bodyEl);
 
         shell.appendChild(measureRoot);
@@ -178,8 +195,8 @@
         state.measureRoot = measureRoot;
         state.focusLayer = focusLayer;
         state.copyBox = copyBox;
-        state.kickerEl = kickerEl;
-        state.titleEl = titleEl;
+        state.kickerEl = null;
+        state.titleEl = null;
         state.bodyEl = bodyEl;
         state.connectorSvg = connectorSvg;
         state.connectorPath = connectorPath;
@@ -214,6 +231,88 @@
         if (state.connectorPath) state.connectorPath.setAttribute('d', '');
         if (state.connectorSvg) state.connectorSvg.style.opacity = '0';
         if (state.haloEl) state.haloEl.style.opacity = '0';
+    }
+
+    function disconnectLoadingObserver() {
+        if (state.loadingObserver) {
+            state.loadingObserver.disconnect();
+            state.loadingObserver = null;
+        }
+    }
+
+    function isLoadingScreenVisible() {
+        if (!state.loadingScreen || !state.loadingScreen.isConnected) return false;
+        const loadingStyle = window.getComputedStyle(state.loadingScreen);
+        return !(loadingStyle.display === 'none' || loadingStyle.visibility === 'hidden' || Number(loadingStyle.opacity || '1') < 0.01);
+    }
+
+    function bindLoadingObserver() {
+        disconnectLoadingObserver();
+        if (!state.loadingScreen || typeof MutationObserver === 'undefined') return;
+        state.loadingObserver = new MutationObserver(function () {
+            if (!isLoadingScreenVisible()) {
+                destroy('loading-hidden');
+            }
+        });
+        state.loadingObserver.observe(state.loadingScreen, {
+            attributes: true,
+            attributeFilter: ['class', 'style']
+        });
+    }
+
+    function destroy(reason) {
+        disconnectLoadingObserver();
+        clearLayers();
+        if (state.shell && state.shell.isConnected) {
+            state.shell.remove();
+        }
+        state.shell = null;
+        state.measureRoot = null;
+        state.focusLayer = null;
+        state.copyBox = null;
+        state.kickerEl = null;
+        state.titleEl = null;
+        state.bodyEl = null;
+        state.connectorSvg = null;
+        state.connectorPath = null;
+        state.haloEl = null;
+        state.progressEl = null;
+        state.progressLabelEl = null;
+        state.visible = false;
+        if (state.loadingScreen) {
+            state.loadingScreen.classList.remove('loading-tutorial-ready');
+            state.loadingScreen.dataset.loadingTutorialHiddenReason = reason || 'destroyed';
+        }
+    }
+
+    function sanitizeCloneTree(root) {
+        if (!root) return root;
+        const nodes = [root].concat(Array.from(root.querySelectorAll('*')));
+        nodes.forEach(function (node) {
+            if (!(node instanceof Element)) return;
+            if (node.id) {
+                node.setAttribute('data-loading-source-id', node.id);
+                node.removeAttribute('id');
+            }
+            if (node.hasAttribute('name')) {
+                node.setAttribute('data-loading-source-name', node.getAttribute('name') || '');
+                node.removeAttribute('name');
+            }
+            if (node.tagName === 'LABEL' && node.hasAttribute('for')) {
+                node.setAttribute('data-loading-source-for', node.getAttribute('for') || '');
+                node.removeAttribute('for');
+            }
+            if (typeof node.matches === 'function' && node.matches('a, button, input, select, textarea')) {
+                node.setAttribute('tabindex', '-1');
+                node.setAttribute('aria-hidden', 'true');
+            }
+        });
+        root.setAttribute('data-loading-clone', 'true');
+        return root;
+    }
+
+    function findSanitizedById(root, id) {
+        return root ? root.querySelector(`[data-loading-source-id="${id}"]`) : null;
     }
 
     function normalizeRect(rect) {
@@ -272,7 +371,7 @@
         const root = createStageRoot('hud');
         const audioUi = document.getElementById('audioPlayerUI');
         if (audioUi) {
-            const audioClone = audioUi.cloneNode(true);
+            const audioClone = sanitizeCloneTree(audioUi.cloneNode(true));
             audioClone.style.display = 'flex';
             audioClone.style.opacity = '1';
             audioClone.style.visibility = 'visible';
@@ -281,7 +380,7 @@
         }
         const loreHud = document.getElementById('loreProgressHud');
         if (loreHud) {
-            const loreClone = loreHud.cloneNode(true);
+            const loreClone = sanitizeCloneTree(loreHud.cloneNode(true));
             loreClone.classList.remove('is-hidden');
             loreClone.classList.add('is-visible');
             loreClone.style.opacity = '1';
@@ -292,8 +391,8 @@
     }
 
     function setArchivePrimaryMode(archiveRoot, mode) {
-        const primaryInhaltBtn = archiveRoot.querySelector('#archivePrimaryInhaltBtn');
-        const primarySettingsBtn = archiveRoot.querySelector('#archivePrimarySettingsBtn');
+        const primaryInhaltBtn = findSanitizedById(archiveRoot, 'archivePrimaryInhaltBtn');
+        const primarySettingsBtn = findSanitizedById(archiveRoot, 'archivePrimarySettingsBtn');
         const tabsBar = archiveRoot.querySelector('.archive-tabs');
         const footer = archiveRoot.querySelector('.archive-footer');
         const normalizedMode = mode === 'einstellungen' ? 'einstellungen' : 'inhalt';
@@ -314,10 +413,11 @@
         });
     }
 
-    function createMockMenuItem(title, subtitle) {
+    function createMockMenuItem(title, subtitle, previewKey) {
         const item = createElement('div', 'menu-item');
         const mainText = createElement('div', 'item-main-text', title);
         const subText = createElement('div', 'item-sub-text', subtitle);
+        if (previewKey) item.setAttribute('data-loading-preview', previewKey);
         item.appendChild(mainText);
         item.appendChild(subText);
         return item;
@@ -325,17 +425,18 @@
 
     function ensureArchiveMockContent(archiveRoot, measurementState) {
         if (measurementState === 'archive-lore') {
-            const loreList = archiveRoot.querySelector('#loreList');
+            const loreList = findSanitizedById(archiveRoot, 'loreList');
             if (loreList && !loreList.children.length) {
-                loreList.appendChild(createMockMenuItem('Das Fluestern', 'Zusaetzlicher Text aus der Welt'));
+                loreList.appendChild(createMockMenuItem('Das Fluestern', 'Zusaetzlicher Text', 'lore-item'));
             }
         }
         if (measurementState === 'archive-bookmarks') {
-            const bookmarkList = archiveRoot.querySelector('#bookmarkList');
+            const bookmarkList = findSanitizedById(archiveRoot, 'bookmarkList');
             if (bookmarkList && !bookmarkList.children.length) {
                 const item = createElement('div', 'menu-item bookmark-item');
-                item.appendChild(createElement('div', 'item-main-text', 'Antiquariat Hannrath - 00:34'));
-                item.appendChild(createElement('div', 'item-sub-text', 'Markierte Stelle zum schnellen Wiederfinden'));
+                item.setAttribute('data-loading-preview', 'bookmark-item');
+                item.appendChild(createElement('div', 'item-main-text', 'Antiquariat - 00:34'));
+                item.appendChild(createElement('div', 'item-sub-text', 'Markierte Stelle'));
                 const deleteBtn = createElement('button', 'bookmark-delete-btn', 'x');
                 item.appendChild(deleteBtn);
                 bookmarkList.appendChild(item);
@@ -347,7 +448,7 @@
         const source = document.getElementById('archiveModal');
         if (!source) return null;
         const root = createStageRoot('archive');
-        const archiveClone = source.cloneNode(true);
+        const archiveClone = sanitizeCloneTree(source.cloneNode(true));
         archiveClone.classList.add('visible');
         archiveClone.style.display = 'flex';
         root.appendChild(archiveClone);
@@ -409,6 +510,48 @@
         return null;
     }
 
+    function computeCropPlacement(card, cropRect) {
+        const isArchivePreview = !!(card && card.target && card.target.stage === 'archive');
+        if (!isArchivePreview) {
+            return {
+                left: Math.round(cropRect.left),
+                top: Math.round(cropRect.top),
+                width: Math.round(cropRect.width),
+                height: Math.round(cropRect.height),
+                scale: 1
+            };
+        }
+
+        const margin = window.innerWidth < 760 ? 22 : 28;
+        const maxWidth = Math.min(window.innerWidth - (margin * 2), window.innerWidth < 760 ? 390 : 560);
+        const maxHeight = Math.min(window.innerHeight * (window.innerWidth < 760 ? 0.28 : 0.32), window.innerWidth < 760 ? 240 : 320);
+        const scale = Math.min(1, maxWidth / cropRect.width, maxHeight / cropRect.height);
+        const width = Math.max(1, Math.round(cropRect.width * scale));
+        const height = Math.max(1, Math.round(cropRect.height * scale));
+        const left = Math.round((window.innerWidth - width) / 2);
+        const top = Math.round(clamp(window.innerHeight * (window.innerWidth < 760 ? 0.16 : 0.14), margin, Math.max(margin, window.innerHeight - height - 180)));
+
+        return {
+            left,
+            top,
+            width,
+            height,
+            scale
+        };
+    }
+
+    function mapRectToPlacement(rect, cropRect, placement) {
+        if (!rect || !cropRect || !placement) return null;
+        return {
+            left: placement.left + ((rect.left - cropRect.left) * placement.scale),
+            top: placement.top + ((rect.top - cropRect.top) * placement.scale),
+            width: rect.width * placement.scale,
+            height: rect.height * placement.scale,
+            right: placement.left + ((rect.right - cropRect.left) * placement.scale),
+            bottom: placement.top + ((rect.bottom - cropRect.top) * placement.scale)
+        };
+    }
+
     function renderUiCloneCard(card) {
         const stageRoot = buildStageForCard(card);
         if (!stageRoot || !state.measureRoot) return null;
@@ -417,22 +560,32 @@
         const selection = resolveTargetSelection(stageRoot, card.target);
         if (!selection || !selection.cropRect) return null;
 
-        const crop = createElement('div', `loading-tutorial-ui-crop ${card.mode === 'ui-clone-group' ? 'loading-tutorial-ui-crop--group' : 'loading-tutorial-ui-crop--single'}`);
-        crop.style.left = `${Math.round(selection.cropRect.left)}px`;
-        crop.style.top = `${Math.round(selection.cropRect.top)}px`;
-        crop.style.width = `${Math.round(selection.cropRect.width)}px`;
-        crop.style.height = `${Math.round(selection.cropRect.height)}px`;
+        const placement = computeCropPlacement(card, selection.cropRect);
+        const cropClassNames = [
+            'loading-tutorial-ui-crop',
+            card.mode === 'ui-clone-group' ? 'loading-tutorial-ui-crop--group' : 'loading-tutorial-ui-crop--single'
+        ];
+        if (card.target && card.target.stage === 'archive') {
+            cropClassNames.push('loading-tutorial-ui-crop--preview');
+        }
+        const crop = createElement('div', cropClassNames.join(' '));
+        crop.style.left = `${placement.left}px`;
+        crop.style.top = `${placement.top}px`;
+        crop.style.width = `${placement.width}px`;
+        crop.style.height = `${placement.height}px`;
 
         const visibleClone = stageRoot.cloneNode(true);
         visibleClone.classList.add('loading-tutorial-stage-clone');
         visibleClone.style.left = `${Math.round(-selection.cropRect.left)}px`;
         visibleClone.style.top = `${Math.round(-selection.cropRect.top)}px`;
+        visibleClone.style.transformOrigin = 'top left';
+        visibleClone.style.transform = placement.scale !== 1 ? `scale(${placement.scale})` : 'none';
         crop.appendChild(visibleClone);
         state.focusLayer.appendChild(crop);
 
         return {
-            anchorRect: selection.focusRect || selection.cropRect,
-            cropRect: selection.cropRect
+            anchorRect: mapRectToPlacement(selection.focusRect || selection.cropRect, selection.cropRect, placement),
+            cropRect: mapRectToPlacement(selection.cropRect, selection.cropRect, placement)
         };
     }
 
@@ -530,10 +683,10 @@
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Eine markierte Stelle bleibt griffbereit.'));
+        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Markierte Stelle.'));
         demo.appendChild(line);
         demo.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
-        demo.appendChild(createElement('div', 'loading-tutorial-bookmark-pill', 'Lesezeichen'));
+        demo.appendChild(createElement('div', 'loading-tutorial-bookmark-pill', 'Gespeichert'));
         return demo;
     }
 
@@ -596,89 +749,60 @@
     }
 
     function setCopyContent(card) {
-        if (!state.copyBox) return;
+        if (!state.copyBox || !state.bodyEl) return;
         state.loadingScreen.style.setProperty('--loading-tutorial-font', getReaderFontStack());
-        state.kickerEl.textContent = state.options && state.options.chapterTitle ? state.options.chapterTitle : 'Kapitel';
-        state.titleEl.textContent = card && card.copy ? card.copy.title : 'Hinweis';
-        state.bodyEl.textContent = card && card.copy ? card.copy.body : '';
+        const bodyText = card && card.copy && typeof card.copy.body === 'string'
+            ? card.copy.body
+            : (typeof card.copy === 'string' ? card.copy : '');
+        state.bodyEl.textContent = bodyText;
     }
 
-    function positionCopy(anchorRect) {
+    function positionCopy(anchorRect, card) {
         const margin = window.innerWidth < 760 ? 18 : 24;
-        const gap = window.innerWidth < 760 ? 18 : 28;
         const width = window.innerWidth < 760
-            ? Math.min(window.innerWidth - (margin * 2), 348)
-            : Math.min(390, Math.max(300, Math.round(window.innerWidth * 0.32)));
+            ? Math.min(window.innerWidth - (margin * 2), 360)
+            : Math.min(window.innerWidth - (margin * 2), 460);
 
         state.copyBox.style.width = `${Math.round(width)}px`;
         state.copyBox.style.maxWidth = `${Math.round(width)}px`;
         state.copyBox.style.left = '-9999px';
         state.copyBox.style.top = '-9999px';
-        const height = Math.max(110, Math.ceil(state.copyBox.offsetHeight || 140));
+        const height = Math.max(56, Math.ceil(state.copyBox.offsetHeight || 72));
+        const left = Math.round(clamp((window.innerWidth - width) / 2, margin, Math.max(margin, window.innerWidth - width - margin)));
+        const topSlot = Math.round(margin + 10);
+        const bottomSlot = Math.round(window.innerHeight - height - 92);
+        const prefersBottom = !anchorRect || anchorRect.top < (window.innerHeight * 0.52);
 
-        const anchorMidX = anchorRect.left + (anchorRect.width / 2);
-        const anchorMidY = anchorRect.top + (anchorRect.height / 2);
-        const maxLeft = window.innerWidth - width - margin;
-        const maxTop = window.innerHeight - height - margin;
-        const candidateLookup = {
-            right: {
-                name: 'right',
-                left: anchorRect.right + gap,
-                top: clamp(anchorMidY - (height / 2), margin, maxTop),
-                width,
-                height
-            },
-            left: {
-                name: 'left',
-                left: anchorRect.left - width - gap,
-                top: clamp(anchorMidY - (height / 2), margin, maxTop),
-                width,
-                height
-            },
-            bottom: {
-                name: 'bottom',
-                left: clamp(anchorMidX - (width / 2), margin, maxLeft),
-                top: anchorRect.bottom + gap,
-                width,
-                height
-            },
-            top: {
-                name: 'top',
-                left: clamp(anchorMidX - (width / 2), margin, maxLeft),
-                top: anchorRect.top - height - gap,
-                width,
-                height
-            }
-        };
-        const orderedNames = window.innerWidth < 760
-            ? ['bottom', 'top', 'right', 'left']
-            : ['right', 'left', 'bottom', 'top'];
+        const candidates = prefersBottom
+            ? [{ left, top: bottomSlot, width, height }, { left, top: topSlot, width, height }]
+            : [{ left, top: topSlot, width, height }, { left, top: bottomSlot, width, height }];
 
-        let best = null;
+        let chosen = candidates[0];
         let bestScore = Number.NEGATIVE_INFINITY;
-        orderedNames.forEach((name, orderIndex) => {
-            const candidate = candidateLookup[name];
+        candidates.forEach(function (candidate, orderIndex) {
             candidate.right = candidate.left + candidate.width;
             candidate.bottom = candidate.top + candidate.height;
-            const overflowX = Math.max(0, margin - candidate.left) + Math.max(0, candidate.right - (window.innerWidth - margin));
-            const overflowY = Math.max(0, margin - candidate.top) + Math.max(0, candidate.bottom - (window.innerHeight - margin));
-            const distance = Math.hypot((candidate.left + (candidate.width / 2)) - anchorMidX, (candidate.top + (candidate.height / 2)) - anchorMidY);
-            const score = (orderedNames.length - orderIndex) * 40 - distance - ((overflowX + overflowY) * 60);
+            const overlapPenalty = rectIntersects(candidate, anchorRect) ? 1000 : 0;
+            const distance = anchorRect
+                ? Math.abs((candidate.top + (candidate.height / 2)) - (anchorRect.top + (anchorRect.height / 2)))
+                : 0;
+            const score = ((candidates.length - orderIndex) * 80) - overlapPenalty - (distance * 0.08);
             if (score > bestScore) {
                 bestScore = score;
-                best = candidate;
+                chosen = candidate;
             }
         });
 
-        best.left = clamp(best.left, margin, maxLeft);
-        best.top = clamp(best.top, margin, maxTop);
-        best.right = best.left + best.width;
-        best.bottom = best.top + best.height;
+        chosen.left = left;
+        chosen.top = clamp(chosen.top, margin, Math.max(margin, window.innerHeight - height - margin));
+        chosen.right = chosen.left + chosen.width;
+        chosen.bottom = chosen.top + chosen.height;
 
-        state.copyBox.style.left = `${Math.round(best.left)}px`;
-        state.copyBox.style.top = `${Math.round(best.top)}px`;
-
-        return best;
+        state.copyBox.style.left = `${Math.round(chosen.left)}px`;
+        state.copyBox.style.top = `${Math.round(chosen.top)}px`;
+        state.copyBox.dataset.loadingTutorialPlacement = chosen.top > (window.innerHeight * 0.5) ? 'bottom' : 'top';
+        state.copyBox.dataset.loadingTutorialMode = card ? card.mode : 'demo';
+        return chosen;
     }
 
     function nearestPointOnRect(rect, point) {
@@ -747,35 +871,36 @@
 
     function positionProgress(anchorRect, copyRect) {
         if (!state.progressEl) return;
-        const margin = 16;
-        const width = window.innerWidth < 760 ? Math.min(window.innerWidth - (margin * 2), 220) : 248;
+        const margin = 18;
+        const width = window.innerWidth < 760 ? Math.min(window.innerWidth - (margin * 2), 228) : 248;
         state.progressEl.style.width = `${Math.round(width)}px`;
-        state.progressEl.style.left = '-9999px';
-        state.progressEl.style.top = '-9999px';
-        const height = Math.max(48, Math.ceil(state.progressEl.offsetHeight || 54));
-
-        const preferBottom = anchorRect.top < (window.innerHeight * 0.5);
-        let top = preferBottom ? window.innerHeight - height - margin : margin;
-        let left = anchorRect.left < (window.innerWidth * 0.5)
-            ? window.innerWidth - width - margin
-            : margin;
-
-        const proposed = {
+        const left = Math.round((window.innerWidth - width) / 2);
+        const height = Math.max(42, Math.ceil(state.progressEl.offsetHeight || 46));
+        const bottomCandidate = {
             left,
-            top,
+            top: Math.round(window.innerHeight - height - margin),
             right: left + width,
-            bottom: top + height
+            bottom: Math.round(window.innerHeight - margin)
         };
-        if (rectIntersects(proposed, copyRect) || rectIntersects(proposed, anchorRect)) {
-            top = preferBottom ? margin : window.innerHeight - height - margin;
+        const topCandidate = {
+            left,
+            top: margin,
+            right: left + width,
+            bottom: margin + height
+        };
+
+        let chosen = bottomCandidate;
+        if (rectIntersects(bottomCandidate, copyRect) || rectIntersects(bottomCandidate, anchorRect)) {
+            chosen = topCandidate;
+        }
+        if (rectIntersects(chosen, copyRect) || rectIntersects(chosen, anchorRect)) {
+            chosen = chosen === topCandidate ? bottomCandidate : topCandidate;
         }
 
-        left = clamp(left, margin, window.innerWidth - width - margin);
-        top = clamp(top, margin, window.innerHeight - height - margin);
-        state.progressEl.style.left = `${Math.round(left)}px`;
-        state.progressEl.style.top = `${Math.round(top)}px`;
-        state.progressEl.classList.toggle('loading-tutorial-progress--top', top < (window.innerHeight * 0.5));
-        state.progressEl.classList.toggle('loading-tutorial-progress--bottom', top >= (window.innerHeight * 0.5));
+        state.progressEl.style.left = `${Math.round(chosen.left)}px`;
+        state.progressEl.style.top = `${Math.round(chosen.top)}px`;
+        state.progressEl.classList.toggle('loading-tutorial-progress--top', chosen === topCandidate);
+        state.progressEl.classList.toggle('loading-tutorial-progress--bottom', chosen !== topCandidate);
     }
 
     function renderCurrentCard(reason) {
@@ -809,9 +934,14 @@
         if (!renderResult || !renderResult.anchorRect) return;
 
         const anchorRect = normalizeRect(renderResult.anchorRect);
-        const copyRect = positionCopy(anchorRect);
+        const copyRect = positionCopy(anchorRect, state.card);
         positionHalo(renderResult.cropRect || anchorRect, anchorRect, state.card.mode);
-        drawConnector(copyRect, anchorRect);
+        if (state.card.mode === 'ui-clone-single') {
+            drawConnector(copyRect, anchorRect);
+        } else if (state.connectorSvg) {
+            state.connectorSvg.style.opacity = '0';
+            state.connectorPath.setAttribute('d', '');
+        }
         positionProgress(anchorRect, copyRect);
         state.loadingScreen.dataset.loadingTutorialCard = state.card.id;
         state.loadingScreen.dataset.loadingTutorialReason = reason || 'render';
@@ -824,18 +954,13 @@
     }
 
     function hide(reason) {
-        if (!state.shell) return;
-        state.shell.classList.add('is-hidden');
-        state.visible = false;
-        if (state.loadingScreen) {
-            state.loadingScreen.dataset.loadingTutorialHiddenReason = reason || 'manual';
-        }
+        destroy(reason || 'manual');
     }
 
     function syncLayout(reason) {
-        if (!state.visible || !state.card || !state.loadingScreen) return;
-        const loadingStyle = window.getComputedStyle(state.loadingScreen);
-        if (loadingStyle.display === 'none' || loadingStyle.visibility === 'hidden' || Number(loadingStyle.opacity || '1') < 0.01) {
+        if (!state.visible || !state.card || !state.loadingScreen || !state.shell) return;
+        if (!isLoadingScreenVisible()) {
+            destroy('loading-hidden');
             return;
         }
         renderCurrentCard(reason || 'layout');
@@ -851,6 +976,10 @@
         const loadingScreen = document.getElementById(mergedOptions.loadingScreenId);
         if (!loadingScreen) return null;
 
+        if (state.shell && state.shell.isConnected) {
+            destroy('reinit');
+        }
+
         state.options = mergedOptions;
         state.loadingScreen = loadingScreen;
         state.deviceProfile = detectDeviceProfile();
@@ -859,6 +988,7 @@
 
         ensureDom();
         bindHandlers();
+        bindLoadingObserver();
 
         state.loadingScreen.classList.add('loading-tutorial-ready');
         state.loadingScreen.style.setProperty('--loading-tutorial-font', getReaderFontStack());

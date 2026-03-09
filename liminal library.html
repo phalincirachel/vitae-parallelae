@@ -599,14 +599,6 @@
                 const CURRENT_PAGE = 'liminal library.html';
                 const CURRENT_CHAPTER = '1b';
                 const CURRENT_CHAPTER_TITLE = 'Antiquariat Hannrath';
-                if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
-                    window.LoadingTutorialOverlay.init({
-                        pageKey: CURRENT_PAGE,
-                        sceneKey: CURRENT_SCENE_NAME,
-                        chapterTitle: CURRENT_CHAPTER_TITLE,
-                        loadingScreenId: 'loading-screen'
-                    });
-                }
                 const LORE_PROGRESS_DEFAULT_TOTAL = 5;
                 const CHAPTER_PROGRESS_SCENE_BY_BUTTON = Object.freeze({
                     chapter1Btn: 'marktplatz',
@@ -6954,6 +6946,17 @@
             } catch (err) {
                 console.error("FATAL ERROR IN MODULE:", err);
             }
+                window.requestAnimationFrame(() => {
+                    if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
+                        window.LoadingTutorialOverlay.init({
+                            pageKey: 'liminal library.html',
+                            sceneKey: 'liminal_library',
+                            chapterTitle: 'Antiquariat Hannrath',
+                            loadingScreenId: 'loading-screen'
+                        });
+                    }
+                });
+
         })();
     </script>
 </body>

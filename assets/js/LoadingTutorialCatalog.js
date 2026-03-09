@@ -1,4 +1,4 @@
-﻿(function initLoadingTutorialCatalog() {
+(function initLoadingTutorialCatalog() {
     const cards = [
         {
             id: 'book_menu',
@@ -8,11 +8,11 @@
             mode: 'ui-clone-single',
             copy: {
                 title: 'Kapitelmenue',
-                body: 'Oeffnen Sie hier Kapitel, Funde, Lesezeichen und Einstellungen.'
+                body: 'Kapitelmenue hier oeffnen.'
             },
             target: {
                 stage: 'hud',
-                selector: '#bookBtn'
+                selector: '[data-loading-source-id="bookBtn"]'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -24,12 +24,12 @@
             order: 20,
             mode: 'ui-clone-single',
             copy: {
-                title: 'Lesemodus',
-                body: 'Wechseln Sie zwischen Spielansicht und Lesemodus.'
+                title: 'Modus',
+                body: 'Zwischen Modi wechseln.'
             },
             target: {
                 stage: 'hud',
-                selector: '#readingModeBtn'
+                selector: '[data-loading-source-id="readingModeBtn"]'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -42,11 +42,11 @@
             mode: 'ui-clone-single',
             copy: {
                 title: 'Helligkeit',
-                body: 'Tippen Sie mehrfach, um die Szene stufenweise abzudunkeln.'
+                body: 'Szene dunkler schalten.'
             },
             target: {
                 stage: 'hud',
-                selector: '#sceneDimmerToggleBtn'
+                selector: '[data-loading-source-id="sceneDimmerToggleBtn"]'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -59,59 +59,24 @@
             mode: 'ui-clone-single',
             copy: {
                 title: 'Vollbild',
-                body: 'Schalten Sie die Ansicht bei Bedarf ins Vollbild.'
+                body: 'Ansicht im Vollbild.'
             },
             target: {
                 stage: 'hud',
-                selector: '#fullscreenBtn'
+                selector: '[data-loading-source-id="fullscreenBtn"]'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
-        },
-        {
-            id: 'lore_progress',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 50,
-            mode: 'ui-clone-single',
-            copy: {
-                title: 'Fundanzeige',
-                body: 'Diese Anzeige zeigt, wie viele Fundstuecke in diesem Kapitel bereits entdeckt wurden.'
-            },
-            target: {
-                stage: 'hud',
-                selector: '#loreProgressHud'
-            },
-            measurementState: 'hud',
-            animationPreset: 'soft-pulse'
-        },
-        {
-            id: 'funde_tab',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 60,
-            mode: 'ui-clone-group',
-            copy: {
-                title: 'Funde',
-                body: 'Im Reiter Funde erscheinen zusaetzliche Texte, die Sie in der Welt freischalten.'
-            },
-            target: {
-                stage: 'archive',
-                selectors: ['.archive-tabs', '.archive-tab-content[data-tab="lore"]'],
-                focusSelector: '[data-loading-tutorial="lore-tab"]'
-            },
-            measurementState: 'archive-lore',
-            animationPreset: 'soft-fade'
         },
         {
             id: 'reader_layouts',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 70,
+            order: 50,
             mode: 'ui-clone-group',
             copy: {
                 title: 'Textansicht',
-                body: 'Im Kapitelmenue koennen Sie Texte als Blaettern, mit Zeitmarken oder als Feed lesen.'
+                body: 'Textansicht hier waehlen.'
             },
             target: {
                 stage: 'archive',
@@ -121,63 +86,14 @@
             animationPreset: 'soft-fade'
         },
         {
-            id: 'bookmark_create',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 80,
-            mode: 'press-hold-demo',
-            copy: {
-                title: 'Lesezeichen setzen',
-                body: 'Halten Sie eine Textstelle kurz gedrueckt, um ein Lesezeichen zu setzen.'
-            },
-            target: null,
-            measurementState: 'demo',
-            animationPreset: 'hold-ring'
-        },
-        {
-            id: 'bookmark_tab',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 90,
-            mode: 'ui-clone-group',
-            copy: {
-                title: 'Lesezeichenmenue',
-                body: 'Im Reiter Lesezeichen springen Sie spaeter direkt zu markierten Stellen.'
-            },
-            target: {
-                stage: 'archive',
-                selectors: ['.archive-tabs', '[data-loading-tutorial="bookmark-list-tab"]'],
-                focusSelector: '[data-loading-tutorial="bookmark-tab"]'
-            },
-            measurementState: 'archive-bookmarks',
-            animationPreset: 'soft-fade'
-        },
-        {
-            id: 'save_load',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 100,
-            mode: 'ui-clone-group',
-            copy: {
-                title: 'Save und Load',
-                body: 'Mit Save exportieren Sie Ihren Spielstand. Mit Load laden Sie ihn wieder ein.'
-            },
-            target: {
-                stage: 'archive',
-                selector: '[data-loading-tutorial="save-load-footer"]'
-            },
-            measurementState: 'archive-kapitel',
-            animationPreset: 'soft-fade'
-        },
-        {
             id: 'volume_controls',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 110,
+            order: 60,
             mode: 'ui-clone-group',
             copy: {
-                title: 'Lautstaerke',
-                body: 'Regeln Sie Text und Hintergrund getrennt.'
+                title: 'Ton',
+                body: 'Ton getrennt regeln.'
             },
             target: {
                 stage: 'archive',
@@ -187,28 +103,98 @@
             animationPreset: 'soft-fade'
         },
         {
-            id: 'index_move_tap_click',
-            scenes: ['marktplatz', 'steingasse'],
+            id: 'funde_tab',
+            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 5,
-            mode: 'gesture-demo',
+            order: 70,
+            mode: 'ui-clone-group',
             copy: {
-                title: 'Bewegen',
-                body: 'Tippen oder klicken Sie auf die Karte, um dorthin zu gehen.'
+                title: 'Funde',
+                body: 'Funde hier ansehen.'
+            },
+            target: {
+                stage: 'archive',
+                selectors: ['[data-loading-tutorial="lore-tab"]', '[data-loading-preview="lore-item"]'],
+                focusSelector: '[data-loading-tutorial="lore-tab"]'
+            },
+            measurementState: 'archive-lore',
+            animationPreset: 'soft-fade'
+        },
+        {
+            id: 'bookmark_tab',
+            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
+            devices: ['mobile', 'desktop'],
+            order: 80,
+            mode: 'ui-clone-group',
+            copy: {
+                title: 'Lesezeichen',
+                body: 'Lesezeichen hier finden.'
+            },
+            target: {
+                stage: 'archive',
+                selectors: ['[data-loading-tutorial="bookmark-tab"]', '[data-loading-preview="bookmark-item"]'],
+                focusSelector: '[data-loading-tutorial="bookmark-tab"]'
+            },
+            measurementState: 'archive-bookmarks',
+            animationPreset: 'soft-fade'
+        },
+        {
+            id: 'save_load',
+            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
+            devices: ['mobile', 'desktop'],
+            order: 90,
+            mode: 'ui-clone-group',
+            copy: {
+                title: 'Save Load',
+                body: 'Spielstand sichern, laden.'
+            },
+            target: {
+                stage: 'archive',
+                selector: '[data-loading-tutorial="save-load-footer"]'
+            },
+            measurementState: 'archive-kapitel',
+            animationPreset: 'soft-fade'
+        },
+        {
+            id: 'bookmark_create',
+            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
+            devices: ['mobile', 'desktop'],
+            order: 100,
+            mode: 'press-hold-demo',
+            copy: {
+                title: 'Lesezeichen',
+                body: 'Textstelle kurz halten.'
             },
             target: null,
             measurementState: 'demo',
-            animationPreset: 'tap-target'
+            animationPreset: 'hold-ring'
+        },
+        {
+            id: 'lore_progress',
+            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
+            devices: ['mobile', 'desktop'],
+            order: 110,
+            mode: 'ui-clone-single',
+            copy: {
+                title: 'Funde',
+                body: 'Fundfortschritt hier sehen.'
+            },
+            target: {
+                stage: 'hud',
+                selector: '[data-loading-source-id="loreProgressHud"]'
+            },
+            measurementState: 'hud',
+            animationPreset: 'soft-pulse'
         },
         {
             id: 'index_drag_camera_mobile',
             scenes: ['marktplatz', 'steingasse'],
             devices: ['mobile'],
-            order: 15,
+            order: 120,
             mode: 'gesture-demo',
             copy: {
-                title: 'Kamera verschieben',
-                body: 'Ziehen Sie auf der Karte, um den Bildausschnitt zu verschieben.'
+                title: 'Kamera',
+                body: 'Kamera durch Ziehen.'
             },
             target: null,
             measurementState: 'demo',
@@ -218,11 +204,11 @@
             id: 'index_pinch_zoom_mobile',
             scenes: ['marktplatz', 'steingasse'],
             devices: ['mobile'],
-            order: 25,
+            order: 130,
             mode: 'gesture-demo',
             copy: {
-                title: 'Zoomen',
-                body: 'Ziehen Sie zwei Finger zusammen oder auseinander, um hinein- oder herauszuzoomen.'
+                title: 'Zoom',
+                body: 'Mit zwei Fingern zoomen.'
             },
             target: null,
             measurementState: 'demo',
@@ -232,11 +218,11 @@
             id: 'index_collect_lights',
             scenes: ['marktplatz', 'steingasse'],
             devices: ['mobile', 'desktop'],
-            order: 55,
+            order: 140,
             mode: 'collectible-demo',
             copy: {
-                title: 'Gelbe Lichter',
-                body: 'Gelbe Lichter lassen sich sammeln und schalten neue Funde frei.'
+                title: 'Orbs',
+                body: 'Orbs schalten Funde frei.'
             },
             target: null,
             measurementState: 'demo',
@@ -246,11 +232,11 @@
             id: 'liminal_swipe_look_mobile',
             scenes: ['liminal_library'],
             devices: ['mobile'],
-            order: 5,
+            order: 120,
             mode: 'gesture-demo',
             copy: {
-                title: 'Blick lenken',
-                body: 'Wischen Sie ueber den Bildschirm, um den Blick zu lenken.'
+                title: 'Blick',
+                body: 'Blick durch Wischen.'
             },
             target: null,
             measurementState: 'demo',
@@ -260,11 +246,11 @@
             id: 'liminal_tap_move_mobile',
             scenes: ['liminal_library'],
             devices: ['mobile'],
-            order: 15,
+            order: 130,
             mode: 'gesture-demo',
             copy: {
-                title: 'Vorwaerts bewegen',
-                body: 'Tippen Sie in den Gang, um sich dorthin zu bewegen.'
+                title: 'Gehen',
+                body: 'Antippen zum Gehen.'
             },
             target: null,
             measurementState: 'demo',
@@ -274,11 +260,11 @@
             id: 'liminal_wasd_mouse_desktop',
             scenes: ['liminal_library'],
             devices: ['desktop'],
-            order: 10,
+            order: 120,
             mode: 'gesture-demo',
             copy: {
                 title: 'Steuerung',
-                body: 'Mit W, A, S, D bewegen Sie sich. Mit der Maus steuern Sie den Blick.'
+                body: 'Mit Maus und Tasten.'
             },
             target: null,
             measurementState: 'demo',
@@ -288,11 +274,11 @@
             id: 'liminal_collect_books',
             scenes: ['liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 55,
+            order: 140,
             mode: 'collectible-demo',
             copy: {
-                title: 'Leuchtende Buecher',
-                body: 'Leuchtende Buecher lassen sich einsammeln und schalten neue Funde frei.'
+                title: 'Buecher',
+                body: 'Buecher schalten Funde frei.'
             },
             target: null,
             measurementState: 'demo',

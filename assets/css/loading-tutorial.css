@@ -46,37 +46,29 @@
 .loading-tutorial-copy {
     position: absolute;
     z-index: 5;
-    width: min(390px, calc(100vw - 32px));
-    padding: 18px 20px 20px;
+    width: min(460px, calc(100vw - 32px));
+    padding: 14px 18px 15px;
     border-radius: 22px;
-    background: linear-gradient(180deg, rgba(26, 26, 26, 0.94), rgba(10, 10, 10, 0.9));
-    border: 1px solid rgba(248, 242, 232, 0.16);
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    background: linear-gradient(180deg, rgba(18, 18, 18, 0.96), rgba(8, 8, 8, 0.92));
+    border: 1px solid rgba(248, 242, 232, 0.14);
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    text-align: center;
 }
 
-.loading-tutorial-kicker {
-    margin-bottom: 8px;
-    font-size: 11px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: rgba(216, 210, 198, 0.7);
-}
-
+.loading-tutorial-kicker,
 .loading-tutorial-title {
-    margin: 0;
-    font-size: clamp(26px, 4.9vw, 42px);
-    line-height: 1.02;
-    letter-spacing: -0.02em;
-    color: rgba(250, 247, 242, 0.98);
+    display: none !important;
 }
 
 .loading-tutorial-body {
-    margin: 12px 0 0;
-    font-size: clamp(14px, 2.45vw, 18px);
-    line-height: 1.52;
-    color: rgba(226, 221, 213, 0.84);
+    margin: 0;
+    font-size: clamp(16px, 2.6vw, 22px);
+    line-height: 1.18;
+    letter-spacing: -0.01em;
+    color: rgba(244, 240, 233, 0.95);
+    text-wrap: balance;
 }
 
 .loading-tutorial-connector {
@@ -115,39 +107,40 @@
     z-index: 5;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px;
-    border-radius: 16px;
-    background: rgba(9, 9, 9, 0.72);
-    border: 1px solid rgba(245, 238, 228, 0.14);
-    box-shadow: 0 16px 46px rgba(0, 0, 0, 0.42);
+    gap: 7px;
+    padding: 11px 14px 12px;
+    border-radius: 18px;
+    background: rgba(10, 10, 10, 0.78);
+    border: 1px solid rgba(245, 238, 228, 0.12);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.34);
 }
 
 .loading-tutorial-progress-label {
-    font-size: 12px;
-    letter-spacing: 0.18em;
+    font-size: 11px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: rgba(223, 217, 208, 0.8);
+    color: rgba(232, 227, 219, 0.78);
+    text-align: center;
 }
 
 .loading-tutorial-progress-track {
     position: relative;
     width: 100%;
-    height: 6px;
+    height: 7px;
     overflow: hidden;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .loading-tutorial-progress-bar {
     position: absolute;
-    top: 0;
-    left: -34%;
-    width: 34%;
-    height: 100%;
+    inset: 0;
+    width: 100%;
     border-radius: inherit;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.2), rgba(246, 241, 233, 0.92), rgba(255, 255, 255, 0.18));
-    animation: loadingTutorialProgressSlide 1.75s ease-in-out infinite;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.18) 28%, rgba(248, 243, 236, 0.9) 48%, rgba(255, 255, 255, 0.2) 62%, rgba(255, 255, 255, 0.06) 100%);
+    background-size: 170px 100%;
+    animation: loadingTutorialProgressSlide 1.9s linear infinite;
 }
 
 .loading-tutorial-ui-crop {
@@ -164,6 +157,13 @@
     border-radius: 28px;
 }
 
+.loading-tutorial-ui-crop--preview {
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(14, 14, 14, 0.96), rgba(6, 6, 6, 0.92));
+    border: 1px solid rgba(248, 242, 232, 0.12);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
 .loading-tutorial-stage,
 .loading-tutorial-stage-clone {
     position: absolute;
@@ -174,13 +174,13 @@
     transition: none !important;
 }
 
-.loading-tutorial-stage--hud #audioPlayerUI {
+.loading-tutorial-stage--hud [data-loading-source-id="audioPlayerUI"] {
     display: flex !important;
     opacity: 1 !important;
     visibility: visible !important;
 }
 
-.loading-tutorial-stage--archive #archiveModal {
+.loading-tutorial-stage--archive [data-loading-source-id="archiveModal"] {
     display: flex !important;
 }
 
@@ -219,9 +219,9 @@
 .loading-tutorial-demo {
     position: absolute;
     left: 50%;
-    top: 44%;
-    width: min(56vw, 520px);
-    height: min(40vw, 320px);
+    top: 38%;
+    width: min(56vw, 500px);
+    height: min(38vw, 300px);
     min-width: 250px;
     min-height: 170px;
     transform: translate(-50%, -50%);
@@ -346,13 +346,13 @@
 }
 
 .loading-tutorial-touch-dot--pinch-left {
-    left: 28%;
+    left: 30%;
     top: 48%;
     animation: loadingTutorialPinchLeft 2.2s ease-in-out infinite;
 }
 
 .loading-tutorial-touch-dot--pinch-right {
-    right: 28%;
+    right: 30%;
     top: 48%;
     animation: loadingTutorialPinchRight 2.2s ease-in-out infinite;
 }
@@ -399,16 +399,16 @@
 }
 
 .loading-tutorial-arrow--pinch-left {
-    left: 37%;
+    left: 41%;
     top: 51%;
-    width: 15%;
+    width: 13%;
     transform: rotate(180deg);
 }
 
 .loading-tutorial-arrow--pinch-right {
-    right: 37%;
+    right: 41%;
     top: 51%;
-    width: 15%;
+    width: 13%;
 }
 
 .loading-tutorial-arrow--swipe {
@@ -664,9 +664,8 @@
 }
 
 @keyframes loadingTutorialProgressSlide {
-    0% { transform: translateX(0); }
-    50% { transform: translateX(220%); }
-    100% { transform: translateX(440%); }
+    0% { background-position: 0 0; }
+    100% { background-position: 170px 0; }
 }
 
 @keyframes loadingTutorialHaloPulse {
@@ -691,12 +690,12 @@
 
 @keyframes loadingTutorialPinchLeft {
     0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(42px); }
+    50% { transform: translateX(36px); }
 }
 
 @keyframes loadingTutorialPinchRight {
     0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(-42px); }
+    50% { transform: translateX(-36px); }
 }
 
 @keyframes loadingTutorialSwipeDot {
@@ -732,13 +731,13 @@
 
 @media (max-width: 760px) {
     .loading-tutorial-demo {
-        top: 38%;
+        top: 34%;
         width: min(84vw, 420px);
-        height: min(58vw, 260px);
+        height: min(54vw, 250px);
     }
 
     .loading-tutorial-copy {
-        padding: 16px 16px 18px;
+        padding: 13px 14px 14px;
         border-radius: 18px;
     }
 

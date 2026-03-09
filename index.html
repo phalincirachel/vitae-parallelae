@@ -544,14 +544,6 @@
         const LEVEL = LEVEL_CONFIGS[_chapterParam] ?? LEVEL_CONFIGS['kapitel1'];
 
         const SCENE_NAME = LEVEL.sceneName;
-        if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
-            window.LoadingTutorialOverlay.init({
-                pageKey: LEVEL.page,
-                sceneKey: LEVEL.sceneName,
-                chapterTitle: LEVEL.chapterTitle,
-                loadingScreenId: 'loading-screen'
-            });
-        }
         const LORE_PROGRESS_DEFAULT_TOTAL = 5;
         const CHAPTER_PROGRESS_SCENE_BY_BUTTON = Object.freeze({
             chapter1Btn: 'marktplatz',
@@ -9030,6 +9022,16 @@
             tick();
         }
 
+        window.requestAnimationFrame(() => {
+            if (window.LoadingTutorialOverlay && typeof window.LoadingTutorialOverlay.init === 'function') {
+                window.LoadingTutorialOverlay.init({
+                    pageKey: LEVEL.page,
+                    sceneKey: LEVEL.sceneName,
+                    chapterTitle: LEVEL.chapterTitle,
+                    loadingScreenId: 'loading-screen'
+                });
+            }
+        });
 
     </script>
 </body>
