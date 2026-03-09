@@ -1358,6 +1358,11 @@
     width: 24px !important;
     height: 24px !important;
     object-fit: contain;
+    filter:
+        brightness(0) invert(1)
+        drop-shadow(0 0 0.55px rgba(255, 255, 255, 0.95))
+        drop-shadow(0 0 1px rgba(255, 255, 255, 0.72))
+        drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8));
 }
 
 .loading-tutorial-centered-focus .audio-btn svg {
@@ -1385,6 +1390,11 @@
     box-shadow: 0 0 0 1px rgba(255, 208, 92, 0.62), 0 0 14px rgba(255, 208, 92, 0.34);
 }
 
+.loading-tutorial-demo--pinch {
+    --loading-tutorial-pinch-dot-offset: 18%;
+    --loading-tutorial-pinch-arrow-length: 12%;
+}
+
 .loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left,
 .loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
     top: 50%;
@@ -1392,33 +1402,33 @@
 }
 
 .loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left {
-    left: 35%;
+    left: calc(50% - var(--loading-tutorial-pinch-dot-offset));
     animation: loadingTutorialPinchLeftSymmetric 2.2s ease-in-out infinite;
 }
 
 .loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
-    left: 65%;
+    left: calc(50% + var(--loading-tutorial-pinch-dot-offset));
     right: auto;
     animation: loadingTutorialPinchRightSymmetric 2.2s ease-in-out infinite;
 }
 
 .loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left,
 .loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
-    top: 51%;
-    width: 14%;
+    top: 50%;
+    width: var(--loading-tutorial-pinch-arrow-length);
 }
 
 .loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left {
-    left: 50%;
-    transform: translate(-100%, -50%) rotate(180deg);
-    transform-origin: right center;
+    left: calc(50% - var(--loading-tutorial-pinch-arrow-length));
+    transform: translateY(-50%) rotate(180deg);
+    transform-origin: center center;
 }
 
 .loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
     left: 50%;
     right: auto;
-    transform: translate(0, -50%);
-    transform-origin: left center;
+    transform: translateY(-50%);
+    transform-origin: center center;
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-bookmark-line {
@@ -1439,11 +1449,11 @@
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-hold-ring {
-    left: 16%;
-    top: 24%;
+    left: 56%;
+    top: 44%;
     width: 96px;
     height: 96px;
-    animation: loadingTutorialHoldRingSoft 2.5s ease-in-out infinite;
+    animation: loadingTutorialHoldRingSoft 3s ease-in-out infinite;
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-bookmark-pill {
@@ -1458,7 +1468,7 @@
     justify-content: center;
     background: rgba(255, 250, 242, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    animation: loadingTutorialBookmarkPillCycle 2.5s ease-in-out infinite;
+    animation: loadingTutorialBookmarkPillCycle 3s ease-in-out infinite;
 }
 
 .loading-tutorial-bookmark-pill-label {
@@ -1470,11 +1480,11 @@
 }
 
 .loading-tutorial-bookmark-pill-label--bookmark {
-    animation: loadingTutorialBookmarkLabelIn 2.5s ease-in-out infinite;
+    animation: loadingTutorialBookmarkLabelIn 3s ease-in-out infinite;
 }
 
 .loading-tutorial-bookmark-pill-label--saved {
-    animation: loadingTutorialBookmarkLabelSaved 2.5s ease-in-out infinite;
+    animation: loadingTutorialBookmarkLabelSaved 3s ease-in-out infinite;
 }
 
 @keyframes loadingTutorialPinchLeftSymmetric {
@@ -1488,24 +1498,185 @@
 }
 
 @keyframes loadingTutorialHoldRingSoft {
-    0% { transform: scale(0.8); opacity: 0.16; }
-    42% { transform: scale(1.02); opacity: 0.9; }
-    74% { transform: scale(1.14); opacity: 0.22; }
-    100% { transform: scale(1.18); opacity: 0; }
+    0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.16; }
+    42% { transform: translate(-50%, -50%) scale(1.02); opacity: 0.9; }
+    74% { transform: translate(-50%, -50%) scale(1.14); opacity: 0.22; }
+    100% { transform: translate(-50%, -50%) scale(1.18); opacity: 0; }
 }
 
 @keyframes loadingTutorialBookmarkPillCycle {
     0%, 100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
-    26%, 76% { opacity: 1; transform: translateX(-50%) translateY(0); }
+    22%, 82% { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 @keyframes loadingTutorialBookmarkLabelIn {
-    0%, 14%, 56%, 100% { opacity: 0; }
-    28%, 46% { opacity: 1; }
+    0%, 12%, 54%, 100% { opacity: 0; }
+    24%, 46% { opacity: 1; }
 }
 
 @keyframes loadingTutorialBookmarkLabelSaved {
-    0%, 56% { opacity: 0; }
-    70%, 86% { opacity: 1; }
+    0%, 58% { opacity: 0; }
+    72%, 88% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
+
+/* 2026-03 final book icon, pinch, hold refinement */
+.loading-tutorial-centered-focus-context {
+    min-height: 48px;
+}
+
+.loading-tutorial-context-book-button,
+.loading-tutorial-overlay-clone--book_menu,
+.loading-tutorial-book-button-shell {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 6px !important;
+    background: transparent !important;
+    border: none !important;
+    line-height: 0;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.loading-tutorial-book-button-image,
+.loading-tutorial-centered-focus .audio-btn img {
+    display: block !important;
+    width: 24px !important;
+    height: 24px !important;
+    object-fit: contain !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    filter:
+        brightness(0) invert(1)
+        drop-shadow(0 0 0.55px rgba(255, 255, 255, 0.95))
+        drop-shadow(0 0 1px rgba(255, 255, 255, 0.72))
+        drop-shadow(2px 2px 6px rgba(0, 0, 0, 0.8)) !important;
+}
+
+.loading-tutorial-demo--pinch {
+    --loading-tutorial-pinch-dot-offset: 20%;
+    --loading-tutorial-pinch-arrow-gap: 4.5%;
+    --loading-tutorial-pinch-arrow-length: 10.5%;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-demo-inner-frame {
+    inset: 18% 22%;
+    border-radius: 20px;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left,
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left {
+    left: calc(50% - var(--loading-tutorial-pinch-dot-offset));
+    right: auto;
+    animation: loadingTutorialPinchLeftSymmetric 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
+    left: calc(50% + var(--loading-tutorial-pinch-dot-offset));
+    right: auto;
+    animation: loadingTutorialPinchRightSymmetric 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left,
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
+    top: 50%;
+    width: var(--loading-tutorial-pinch-arrow-length);
+    height: 1.5px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(244, 240, 232, 0.9), rgba(255, 255, 255, 0.04));
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left {
+    left: calc(50% - var(--loading-tutorial-pinch-arrow-gap) - var(--loading-tutorial-pinch-arrow-length));
+    transform: translateY(-50%);
+    transform-origin: center center;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left::after {
+    left: -1px;
+    right: auto;
+    border-top: 2px solid rgba(244, 240, 232, 0.88);
+    border-right: 0;
+    border-left: 2px solid rgba(244, 240, 232, 0.88);
+    transform: translateY(-50%) rotate(-45deg);
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
+    left: calc(50% + var(--loading-tutorial-pinch-arrow-gap));
+    right: auto;
+    transform: translateY(-50%);
+    transform-origin: center center;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-line {
+    left: 12%;
+    right: 12%;
+    top: 36%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 12px;
+    align-items: center;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-text {
+    min-width: 0;
+    color: rgba(244, 241, 235, 0.94);
+    opacity: 1;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-hold-ring {
+    left: 64%;
+    top: 44%;
+    width: 96px;
+    height: 96px;
+    animation: loadingTutorialHoldRingSoft 3s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-pill {
+    left: 50%;
+    right: auto;
+    top: 63%;
+    width: 168px;
+    min-height: 42px;
+    transform: translateX(-50%);
+    animation: loadingTutorialBookmarkPillCycle 3s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-pill-label--bookmark {
+    animation: loadingTutorialBookmarkLabelIn 3s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-pill-label--saved {
+    animation: loadingTutorialBookmarkLabelSaved 3s ease-in-out infinite;
+}
+
+@keyframes loadingTutorialHoldRingSoft {
+    0% { transform: translate(-50%, -50%) scale(0.76); opacity: 0.08; }
+    56% { transform: translate(-50%, -50%) scale(0.98); opacity: 0.92; }
+    80% { transform: translate(-50%, -50%) scale(1.08); opacity: 0.34; }
+    100% { transform: translate(-50%, -50%) scale(1.16); opacity: 0; }
+}
+
+@keyframes loadingTutorialBookmarkPillCycle {
+    0%, 100% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    20%, 96% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes loadingTutorialBookmarkLabelIn {
+    0%, 18%, 62%, 100% { opacity: 0; }
+    30%, 56% { opacity: 1; }
+}
+
+@keyframes loadingTutorialBookmarkLabelSaved {
+    0%, 68% { opacity: 0; }
+    78%, 96% { opacity: 1; }
     100% { opacity: 0; }
 }

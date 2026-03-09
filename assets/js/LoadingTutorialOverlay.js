@@ -632,14 +632,38 @@
         return clone;
     }
 
+    function createBookButtonShell(card, extraClassName) {
+        const bookButton = document.getElementById('bookBtn');
+        const bookImage = bookButton ? bookButton.querySelector('img') : null;
+        if (!bookImage) return null;
+
+        const shell = createElement('div', 'audio-btn loading-tutorial-book-button-shell');
+        shell.setAttribute('aria-hidden', 'true');
+        shell.classList.add('loading-tutorial-overlay-clone');
+        if (extraClassName) {
+            String(extraClassName).split(/\s+/).filter(Boolean).forEach((className) => shell.classList.add(className));
+        }
+        if (card && card.id) {
+            const safeCardId = String(card.id).replace(/[^a-z0-9_-]+/gi, '-');
+            shell.classList.add(`loading-tutorial-overlay-clone--${safeCardId}`);
+            shell.setAttribute('data-loading-tutorial-card', String(card.id));
+        }
+
+        const imageClone = sanitizeCloneTree(bookImage.cloneNode(true));
+        imageClone.removeAttribute('style');
+        imageClone.classList.add('loading-tutorial-book-button-image');
+        imageClone.style.opacity = '1';
+        imageClone.style.visibility = 'visible';
+        shell.appendChild(imageClone);
+        return shell;
+    }
+
     function createCenteredFocusShell(card) {
         const shell = createElement('div', `loading-tutorial-centered-focus loading-tutorial-centered-focus--${card.mode === 'ui-clone-single' ? 'single' : 'group'}`);
         if (card && card.target && card.target.stage === 'archive') {
             const context = createElement('div', 'loading-tutorial-centered-focus-context');
-            const bookButton = document.getElementById('bookBtn');
-            if (bookButton) {
-                const contextButton = prepareCloneForOverlay(bookButton, { id: 'archive_context_book' });
-                contextButton.classList.add('loading-tutorial-context-book-button');
+            const contextButton = createBookButtonShell(null, 'loading-tutorial-context-book-button');
+            if (contextButton) {
                 context.appendChild(contextButton);
             }
             shell.appendChild(context);
@@ -655,13 +679,20 @@
         if (!selection || !selection.nodes.length) return null;
 
         const { shell, content } = createCenteredFocusShell(card);
-        const nodesToRender = card.mode === 'ui-clone-single'
-            ? [selection.focusNode || selection.nodes[0]]
-            : selection.nodes;
+        if (card.id === 'book_menu') {
+            const bookClone = createBookButtonShell(card);
+            if (bookClone) {
+                content.appendChild(bookClone);
+            }
+        } else {
+            const nodesToRender = card.mode === 'ui-clone-single'
+                ? [selection.focusNode || selection.nodes[0]]
+                : selection.nodes;
 
-        nodesToRender.filter(Boolean).forEach((node) => {
-            content.appendChild(prepareCloneForOverlay(node, card));
-        });
+            nodesToRender.filter(Boolean).forEach((node) => {
+                content.appendChild(prepareCloneForOverlay(node, card));
+            });
+        }
 
         if (!content.children.length) return null;
         state.focusLayer.appendChild(shell);
@@ -766,7 +797,7 @@
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Eda, die Zeit...'));
+        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Edna, die Zeit...'));
         demo.appendChild(line);
         demo.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
         const pill = createElement('div', 'loading-tutorial-bookmark-pill');
