@@ -1461,6 +1461,7 @@
             dragMoved: false,
             pinchActive: false,
             pinchStartDistance: 0,
+            pinchFilteredDistance: 0,
             pinchStartZoom: 1,
             pinchAnchorWorldX: 0,
             pinchAnchorWorldY: 0,
@@ -1565,6 +1566,7 @@
             gameCanvasGesture.dragMoved = false;
             gameCanvasGesture.pinchActive = false;
             gameCanvasGesture.pinchStartDistance = 0;
+            gameCanvasGesture.pinchFilteredDistance = 0;
             gameCanvasGesture.pinchStartZoom = cameraZoom;
             gameCanvasGesture.pinchAnchorWorldX = 0;
             gameCanvasGesture.pinchAnchorWorldY = 0;
@@ -2713,6 +2715,7 @@
             gameCanvasGesture.pinchActive = true;
             gameCanvasGesture.suppressTap = true;
             gameCanvasGesture.pinchStartDistance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
+            gameCanvasGesture.pinchFilteredDistance = gameCanvasGesture.pinchStartDistance;
             gameCanvasGesture.pinchStartZoom = cameraZoom;
             gameCanvasGesture.pinchAnchorWorldX = anchor.worldX;
             gameCanvasGesture.pinchAnchorWorldY = anchor.worldY;
@@ -2727,9 +2730,13 @@
             if (pointers.length < 2) return;
             const [first, second] = pointers;
             const distance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
-            gameCanvasGesture.pinchCenterCanvasX = (first.canvasX + second.canvasX) * 0.5;
-            gameCanvasGesture.pinchCenterCanvasY = (first.canvasY + second.canvasY) * 0.5;
-            cameraZoomTarget = getCameraZoomClamped(gameCanvasGesture.pinchStartZoom * (distance / Math.max(1, gameCanvasGesture.pinchStartDistance)));
+            const nextCenterCanvasX = (first.canvasX + second.canvasX) * 0.5;
+            const nextCenterCanvasY = (first.canvasY + second.canvasY) * 0.5;
+            const pinchFilter = 0.34;
+            gameCanvasGesture.pinchFilteredDistance += (distance - gameCanvasGesture.pinchFilteredDistance) * pinchFilter;
+            gameCanvasGesture.pinchCenterCanvasX += (nextCenterCanvasX - gameCanvasGesture.pinchCenterCanvasX) * pinchFilter;
+            gameCanvasGesture.pinchCenterCanvasY += (nextCenterCanvasY - gameCanvasGesture.pinchCenterCanvasY) * pinchFilter;
+            cameraZoomTarget = getCameraZoomClamped(gameCanvasGesture.pinchStartZoom * (gameCanvasGesture.pinchFilteredDistance / Math.max(1, gameCanvasGesture.pinchStartDistance)));
         }
 
         if (window.PointerEvent) {
@@ -3788,13 +3795,18 @@
             let cameraStep;
 
             if (gameCanvasGesture.mode === "pinch") {
-                desiredCamX = clampCameraX(
-                    gameCanvasGesture.pinchAnchorWorldX - (gameCanvasGesture.pinchCenterCanvasX / Math.max(0.0001, cameraZoom))
-                );
-                desiredCamY = clampCameraY(
-                    gameCanvasGesture.pinchAnchorWorldY - (gameCanvasGesture.pinchCenterCanvasY / Math.max(0.0001, cameraZoom))
-                );
-                cameraStep = Math.min(1, GAME_CAMERA_ZOOM_ACTIVE_LERP * dt);
+                const pinchZoom = Math.max(0.0001, cameraZoom);
+                const rawDesiredCamX = gameCanvasGesture.pinchAnchorWorldX - (gameCanvasGesture.pinchCenterCanvasX / pinchZoom);
+                const rawDesiredCamY = gameCanvasGesture.pinchAnchorWorldY - (gameCanvasGesture.pinchCenterCanvasY / pinchZoom);
+                desiredCamX = clampCameraX(rawDesiredCamX);
+                desiredCamY = clampCameraY(rawDesiredCamY);
+                if (Math.abs(desiredCamX - rawDesiredCamX) > 0.01) {
+                    gameCanvasGesture.pinchAnchorWorldX = desiredCamX + (gameCanvasGesture.pinchCenterCanvasX / pinchZoom);
+                }
+                if (Math.abs(desiredCamY - rawDesiredCamY) > 0.01) {
+                    gameCanvasGesture.pinchAnchorWorldY = desiredCamY + (gameCanvasGesture.pinchCenterCanvasY / pinchZoom);
+                }
+                cameraStep = Math.min(1, GAME_CAMERA_ACTIVE_LERP * dt);
             } else {
                 const followCamX = getCameraFollowTargetX();
                 const followCamY = getCameraFollowTargetY();
