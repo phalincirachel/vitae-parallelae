@@ -1462,6 +1462,10 @@
             pinchActive: false,
             pinchStartDistance: 0,
             pinchStartZoom: 1,
+            pinchAnchorWorldX: 0,
+            pinchAnchorWorldY: 0,
+            pinchCenterCanvasX: 0,
+            pinchCenterCanvasY: 0,
             suppressTap: false,
             mode: "idle"
         };
@@ -1562,6 +1566,10 @@
             gameCanvasGesture.pinchActive = false;
             gameCanvasGesture.pinchStartDistance = 0;
             gameCanvasGesture.pinchStartZoom = cameraZoom;
+            gameCanvasGesture.pinchAnchorWorldX = 0;
+            gameCanvasGesture.pinchAnchorWorldY = 0;
+            gameCanvasGesture.pinchCenterCanvasX = 0;
+            gameCanvasGesture.pinchCenterCanvasY = 0;
             gameCanvasGesture.suppressTap = false;
             gameCanvasGesture.mode = "idle";
         }
@@ -2695,6 +2703,10 @@
             const pointers = Array.from(gameCanvasGesture.pointers.values());
             if (pointers.length < 2) return;
             const [first, second] = pointers;
+            const midClientX = (first.clientX + second.clientX) * 0.5;
+            const midClientY = (first.clientY + second.clientY) * 0.5;
+            const anchor = screenPointToWorld(midClientX, midClientY);
+            if (!anchor) return;
             gameCanvasGesture.mode = "pinch";
             gameCanvasGesture.primaryPointerId = null;
             gameCanvasGesture.dragMoved = false;
@@ -2702,6 +2714,10 @@
             gameCanvasGesture.suppressTap = true;
             gameCanvasGesture.pinchStartDistance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
             gameCanvasGesture.pinchStartZoom = cameraZoom;
+            gameCanvasGesture.pinchAnchorWorldX = anchor.worldX;
+            gameCanvasGesture.pinchAnchorWorldY = anchor.worldY;
+            gameCanvasGesture.pinchCenterCanvasX = anchor.canvasX;
+            gameCanvasGesture.pinchCenterCanvasY = anchor.canvasY;
             cameraZoomTarget = cameraZoom;
         }
 
@@ -2711,6 +2727,8 @@
             if (pointers.length < 2) return;
             const [first, second] = pointers;
             const distance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
+            gameCanvasGesture.pinchCenterCanvasX = (first.canvasX + second.canvasX) * 0.5;
+            gameCanvasGesture.pinchCenterCanvasY = (first.canvasY + second.canvasY) * 0.5;
             cameraZoomTarget = getCameraZoomClamped(gameCanvasGesture.pinchStartZoom * (distance / Math.max(1, gameCanvasGesture.pinchStartDistance)));
         }
 
@@ -3765,23 +3783,35 @@
             const zoomStep = Math.min(1, ((gameCanvasGesture.mode === "pinch") ? GAME_CAMERA_ZOOM_ACTIVE_LERP : 9.5) * dt);
             cameraZoom += (cameraZoomTarget - cameraZoom) * zoomStep;
 
-            const followCamX = getCameraFollowTargetX();
-            const followCamY = getCameraFollowTargetY();
+            let desiredCamX;
+            let desiredCamY;
+            let cameraStep;
 
-            if (gameCanvasGesture.mode !== "drag") {
-                const springStrength = (gameCanvasGesture.mode === "pinch")
-                    ? GAME_CAMERA_PAN_RETURN_SPEED * 1.25
-                    : GAME_CAMERA_PAN_RETURN_SPEED;
-                const spring = Math.min(1, springStrength * dt);
-                cameraPanOffsetX += (0 - cameraPanOffsetX) * spring;
-                cameraPanOffsetY += (0 - cameraPanOffsetY) * spring;
-                if (Math.abs(cameraPanOffsetX) < 0.01) cameraPanOffsetX = 0;
-                if (Math.abs(cameraPanOffsetY) < 0.01) cameraPanOffsetY = 0;
+            if (gameCanvasGesture.mode === "pinch") {
+                desiredCamX = clampCameraX(
+                    gameCanvasGesture.pinchAnchorWorldX - (gameCanvasGesture.pinchCenterCanvasX / Math.max(0.0001, cameraZoom))
+                );
+                desiredCamY = clampCameraY(
+                    gameCanvasGesture.pinchAnchorWorldY - (gameCanvasGesture.pinchCenterCanvasY / Math.max(0.0001, cameraZoom))
+                );
+                cameraStep = Math.min(1, GAME_CAMERA_ZOOM_ACTIVE_LERP * dt);
+            } else {
+                const followCamX = getCameraFollowTargetX();
+                const followCamY = getCameraFollowTargetY();
+
+                if (gameCanvasGesture.mode !== "drag") {
+                    const springStrength = GAME_CAMERA_PAN_RETURN_SPEED;
+                    const spring = Math.min(1, springStrength * dt);
+                    cameraPanOffsetX += (0 - cameraPanOffsetX) * spring;
+                    cameraPanOffsetY += (0 - cameraPanOffsetY) * spring;
+                    if (Math.abs(cameraPanOffsetX) < 0.01) cameraPanOffsetX = 0;
+                    if (Math.abs(cameraPanOffsetY) < 0.01) cameraPanOffsetY = 0;
+                }
+
+                desiredCamX = clampCameraX(followCamX + cameraPanOffsetX);
+                desiredCamY = clampCameraY(followCamY + cameraPanOffsetY);
+                cameraStep = Math.min(1, (isGameCanvasGestureActive() ? GAME_CAMERA_ACTIVE_LERP : 5.0) * dt);
             }
-
-            const desiredCamX = clampCameraX(followCamX + cameraPanOffsetX);
-            const desiredCamY = clampCameraY(followCamY + cameraPanOffsetY);
-            const cameraStep = Math.min(1, (isGameCanvasGestureActive() ? GAME_CAMERA_ACTIVE_LERP : 5.0) * dt);
 
             targetCamX = desiredCamX;
             targetCamY = desiredCamY;
