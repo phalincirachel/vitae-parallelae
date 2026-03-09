@@ -956,6 +956,23 @@
             return '';
         }
 
+        function resolveBookmarkDisplayChapter(bm) {
+            const page = (bm && typeof bm.page === 'string' && bm.page.trim()) ? bm.page.trim() : CURRENT_PAGE;
+            if (page === 'liminal library.html') return 'kapitel1b';
+            if (page === 'index.html?chapter=kapitel1c') return 'kapitel1c';
+            if (page === 'index.html') return 'kapitel1a';
+
+            const contentKey = resolveBookmarkContentKey(bm);
+            if (contentKey === 'liminal_library') return 'kapitel1b';
+            if (contentKey === 'kapitel1c') return 'kapitel1c';
+            if (contentKey === 'kapitel1') return 'kapitel1a';
+
+            const chapter = (bm && typeof bm.chapter === 'string') ? bm.chapter.trim().toLowerCase() : '';
+            if (chapter === '1b' || chapter === 'kapitel1b') return 'kapitel1b';
+            if (chapter === '1c' || chapter === 'kapitel1c') return 'kapitel1c';
+            return 'kapitel1a';
+        }
+
         async function ensureBookmarkContentForCurrentPage(bm, reason = 'bookmark') {
             await waitForContentSwitchIdle(`${reason}:pre`);
 
@@ -1004,7 +1021,7 @@
                 const mainText = document.createElement('div');
                 mainText.className = 'item-main-text';
                 const timeStr = window.GameState.formatBookmarkTime(bm.time);
-                mainText.innerText = `${bm.chapterTitle} Â· ${timeStr}`;
+                mainText.innerText = `${resolveBookmarkDisplayChapter(bm)} - ${timeStr}`;
 
                 const subText = document.createElement('div');
                 subText.className = 'item-sub-text';
@@ -5738,9 +5755,12 @@
                     : null;
                 const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
                 const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
-                const bookmarkChapterTitle = loreId
-                    ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
-                    : CURRENT_CHAPTER_TITLE;
+                const bookmarkChapterTitle = resolveBookmarkDisplayChapter({
+                    page: CURRENT_PAGE,
+                    contentKey: bookmarkContentKey,
+                    chapter: bookmarkChapter,
+                    loreId: loreId
+                });
                 const bookmarkAudioRef = loreId
                     ? ((loreMeta && loreMeta.audio) || (loreData && loreData.audio ? loreData.audio[loreId] : '') || `assets/lore${loreId}.mp3`)
                     : LEVEL.audioUrl;
@@ -7404,9 +7424,12 @@
                                         : null;
                                     const bookmarkContentKey = loreId ? `lore${loreId}` : MAIN_CONTENT_KEY;
                                     const bookmarkChapter = loreId ? `lore${loreId}` : CURRENT_CHAPTER;
-                                    const bookmarkChapterTitle = loreId
-                                        ? (loreMeta && loreMeta.title ? `Lore ${loreId}: ${loreMeta.title}` : `Lore ${loreId}`)
-                                        : CURRENT_CHAPTER_TITLE;
+                                    const bookmarkChapterTitle = resolveBookmarkDisplayChapter({
+                                        page: CURRENT_PAGE,
+                                        contentKey: bookmarkContentKey,
+                                        chapter: bookmarkChapter,
+                                        loreId: loreId
+                                    });
                                     const bookmarkAudioRef = loreId
                                         ? ((loreMeta && loreMeta.audio) || loreData.audio[loreId] || `assets/lore${loreId}.mp3`)
                                         : LEVEL.audioUrl;
@@ -7478,17 +7501,37 @@
                                 }
                             }, 4000);
                         };
+                        div._showBookmarkButton = showBookmarkButton;
 
+                        let _bmLastDesktopTriggerAt = 0;
+                        const triggerDesktopBookmark = (event) => {
+                            if (!isDesktopPointer()) return;
+                            const point = getPointerPoint(event);
+                            if (!point) return;
+                            const now = performance.now();
+                            if (now - _bmLastDesktopTriggerAt < 140) {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return;
+                            }
+                            _bmLastDesktopTriggerAt = now;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            cancelLongPress();
+                            showBookmarkButton({ clientX: point.clientX, clientY: point.clientY });
+                        };
                         div.addEventListener('mousedown', (e) => {
+                            if (isDesktopPointer()) return;
                             if (e.button !== 0) return;
                             startLongPress(e);
                         });
+                        div.addEventListener('pointerup', (e) => {
+                            if (!isDesktopPointer() || e.button !== 2) return;
+                            triggerDesktopBookmark(e);
+                        });
                         div.addEventListener('contextmenu', (e) => {
                             if (!isDesktopPointer()) return;
-                            e.preventDefault();
-                            e.stopPropagation();
-                            cancelLongPress();
-                            showBookmarkButton({ clientX: e.clientX, clientY: e.clientY });
+                            triggerDesktopBookmark(e);
                         });
                         div.addEventListener('touchstart', startLongPress, { passive: true });
                         div.addEventListener('mouseup', cancelLongPress);
@@ -7847,6 +7890,7 @@
 
         const handleDown = (e) => {
             if (!isReadingMode || isBlaetternLayoutActive()) return;
+            if (typeof e.button === 'number' && e.button !== 0) return;
             cancelMomentum();
             isDown = true;
             subtitleContainer.dataset.isDragging = 'false';
@@ -7942,6 +7986,18 @@
         subtitleContainer.addEventListener('pointermove', onBlaetternPointerMove);
         subtitleContainer.addEventListener('pointerup', onBlaetternPointerEnd);
         subtitleContainer.addEventListener('pointercancel', onBlaetternPointerEnd);
+        subtitleContainer.addEventListener('contextmenu', (e) => {
+            if (!isReadingMode || isBlaetternLayoutActive()) return;
+            if (!(window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches)) return;
+            if (e.target && typeof e.target.closest === 'function' && e.target.closest('.bookmark-btn')) return;
+            const subtitleLine = e.target && typeof e.target.closest === 'function'
+                ? e.target.closest('.subtitle-line')
+                : null;
+            if (!subtitleLine || typeof subtitleLine._showBookmarkButton !== 'function') return;
+            e.preventDefault();
+            e.stopPropagation();
+            subtitleLine._showBookmarkButton({ clientX: e.clientX, clientY: e.clientY });
+        });
 
         // 10. Scrollbar Auto-Hide Logic
         let scrollTimeout;

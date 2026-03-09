@@ -1845,6 +1845,10 @@
     .loading-tutorial-progress-bar {
         animation: loadingTutorialProgressSweep 3.2s linear infinite !important;
     }
+
+    .loading-tutorial-demo--hold .loading-tutorial-hold-ring {
+        animation: loadingTutorialHoldRingSoft 3s ease-in-out infinite !important;
+    }
 }
 
 
