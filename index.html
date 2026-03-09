@@ -1757,6 +1757,35 @@
         // ============================================
         // ELECTRON AUTO-LOAD
         // ============================================
+        let loadingScreenHideToken = 0;
+        function hideLoadingScreenSafely(reason = 'ready') {
+            const screen = document.getElementById('loading-screen');
+            if (!screen) return;
+            const requestToken = ++loadingScreenHideToken;
+            const desktopLike = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                && Number(navigator.maxTouchPoints || 0) === 0
+                && window.innerWidth > 900;
+            if (desktopLike) {
+                const ui = document.getElementById('audioPlayerUI');
+                if (ui) {
+                    ui.style.display = 'flex';
+                    ui.style.visibility = 'visible';
+                    ui.style.opacity = '1';
+                }
+            }
+
+            const finalizeHide = () => {
+                if (requestToken !== loadingScreenHideToken) return;
+                if (!screen.isConnected) return;
+                screen.dataset.loadingHideReason = reason;
+                screen.style.display = 'none';
+            };
+
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(finalizeHide);
+            });
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("Electron Mode: Auto-Loading...");
 
@@ -1792,46 +1821,6 @@
             const loadingScreen = document.getElementById('loading-screen');
             const processingInfo = document.getElementById('processingInfo');
             const dropZone = document.getElementById('dropZone');
-            let loadingScreenHideToken = 0;
-
-            function isDesktopLoaderRevealReady() {
-                const ui = document.getElementById('audioPlayerUI');
-                if (!ui) return true;
-                const style = window.getComputedStyle(ui);
-                if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') < 0.01) {
-                    return false;
-                }
-                const rect = ui.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
-            }
-
-            function hideLoadingScreenSafely(reason = 'ready') {
-                const screen = document.getElementById('loading-screen');
-                if (!screen) return;
-                const requestToken = ++loadingScreenHideToken;
-                const desktopLike = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
-                    && Number(navigator.maxTouchPoints || 0) === 0
-                    && window.innerWidth > 900;
-                if (desktopLike) {
-                    const ui = document.getElementById('audioPlayerUI');
-                    if (ui) {
-                        ui.style.display = 'flex';
-                        ui.style.visibility = 'visible';
-                        ui.style.opacity = '1';
-                    }
-                }
-
-                const finalizeHide = () => {
-                    if (requestToken !== loadingScreenHideToken) return;
-                    if (!screen.isConnected) return;
-                    screen.dataset.loadingHideReason = reason;
-                    screen.style.display = 'none';
-                };
-
-                window.requestAnimationFrame(() => {
-                    window.requestAnimationFrame(finalizeHide);
-                });
-            }
 
             setTimeout(() => {
                 if (gameReady) return;
