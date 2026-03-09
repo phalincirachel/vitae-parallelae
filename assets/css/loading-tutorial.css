@@ -1802,3 +1802,28 @@
         animation: loadingTutorialProgressSweep 3.2s linear infinite !important;
     }
 }
+
+
+/* 2026-03 progress hotfix */
+.loading-tutorial-progress-bar {
+    inset: -1px auto -1px -46% !important;
+    width: 46% !important;
+    border-radius: 999px !important;
+    filter: blur(1.1px) !important;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.14) 16%, rgba(248, 243, 236, 0.94) 50%, rgba(255, 255, 255, 0.14) 84%, rgba(255, 255, 255, 0) 100%) !important;
+    background-size: 100% 100% !important;
+    will-change: transform;
+    animation: loadingTutorialProgressTravel 1.85s linear infinite !important;
+}
+
+@keyframes loadingTutorialProgressTravel {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(320%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-tutorial-progress-bar {
+        animation: loadingTutorialProgressTravel 2.8s linear infinite !important;
+    }
+}

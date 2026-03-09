@@ -1809,25 +1809,28 @@
                 const screen = document.getElementById('loading-screen');
                 if (!screen) return;
                 const requestToken = ++loadingScreenHideToken;
-                const startedAt = Date.now();
-
-                function attemptHide() {
-                    if (requestToken !== loadingScreenHideToken) return;
-                    if (!screen.isConnected) return;
-                    const desktopLike = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
-                        && Number(navigator.maxTouchPoints || 0) === 0
-                        && window.innerWidth > 900;
-                    const uiReady = !desktopLike || isDesktopLoaderRevealReady() || (Date.now() - startedAt) > 1800;
-                    if (!uiReady) {
-                        screen.style.display = 'flex';
-                        window.requestAnimationFrame(attemptHide);
-                        return;
+                const desktopLike = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                    && Number(navigator.maxTouchPoints || 0) === 0
+                    && window.innerWidth > 900;
+                if (desktopLike) {
+                    const ui = document.getElementById('audioPlayerUI');
+                    if (ui) {
+                        ui.style.display = 'flex';
+                        ui.style.visibility = 'visible';
+                        ui.style.opacity = '1';
                     }
-                    screen.dataset.loadingHideReason = reason;
-                    screen.style.display = 'none';
                 }
 
-                attemptHide();
+                const finalizeHide = () => {
+                    if (requestToken !== loadingScreenHideToken) return;
+                    if (!screen.isConnected) return;
+                    screen.dataset.loadingHideReason = reason;
+                    screen.style.display = 'none';
+                };
+
+                window.requestAnimationFrame(() => {
+                    window.requestAnimationFrame(finalizeHide);
+                });
             }
 
             setTimeout(() => {
