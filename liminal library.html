@@ -2644,37 +2644,32 @@
                 }
 
                 function positionBlaetternBookmarkButton(btn, lineEl, point = null, options = {}) {
-                    if (!btn || !lineEl || !subtitleContainer) return;
-                    ensureBlaetternBookmarkButtonMode(btn);
-                    const containerRect = subtitleContainer.getBoundingClientRect();
-                    const lineRect = lineEl.getBoundingClientRect();
-                    const btnW = btn.offsetWidth || 118;
-                    const btnH = btn.offsetHeight || 36;
-                    const margin = 8;
+            if (!btn || !lineEl || !subtitleContainer) return;
+            ensureBlaetternBookmarkButtonMode(btn);
+            const lineRect = lineEl.getBoundingClientRect();
+            const btnW = btn.offsetWidth || 124;
+            const btnH = btn.offsetHeight || 36;
+            const margin = 10;
+            const anchor = (point && Number.isFinite(point.clientX) && Number.isFinite(point.clientY))
+                ? { clientX: point.clientX, clientY: point.clientY }
+                : { clientX: lineRect.right, clientY: lineRect.top + (lineRect.height * 0.5) };
+            btn._bookmarkAnchorPoint = anchor;
 
-                    if (options.lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
-                        btn.style.left = `${Math.round(btn._flatLockedX)}px`;
-                        btn.style.top = `${Math.round(btn._flatLockedY)}px`;
-                        startBlaetternBookmarkMapLayerLoop(btn);
-                        return;
-                    }
+            let x = anchor.clientX + 16;
+            if (x + btnW > window.innerWidth - margin) {
+                x = anchor.clientX - btnW - 16;
+            }
+            x = Math.max(margin, Math.min(window.innerWidth - btnW - margin, x));
 
-                    let x = point && Number.isFinite(point.clientX)
-                        ? point.clientX - (btnW / 2)
-                        : lineRect.left + ((lineRect.width - btnW) / 2);
-                    let y = lineRect.top - btnH - 10;
-                    if (y < containerRect.top + margin) y = lineRect.bottom + 10;
+            let y = anchor.clientY - (btnH / 2);
+            y = Math.max(margin, Math.min(window.innerHeight - btnH - margin, y));
 
-                    x = Math.max(margin, Math.min(window.innerWidth - btnW - margin, x));
-                    y = Math.max(margin, Math.min(window.innerHeight - btnH - margin, y));
-                    btn._flatLockedX = Math.round(x);
-                    btn._flatLockedY = Math.round(y);
-                    btn.style.left = `${btn._flatLockedX}px`;
-                    btn.style.top = `${btn._flatLockedY}px`;
-                    startBlaetternBookmarkMapLayerLoop(btn);
-                }
+            btn.style.left = `${Math.round(x)}px`;
+            btn.style.top = `${Math.round(y)}px`;
+            startBlaetternBookmarkMapLayerLoop(btn);
+        }
 
-                function showBlaetternBookmarkButton(lineIndex, point = null) {
+        function showBlaetternBookmarkButton(lineIndex, point = null) {
                     const root = ensureBlaetternRoot();
                     const lineEl = root.querySelector(`.blaettern-page-current .blaettern-line[data-index="${lineIndex}"]`);
                     const btn = root.querySelector('.blaettern-bookmark-btn');
@@ -3361,100 +3356,21 @@
                         const BOOKMARK_SAVED_LABEL = 'Gespeichert';
                         const isDesktopPointer = () => window.matchMedia('(hover: hover) and (pointer: fine)').matches;
                         const clampBookmarkCoord = (value, min, max) => Math.max(min, Math.min(max, value));
-                        const rectOverlapArea = (x, y, width, height, rect) => {
-                            const overlapW = Math.max(0, Math.min(x + width, rect.right) - Math.max(x, rect.left));
-                            const overlapH = Math.max(0, Math.min(y + height, rect.bottom) - Math.max(y, rect.top));
-                            return overlapW * overlapH;
-                        };
-                        const isFlatBookmarkLayout = () =>
-                            subtitleContainer.classList.contains('reader-layout-flat')
-                            || subtitleContainer.classList.contains('reader-layout-timestamps');
-                        const setBookmarkButtonLabel = (btn, label) => {
-                            if (!btn) return;
-                            const labelNode = btn.querySelector('.bookmark-label');
-                            if (labelNode) labelNode.textContent = label;
-                            else btn.innerText = label;
-                        };
-                        const ensureBookmarkButtonMode = (btn, useFlatOverlay) => {
-                            if (!btn) return;
-                            if (useFlatOverlay) {
-                                if (btn.dataset.flatOverlay !== '1') {
-                                    const currentLabel = (btn.textContent || '').trim() || BOOKMARK_LABEL;
-                                    btn.dataset.flatOverlay = '1';
-                                    btn.innerHTML = '';
-                                    const labelLayer = document.createElement('span');
-                                    labelLayer.className = 'bookmark-label';
-                                    labelLayer.textContent = currentLabel;
-                                    btn.appendChild(labelLayer);
-                                } else if (!btn.querySelector('.bookmark-label')) {
-                                    btn.innerHTML = '';
-                                    const labelLayer = document.createElement('span');
-                                    labelLayer.className = 'bookmark-label';
-                                    labelLayer.textContent = BOOKMARK_LABEL;
-                                    btn.appendChild(labelLayer);
-                                }
-                                btn.classList.add('bookmark-btn-flat-overlay');
-                            } else {
-                                if (btn._flatMapRaf) {
-                                    cancelAnimationFrame(btn._flatMapRaf);
-                                    btn._flatMapRaf = 0;
-                                }
-                                btn._flatLockedX = null;
-                                btn._flatLockedY = null;
-                                btn.classList.remove('bookmark-btn-flat-overlay');
-                                if (btn.dataset.flatOverlay === '1') {
-                                    btn.dataset.flatOverlay = '0';
-                                    btn.replaceChildren(document.createTextNode(BOOKMARK_LABEL));
-                                }
+                        const BOOKMARK_SIDE_GAP_PX = 16;
+                        const BOOKMARK_VIEWPORT_MARGIN_PX = 10;
+                        const getBookmarkAnchorPoint = (btn, fallbackRect, options = {}) => {
+                            if (Number.isFinite(options.clientX) && Number.isFinite(options.clientY)) {
+                                return { clientX: options.clientX, clientY: options.clientY };
                             }
-                            setBookmarkButtonTheme(btn);
-                        };
-                        const stopFlatBookmarkMapLayerLoop = (btn) => {
-                            if (!btn || !btn._flatMapRaf) return;
-                            cancelAnimationFrame(btn._flatMapRaf);
-                            btn._flatMapRaf = 0;
-                        };
-                        const startFlatBookmarkMapLayerLoop = (btn) => {
-                            stopFlatBookmarkMapLayerLoop(btn);
-                            setBookmarkButtonTheme(btn);
-                        };
-                        const collectLineTextRects = (lineEl, containerRect) => {
-                            const rects = [];
-                            if (!lineEl) return rects;
-                            const walker = document.createTreeWalker(
-                                lineEl,
-                                NodeFilter.SHOW_TEXT,
-                                {
-                                    acceptNode(node) {
-                                        return (node && (node.textContent || '').trim())
-                                            ? NodeFilter.FILTER_ACCEPT
-                                            : NodeFilter.FILTER_REJECT;
-                                    }
-                                }
-                            );
-                            while (walker.nextNode()) {
-                                const node = walker.currentNode;
-                                const range = document.createRange();
-                                range.selectNodeContents(node);
-                                for (const rect of range.getClientRects()) {
-                                    if (rect.width <= 0 || rect.height <= 0) continue;
-                                    if (rect.bottom < containerRect.top || rect.top > containerRect.bottom) continue;
-                                    rects.push(rect);
-                                }
+                            if (btn && btn._bookmarkAnchorPoint
+                                && Number.isFinite(btn._bookmarkAnchorPoint.clientX)
+                                && Number.isFinite(btn._bookmarkAnchorPoint.clientY)) {
+                                return btn._bookmarkAnchorPoint;
                             }
-                            return rects;
-                        };
-                        const collectSubtitleTextRects = () => {
-                            const rects = [];
-                            const containerRect = subtitleContainer.getBoundingClientRect();
-                            subtitleContainer.querySelectorAll('.subtitle-line').forEach((lineEl) => {
-                                rects.push(...collectLineTextRects(lineEl, containerRect));
-                            });
-                            if (subtitleRecenterBtn && subtitleRecenterBtn.offsetParent !== null) {
-                                const recenterRect = subtitleRecenterBtn.getBoundingClientRect();
-                                if (recenterRect.width > 0 && recenterRect.height > 0) rects.push(recenterRect);
-                            }
-                            return { rects, containerRect };
+                            return {
+                                clientX: fallbackRect.left + Math.min(Math.max(fallbackRect.width - 12, 12), 28),
+                                clientY: fallbackRect.top + (fallbackRect.height * 0.5)
+                            };
                         };
                         const getPointerPoint = (event) => {
                             if (!event) return null;
@@ -3533,60 +3449,39 @@
                             const useFlatOverlay = isFlatBookmarkLayout();
                             ensureBookmarkButtonMode(btn, useFlatOverlay);
                             const lineRect = div.getBoundingClientRect();
-                            const containerRect = subtitleContainer.getBoundingClientRect();
-                            if (!lineRect.width || !lineRect.height || !containerRect.width || !containerRect.height) return;
-                            const btnWidth = btn.offsetWidth || 0;
-                            const btnHeight = btn.offsetHeight || 0;
+                            if (!lineRect.width || !lineRect.height) return;
+                            const btnWidth = btn.offsetWidth || 124;
+                            const btnHeight = btn.offsetHeight || 36;
+                            const anchor = getBookmarkAnchorPoint(btn, lineRect, options);
+                            btn._bookmarkAnchorPoint = { clientX: anchor.clientX, clientY: anchor.clientY };
+
+                            let x = anchor.clientX + BOOKMARK_SIDE_GAP_PX;
+                            if (x + btnWidth > window.innerWidth - BOOKMARK_VIEWPORT_MARGIN_PX) {
+                                x = anchor.clientX - btnWidth - BOOKMARK_SIDE_GAP_PX;
+                            }
+                            x = clampBookmarkCoord(
+                                x,
+                                BOOKMARK_VIEWPORT_MARGIN_PX,
+                                Math.max(BOOKMARK_VIEWPORT_MARGIN_PX, window.innerWidth - btnWidth - BOOKMARK_VIEWPORT_MARGIN_PX)
+                            );
+
+                            let y = anchor.clientY - (btnHeight / 2);
+                            y = clampBookmarkCoord(
+                                y,
+                                BOOKMARK_VIEWPORT_MARGIN_PX,
+                                Math.max(BOOKMARK_VIEWPORT_MARGIN_PX, window.innerHeight - btnHeight - BOOKMARK_VIEWPORT_MARGIN_PX)
+                            );
 
                             if (useFlatOverlay) {
-                                const lockToExisting = !!options.lockToExisting;
-                                if (lockToExisting && Number.isFinite(btn._flatLockedX) && Number.isFinite(btn._flatLockedY)) {
-                                    btn.style.left = `${Math.round(btn._flatLockedX)}px`;
-                                    btn.style.top = `${Math.round(btn._flatLockedY)}px`;
-                                    startFlatBookmarkMapLayerLoop(btn);
-                                    return;
-                                }
-                                const lineTextRects = collectLineTextRects(div, containerRect);
-                                const anchorRect = lineTextRects.length > 0 ? lineTextRects[0] : lineRect;
-                                const edgeMargin = 6;
-                                const x = clampBookmarkCoord(anchorRect.left, edgeMargin, Math.max(edgeMargin, window.innerWidth - btnWidth - edgeMargin));
-                                const y = clampBookmarkCoord(anchorRect.top - btnHeight - 6, edgeMargin, Math.max(edgeMargin, window.innerHeight - btnHeight - edgeMargin));
-                                btn._flatLockedX = Math.round(x);
-                                btn._flatLockedY = Math.round(y);
-                                btn.style.left = `${btn._flatLockedX}px`;
-                                btn.style.top = `${btn._flatLockedY}px`;
+                                btn.style.left = `${Math.round(x)}px`;
+                                btn.style.top = `${Math.round(y)}px`;
                                 startFlatBookmarkMapLayerLoop(btn);
                                 return;
                             }
 
                             stopFlatBookmarkMapLayerLoop(btn);
-                            btn._flatLockedX = null;
-                            btn._flatLockedY = null;
-
-                            // -- NEW POSITIONING LOGIC --
-                            if (options.clientX !== undefined && options.clientY !== undefined && options.clientX !== null && options.clientY !== null) {
-                                let x = options.clientX - (btnWidth / 2);
-                                let y = options.clientY - 200; // 200px above
-
-                                // Fallback if too close to top (<150px space) or offscreen
-                                if (y < 150) {
-                                    y = options.clientY + 200; // 200px below
-                                }
-
-                                // Prevent horizontal clipping
-                                const margin = 8;
-                                x = clampBookmarkCoord(x, containerRect.left + margin, containerRect.right - btnWidth - margin);
-
-                                btn.style.left = `${Math.round(x - lineRect.left)}px`;
-                                btn.style.top = `${Math.round(y - lineRect.top)}px`;
-                                return;
-                            }
-
-                            // Fallback if no coordinates (shouldn't happen with updated showBookmarkButton)
-                            const margin = 8;
-                            const anchorRect = lineRect;
-                            btn.style.left = `${Math.round(anchorRect.right + margin - lineRect.left)}px`;
-                            btn.style.top = `${Math.round(anchorRect.top - lineRect.top)}px`;
+                            btn.style.left = `${Math.round(x - lineRect.left)}px`;
+                            btn.style.top = `${Math.round(y - lineRect.top)}px`;
                         };
 
                         const showBookmarkButton = (options = {}) => {
@@ -3638,7 +3533,7 @@
                                         if (added) {
                                             btn.classList.add('saved');
                                             setBookmarkButtonLabel(btn, BOOKMARK_SAVED_LABEL);
-                                            positionBookmarkButton(btn, { lockToExisting: true, clientX: options.clientX, clientY: options.clientY });
+                                            positionBookmarkButton(btn);
                                             setTimeout(() => {
                                                 btn.classList.remove('visible', 'saved');
                                                 stopFlatBookmarkMapLayerLoop(btn);
@@ -3666,7 +3561,7 @@
                                 }
                             });
                             btn.classList.add('visible');
-                            positionBookmarkButton(btn, { lockToExisting: false, clientX: options.clientX, clientY: options.clientY });
+                            positionBookmarkButton(btn, { clientX: options.clientX, clientY: options.clientY });
                             // Auto-hide after 4 seconds
                             setTimeout(() => {
                                 if (!btn.classList.contains('saved')) {
