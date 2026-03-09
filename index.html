@@ -1447,8 +1447,9 @@
         const GAME_CAMERA_ZOOM_MIN_FLOOR = 0.85;
         const GAME_CAMERA_ZOOM_MAX = 2.25;
         const GAME_CAMERA_DRAG_THRESHOLD_PX = 10;
-        const GAME_CAMERA_PAN_RETURN_SPEED = 7.8;
-        const GAME_CAMERA_ACTIVE_LERP = 12.5;
+        const GAME_CAMERA_PAN_RETURN_SPEED = 8.4;
+        const GAME_CAMERA_ACTIVE_LERP = 18.0;
+        const GAME_CAMERA_ZOOM_ACTIVE_LERP = 22.0;
 
         const gameCanvasGesture = {
             pointers: new Map(),
@@ -1461,9 +1462,8 @@
             pinchActive: false,
             pinchStartDistance: 0,
             pinchStartZoom: 1,
-            pinchAnchorWorldX: 0,
-            pinchAnchorWorldY: 0,
-            suppressTap: false
+            suppressTap: false,
+            mode: "idle"
         };
 
         function getCameraZoomClamped(nextZoom) {
@@ -1523,22 +1523,22 @@
 
         function getGameCameraPanLimitX() {
             const mapSlack = Math.max(0, mapW - getCameraViewWidth());
-            return Math.max(0, Math.min(96, Math.min(getCameraViewWidth() * 0.24, mapSlack * 0.5)));
+            return Math.max(0, Math.min(192, Math.min(getCameraViewWidth() * 0.48, mapSlack * 0.82)));
         }
 
         function getGameCameraPanLimitY() {
             const mapSlack = Math.max(0, mapH - getCameraViewHeight());
-            return Math.max(0, Math.min(72, Math.min(getCameraViewHeight() * 0.2, mapSlack * 0.45)));
+            return Math.max(0, Math.min(144, Math.min(getCameraViewHeight() * 0.4, mapSlack * 0.78)));
         }
 
         function applyGameCameraRubberBand(nextOffset, limit) {
             if (!Number.isFinite(nextOffset) || limit <= 0) return 0;
             const sign = nextOffset < 0 ? -1 : 1;
             const distance = Math.abs(nextOffset);
-            if (distance <= limit) return nextOffset;
-            const overflow = distance - limit;
-            const stretched = limit + (overflow * 0.24);
-            return sign * Math.min(limit * 1.45, stretched);
+            const maxInput = limit * 1.85;
+            const t = Math.min(1, distance / Math.max(1, maxInput));
+            const eased = 1 - Math.pow(1 - t, 1.65);
+            return sign * (limit * eased);
         }
 
         function setGameCameraPanFromDrag(deltaX, deltaY, baseOffsetX = 0, baseOffsetY = 0) {
@@ -1548,7 +1548,7 @@
         }
 
         function isGameCanvasGestureActive() {
-            return gameCanvasGesture.pointers.size > 0 || gameCanvasGesture.dragMoved || gameCanvasGesture.pinchActive;
+            return gameCanvasGesture.mode === "drag" || gameCanvasGesture.mode === "pinch";
         }
 
         function resetGameCanvasGestureState() {
@@ -1561,17 +1561,15 @@
             gameCanvasGesture.dragMoved = false;
             gameCanvasGesture.pinchActive = false;
             gameCanvasGesture.pinchStartDistance = 0;
-            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
-            gameCanvasGesture.pinchAnchorWorldX = 0;
-            gameCanvasGesture.pinchAnchorWorldY = 0;
+            gameCanvasGesture.pinchStartZoom = cameraZoom;
             gameCanvasGesture.suppressTap = false;
+            gameCanvasGesture.mode = "idle";
         }
 
         function syncCanvasTouchAction() {
             if (!canvas) return;
             canvas.style.touchAction = (!isReadingMode && window.PointerEvent) ? "none" : "";
         }
-
 
         // Sprite Sheet Konfiguration
         const SPRITE = {
@@ -2680,6 +2678,7 @@
                 resetGameCanvasGestureState();
                 return;
             }
+            gameCanvasGesture.mode = "drag";
             gameCanvasGesture.primaryPointerId = pointerInfo.pointerId;
             gameCanvasGesture.dragStartCanvasX = pointerInfo.canvasX;
             gameCanvasGesture.dragStartCanvasY = pointerInfo.canvasY;
@@ -2688,9 +2687,7 @@
             gameCanvasGesture.dragMoved = false;
             gameCanvasGesture.pinchActive = false;
             gameCanvasGesture.pinchStartDistance = 0;
-            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
-            gameCanvasGesture.pinchAnchorWorldX = 0;
-            gameCanvasGesture.pinchAnchorWorldY = 0;
+            gameCanvasGesture.pinchStartZoom = cameraZoom;
             gameCanvasGesture.suppressTap = !!options.suppressTap;
         }
 
@@ -2698,55 +2695,35 @@
             const pointers = Array.from(gameCanvasGesture.pointers.values());
             if (pointers.length < 2) return;
             const [first, second] = pointers;
-            const midX = (first.clientX + second.clientX) * 0.5;
-            const midY = (first.clientY + second.clientY) * 0.5;
-            const anchor = screenPointToWorld(midX, midY);
-            if (!anchor) return;
+            gameCanvasGesture.mode = "pinch";
+            gameCanvasGesture.primaryPointerId = null;
+            gameCanvasGesture.dragMoved = false;
             gameCanvasGesture.pinchActive = true;
-            gameCanvasGesture.dragMoved = true;
             gameCanvasGesture.suppressTap = true;
             gameCanvasGesture.pinchStartDistance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
-            gameCanvasGesture.pinchStartZoom = cameraZoomTarget;
-            gameCanvasGesture.pinchAnchorWorldX = anchor.worldX;
-            gameCanvasGesture.pinchAnchorWorldY = anchor.worldY;
+            gameCanvasGesture.pinchStartZoom = cameraZoom;
+            cameraZoomTarget = cameraZoom;
         }
 
         function updateGameCanvasPinchGesture() {
+            if (gameCanvasGesture.mode !== "pinch") return;
             const pointers = Array.from(gameCanvasGesture.pointers.values());
             if (pointers.length < 2) return;
             const [first, second] = pointers;
             const distance = Math.max(1, Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY));
-            const midX = (first.clientX + second.clientX) * 0.5;
-            const midY = (first.clientY + second.clientY) * 0.5;
-            const canvasPoint = getCanvasPointFromClient(midX, midY);
-            if (!canvasPoint) return;
-
             cameraZoomTarget = getCameraZoomClamped(gameCanvasGesture.pinchStartZoom * (distance / Math.max(1, gameCanvasGesture.pinchStartDistance)));
-            cameraZoom = cameraZoomTarget;
-
-            const followX = getCameraFollowTargetX();
-            const followY = getCameraFollowTargetY();
-            const desiredCamX = gameCanvasGesture.pinchAnchorWorldX - (canvasPoint.canvasX / Math.max(0.0001, cameraZoom));
-            const desiredCamY = gameCanvasGesture.pinchAnchorWorldY - (canvasPoint.canvasY / Math.max(0.0001, cameraZoom));
-
-            cameraPanOffsetX = applyGameCameraRubberBand(desiredCamX - followX, getGameCameraPanLimitX());
-            cameraPanOffsetY = applyGameCameraRubberBand(desiredCamY - followY, getGameCameraPanLimitY());
-            camX = clampCameraX(followX + cameraPanOffsetX);
-            camY = clampCameraY(followY + cameraPanOffsetY);
-            targetCamX = camX;
-            targetCamY = camY;
         }
 
         if (window.PointerEvent) {
-            canvas.addEventListener('pointerdown', (event) => {
+            canvas.addEventListener("pointerdown", (event) => {
                 if (!gameReady || isReadingMode) return;
-                if (event.pointerType === 'mouse' && event.button !== 0) return;
-                if (event.target !== canvas && event.target.tagName !== 'CANVAS') return;
+                if (event.pointerType === "mouse" && event.button !== 0) return;
+                if (event.target !== canvas && event.target.tagName !== "CANVAS") return;
                 const point = getCanvasPointFromClient(event.clientX, event.clientY);
                 if (!point) return;
 
                 event.preventDefault();
-                if (typeof canvas.setPointerCapture === 'function') {
+                if (typeof canvas.setPointerCapture === "function") {
                     try {
                         canvas.setPointerCapture(event.pointerId);
                     } catch (_) {
@@ -2762,14 +2739,25 @@
                     canvasY: point.canvasY
                 });
 
-                if (gameCanvasGesture.pointers.size === 1) {
+                if (gameCanvasGesture.mode === "blocked") return;
+
+                if (gameCanvasGesture.pointers.size === 1 && gameCanvasGesture.mode === "idle") {
                     beginGameCanvasSinglePointerGesture(gameCanvasGesture.pointers.get(event.pointerId));
-                } else if (gameCanvasGesture.pointers.size >= 2) {
+                    return;
+                }
+
+                if (gameCanvasGesture.pointers.size >= 2) {
+                    if (gameCanvasGesture.mode === "drag" && gameCanvasGesture.dragMoved) {
+                        gameCanvasGesture.mode = "blocked";
+                        gameCanvasGesture.primaryPointerId = null;
+                        gameCanvasGesture.suppressTap = true;
+                        return;
+                    }
                     beginGameCanvasPinchGesture();
                 }
             });
 
-            canvas.addEventListener('pointermove', (event) => {
+            canvas.addEventListener("pointermove", (event) => {
                 const pointer = gameCanvasGesture.pointers.get(event.pointerId);
                 if (!pointer) return;
                 const point = getCanvasPointFromClient(event.clientX, event.clientY);
@@ -2783,10 +2771,12 @@
                 if (!gameReady || isReadingMode) return;
                 event.preventDefault();
 
-                if (gameCanvasGesture.pinchActive && gameCanvasGesture.pointers.size >= 2) {
-                    updateGameCanvasPinchGesture();
+                if (gameCanvasGesture.mode === "pinch") {
+                    if (gameCanvasGesture.pointers.size >= 2) updateGameCanvasPinchGesture();
                     return;
                 }
+
+                if (gameCanvasGesture.mode !== "drag") return;
                 if (event.pointerId !== gameCanvasGesture.primaryPointerId) return;
 
                 const deltaX = pointer.canvasX - gameCanvasGesture.dragStartCanvasX;
@@ -2798,12 +2788,6 @@
                 if (!gameCanvasGesture.dragMoved) return;
 
                 setGameCameraPanFromDrag(deltaX, deltaY, gameCanvasGesture.dragBaseOffsetX, gameCanvasGesture.dragBaseOffsetY);
-                const followX = getCameraFollowTargetX();
-                const followY = getCameraFollowTargetY();
-                camX = clampCameraX(followX + cameraPanOffsetX);
-                camY = clampCameraY(followY + cameraPanOffsetY);
-                targetCamX = camX;
-                targetCamY = camY;
             });
 
             const endGameCanvasPointerGesture = (event, cancelled = false) => {
@@ -2812,11 +2796,11 @@
 
                 const hadSinglePointer = gameCanvasGesture.pointers.size === 1;
                 const wasPrimary = event.pointerId === gameCanvasGesture.primaryPointerId;
-                const wasPinchActive = gameCanvasGesture.pinchActive;
+                const gestureMode = gameCanvasGesture.mode;
                 const wasDragGesture = gameCanvasGesture.dragMoved;
                 const suppressTap = gameCanvasGesture.suppressTap;
 
-                if (typeof canvas.releasePointerCapture === 'function') {
+                if (typeof canvas.releasePointerCapture === "function") {
                     try {
                         canvas.releasePointerCapture(event.pointerId);
                     } catch (_) {
@@ -2826,40 +2810,50 @@
 
                 gameCanvasGesture.pointers.delete(event.pointerId);
 
-                if (!cancelled && hadSinglePointer && wasPrimary && !wasPinchActive && !wasDragGesture && !suppressTap) {
+                if (!cancelled && hadSinglePointer && gestureMode === "drag" && wasPrimary && !wasDragGesture && !suppressTap) {
                     handleClickMove(pointer.clientX, pointer.clientY);
                 }
 
-                if (gameCanvasGesture.pointers.size >= 2) {
-                    beginGameCanvasPinchGesture();
+                if (gameCanvasGesture.pointers.size === 0) {
+                    resetGameCanvasGestureState();
                     return;
                 }
 
-                if (gameCanvasGesture.pointers.size === 1) {
-                    beginGameCanvasSinglePointerGesture(Array.from(gameCanvasGesture.pointers.values())[0], { suppressTap: true });
+                if (gestureMode === "pinch") {
+                    if (gameCanvasGesture.pointers.size >= 2) {
+                        beginGameCanvasPinchGesture();
+                        return;
+                    }
+                    gameCanvasGesture.mode = "blocked";
+                    gameCanvasGesture.primaryPointerId = null;
+                    gameCanvasGesture.pinchActive = false;
+                    gameCanvasGesture.suppressTap = true;
                     return;
                 }
 
-                resetGameCanvasGestureState();
+                gameCanvasGesture.mode = "blocked";
+                gameCanvasGesture.primaryPointerId = null;
+                gameCanvasGesture.dragMoved = false;
+                gameCanvasGesture.suppressTap = true;
             };
 
-            canvas.addEventListener('pointerup', (event) => {
+            canvas.addEventListener("pointerup", (event) => {
                 endGameCanvasPointerGesture(event, false);
             });
-            canvas.addEventListener('pointercancel', (event) => {
+            canvas.addEventListener("pointercancel", (event) => {
                 endGameCanvasPointerGesture(event, true);
             });
         } else {
             let suppressCanvasClickUntil = 0;
 
-            canvas.addEventListener('click', e => {
-                if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
+            canvas.addEventListener("click", e => {
+                if (e.target !== canvas && e.target.tagName !== "CANVAS") return;
                 if (performance.now() < suppressCanvasClickUntil) return;
                 handleClickMove(e.clientX, e.clientY);
             });
 
-            canvas.addEventListener('touchstart', e => {
-                if (e.target !== canvas && e.target.tagName !== 'CANVAS') return;
+            canvas.addEventListener("touchstart", e => {
+                if (e.target !== canvas && e.target.tagName !== "CANVAS") return;
                 e.preventDefault();
                 suppressCanvasClickUntil = performance.now() + 420;
                 if (e.touches.length > 0) {
@@ -3768,13 +3762,17 @@
 
             // Smooth Camera (Time-based)
             cameraZoomTarget = getCameraZoomClamped(cameraZoomTarget);
-            cameraZoom += (cameraZoomTarget - cameraZoom) * Math.min(1, 9.5 * dt);
+            const zoomStep = Math.min(1, ((gameCanvasGesture.mode === "pinch") ? GAME_CAMERA_ZOOM_ACTIVE_LERP : 9.5) * dt);
+            cameraZoom += (cameraZoomTarget - cameraZoom) * zoomStep;
 
             const followCamX = getCameraFollowTargetX();
             const followCamY = getCameraFollowTargetY();
 
-            if (!isGameCanvasGestureActive()) {
-                const spring = Math.min(1, GAME_CAMERA_PAN_RETURN_SPEED * dt);
+            if (gameCanvasGesture.mode !== "drag") {
+                const springStrength = (gameCanvasGesture.mode === "pinch")
+                    ? GAME_CAMERA_PAN_RETURN_SPEED * 1.25
+                    : GAME_CAMERA_PAN_RETURN_SPEED;
+                const spring = Math.min(1, springStrength * dt);
                 cameraPanOffsetX += (0 - cameraPanOffsetX) * spring;
                 cameraPanOffsetY += (0 - cameraPanOffsetY) * spring;
                 if (Math.abs(cameraPanOffsetX) < 0.01) cameraPanOffsetX = 0;
@@ -3789,7 +3787,6 @@
             targetCamY = desiredCamY;
             camX += (desiredCamX - camX) * cameraStep;
             camY += (desiredCamY - camY) * cameraStep;
-
             // Update Particles
             nearbyLights = [];
             for (const p of particles) p.update(dt); // Ensure particle update accepts dt (or add it)
