@@ -796,10 +796,12 @@
         const demo = makeDemo();
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
+        const focus = createElement('div', 'loading-tutorial-bookmark-focus');
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Edna, die Zeit...'));
+        focus.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Edna, die Zeit...'));
+        focus.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
+        line.appendChild(focus);
         demo.appendChild(line);
-        demo.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
         const pill = createElement('div', 'loading-tutorial-bookmark-pill');
         pill.appendChild(createElement('span', 'loading-tutorial-bookmark-pill-label loading-tutorial-bookmark-pill-label--bookmark', 'Lesezeichen'));
         pill.appendChild(createElement('span', 'loading-tutorial-bookmark-pill-label loading-tutorial-bookmark-pill-label--saved', 'Gespeichert'));

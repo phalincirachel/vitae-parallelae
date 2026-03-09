@@ -1792,6 +1792,43 @@
             const loadingScreen = document.getElementById('loading-screen');
             const processingInfo = document.getElementById('processingInfo');
             const dropZone = document.getElementById('dropZone');
+            let loadingScreenHideToken = 0;
+
+            function isDesktopLoaderRevealReady() {
+                const ui = document.getElementById('audioPlayerUI');
+                if (!ui) return true;
+                const style = window.getComputedStyle(ui);
+                if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') < 0.01) {
+                    return false;
+                }
+                const rect = ui.getBoundingClientRect();
+                return rect.width > 0 && rect.height > 0;
+            }
+
+            function hideLoadingScreenSafely(reason = 'ready') {
+                const screen = document.getElementById('loading-screen');
+                if (!screen) return;
+                const requestToken = ++loadingScreenHideToken;
+                const startedAt = Date.now();
+
+                function attemptHide() {
+                    if (requestToken !== loadingScreenHideToken) return;
+                    if (!screen.isConnected) return;
+                    const desktopLike = !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches)
+                        && Number(navigator.maxTouchPoints || 0) === 0
+                        && window.innerWidth > 900;
+                    const uiReady = !desktopLike || isDesktopLoaderRevealReady() || (Date.now() - startedAt) > 1800;
+                    if (!uiReady) {
+                        screen.style.display = 'flex';
+                        window.requestAnimationFrame(attemptHide);
+                        return;
+                    }
+                    screen.dataset.loadingHideReason = reason;
+                    screen.style.display = 'none';
+                }
+
+                attemptHide();
+            }
 
             setTimeout(() => {
                 if (gameReady) return;
@@ -3148,8 +3185,7 @@
                     if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
                     if (document.getElementById('dropZone')) document.getElementById('dropZone').classList.add('hidden');
                     // Hide Loading Screen
-                    const ls = document.getElementById('loading-screen');
-                    if (ls) ls.style.display = 'none';
+                    hideLoadingScreenSafely('map-ready');
 
                     if (spawnPixel) {
                         // FIX: Blue pixel marks FOOT position, not sprite top
@@ -3212,8 +3248,7 @@
                 collisionData = new Array(mapH).fill(null).map(() => new Array(mapW).fill(false)); // Safe init
                 gameReady = true;
                 if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
-                const lsFallback = document.getElementById('loading-screen');
-                if (lsFallback) lsFallback.style.display = 'none';
+                hideLoadingScreenSafely('map-fallback-ready');
                 startGameLoop();
             }
         }
@@ -3427,8 +3462,7 @@
             window.gameLoopRunning = true;
             lastTime = 0;
             if (gameReady) {
-                const loadingScreen = document.getElementById('loading-screen');
-                if (loadingScreen) loadingScreen.style.display = 'none';
+                hideLoadingScreenSafely('start-game-loop');
                 const processingInfoEl = document.getElementById('processingInfo');
                 if (processingInfoEl) processingInfoEl.style.display = 'none';
             }
