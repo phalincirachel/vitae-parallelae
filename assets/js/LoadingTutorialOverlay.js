@@ -595,41 +595,73 @@
         };
     }
 
-    function renderUiCloneCard(card) {
-        if (card && card.target && card.target.stage === 'archive') {
-            return renderArchivePreviewCard(card);
-        }
-
-        const stageRoot = buildStageForCard(card);
-        if (!stageRoot || !state.measureRoot) return null;
-        state.measureRoot.innerHTML = '';
-        state.measureRoot.appendChild(stageRoot);
-        const selection = resolveTargetSelection(stageRoot, card.target);
-        if (!selection || !selection.cropRect) return null;
-
-        const placement = computeHudCropPlacement(selection.cropRect);
-        const cropClassNames = [
-            'loading-tutorial-ui-crop',
-            card.mode === 'ui-clone-group' ? 'loading-tutorial-ui-crop--group' : 'loading-tutorial-ui-crop--single'
-        ];
-        const crop = createElement('div', cropClassNames.join(' '));
-        crop.style.left = `${placement.left}px`;
-        crop.style.top = `${placement.top}px`;
-        crop.style.width = `${placement.width}px`;
-        crop.style.height = `${placement.height}px`;
-
-        const visibleClone = stageRoot.cloneNode(true);
-        visibleClone.classList.add('loading-tutorial-stage-clone');
-        visibleClone.style.left = `${Math.round(-selection.cropRect.left)}px`;
-        visibleClone.style.top = `${Math.round(-selection.cropRect.top)}px`;
-        visibleClone.style.transformOrigin = 'top left';
-        visibleClone.style.transform = 'none';
-        crop.appendChild(visibleClone);
-        state.focusLayer.appendChild(crop);
-
+    function findLiveTargetNodes(targetConfig) {
+        if (!targetConfig) return null;
+        const selectors = Array.isArray(targetConfig.selectors)
+            ? targetConfig.selectors.slice()
+            : (targetConfig.selector ? [targetConfig.selector] : []);
+        const nodes = selectors
+            .map((selector) => document.querySelector(selector))
+            .filter(Boolean);
+        if (!nodes.length) return null;
+        const focusNode = targetConfig.focusSelector ? document.querySelector(targetConfig.focusSelector) : (nodes[0] || null);
         return {
-            anchorRect: mapRectToPlacement(selection.focusRect || selection.cropRect, selection.cropRect, placement),
-            cropRect: mapRectToPlacement(selection.cropRect, selection.cropRect, placement)
+            nodes,
+            focusNode
+        };
+    }
+
+    function prepareCloneForOverlay(node, card) {
+        const clone = sanitizeCloneTree(node.cloneNode(true));
+        clone.removeAttribute('style');
+        clone.hidden = false;
+        clone.removeAttribute('hidden');
+        clone.classList.remove('is-hidden');
+        clone.classList.add('loading-tutorial-overlay-clone');
+        if (card && card.id) {
+            clone.classList.add(`loading-tutorial-overlay-clone--${String(card.id).replace(/[^a-z0-9_-]+/gi, '-')}`);
+            clone.setAttribute('data-loading-tutorial-card', String(card.id));
+        }
+        clone.style.opacity = '1';
+        clone.style.visibility = 'visible';
+        clone.style.transform = 'none';
+        if (card && card.id === 'lore_progress') {
+            clone.classList.add('is-visible');
+        }
+        clone.querySelectorAll('input[type="file"]').forEach((input) => input.remove());
+        return clone;
+    }
+
+    function createCenteredFocusShell(card) {
+        const shell = createElement('div', `loading-tutorial-centered-focus loading-tutorial-centered-focus--${card.mode === 'ui-clone-single' ? 'single' : 'group'}`);
+        if (card && card.target && card.target.stage === 'archive') {
+            shell.appendChild(createElement('div', 'loading-tutorial-centered-focus-context', card.contextLabel || 'Kapitelmen\u00fc'));
+        }
+        const content = createElement('div', 'loading-tutorial-centered-focus-content');
+        shell.appendChild(content);
+        return { shell, content };
+    }
+
+    function renderUiCloneCard(card) {
+        if (!card || !card.target) return null;
+        const selection = findLiveTargetNodes(card.target);
+        if (!selection || !selection.nodes.length) return null;
+
+        const { shell, content } = createCenteredFocusShell(card);
+        const nodesToRender = card.mode === 'ui-clone-single'
+            ? [selection.focusNode || selection.nodes[0]]
+            : selection.nodes;
+
+        nodesToRender.filter(Boolean).forEach((node) => {
+            content.appendChild(prepareCloneForOverlay(node, card));
+        });
+
+        if (!content.children.length) return null;
+        state.focusLayer.appendChild(shell);
+        const rect = normalizeRect(shell.getBoundingClientRect());
+        return {
+            anchorRect: rect,
+            cropRect: rect
         };
     }
 
@@ -820,12 +852,18 @@
         const anchorMidX = anchorRect ? anchorRect.left + (anchorRect.width / 2) : (window.innerWidth / 2);
         const maxLeft = Math.max(margin, window.innerWidth - width - margin);
         const left = Math.round(clamp(anchorMidX - (width / 2), margin, maxLeft));
+        const isCloneCard = !!(card && (card.mode === 'ui-clone-single' || card.mode === 'ui-clone-group'));
         const gap = card && card.mode === 'ui-clone-single' ? 18 : 14;
         const bottomLimit = window.innerHeight - height - 86;
-        let top = anchorRect ? anchorRect.bottom + gap : margin + 20;
+        let top = isCloneCard && anchorRect
+            ? anchorRect.top - height - gap
+            : (anchorRect ? anchorRect.bottom + gap : margin + 20);
 
+        if (top < margin) {
+            top = anchorRect ? anchorRect.bottom + gap : margin + 20;
+        }
         if (top > bottomLimit) {
-            top = anchorRect ? anchorRect.top - height - gap : bottomLimit;
+            top = bottomLimit;
         }
         top = clamp(top, margin, bottomLimit);
 
@@ -909,16 +947,7 @@
 
     function positionHalo(cropRect, anchorRect, mode) {
         if (!state.haloEl) return;
-        if (mode !== 'ui-clone-single' || !anchorRect) {
-            state.haloEl.style.opacity = '0';
-            return;
-        }
-        const pad = 10;
-        state.haloEl.style.left = `${Math.round(anchorRect.left - pad)}px`;
-        state.haloEl.style.top = `${Math.round(anchorRect.top - pad)}px`;
-        state.haloEl.style.width = `${Math.round(anchorRect.width + (pad * 2))}px`;
-        state.haloEl.style.height = `${Math.round(anchorRect.height + (pad * 2))}px`;
-        state.haloEl.style.opacity = '1';
+        state.haloEl.style.opacity = '0';
     }
 
     function positionProgress(anchorRect, copyRect) {
@@ -988,9 +1017,7 @@
         const anchorRect = normalizeRect(renderResult.anchorRect);
         const copyRect = positionCopy(anchorRect, state.card);
         positionHalo(renderResult.cropRect || anchorRect, anchorRect, state.card.mode);
-        if (state.card.mode === 'ui-clone-single') {
-            drawConnector(copyRect, anchorRect);
-        } else if (state.connectorSvg) {
+        if (state.connectorSvg) {
             state.connectorSvg.style.opacity = '0';
             state.connectorPath.setAttribute('d', '');
         }

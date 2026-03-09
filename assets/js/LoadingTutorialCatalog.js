@@ -1,4 +1,4 @@
-(function initLoadingTutorialCatalog() {
+﻿(function initLoadingTutorialCatalog() {
     const cards = [
         {
             id: 'book_menu',
@@ -6,10 +6,10 @@
             devices: ['mobile', 'desktop'],
             order: 10,
             mode: 'ui-clone-single',
-            copy: 'Kapitelmenü hier öffnen.',
+            copy: 'Inhaltsverzeichnis und Einstellungen.',
             target: {
                 stage: 'hud',
-                selector: '[data-loading-source-id="bookBtn"]'
+                selector: '#bookBtn'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -20,10 +20,10 @@
             devices: ['mobile', 'desktop'],
             order: 20,
             mode: 'ui-clone-single',
-            copy: 'Modus hier wechseln.',
+            copy: 'Spielen / Lesen.',
             target: {
                 stage: 'hud',
-                selector: '[data-loading-source-id="readingModeBtn"]'
+                selector: '#readingModeBtn'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -34,24 +34,10 @@
             devices: ['mobile', 'desktop'],
             order: 30,
             mode: 'ui-clone-single',
-            copy: 'Szene dunkler schalten.',
+            copy: 'Hintergrund und Helligkeit.',
             target: {
                 stage: 'hud',
-                selector: '[data-loading-source-id="sceneDimmerToggleBtn"]'
-            },
-            measurementState: 'hud',
-            animationPreset: 'soft-pulse'
-        },
-        {
-            id: 'fullscreen',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 40,
-            mode: 'ui-clone-single',
-            copy: 'Ansicht ins Vollbild.',
-            target: {
-                stage: 'hud',
-                selector: '[data-loading-source-id="fullscreenBtn"]'
+                selector: '#sceneDimmerToggleBtn'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -60,9 +46,9 @@
             id: 'reader_layouts',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 50,
+            order: 40,
             mode: 'ui-clone-group',
-            copy: 'Texte hier umstellen.',
+            copy: 'Blättern oder Schriftrolle.',
             target: {
                 stage: 'archive',
                 selector: '[data-loading-tutorial="layout-group"]'
@@ -74,50 +60,12 @@
             animationPreset: 'soft-fade'
         },
         {
-            id: 'funde_tab',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 60,
-            mode: 'ui-clone-group',
-            copy: 'Funde hier öffnen.',
-            target: {
-                stage: 'archive',
-                selectors: ['[data-loading-tutorial="lore-tab"]', '[data-loading-preview="lore-item"]'],
-                focusSelector: '[data-loading-tutorial="lore-tab"]'
-            },
-            measurementState: 'archive-lore',
-            previewLayout: 'tab-item',
-            previewContext: 'inhalt',
-            previewTab: 'lore',
-            contextLabel: 'Kapitelmenü',
-            animationPreset: 'soft-fade'
-        },
-        {
-            id: 'bookmark_tab',
-            scenes: ['marktplatz', 'steingasse', 'liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 70,
-            mode: 'ui-clone-group',
-            copy: 'Lesezeichen hier öffnen.',
-            target: {
-                stage: 'archive',
-                selectors: ['[data-loading-tutorial="bookmark-tab"]', '[data-loading-preview="bookmark-item"]'],
-                focusSelector: '[data-loading-tutorial="bookmark-tab"]'
-            },
-            measurementState: 'archive-bookmarks',
-            previewLayout: 'tab-item',
-            previewContext: 'inhalt',
-            previewTab: 'lesezeichen',
-            contextLabel: 'Kapitelmenü',
-            animationPreset: 'soft-fade'
-        },
-        {
             id: 'volume_controls',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 80,
+            order: 50,
             mode: 'ui-clone-group',
-            copy: 'Ton getrennt regeln.',
+            copy: 'Lautstärken sind getrennt regelbar.',
             target: {
                 stage: 'archive',
                 selector: '[data-loading-tutorial="volume-group"]'
@@ -132,7 +80,7 @@
             id: 'save_load',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 90,
+            order: 60,
             mode: 'ui-clone-group',
             copy: 'Spielstand sichern, laden.',
             target: {
@@ -150,9 +98,9 @@
             id: 'bookmark_create',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 100,
+            order: 70,
             mode: 'press-hold-demo',
-            copy: 'Textstelle gedrückt halten.',
+            copy: 'Für Lesezeichen: Textstelle gedrückt halten.',
             target: null,
             measurementState: 'demo',
             animationPreset: 'hold-ring'
@@ -161,12 +109,12 @@
             id: 'lore_progress',
             scenes: ['marktplatz', 'steingasse', 'liminal_library'],
             devices: ['mobile', 'desktop'],
-            order: 110,
+            order: 80,
             mode: 'ui-clone-single',
-            copy: 'Funde hier verfolgen.',
+            copy: 'Textfunde werden hier angezeigt und gesammelt.',
             target: {
                 stage: 'hud',
-                selector: '[data-loading-source-id="loreProgressHud"]'
+                selector: '#loreProgressHud'
             },
             measurementState: 'hud',
             animationPreset: 'soft-pulse'
@@ -175,9 +123,9 @@
             id: 'index_drag_camera_mobile',
             scenes: ['marktplatz', 'steingasse'],
             devices: ['mobile'],
-            order: 120,
+            order: 90,
             mode: 'gesture-demo',
-            copy: 'Kamera durch Ziehen.',
+            copy: 'Ziehen, um Kamera zu bewegen.',
             target: null,
             measurementState: 'demo',
             animationPreset: 'drag-path'
@@ -186,56 +134,12 @@
             id: 'index_pinch_zoom_mobile',
             scenes: ['marktplatz', 'steingasse'],
             devices: ['mobile'],
-            order: 130,
+            order: 100,
             mode: 'gesture-demo',
             copy: 'Mit zwei Fingern zoomen.',
             target: null,
             measurementState: 'demo',
             animationPreset: 'pinch'
-        },
-        {
-            id: 'index_collect_lights',
-            scenes: ['marktplatz', 'steingasse'],
-            devices: ['mobile', 'desktop'],
-            order: 140,
-            mode: 'collectible-demo',
-            copy: 'Orbs schalten Funde frei.',
-            target: null,
-            measurementState: 'demo',
-            animationPreset: 'light-to-hud'
-        },
-        {
-            id: 'liminal_swipe_look_mobile',
-            scenes: ['liminal_library'],
-            devices: ['mobile'],
-            order: 120,
-            mode: 'gesture-demo',
-            copy: 'Blick durch Wischen lenken.',
-            target: null,
-            measurementState: 'demo',
-            animationPreset: 'swipe-look'
-        },
-        {
-            id: 'liminal_wasd_mouse_desktop',
-            scenes: ['liminal_library'],
-            devices: ['desktop'],
-            order: 130,
-            mode: 'gesture-demo',
-            copy: 'WASD und Maus nutzen.',
-            target: null,
-            measurementState: 'demo',
-            animationPreset: 'wasd-mouse'
-        },
-        {
-            id: 'liminal_collect_books',
-            scenes: ['liminal_library'],
-            devices: ['mobile', 'desktop'],
-            order: 140,
-            mode: 'collectible-demo',
-            copy: 'Bücher schalten Funde frei.',
-            target: null,
-            measurementState: 'demo',
-            animationPreset: 'book-to-hud'
         }
     ];
 
