@@ -6091,28 +6091,39 @@
                     startGame();
                 }
 
+                let gameRevealQueued = false;
+
+                function revealGameWhenReady() {
+                    if (gameRevealQueued) return;
+                    gameRevealQueued = true;
+
+                    const finalizeReveal = () => {
+                        const loadingScreen = document.getElementById('loading-screen');
+                        if (uiContainer) uiContainer.style.display = 'flex';
+                        refreshLoreProgressUi();
+                        if (isReadingMode && isBlaetternLayoutSelected()) {
+                            scheduleBlaetternPaginationRetry('ui-visible');
+                        }
+                        if (window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
+                            const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
+                                ? window.audioPlayer.currentSubtitleIndex
+                                : 0;
+                            window.audioPlayer.renderLines(Math.max(0, idx));
+                        }
+                        if (loadingScreen) loadingScreen.style.display = 'none';
+                    };
+
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(finalizeReveal);
+                    });
+                }
+
                 function startGame() {
                     hasStartedGame = true;
 
-                    // Hide 'Click to Start' and Loading Screens
+                    // Hide the loading label while the first stable frame is still building.
                     const loadingText = document.getElementById('loading');
                     if (loadingText) loadingText.style.display = 'none';
-
-                    const loadingScreen = document.getElementById('loading-screen');
-                    if (loadingScreen) loadingScreen.style.display = 'none';
-
-                    // Show Game UI immediately
-                    if (uiContainer) uiContainer.style.display = 'flex';
-                    refreshLoreProgressUi();
-                    if (isReadingMode && isBlaetternLayoutSelected()) {
-                        scheduleBlaetternPaginationRetry('ui-visible');
-                    }
-                    if (window.audioPlayer && typeof window.audioPlayer.renderLines === 'function') {
-                        const idx = Number.isFinite(window.audioPlayer.currentSubtitleIndex)
-                            ? window.audioPlayer.currentSubtitleIndex
-                            : 0;
-                        window.audioPlayer.renderLines(Math.max(0, idx));
-                    }
 
                     // SAFETY SYNC: Force Reading Mode State
                     if (window.audioPlayer && isReadingMode) {
@@ -6216,6 +6227,7 @@
 
                     // Start Animation Loop only after preload
                     startAnimationLoop();
+                    revealGameWhenReady();
                 }
 
                 // Global Animation State

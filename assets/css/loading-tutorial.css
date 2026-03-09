@@ -1740,8 +1740,10 @@
 .loading-tutorial-demo--hold .loading-tutorial-bookmark-text {
     position: relative;
     z-index: 2;
-    display: inline-block;
-    width: max-content;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
     max-width: 100%;
     min-width: 0;
     overflow: visible;
@@ -1750,7 +1752,20 @@
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-bookmark-text-label {
+    position: relative;
+    display: inline-block;
+    width: max-content;
+    max-width: 100%;
+    min-width: 0;
+    height: auto;
+    overflow: visible;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-text-content {
+    position: relative;
+    z-index: 2;
     display: block;
+    width: auto;
     max-width: 100%;
     min-width: 0;
     text-align: center;
@@ -1760,10 +1775,15 @@
 }
 
 .loading-tutorial-demo--hold .loading-tutorial-hold-ring {
+    z-index: 1;
+    pointer-events: none;
     left: 50%;
     top: 50%;
     width: 88px;
     height: 88px;
+    transform: translate(-50%, -50%);
+    border-color: rgba(255, 255, 255, 0.32);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 0 18px rgba(255, 255, 255, 0.1);
     animation: loadingTutorialHoldRingSoft 3s ease-in-out infinite;
 }
 
@@ -1777,6 +1797,12 @@
     padding: 0 18px;
     transform: translateX(-50%);
     animation: loadingTutorialBookmarkPillCycle 3s ease-in-out infinite;
+}
+
+@keyframes loadingTutorialHoldRingSoft {
+    0% { transform: translate(-50%, -50%) scale(0.82); opacity: 0.28; }
+    48% { transform: translate(-50%, -50%) scale(1.01); opacity: 0.92; }
+    100% { transform: translate(-50%, -50%) scale(1.14); opacity: 0.24; }
 }
 
 @keyframes loadingTutorialProgressSweep {

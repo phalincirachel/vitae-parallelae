@@ -799,8 +799,11 @@
         const focus = createElement('div', 'loading-tutorial-bookmark-focus');
         const target = createElement('div', 'loading-tutorial-bookmark-target');
         const textShell = createElement('span', 'loading-tutorial-bookmark-text');
-        textShell.appendChild(createElement('span', 'loading-tutorial-bookmark-text-label', 'Liebe Edna, die Zeit...'));
-        textShell.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
+        const textLabel = createElement('span', 'loading-tutorial-bookmark-text-label');
+        const textContent = createElement('span', 'loading-tutorial-bookmark-text-content', 'Liebe Edna, die Zeit...');
+        textLabel.appendChild(textContent);
+        textLabel.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
+        textShell.appendChild(textLabel);
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
         target.appendChild(textShell);
         focus.appendChild(target);
@@ -822,8 +825,34 @@
         return demo;
     }
 
+    function alignHoldDemoGeometry(demo) {
+        if (!demo) return;
+        const textShell = demo.querySelector('.loading-tutorial-bookmark-text');
+        const textLabel = demo.querySelector('.loading-tutorial-bookmark-text-label');
+        const textContent = demo.querySelector('.loading-tutorial-bookmark-text-content');
+        const ring = demo.querySelector('.loading-tutorial-hold-ring');
+        if (!textShell || !textLabel || !textContent || !ring) return;
+
+        const contentRect = textContent.getBoundingClientRect();
+        if (!contentRect || contentRect.width <= 0 || contentRect.height <= 0) return;
+
+        const measuredWidth = Math.ceil(contentRect.width);
+        const measuredHeight = Math.ceil(contentRect.height);
+        textShell.style.width = measuredWidth + 'px';
+        textShell.style.maxWidth = measuredWidth + 'px';
+        textLabel.style.width = measuredWidth + 'px';
+        textLabel.style.maxWidth = measuredWidth + 'px';
+        textLabel.style.height = measuredHeight + 'px';
+        textContent.style.width = measuredWidth + 'px';
+        ring.style.left = (measuredWidth / 2) + 'px';
+        ring.style.top = (measuredHeight / 2) + 'px';
+    }
+
     function appendDemoToFocus(demo) {
         state.focusLayer.appendChild(demo);
+        if (demo && demo.classList && demo.classList.contains('loading-tutorial-demo--hold')) {
+            alignHoldDemoGeometry(demo);
+        }
         const rect = normalizeRect(demo.getBoundingClientRect());
         return {
             anchorRect: rect,
