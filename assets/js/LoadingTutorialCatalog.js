@@ -20,7 +20,7 @@
             devices: ['mobile', 'desktop'],
             order: 20,
             mode: 'ui-clone-single',
-            copy: 'Spielen / Lesen.',
+            copy: 'Zwischen Spielemodus und Lesemodus wechseln',
             target: {
                 stage: 'hud',
                 selector: '#readingModeBtn'
@@ -34,7 +34,7 @@
             devices: ['mobile', 'desktop'],
             order: 30,
             mode: 'ui-clone-single',
-            copy: 'Hintergrund und Helligkeit.',
+            copy: 'Hintergrund und Helligkeit sind frei wählbar',
             target: {
                 stage: 'hud',
                 selector: '#sceneDimmerToggleBtn'
@@ -56,7 +56,7 @@
             measurementState: 'archive-settings',
             previewLayout: 'settings-group',
             previewContext: 'settings',
-            contextLabel: 'Kapitelmenü',
+            contextLabel: 'book-icon',
             animationPreset: 'soft-fade'
         },
         {
@@ -65,7 +65,7 @@
             devices: ['mobile', 'desktop'],
             order: 50,
             mode: 'ui-clone-group',
-            copy: 'Lautstärken sind getrennt regelbar.',
+            copy: 'Lautstärken sind in den Einstellungen getrennt regelbar',
             target: {
                 stage: 'archive',
                 selector: '[data-loading-tutorial="volume-group"]'
@@ -73,7 +73,7 @@
             measurementState: 'archive-settings',
             previewLayout: 'settings-group',
             previewContext: 'settings',
-            contextLabel: 'Kapitelmenü',
+            contextLabel: 'book-icon',
             animationPreset: 'soft-fade'
         },
         {
@@ -91,7 +91,7 @@
             previewLayout: 'footer',
             previewContext: 'inhalt',
             previewTab: 'kapitel',
-            contextLabel: 'Kapitelmenü',
+            contextLabel: 'book-icon',
             animationPreset: 'soft-fade'
         },
         {

@@ -635,7 +635,14 @@
     function createCenteredFocusShell(card) {
         const shell = createElement('div', `loading-tutorial-centered-focus loading-tutorial-centered-focus--${card.mode === 'ui-clone-single' ? 'single' : 'group'}`);
         if (card && card.target && card.target.stage === 'archive') {
-            shell.appendChild(createElement('div', 'loading-tutorial-centered-focus-context', card.contextLabel || 'Kapitelmen\u00fc'));
+            const context = createElement('div', 'loading-tutorial-centered-focus-context');
+            const bookButton = document.getElementById('bookBtn');
+            if (bookButton) {
+                const contextButton = prepareCloneForOverlay(bookButton, { id: 'archive_context_book' });
+                contextButton.classList.add('loading-tutorial-context-book-button');
+                context.appendChild(contextButton);
+            }
+            shell.appendChild(context);
         }
         const content = createElement('div', 'loading-tutorial-centered-focus-content');
         shell.appendChild(content);
@@ -759,10 +766,13 @@
         demo.classList.add('loading-tutorial-demo--hold');
         const line = createElement('div', 'loading-tutorial-bookmark-line');
         line.appendChild(createElement('span', 'loading-tutorial-bookmark-time', '00:34'));
-        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Textabschnitt'));
+        line.appendChild(createElement('span', 'loading-tutorial-bookmark-text', 'Liebe Eda, die Zeit...'));
         demo.appendChild(line);
         demo.appendChild(createElement('div', 'loading-tutorial-hold-ring'));
-        demo.appendChild(createElement('div', 'loading-tutorial-bookmark-pill', 'Gespeichert'));
+        const pill = createElement('div', 'loading-tutorial-bookmark-pill');
+        pill.appendChild(createElement('span', 'loading-tutorial-bookmark-pill-label loading-tutorial-bookmark-pill-label--bookmark', 'Lesezeichen'));
+        pill.appendChild(createElement('span', 'loading-tutorial-bookmark-pill-label loading-tutorial-bookmark-pill-label--saved', 'Gespeichert'));
+        demo.appendChild(pill);
         return demo;
     }
 

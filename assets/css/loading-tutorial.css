@@ -1330,3 +1330,182 @@
         gap: 10px;
     }
 }
+
+
+/* 2026-03 focused polish pass */
+.loading-tutorial-centered-focus-context {
+    align-self: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 0;
+}
+
+.loading-tutorial-context-book-button,
+.loading-tutorial-overlay-clone--book_menu {
+    min-width: 48px;
+    min-height: 48px;
+}
+
+.loading-tutorial-centered-focus .audio-btn img,
+.loading-tutorial-centered-focus .audio-btn svg {
+    display: block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.loading-tutorial-centered-focus .audio-btn img {
+    width: 24px !important;
+    height: 24px !important;
+    object-fit: contain;
+}
+
+.loading-tutorial-centered-focus .audio-btn svg {
+    width: 24px;
+    height: 24px;
+}
+
+.loading-tutorial-overlay-clone--lore_progress {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgba(14, 14, 14, 0.82);
+    border: 1px solid rgba(255, 208, 92, 0.36);
+    color: rgba(248, 244, 235, 0.94);
+}
+
+.loading-tutorial-overlay-clone--lore_progress .lore-progress-light {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 254, 245, 0.98), rgba(255, 229, 145, 0.95) 42%, rgba(255, 196, 66, 0.3) 100%);
+    box-shadow: 0 0 0 1px rgba(255, 208, 92, 0.62), 0 0 14px rgba(255, 208, 92, 0.34);
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left,
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-left {
+    left: 35%;
+    animation: loadingTutorialPinchLeftSymmetric 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-touch-dot--pinch-right {
+    left: 65%;
+    right: auto;
+    animation: loadingTutorialPinchRightSymmetric 2.2s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left,
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
+    top: 51%;
+    width: 14%;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-left {
+    left: 50%;
+    transform: translate(-100%, -50%) rotate(180deg);
+    transform-origin: right center;
+}
+
+.loading-tutorial-demo--pinch .loading-tutorial-arrow--pinch-right {
+    left: 50%;
+    right: auto;
+    transform: translate(0, -50%);
+    transform-origin: left center;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-line {
+    left: 12%;
+    right: 12%;
+    top: 36%;
+    align-items: center;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-text {
+    color: rgba(244, 241, 235, 0.94);
+    opacity: 1;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-text::before,
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-snippet::before {
+    display: none !important;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-hold-ring {
+    left: 16%;
+    top: 24%;
+    width: 96px;
+    height: 96px;
+    animation: loadingTutorialHoldRingSoft 2.5s ease-in-out infinite;
+}
+
+.loading-tutorial-demo--hold .loading-tutorial-bookmark-pill {
+    left: 50%;
+    right: auto;
+    top: 63%;
+    width: 168px;
+    min-height: 42px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 250, 242, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    animation: loadingTutorialBookmarkPillCycle 2.5s ease-in-out infinite;
+}
+
+.loading-tutorial-bookmark-pill-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.loading-tutorial-bookmark-pill-label--bookmark {
+    animation: loadingTutorialBookmarkLabelIn 2.5s ease-in-out infinite;
+}
+
+.loading-tutorial-bookmark-pill-label--saved {
+    animation: loadingTutorialBookmarkLabelSaved 2.5s ease-in-out infinite;
+}
+
+@keyframes loadingTutorialPinchLeftSymmetric {
+    0%, 100% { transform: translate(-50%, -50%) translateX(-24px); }
+    50% { transform: translate(-50%, -50%) translateX(24px); }
+}
+
+@keyframes loadingTutorialPinchRightSymmetric {
+    0%, 100% { transform: translate(-50%, -50%) translateX(24px); }
+    50% { transform: translate(-50%, -50%) translateX(-24px); }
+}
+
+@keyframes loadingTutorialHoldRingSoft {
+    0% { transform: scale(0.8); opacity: 0.16; }
+    42% { transform: scale(1.02); opacity: 0.9; }
+    74% { transform: scale(1.14); opacity: 0.22; }
+    100% { transform: scale(1.18); opacity: 0; }
+}
+
+@keyframes loadingTutorialBookmarkPillCycle {
+    0%, 100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+    26%, 76% { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes loadingTutorialBookmarkLabelIn {
+    0%, 14%, 56%, 100% { opacity: 0; }
+    28%, 46% { opacity: 1; }
+}
+
+@keyframes loadingTutorialBookmarkLabelSaved {
+    0%, 56% { opacity: 0; }
+    70%, 86% { opacity: 1; }
+    100% { opacity: 0; }
+}
