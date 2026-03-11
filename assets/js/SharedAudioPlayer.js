@@ -392,6 +392,12 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                     div.addEventListener('click', async (event) => {
                         if (this.canSeek && !this.canSeek()) return;
                         if (this.container.dataset.wasDragging === 'true') return;
+                        if (
+                            event &&
+                            event.target &&
+                            typeof event.target.closest === 'function' &&
+                            event.target.closest('.subtitle-inline-link')
+                        ) return;
                         // Skip seek if bookmark button was clicked
                         if (
                             event &&

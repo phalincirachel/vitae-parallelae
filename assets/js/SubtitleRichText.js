@@ -488,15 +488,54 @@
         linkEl.setAttribute('aria-haspopup', 'dialog');
         linkEl.setAttribute('aria-label', `Info: ${lookupKey}`);
 
+        let lastActivateAt = -Infinity;
+        let lastPointerIntentAt = -Infinity;
+
+        function activatePinnedOverlay(event, options = {}) {
+            if (event) {
+                event.preventDefault();
+                event.stopPropagation();
+            }
+
+            const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
+            const minIntervalMs = Math.max(0, Number(options.minIntervalMs) || 0);
+            if ((now - lastActivateAt) < minIntervalMs) return;
+            lastActivateAt = now;
+
+            if (state.isDesktopPointer()) {
+                const alreadyPinned = isOverlayVisible() && state.activeKey === lookupKey && state.pinned;
+                if (alreadyPinned) {
+                    closeOverlay(true);
+                    return;
+                }
+                openOverlay(lookupKey, linkEl, { pinned: true });
+                return;
+            }
+
+            openOverlay(lookupKey, linkEl, { pinned: true, focusClose: true });
+        }
+
         linkEl.addEventListener('pointerdown', (event) => {
+            lastPointerIntentAt = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
             event.stopPropagation();
         });
         linkEl.addEventListener('mousedown', (event) => {
+            lastPointerIntentAt = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
             event.stopPropagation();
         });
         linkEl.addEventListener('touchstart', (event) => {
+            lastPointerIntentAt = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
             event.stopPropagation();
         }, { passive: true });
+
 
         linkEl.addEventListener('mouseenter', () => {
             if (!state.isDesktopPointer()) return;
@@ -509,6 +548,10 @@
         });
 
         linkEl.addEventListener('focus', () => {
+            const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
+                ? performance.now()
+                : Date.now();
+            if ((now - lastPointerIntentAt) < 320) return;
             openOverlay(lookupKey, linkEl, { pinned: true });
         });
 
@@ -525,20 +568,7 @@
         });
 
         linkEl.addEventListener('click', (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-
-            if (state.isDesktopPointer()) {
-                const alreadyPinned = isOverlayVisible() && state.activeKey === lookupKey && state.pinned;
-                if (alreadyPinned) {
-                    closeOverlay(true);
-                    return;
-                }
-                openOverlay(lookupKey, linkEl, { pinned: true });
-                return;
-            }
-
-            openOverlay(lookupKey, linkEl, { pinned: true, focusClose: true });
+            activatePinnedOverlay(event, { minIntervalMs: state.isDesktopPointer() ? 120 : 0 });
         });
     }
 

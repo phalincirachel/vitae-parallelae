@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport"
-        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+        content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Liminal Archive</title>
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
@@ -2807,11 +2807,28 @@
                 function onBlaetternPointerDown(event) {
                     if (!isBlaetternLayoutActive()) return;
                     if (contentSwitchInProgress) return;
+                    if (event.pointerType === 'touch' && event.isPrimary === false) {
+                        const activePointerId = blaetternSwipeState && blaetternSwipeState.pointerId;
+                        clearBlaetternLongPressTimer();
+                        blaetternSwipeState = null;
+                        if (subtitleContainer && typeof subtitleContainer.releasePointerCapture === 'function' && activePointerId !== undefined) {
+                            try {
+                                subtitleContainer.releasePointerCapture(activePointerId);
+                            } catch (_) {
+                                // no-op
+                            }
+                        }
+                        return;
+                    }
                     if (blaetternSwipeAnimating) {
                         event.preventDefault();
                         return;
                     }
                     if (event.button !== undefined && event.button !== 0) return;
+                    if (event.target && typeof event.target.closest === 'function' && event.target.closest('.subtitle-inline-link')) {
+                        bumpBlaetternControlsAutoHide('blaettern-info-link');
+                        return;
+                    }
                     if (event.target && typeof event.target.closest === 'function' && event.target.closest('.blaettern-bookmark-btn')) {
                         bumpBlaetternControlsAutoHide('blaettern-bookmark-touch');
                         return;
@@ -2938,6 +2955,28 @@
                         handleBlaetternTimestampTap(localState.lineIndex);
                         event.preventDefault();
                     }
+                }
+
+                function isReaderKeyboardEditingTarget(target) {
+                    if (!(target instanceof HTMLElement)) return false;
+                    const tagName = target.tagName;
+                    return tagName === 'INPUT'
+                        || tagName === 'TEXTAREA'
+                        || tagName === 'SELECT'
+                        || target.isContentEditable;
+                }
+
+                function turnBlaetternPage(direction, reason = 'keyboard') {
+                    if (!isBlaetternLayoutActive()) return false;
+                    const normalizedDirection = direction > 0 ? 1 : (direction < 0 ? -1 : 0);
+                    if (!normalizedDirection || !blaetternPages.length || blaetternPages.length <= 1) return false;
+                    if (normalizedDirection > 0 && blaetternPageIndex >= blaetternPages.length - 1) return false;
+                    if (normalizedDirection < 0 && blaetternPageIndex <= 0) return false;
+                    clearBlaetternLongPressTimer();
+                    hideBlaetternBookmarkButton();
+                    finishBlaetternSwipe(normalizedDirection);
+                    bumpBlaetternControlsAutoHide(`blaettern-${reason}`);
+                    return true;
                 }
 
                 function clamp01(value) {
@@ -4147,47 +4186,69 @@
                     }
                 }
 
-                function updateReadingModeUI() {
+                let lastAppliedReadingMode = null;
+                let modeSwitchUiTimer = null;
+
+                function syncModeToggleButton() {
+                    if (!modeToggleBtn) return;
+                    const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
+                    modeToggleBtn.title = nextModeLabel;
+                    modeToggleBtn.setAttribute('aria-label', nextModeLabel);
+                }
+
+                function pulseModeSwitchUi() {
+                    if (!uiContainer) return;
+                    uiContainer.classList.add('mode-switching');
+                    if (modeSwitchUiTimer) clearTimeout(modeSwitchUiTimer);
+                    modeSwitchUiTimer = setTimeout(() => {
+                        uiContainer.classList.remove('mode-switching');
+                    }, 150);
+                }
+
+                function updateReadingModeUI(reason = 'manual', options = {}) {
                     if (!isReadingMode && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                         isReadingMode = true;
                     }
+                    isReadingMode = !!isReadingMode;
+                    const modeChanged = lastAppliedReadingMode !== isReadingMode;
 
                     // Sync with Shared Player
                     if (window.audioPlayer) {
                         window.audioPlayer.isReadingMode = isReadingMode;
                     }
 
-                    if (isReadingMode) {
-                        uiContainer.classList.add('reading-mode');
-                        localStorage.setItem('gameboy_reading_mode', 'true');
-                        isCenteringCamera = true;
-                        queueDeferredReadingModeRender('mode-enter-reading');
-                        hideNextChapterPrompt('reading-mode-on');
-                    } else {
-                        modeSwitchDeferredReadingRenderPending = false;
-                        clearModeSwitchDeferredReadingRenderTimer();
-                        setReadingRenderPending(false);
-                        clearBlaetternPaginationRetryTimer();
-                        setSubtitleFollowLocked(false);
-                        if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {
-                            window.SubtitleRichText.closeOverlay(true);
+                    if (modeChanged || options.force) {
+                        if (isReadingMode) {
+                            uiContainer.classList.add('reading-mode');
+                            localStorage.setItem('gameboy_reading_mode', 'true');
+                            isCenteringCamera = true;
+                            queueDeferredReadingModeRender('mode-enter-reading');
+                            hideNextChapterPrompt('reading-mode-on');
+                        } else {
+                            modeSwitchDeferredReadingRenderPending = false;
+                            clearModeSwitchDeferredReadingRenderTimer();
+                            setReadingRenderPending(false);
+                            clearBlaetternPaginationRetryTimer();
+                            setSubtitleFollowLocked(false);
+                            if (window.SubtitleRichText && typeof window.SubtitleRichText.closeOverlay === 'function') {
+                                window.SubtitleRichText.closeOverlay(true);
+                            }
+                            if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
+                                window.audioPlayer.setReadingMode(false);
+                            }
+                            uiContainer.classList.remove('reading-mode');
+                            localStorage.setItem('gameboy_reading_mode', 'false');
                         }
-                        if (window.audioPlayer && typeof window.audioPlayer.setReadingMode === 'function') {
-                            window.audioPlayer.setReadingMode(false);
-                        }
-                        uiContainer.classList.remove('reading-mode');
-                        localStorage.setItem('gameboy_reading_mode', 'false');
+                        lastAppliedReadingMode = isReadingMode;
                     }
                     syncModeDimmerLevel({ force: true });
-
-                    if (modeToggleBtn) {
-                        const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
-                        modeToggleBtn.title = nextModeLabel;
-                        modeToggleBtn.setAttribute('aria-label', nextModeLabel);
-                    }
+                    syncModeToggleButton();
                     markBlaetternPaginationDirty();
-                    syncBlaetternUiState(`mode-switch:${isReadingMode ? 'reading' : 'game'}`);
-                    scheduleModeSwitchMotionSync(isReadingMode);
+                    syncBlaetternUiState(`mode-switch:${reason}`);
+                    if (modeChanged || options.force) {
+                        scheduleModeSwitchMotionSync(isReadingMode);
+                        pulseModeSwitchUi();
+                    }
                     updateRecenterButtonVisibility();
                     updateLoreProgressHud();
                 }
@@ -4262,7 +4323,7 @@
                     } else {
                         isReadingMode = !isReadingMode;
                     }
-                    updateReadingModeUI();
+                    updateReadingModeUI('ui-mode-toggle');
                     markUiInteraction(
                         isReadingMode ? 'btn:reading-mode' : 'btn:game-mode',
                         { keepCentering: isReadingMode }
@@ -4416,14 +4477,39 @@
                     }
                 }
 
+                const getReaderPointerPageY = (event) => {
+                    if (!event) return null;
+                    if (event.touches && event.touches.length > 0) return event.touches[0].pageY;
+                    if (event.changedTouches && event.changedTouches.length > 0) return event.changedTouches[0].pageY;
+                    if (typeof event.pageY === 'number') return event.pageY;
+                    return null;
+                };
+
+                const isReaderMultiTouchEvent = (event) => !!(event && event.touches && event.touches.length > 1);
+
+                const cancelReaderDragInteraction = () => {
+                    isDown = false;
+                    subtitleContainer.dataset.isDragging = 'false';
+                    subtitleContainer.style.cursor = 'auto';
+                    swipeVelocity = 0;
+                };
+
                 const handleDown = (e) => {
                     if (!isReadingMode || isBlaetternLayoutActive()) return;
                     if (typeof e.button === 'number' && e.button !== 0) return;
+                    if (isReaderMultiTouchEvent(e)) {
+                        cancelReaderDragInteraction();
+                        return;
+                    }
                     cancelMomentum();
                     isDown = true;
                     subtitleContainer.dataset.isDragging = 'false';
                     subtitleContainer.dataset.wasDragging = 'false';
-                    const pageY = e.pageY || e.touches[0].pageY;
+                    const pageY = getReaderPointerPageY(e);
+                    if (!Number.isFinite(pageY)) {
+                        cancelReaderDragInteraction();
+                        return;
+                    }
                     startY = pageY - subtitleContainer.offsetTop;
                     scrollTop = subtitleContainer.scrollTop;
                     lastMoveY = pageY;
@@ -4435,8 +4521,13 @@
                 const handleMove = (e) => {
                     if (!isReadingMode || isBlaetternLayoutActive()) return;
                     if (!isDown) return;
+                    if (isReaderMultiTouchEvent(e)) {
+                        cancelReaderDragInteraction();
+                        return;
+                    }
                     e.preventDefault();
-                    const pageY = e.pageY || e.touches[0].pageY;
+                    const pageY = getReaderPointerPageY(e);
+                    if (!Number.isFinite(pageY)) return;
                     const y = pageY - subtitleContainer.offsetTop;
                     const walk = (y - startY) * 1.0;
 
@@ -4518,7 +4609,17 @@
                     subtitleLine._showBookmarkButton({ clientX: e.clientX, clientY: e.clientY });
                 });
 
+                window.addEventListener('keydown', (event) => {
+                    if (!isReadingMode || !isBlaetternLayoutActive() || !isDesktopPointerLayout()) return;
+                    if (contentSwitchInProgress || blaetternSwipeAnimating) return;
+                    if (event.altKey || event.ctrlKey || event.metaKey) return;
+                    if (isReaderKeyboardEditingTarget(event.target)) return;
+                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
 
+                    turnBlaetternPage(event.key === 'ArrowRight' ? 1 : -1, 'keyboard');
+                    event.preventDefault();
+                    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+                }, { capture: true });
 
                 function updateIcons() {
                     const transportPaused = isPlayerTransportPaused();
@@ -4756,10 +4857,6 @@
                     }
                 }, { passive: true });
 
-                // Prevent pinch-zoom from desynchronizing viewport/camera calibration.
-                document.addEventListener('touchmove', (event) => {
-                    if (event.touches && event.touches.length > 1) event.preventDefault();
-                }, { passive: false });
 
                 // --- TEXTURES & MATERIALS ---
                 function createWoodTexture() {

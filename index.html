@@ -5969,11 +5969,28 @@
         function onBlaetternPointerDown(event) {
             if (!isBlaetternLayoutActive()) return;
             if (contentSwitchInProgress) return;
+            if (event.pointerType === 'touch' && event.isPrimary === false) {
+                const activePointerId = blaetternSwipeState && blaetternSwipeState.pointerId;
+                clearBlaetternLongPressTimer();
+                blaetternSwipeState = null;
+                if (subtitleContainer && typeof subtitleContainer.releasePointerCapture === 'function' && activePointerId !== undefined) {
+                    try {
+                        subtitleContainer.releasePointerCapture(activePointerId);
+                    } catch (_) {
+                        // no-op
+                    }
+                }
+                return;
+            }
             if (blaetternSwipeAnimating) {
                 event.preventDefault();
                 return;
             }
             if (event.button !== undefined && event.button !== 0) return;
+            if (event.target && typeof event.target.closest === 'function' && event.target.closest('.subtitle-inline-link')) {
+                bumpBlaetternControlsAutoHide('blaettern-info-link');
+                return;
+            }
             if (event.target && typeof event.target.closest === 'function' && event.target.closest('.blaettern-bookmark-btn')) {
                 bumpBlaetternControlsAutoHide('blaettern-bookmark-touch');
                 return;
@@ -6100,6 +6117,28 @@
                 handleBlaetternTimestampTap(localState.lineIndex);
                 event.preventDefault();
             }
+        }
+
+        function isReaderKeyboardEditingTarget(target) {
+            if (!(target instanceof HTMLElement)) return false;
+            const tagName = target.tagName;
+            return tagName === 'INPUT'
+                || tagName === 'TEXTAREA'
+                || tagName === 'SELECT'
+                || target.isContentEditable;
+        }
+
+        function turnBlaetternPage(direction, reason = 'keyboard') {
+            if (!isBlaetternLayoutActive()) return false;
+            const normalizedDirection = direction > 0 ? 1 : (direction < 0 ? -1 : 0);
+            if (!normalizedDirection || !blaetternPages.length || blaetternPages.length <= 1) return false;
+            if (normalizedDirection > 0 && blaetternPageIndex >= blaetternPages.length - 1) return false;
+            if (normalizedDirection < 0 && blaetternPageIndex <= 0) return false;
+            clearBlaetternLongPressTimer();
+            hideBlaetternBookmarkButton();
+            finishBlaetternSwipe(normalizedDirection);
+            bumpBlaetternControlsAutoHide(`blaettern-${reason}`);
+            return true;
         }
 
         function clamp01(value) {
@@ -7054,6 +7093,10 @@
                                 indexTrace('ui:timestamp:blocked', { reason: 'wasDragging', index: i, targetTime: track.time });
                                 return;
                             }
+                            if (e.target && typeof e.target.closest === 'function' && e.target.closest('.subtitle-inline-link')) {
+                                indexTrace('ui:timestamp:blocked', { reason: 'info-link', index: i, targetTime: track.time });
+                                return;
+                            }
                             // If a bookmark button is visible and was the click target, skip seek
                             if (e.target && typeof e.target.closest === 'function' && e.target.closest('.bookmark-btn')) {
                                 indexTrace('ui:timestamp:blocked', { reason: 'bookmark-btn', index: i, targetTime: track.time });
@@ -7729,14 +7772,39 @@
             }
         }
 
+        const getReaderPointerPageY = (event) => {
+            if (!event) return null;
+            if (event.touches && event.touches.length > 0) return event.touches[0].pageY;
+            if (event.changedTouches && event.changedTouches.length > 0) return event.changedTouches[0].pageY;
+            if (typeof event.pageY === 'number') return event.pageY;
+            return null;
+        };
+
+        const isReaderMultiTouchEvent = (event) => !!(event && event.touches && event.touches.length > 1);
+
+        const cancelReaderDragInteraction = () => {
+            isDown = false;
+            subtitleContainer.dataset.isDragging = 'false';
+            subtitleContainer.style.cursor = 'auto';
+            swipeVelocity = 0;
+        };
+
         const handleDown = (e) => {
             if (!isReadingMode || isBlaetternLayoutActive()) return;
             if (typeof e.button === 'number' && e.button !== 0) return;
+            if (isReaderMultiTouchEvent(e)) {
+                cancelReaderDragInteraction();
+                return;
+            }
             cancelMomentum();
             isDown = true;
             subtitleContainer.dataset.isDragging = 'false';
             subtitleContainer.dataset.wasDragging = 'false'; // Reset for next click check
-            const pageY = e.pageY || e.touches[0].pageY;
+            const pageY = getReaderPointerPageY(e);
+            if (!Number.isFinite(pageY)) {
+                cancelReaderDragInteraction();
+                return;
+            }
             startY = pageY - subtitleContainer.offsetTop;
             scrollTop = subtitleContainer.scrollTop;
             lastMoveY = pageY;
@@ -7749,8 +7817,13 @@
         const handleMove = (e) => {
             if (!isReadingMode || isBlaetternLayoutActive()) return;
             if (!isDown) return;
+            if (isReaderMultiTouchEvent(e)) {
+                cancelReaderDragInteraction();
+                return;
+            }
             e.preventDefault(); // Prevent text selection
-            const pageY = e.pageY || e.touches[0].pageY;
+            const pageY = getReaderPointerPageY(e);
+            if (!Number.isFinite(pageY)) return;
             const y = pageY - subtitleContainer.offsetTop;
             const walk = (y - startY) * 1.0; // Scroll speed
 
@@ -7839,6 +7912,18 @@
             e.stopPropagation();
             subtitleLine._showBookmarkButton({ clientX: e.clientX, clientY: e.clientY });
         });
+
+        window.addEventListener('keydown', (event) => {
+            if (!isReadingMode || !isBlaetternLayoutActive() || !isDesktopPointerLayout()) return;
+            if (contentSwitchInProgress || blaetternSwipeAnimating) return;
+            if (event.altKey || event.ctrlKey || event.metaKey) return;
+            if (isReaderKeyboardEditingTarget(event.target)) return;
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+
+            turnBlaetternPage(event.key === 'ArrowRight' ? 1 : -1, 'keyboard');
+            event.preventDefault();
+            if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+        }, { capture: true });
 
         // 10. Scrollbar Auto-Hide Logic
         let scrollTimeout;

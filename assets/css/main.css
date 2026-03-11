@@ -732,7 +732,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     padding-top: clamp(56px, 8vh, 110px);
     padding-bottom: 50vh;
     pointer-events: auto !important;
-    touch-action: pan-y;
+    touch-action: pan-y pinch-zoom;
     user-select: none;
 }
 
@@ -794,7 +794,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     min-height: 240px;
     mask-image: none;
     -webkit-mask-image: none;
-    touch-action: none;
+    touch-action: pinch-zoom;
     user-select: none;
 }
 
