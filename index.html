@@ -6216,31 +6216,64 @@
             };
         }
 
-        function getWheelColorAtOffset(offsetX, offsetY, radius) {
+        function mixReaderWheelRgb(startRgb, endRgb, amount) {
+            const t = clamp01(amount);
+            return {
+                r: Math.round(startRgb.r + ((endRgb.r - startRgb.r) * t)),
+                g: Math.round(startRgb.g + ((endRgb.g - startRgb.g) * t)),
+                b: Math.round(startRgb.b + ((endRgb.b - startRgb.b) * t))
+            };
+        }
+
+        function getReaderWheelRgbAtOffset(offsetX, offsetY, radius) {
             const safeRadius = Math.max(1, radius);
             const distance = Math.min(1, Math.hypot(offsetX, offsetY) / safeRadius);
             const hue = ((Math.atan2(offsetY, offsetX) * (180 / Math.PI)) + 360) % 360;
-            const saturation = 0.18 + (distance * 0.82);
-            const lightness = 0.64 - (distance * 0.24);
-            const rgb = hslToRgb(hue, saturation, lightness);
+            const hueRgb = hslToRgb(hue, 1, 0.5);
+            if (distance <= 0.5) {
+                return mixReaderWheelRgb({ r: 255, g: 255, b: 255 }, hueRgb, distance / 0.5);
+            }
+            return mixReaderWheelRgb(hueRgb, { r: 0, g: 0, b: 0 }, (distance - 0.5) / 0.5);
+        }
+
+        function getWheelColorAtOffset(offsetX, offsetY, radius) {
+            const rgb = getReaderWheelRgbAtOffset(offsetX, offsetY, radius);
             return rgbToHex(rgb.r, rgb.g, rgb.b);
         }
 
         function setReaderWheelMarkerFromHex(markerEl, wheelEl, hexColor) {
             if (!markerEl || !wheelEl) return;
-            const rgb = hexToRgb(hexColor);
-            if (!rgb) return;
-            const hsl = rgbToHsl(rgb.r, rgb.g, rgb.b);
+            const targetRgb = hexToRgb(hexColor);
+            if (!targetRgb) return;
             const size = Math.min(wheelEl.clientWidth || wheelEl.width || 0, wheelEl.clientHeight || wheelEl.height || 0);
             if (!size) return;
             const radius = size / 2;
-            const sat = clamp01((hsl.s - 0.18) / 0.82);
-            const angle = (hsl.h * Math.PI) / 180;
-            const markerRadius = sat * radius;
-            const x = radius + (Math.cos(angle) * markerRadius);
-            const y = radius + (Math.sin(angle) * markerRadius);
-            markerEl.style.left = `${x}px`;
-            markerEl.style.top = `${y}px`;
+            const sampleRadius = Math.max(1, Math.round(radius));
+            const radiusSq = radius * radius;
+            let bestScore = Number.POSITIVE_INFINITY;
+            let bestX = 0;
+            let bestY = 0;
+
+            searchLoop:
+            for (let y = -sampleRadius; y <= sampleRadius; y++) {
+                for (let x = -sampleRadius; x <= sampleRadius; x++) {
+                    const distSq = (x * x) + (y * y);
+                    if (distSq > radiusSq) continue;
+                    const rgb = getReaderWheelRgbAtOffset(x, y, radius);
+                    const dr = rgb.r - targetRgb.r;
+                    const dg = rgb.g - targetRgb.g;
+                    const db = rgb.b - targetRgb.b;
+                    const score = (dr * dr) + (dg * dg) + (db * db);
+                    if (score >= bestScore) continue;
+                    bestScore = score;
+                    bestX = x;
+                    bestY = y;
+                    if (score === 0) break searchLoop;
+                }
+            }
+
+            markerEl.style.left = `${radius + bestX}px`;
+            markerEl.style.top = `${radius + bestY}px`;
         }
 
         function drawReaderGoetheColorWheel(canvasEl) {
@@ -6266,11 +6299,7 @@
                         data[index + 3] = 0;
                         continue;
                     }
-                    const distNorm = dist / radius;
-                    const hue = ((Math.atan2(dy, dx) * (180 / Math.PI)) + 360) % 360;
-                    const saturation = 0.18 + (distNorm * 0.82);
-                    const lightness = 0.64 - (distNorm * 0.24);
-                    const rgb = hslToRgb(hue, saturation, lightness);
+                    const rgb = getReaderWheelRgbAtOffset(dx, dy, radius);
                     data[index] = rgb.r;
                     data[index + 1] = rgb.g;
                     data[index + 2] = rgb.b;
@@ -6283,11 +6312,11 @@
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy, radius - 0.5, 0, Math.PI * 2);
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.strokeStyle = 'rgba(255,255,255,0.22)';
             ctx.lineWidth = 1;
             ctx.stroke();
             ctx.beginPath();
-            ctx.arc(cx, cy, radius * 0.36, 0, Math.PI * 2);
+            ctx.arc(cx, cy, radius * 0.5, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(255,255,255,0.18)';
             ctx.lineWidth = 1;
             ctx.stroke();
@@ -8038,7 +8067,6 @@
         });
 
         // 7. Modus-Wechsel mit robuster Animation
-        let modeSwitchUiTimer = null;
         let modeSwitchLockUntil = 0;
 
         function syncModeToggleButton() {
@@ -8088,11 +8116,6 @@
             clickWalkGoal = null;
             renderSubtitleLines(Math.max(0, currentSubtitleIndex));
 
-            uiContainer.classList.add('mode-switching');
-            if (modeSwitchUiTimer) clearTimeout(modeSwitchUiTimer);
-            modeSwitchUiTimer = setTimeout(() => {
-                uiContainer.classList.remove('mode-switching');
-            }, 150);
 
             indexDebugNote(
                 'mode-switch',

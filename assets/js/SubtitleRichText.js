@@ -537,21 +537,13 @@
         }, { passive: true });
 
 
-        linkEl.addEventListener('mouseenter', () => {
-            if (!state.isDesktopPointer()) return;
-            openOverlay(lookupKey, linkEl, { pinned: false });
-        });
-
-        linkEl.addEventListener('mouseleave', () => {
-            if (!state.isDesktopPointer()) return;
-            scheduleOverlayHide();
-        });
 
         linkEl.addEventListener('focus', () => {
             const now = (typeof performance !== 'undefined' && typeof performance.now === 'function')
                 ? performance.now()
                 : Date.now();
             if ((now - lastPointerIntentAt) < 320) return;
+            if (state.isDesktopPointer()) return;
             openOverlay(lookupKey, linkEl, { pinned: true });
         });
 
