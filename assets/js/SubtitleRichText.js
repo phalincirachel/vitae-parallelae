@@ -5,20 +5,6 @@
     const OVERLAY_VISIBLE_CLASS = 'visible';
     const LINK_BOUND_ATTR = 'data-subtitle-info-bound';
     const DEFAULT_HIDE_DELAY_MS = 170;
-    const HANGING_PUNCTUATION_CLASS = 'subtitle-punctuation-hang-end';
-    const HANGING_DASH_CLASS = 'subtitle-punctuation-hang-dash';
-    const TRAILING_HANGING_PUNCTUATION_RE = /((?:[,.;:!?…]|[-\u00ad\u2010\u2011\u2012\u2013\u2014])+(?:["'»”’)\]]+)*)$/u;
-    const DASH_HANG_RE = /[-\u00ad\u2010\u2011\u2012\u2013\u2014]/u;
-    const SUPPORTS_NATIVE_HANGING_PUNCTUATION = (() => {
-        try {
-            if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return false;
-            return CSS.supports('hanging-punctuation: last')
-                || CSS.supports('hanging-punctuation: allow-end')
-                || CSS.supports('hanging-punctuation: first allow-end last');
-        } catch (_) {
-            return false;
-        }
-    })();
 
     const state = {
         container: null,
@@ -112,85 +98,6 @@
             plainText: tokens.map((token) => token.text).join(''),
             tokens
         };
-    }
-
-    function findTrailingTextTarget(node) {
-        if (!node) return null;
-        if (node.nodeType === Node.TEXT_NODE) {
-            return /\S/u.test(safeText(node.textContent)) ? node : null;
-        }
-        if (!(node instanceof HTMLElement)) return null;
-        for (let i = node.childNodes.length - 1; i >= 0; i -= 1) {
-            const candidate = findTrailingTextTarget(node.childNodes[i]);
-            if (candidate) return candidate;
-        }
-        return /\S/u.test(safeText(node.textContent)) ? node : null;
-    }
-
-    function splitTrailingHangingPunctuation(rawText) {
-        const fullText = safeText(rawText);
-        if (!fullText) return null;
-        const trimmedText = fullText.replace(/\s+$/u, '');
-        if (!trimmedText) return null;
-        const trailingWhitespace = fullText.slice(trimmedText.length);
-        const match = trimmedText.match(TRAILING_HANGING_PUNCTUATION_RE);
-        if (!match || !match[1]) return null;
-        const suffix = match[1];
-        const prefix = trimmedText.slice(0, trimmedText.length - suffix.length);
-        return { prefix, suffix, trailingWhitespace };
-    }
-
-    function replaceTrailingPunctuationInTextNode(textNode) {
-        if (!textNode || textNode.nodeType !== Node.TEXT_NODE || !textNode.parentNode) return false;
-        const parts = splitTrailingHangingPunctuation(textNode.textContent);
-        if (!parts) return false;
-
-        const fragment = document.createDocumentFragment();
-        if (parts.prefix) fragment.appendChild(document.createTextNode(parts.prefix));
-        const hangEl = document.createElement('span');
-        hangEl.className = HANGING_PUNCTUATION_CLASS;
-        if (DASH_HANG_RE.test(parts.suffix)) {
-            hangEl.classList.add(HANGING_DASH_CLASS);
-        }
-        hangEl.textContent = parts.suffix;
-        fragment.appendChild(hangEl);
-        if (parts.trailingWhitespace) {
-            fragment.appendChild(document.createTextNode(parts.trailingWhitespace));
-        }
-        textNode.parentNode.replaceChild(fragment, textNode);
-        return true;
-    }
-
-    function replaceTrailingPunctuationInElement(element) {
-        if (!(element instanceof HTMLElement)) return false;
-        const parts = splitTrailingHangingPunctuation(element.textContent);
-        if (!parts) return false;
-
-        element.textContent = '';
-        if (parts.prefix) element.appendChild(document.createTextNode(parts.prefix));
-        const hangEl = document.createElement('span');
-        hangEl.className = HANGING_PUNCTUATION_CLASS;
-        if (DASH_HANG_RE.test(parts.suffix)) {
-            hangEl.classList.add(HANGING_DASH_CLASS);
-        }
-        hangEl.textContent = parts.suffix;
-        element.appendChild(hangEl);
-        if (parts.trailingWhitespace) {
-            element.appendChild(document.createTextNode(parts.trailingWhitespace));
-        }
-        return true;
-    }
-
-    function applyTrailingPunctuationHang(lineEl) {
-        if (!(lineEl instanceof HTMLElement)) return;
-        if (SUPPORTS_NATIVE_HANGING_PUNCTUATION) return;
-        const target = findTrailingTextTarget(lineEl);
-        if (!target) return;
-        if (target.nodeType === Node.TEXT_NODE) {
-            replaceTrailingPunctuationInTextNode(target);
-            return;
-        }
-        replaceTrailingPunctuationInElement(target);
     }
 
     function resolveLibraryEntry(key) {
@@ -696,8 +603,6 @@
         if (!lineEl.childNodes.length) {
             lineEl.textContent = fallbackText;
         }
-
-        applyTrailingPunctuationHang(lineEl);
     }
 
     globalScope.SubtitleRichText = {

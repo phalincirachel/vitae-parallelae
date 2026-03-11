@@ -685,32 +685,6 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     opacity: 1;
 }
 
-.subtitle-punctuation-hang-end {
-    display: inline-block;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-punctuation-hang-end {
-    position: relative;
-    left: 0.12em;
-    margin-right: -0.12em;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-punctuation-hang-end {
-    position: relative;
-    left: 0.14em;
-    margin-right: -0.14em;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-punctuation-hang-end.subtitle-punctuation-hang-dash {
-    left: 0.16em;
-    margin-right: -0.16em;
-}
-
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-punctuation-hang-end.subtitle-punctuation-hang-dash {
-    left: 0.18em;
-    margin-right: -0.18em;
-}
-
 .subtitle-current {
     color: rgba(255, 255, 255, 0.95) !important;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
@@ -796,6 +770,10 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     padding-left: 0;
     padding-right: 0;
     margin-right: var(--timestamp-gap, var(--flat-timestamp-gap));
+    hyphens: inherit;
+    -webkit-hyphens: inherit;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
@@ -882,6 +860,10 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     margin-right: var(--timestamp-gap, 0.22em);
     padding: 0;
     text-align: inherit;
+    hyphens: inherit;
+    -webkit-hyphens: inherit;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.blaettern-line-smart {
