@@ -8,7 +8,7 @@ function getSaveFile() {
     return path.join(app.getPath('userData'), 'savegame_v3.json');
 }
 
-function createWindow() {
+async function createWindow() {
     const win = new BrowserWindow({
         width: 1024,
         height: 768,
@@ -19,12 +19,38 @@ function createWindow() {
         }
     });
 
-    win.loadFile('index.html');
+    if (!app.isPackaged) {
+        win.webContents.on('before-input-event', (event, input) => {
+            const key = String(input && input.key ? input.key : '').toLowerCase();
+            const wantsHardReload = (input && (input.control || input.meta)) && input.shift && key === 'r';
+            if (!wantsHardReload) return;
+            event.preventDefault();
+            win.webContents.reloadIgnoringCache();
+        });
+
+        try {
+            await win.webContents.session.clearCache();
+        } catch (error) {
+            console.warn('[Electron] Failed to clear cache before load:', error);
+        }
+
+        try {
+            await win.webContents.session.clearStorageData({
+                storages: ['serviceworkers', 'cachestorage']
+            });
+        } catch (error) {
+            console.warn('[Electron] Failed to clear transient storage before load:', error);
+        }
+    }
+
+    await win.loadFile('index.html', !app.isPackaged
+        ? { query: { v: String(Date.now()) } }
+        : undefined);
     // win.webContents.openDevTools(); // Optional for debugging
 }
 
-app.whenReady().then(() => {
-    createWindow();
+app.whenReady().then(async () => {
+    await createWindow();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) {

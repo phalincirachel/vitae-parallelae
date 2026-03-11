@@ -6,7 +6,9 @@
     const LINK_BOUND_ATTR = 'data-subtitle-info-bound';
     const DEFAULT_HIDE_DELAY_MS = 170;
     const HANGING_PUNCTUATION_CLASS = 'subtitle-punctuation-hang-end';
-    const TRAILING_HANGING_PUNCTUATION_RE = /([,.;:!?…]+(?:["'»”’)\]]+)*)$/u;
+    const HANGING_DASH_CLASS = 'subtitle-punctuation-hang-dash';
+    const TRAILING_HANGING_PUNCTUATION_RE = /((?:[,.;:!?…]|[-\u00ad\u2010\u2011\u2012\u2013\u2014])+(?:["'»”’)\]]+)*)$/u;
+    const DASH_HANG_RE = /[-\u00ad\u2010\u2011\u2012\u2013\u2014]/u;
     const SUPPORTS_NATIVE_HANGING_PUNCTUATION = (() => {
         try {
             if (typeof CSS === 'undefined' || typeof CSS.supports !== 'function') return false;
@@ -147,6 +149,9 @@
         if (parts.prefix) fragment.appendChild(document.createTextNode(parts.prefix));
         const hangEl = document.createElement('span');
         hangEl.className = HANGING_PUNCTUATION_CLASS;
+        if (DASH_HANG_RE.test(parts.suffix)) {
+            hangEl.classList.add(HANGING_DASH_CLASS);
+        }
         hangEl.textContent = parts.suffix;
         fragment.appendChild(hangEl);
         if (parts.trailingWhitespace) {
@@ -165,6 +170,9 @@
         if (parts.prefix) element.appendChild(document.createTextNode(parts.prefix));
         const hangEl = document.createElement('span');
         hangEl.className = HANGING_PUNCTUATION_CLASS;
+        if (DASH_HANG_RE.test(parts.suffix)) {
+            hangEl.classList.add(HANGING_DASH_CLASS);
+        }
         hangEl.textContent = parts.suffix;
         element.appendChild(hangEl);
         if (parts.trailingWhitespace) {

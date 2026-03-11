@@ -701,6 +701,16 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     margin-right: -0.14em;
 }
 
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-punctuation-hang-end.subtitle-punctuation-hang-dash {
+    left: 0.16em;
+    margin-right: -0.16em;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-punctuation-hang-end.subtitle-punctuation-hang-dash {
+    left: 0.18em;
+    margin-right: -0.18em;
+}
+
 .subtitle-current {
     color: rgba(255, 255, 255, 0.95) !important;
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
