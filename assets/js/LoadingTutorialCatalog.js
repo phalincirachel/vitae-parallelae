@@ -1,4 +1,4 @@
-﻿(function initLoadingTutorialCatalog() {
+(function initLoadingTutorialCatalog() {
     const cards = [
         {
             id: 'book_menu',
@@ -48,7 +48,7 @@
             devices: ['mobile', 'desktop'],
             order: 40,
             mode: 'ui-clone-group',
-            copy: 'Blättern oder Schriftrolle.',
+            copy: 'Anzeige wie in einem Buch (nach rechts) oder wie eine Schriftrolle (nach unten)',
             target: {
                 stage: 'archive',
                 selector: '[data-loading-tutorial="layout-group"]'
