@@ -3169,16 +3169,32 @@
                         return null;
                     }
 
-                    drawReaderGoetheColorWheel(canvasEl);
+                    let canvasInitialized = false;
+                    let pendingHexColor = null;
 
-                    const updatePreviewAndMarker = (hexColor) => {
+                    function ensureCanvasReady() {
+                        if (canvasInitialized) return true;
+                        // Delay wheel rasterization until the hidden picker is actually opened.
+                        drawReaderGoetheColorWheel(canvasEl);
+                        canvasInitialized = true;
+                        if (pendingHexColor) {
+                            setReaderWheelMarkerFromHex(markerEl, canvasEl, pendingHexColor);
+                        }
+                        return true;
+                    }
+
+                    const updatePreviewAndMarker = (hexColor, options = {}) => {
                         const normalized = normalizeReaderHexColor(hexColor, null);
                         if (!normalized) return;
+                        pendingHexColor = normalized;
                         previewEl.style.background = normalized;
+                        if (!options.ensureCanvas && !canvasInitialized) return;
+                        ensureCanvasReady();
                         setReaderWheelMarkerFromHex(markerEl, canvasEl, normalized);
                     };
 
                     const pickFromClientPoint = (clientX, clientY) => {
+                        ensureCanvasReady();
                         const rect = canvasEl.getBoundingClientRect();
                         if (!rect.width || !rect.height) return;
                         const radius = Math.min(rect.width, rect.height) / 2;
@@ -3315,7 +3331,7 @@
                             popover: document.getElementById('readerBgColorPickerPopover'),
                             sync: () => {
                                 if (typeof readerColorWheelSync.bg === 'function') {
-                                    readerColorWheelSync.bg(readerBgColor || getReaderFallbackBgColor());
+                                    readerColorWheelSync.bg(readerBgColor || getReaderFallbackBgColor(), { ensureCanvas: true });
                                 }
                             }
                         },
@@ -3325,7 +3341,7 @@
                             popover: document.getElementById('readerTextColorPickerPopover'),
                             sync: () => {
                                 if (typeof readerColorWheelSync.text === 'function') {
-                                    readerColorWheelSync.text(readerTextColor || getReaderFallbackTextColor());
+                                    readerColorWheelSync.text(readerTextColor || getReaderFallbackTextColor(), { ensureCanvas: true });
                                 }
                             }
                         }

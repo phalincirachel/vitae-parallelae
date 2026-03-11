@@ -756,7 +756,11 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     line-height: 1.65;
     text-align: var(--reader-text-align, justify);
     text-justify: inter-word;
+    text-wrap: pretty;
     white-space: normal;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+    hanging-punctuation: first allow-end last;
     --flat-timestamp-gap: 0.12em;
 }
 
@@ -819,6 +823,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     white-space: normal;
     hyphens: auto;
     -webkit-hyphens: auto;
+    hanging-punctuation: first allow-end last;
     will-change: transform;
 }
 
