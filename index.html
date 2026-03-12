@@ -2869,10 +2869,10 @@
             const baseEm = Number(options.baseEm) || 0.12;
             const minorEm = Number(options.minorEm) || baseEm;
             const sentenceEm = Number(options.sentenceEm) || Math.max(minorEm, baseEm);
-            const text = (currentText || '').trim();
+            const text = (currentText || "").trim();
             if (!text) return baseEm;
 
-            const nextTrimmed = (nextText || '').trim();
+            const nextTrimmed = (nextText || "").trim();
             if (!nextTrimmed) return 0;
 
             const closingTrail = String.raw`(?:["'\u00bb\u201c\u201d\u2018\u2019)\]])*`;
@@ -2895,6 +2895,18 @@
             if (pausePattern.test(text)) return minorEm;
             if (continuationPattern.test(nextTrimmed)) return Math.max(0.04, Math.min(baseEm, baseEm * 0.45));
             return baseEm;
+        }
+
+        function getTimestampBoundarySeparatorText(currentText, nextText) {
+            const nextTrimmed = (nextText || "").trim();
+            if (!nextTrimmed) return "";
+            const text = (currentText || "").trim();
+            if (!text) return " ";
+
+            const hyphenPattern = /(?:-|\u2010|\u2011|\u2012|\u2013|\u2014)$/;
+            const tightLeadingPattern = /^[,.;:!?\u2026)\]\u201d\u2019]/;
+            if (hyphenPattern.test(text) || tightLeadingPattern.test(nextTrimmed)) return "";
+            return " ";
         }
 
         function applyTimestampBoundaryGap(lineEl, index, tracks, mode = 'flat') {
@@ -2934,6 +2946,8 @@
             lineEl.style.removeProperty('--flat-smart-letter-spacing');
             lineEl.style.removeProperty('--flat-smart-stretch');
             lineEl.style.removeProperty('--flat-smart-wdth');
+            lineEl.style.removeProperty('margin-left');
+            lineEl.style.removeProperty('margin-right');
         }
 
         function getFlatLineClientRects(lineEl) {
@@ -2983,6 +2997,29 @@
             return false;
         }
 
+        function getTrailingHangingPunctuationPx(lineEl) {
+            if (!lineEl) return 0;
+            const text = (lineEl.textContent || "").trim();
+            if (!text) return 0;
+
+            const trailing = text.match(/([,.;:!?\u2026\-\u2010\u2011\u2012\u2013\u2014]+|[)\]"'\u00bb\u201d\u2019]+)$/u);
+            if (!trailing) return 0;
+
+            let sample = trailing[0];
+            let coreChar = sample.charAt(sample.length - 1);
+            while (/[)\]"'\u00bb\u201d\u2019]/u.test(coreChar) && sample.length > 1) {
+                sample = sample.slice(0, -1);
+                coreChar = sample.charAt(sample.length - 1);
+            }
+
+            const fontSize = parseFloat(window.getComputedStyle(lineEl).fontSize) || 16;
+            if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
+            if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.15, 4.2);
+            if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.12, 3.8);
+            if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.22, 5.8);
+            return 0;
+        }
+
         function applyFlatSmartJustification() {
             if (!subtitleContainer) return;
             const lineElements = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'));
@@ -3024,6 +3061,19 @@
             const visualLines = Array.from(linesByTop.entries())
                 .sort((left, right) => left[0] - right[0])
                 .map((entry) => entry[1]);
+            if (!visualLines.length) return;
+
+            visualLines.forEach((line) => {
+                const elements = Array.from(line.elements);
+                if (!elements.length) return;
+                const lastEl = elements[elements.length - 1];
+                if ((elementRectCount.get(lastEl) || 0) !== 1) return;
+                const hangEndPx = getTrailingHangingPunctuationPx(lastEl);
+                if (hangEndPx < -0.5) {
+                    lastEl.style.marginRight = `${hangEndPx.toFixed(3)}px`;
+                }
+            });
+
             if (visualLines.length <= 1) return;
 
             for (let i = 0; i < visualLines.length - 1; i += 1) {
@@ -3538,11 +3588,11 @@
             return isDesktopPointerLayout();
         }
 
-        function appendBlaetternLineWithSeparator(parentEl, lineEl, addSeparator) {
+        function appendBlaetternLineWithSeparator(parentEl, lineEl, separatorText = "") {
             if (!parentEl || !lineEl) return;
             parentEl.appendChild(lineEl);
-            if (!addSeparator) return;
-            parentEl.appendChild(document.createTextNode(' '));
+            if (!separatorText) return;
+            parentEl.appendChild(document.createTextNode(separatorText));
         }
 
         function removeTrailingBlaetternSeparator(parentEl) {
@@ -3560,6 +3610,8 @@
             lineEl.style.removeProperty('--blaettern-smart-letter-spacing');
             lineEl.style.removeProperty('--blaettern-smart-stretch');
             lineEl.style.removeProperty('--blaettern-smart-wdth');
+            lineEl.style.removeProperty('margin-left');
+            lineEl.style.removeProperty('margin-right');
         }
 
         function getBlaetternLineClientRects(lineEl) {
@@ -3648,6 +3700,19 @@
             const visualLines = Array.from(linesByTop.entries())
                 .sort((a, b) => a[0] - b[0])
                 .map((entry) => entry[1]);
+            if (!visualLines.length) return;
+
+            visualLines.forEach((line) => {
+                const elements = Array.from(line.elements);
+                if (!elements.length) return;
+                const lastEl = elements[elements.length - 1];
+                if ((elementRectCount.get(lastEl) || 0) !== 1) return;
+                const hangEndPx = getTrailingHangingPunctuationPx(lastEl);
+                if (hangEndPx < -0.5) {
+                    lastEl.style.marginRight = `${hangEndPx.toFixed(3)}px`;
+                }
+            });
+
             if (visualLines.length <= 1) return;
 
             for (let i = 0; i < visualLines.length - 1; i++) {
@@ -3769,14 +3834,14 @@
             while (startIndex < subtitleTracks.length) {
                 measureLayer.replaceChildren();
                 let endIndex = startIndex - 1;
-                const useDesktopSeparators = shouldUseDesktopBlaetternWordSeparators();
-
                 for (let i = startIndex; i < subtitleTracks.length; i++) {
                     const node = createBlaetternLineElement(i, { forMeasure: true });
-                    const addSeparator = useDesktopSeparators && i < (subtitleTracks.length - 1);
-                    appendBlaetternLineWithSeparator(measureLayer, node, addSeparator);
+                    const separatorText = i < (subtitleTracks.length - 1)
+                        ? getTimestampBoundarySeparatorText(subtitleTracks[i].text, subtitleTracks[i + 1].text)
+                        : "";
+                    appendBlaetternLineWithSeparator(measureLayer, node, separatorText);
                     if (measureLayer.scrollHeight > (measureLayer.clientHeight + 1)) {
-                        if (addSeparator) removeTrailingBlaetternSeparator(measureLayer);
+                        if (separatorText) removeTrailingBlaetternSeparator(measureLayer);
                         measureLayer.removeChild(node);
                         break;
                     }
@@ -3820,10 +3885,11 @@
 
             layer.classList.remove('blaettern-page-empty');
             const page = blaetternPages[pageIdx];
-            const useDesktopSeparators = shouldUseDesktopBlaetternWordSeparators();
             for (let i = page.startIndex; i <= page.endIndex; i++) {
-                const addSeparator = useDesktopSeparators && i < page.endIndex;
-                appendBlaetternLineWithSeparator(layer, createBlaetternLineElement(i), addSeparator);
+                const separatorText = i < page.endIndex
+                    ? getTimestampBoundarySeparatorText(subtitleTracks[i].text, subtitleTracks[i + 1].text)
+                    : "";
+                appendBlaetternLineWithSeparator(layer, createBlaetternLineElement(i), separatorText);
             }
             applyBlaetternSmartJustification(layer);
         }
@@ -5317,6 +5383,10 @@
 
                         subtitleContainer.appendChild(div);
                         applyFlatLeadingCompensation(div, track.text);
+                        if (readerSentenceLayout === READER_LAYOUT_FLAT && i < subtitleTracks.length - 1) {
+                            const separatorText = getTimestampBoundarySeparatorText(track.text, subtitleTracks[i + 1].text);
+                            if (separatorText) subtitleContainer.appendChild(document.createTextNode(separatorText));
+                        }
                     });
                 }
 

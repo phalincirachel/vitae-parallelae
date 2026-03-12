@@ -320,10 +320,10 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const baseEm = Number(options.baseEm) || 0.12;
         const minorEm = Number(options.minorEm) || baseEm;
         const sentenceEm = Number(options.sentenceEm) || Math.max(minorEm, baseEm);
-        const text = (currentText || '').trim();
+        const text = (currentText || "").trim();
         if (!text) return baseEm;
 
-        const nextTrimmed = (nextText || '').trim();
+        const nextTrimmed = (nextText || "").trim();
         if (!nextTrimmed) return 0;
 
         const closingTrail = String.raw`(?:["'\u00bb\u201c\u201d\u2018\u2019)\]])*`;
@@ -346,6 +346,18 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         if (pausePattern.test(text)) return minorEm;
         if (continuationPattern.test(nextTrimmed)) return Math.max(0.04, Math.min(baseEm, baseEm * 0.45));
         return baseEm;
+    }
+
+    _getTimestampBoundarySeparatorText(currentText, nextText) {
+        const nextTrimmed = (nextText || "").trim();
+        if (!nextTrimmed) return "";
+        const text = (currentText || "").trim();
+        if (!text) return " ";
+
+        const hyphenPattern = /(?:-|\u2010|\u2011|\u2012|\u2013|\u2014)$/;
+        const tightLeadingPattern = /^[,.;:!?\u2026)\]\u201d\u2019]/;
+        if (hyphenPattern.test(text) || tightLeadingPattern.test(nextTrimmed)) return "";
+        return " ";
     }
 
     _applyFlatTimestampBoundaryGap(lineEl, index) {
@@ -385,6 +397,8 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         lineEl.style.removeProperty('--flat-smart-letter-spacing');
         lineEl.style.removeProperty('--flat-smart-stretch');
         lineEl.style.removeProperty('--flat-smart-wdth');
+        lineEl.style.removeProperty('margin-left');
+        lineEl.style.removeProperty('margin-right');
     }
 
     _getFlatLineClientRects(lineEl) {
@@ -394,12 +408,35 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
 
     _getFlatLineBoundaryGapPx(elements) {
         if (!Array.isArray(elements) || elements.length <= 1) return 0;
-        if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return 0;
+        if (typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
         let total = 0;
         for (let i = 0; i < elements.length - 1; i += 1) {
             total += parseFloat(window.getComputedStyle(elements[i]).marginRight) || 0;
         }
         return total;
+    }
+
+    _getTrailingHangingPunctuationPx(lineEl) {
+        if (!lineEl || typeof window === "undefined" || typeof window.getComputedStyle !== "function") return 0;
+        const text = (lineEl.textContent || "").trim();
+        if (!text) return 0;
+
+        const trailing = text.match(/([,.;:!?\u2026\-\u2010\u2011\u2012\u2013\u2014]+|[)\]"'\u00bb\u201d\u2019]+)$/u);
+        if (!trailing) return 0;
+
+        let sample = trailing[0];
+        let coreChar = sample.charAt(sample.length - 1);
+        while (/[)\]"'\u00bb\u201d\u2019]/u.test(coreChar) && sample.length > 1) {
+            sample = sample.slice(0, -1);
+            coreChar = sample.charAt(sample.length - 1);
+        }
+
+        const fontSize = parseFloat(window.getComputedStyle(lineEl).fontSize) || 16;
+        if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
+        if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.15, 4.2);
+        if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.12, 3.8);
+        if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.22, 5.8);
+        return 0;
     }
 
     _captureFlatLineGeometry(elements, containerRect) {
@@ -478,6 +515,19 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const visualLines = Array.from(linesByTop.entries())
             .sort((left, right) => left[0] - right[0])
             .map((entry) => entry[1]);
+        if (!visualLines.length) return;
+
+        visualLines.forEach((line) => {
+            const elements = Array.from(line.elements);
+            if (!elements.length) return;
+            const lastEl = elements[elements.length - 1];
+            if ((elementRectCount.get(lastEl) || 0) !== 1) return;
+            const hangEndPx = this._getTrailingHangingPunctuationPx(lastEl);
+            if (hangEndPx < -0.5) {
+                lastEl.style.marginRight = `${hangEndPx.toFixed(3)}px`;
+            }
+        });
+
         if (visualLines.length <= 1) return;
 
         for (let i = 0; i < visualLines.length - 1; i += 1) {
@@ -603,6 +653,13 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
 
                     this.container.appendChild(div);
                     this._applyFlatLeadingCompensation(div, this.subtitleTracks[i].text);
+                    if (this.container.classList.contains('reader-layout-flat') && i < this.subtitleTracks.length - 1) {
+                        const separatorText = this._getTimestampBoundarySeparatorText(
+                            this.subtitleTracks[i].text,
+                            this.subtitleTracks[i + 1].text
+                        );
+                        if (separatorText) this.container.appendChild(document.createTextNode(separatorText));
+                    }
                 }
             }
 

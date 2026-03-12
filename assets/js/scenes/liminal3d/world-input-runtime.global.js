@@ -109,22 +109,23 @@
       clickMouse.y = -clickScreenY;
       raycaster.setFromCamera(clickMouse, camera);
 
-      const intersects = raycaster.intersectObjects(scene.children, true);
       let target = null;
-      for (let i = 0; i < intersects.length; i++) {
-        if (intersects[i].object.type === 'Points') continue;
-        target = intersects[i].point;
-        break;
-      }
-
-      if (!target) {
-        const groundTarget = new THREE.Vector3();
-        if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
-          target = groundTarget;
+      const groundTarget = new THREE.Vector3();
+      if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
+        target = groundTarget;
+      } else if (scene && Array.isArray(scene.children)) {
+        const intersects = raycaster.intersectObjects(scene.children, true);
+        for (let i = 0; i < intersects.length; i++) {
+          if (intersects[i].object.type === 'Points') continue;
+          target = intersects[i].point;
+          break;
         }
       }
 
       if (!target) return false;
+
+      const clampedX = Math.max(-2.5, Math.min(2.5, target.x));
+      const navigationTarget = new THREE.Vector3(clampedX, camera.position.y, target.z);
 
       if (isPointInsideUi(clientX, clientY) || clientY >= getUiDeadzoneTop()) {
         cause('C05_MOVE_SET_FROM_UI_REGION', `x=${clientX} y=${clientY}`);
@@ -132,21 +133,20 @@
       if (sinceUi < uiClickSuppressMs + 30) {
         cause('C06_MOVE_SET_RECENT_UI_WINDOW', `sinceUi=${sinceUi.toFixed(0)}ms`);
       }
-      if (isMobileTap) {
-        setCameraLookTarget(target.clone());
-      }
 
-      if (target.x < -2.5) target.x = -2.5;
-      if (target.x > 2.5) target.x = 2.5;
-      if (target.z > camera.position.z + 2.0) {
+      if (navigationTarget.z > camera.position.z + 2.0) {
         log('Ignored Backwards Click');
         setCameraLookTarget(null);
         debugNote('move-skip', 'backwards-target');
         return false;
       }
 
-      setMoveTarget(new THREE.Vector3(target.x, camera.position.y, target.z));
-      debugNote('move-set', `${isMobileTap ? 'tap' : 'click'} x=${target.x.toFixed(2)} z=${target.z.toFixed(2)}`);
+      if (isMobileTap) {
+        setCameraLookTarget(navigationTarget.clone());
+      }
+
+      setMoveTarget(navigationTarget);
+      debugNote('move-set', `${isMobileTap ? 'tap' : 'click'} x=${navigationTarget.x.toFixed(2)} z=${navigationTarget.z.toFixed(2)}`);
       log('Moving to:', getMoveTarget(), 'Looking at:', getCameraLookTarget());
       return true;
     }

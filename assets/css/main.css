@@ -769,7 +769,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     line-height: inherit;
     padding-left: 0;
     padding-right: 0;
-    margin-right: var(--timestamp-gap, var(--flat-timestamp-gap));
+    margin-right: 0;
     hyphens: inherit;
     -webkit-hyphens: inherit;
     word-break: normal;
@@ -825,7 +825,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer {
     position: absolute;
     inset: 0;
-    overflow: hidden;
+    overflow: visible;
     display: block;
     padding: clamp(58px, 8vh, 96px) 24px clamp(48px, 7vh, 78px);
     line-height: 1.68;
@@ -865,7 +865,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line {
     display: inline;
     line-height: inherit;
-    margin-right: var(--timestamp-gap, 0.22em);
+    margin-right: 0;
     padding: 0;
     text-align: inherit;
     hyphens: inherit;

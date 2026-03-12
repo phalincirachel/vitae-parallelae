@@ -52,7 +52,7 @@ test('liminal world input runtime sets move target from world click and updates 
   const move = { f: false, b: false, l: false, r: false };
   let moveTarget = null;
   let cameraLookTarget = null;
-  const targetPoint = new Vector3(5, 1.6, -8);
+  const targetPoint = new Vector3(5, 0, -8);
   const raycaster = {
     ray: {
       intersectPlane() {
@@ -120,7 +120,9 @@ test('liminal world input runtime sets move target from world click and updates 
   assert.equal(moveTarget.y, 1.6);
   assert.equal(moveTarget.z, -8);
   assert.ok(cameraLookTarget);
-  assert.equal(cameraLookTarget.x, 5);
+  assert.equal(cameraLookTarget.x, 2.5);
+  assert.equal(cameraLookTarget.y, 1.6);
+  assert.equal(cameraLookTarget.z, -8);
 });
 
 test('liminal world input runtime blocks move target updates when input is locked or backward', () => {
