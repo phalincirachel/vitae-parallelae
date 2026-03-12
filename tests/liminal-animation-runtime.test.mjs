@@ -371,3 +371,90 @@ test('liminal animation runtime wraps click-look yaw to the short rotation path'
   assert.equal(camera.quaternion.lastEuler.y > 3.09, true);
   assert.equal(cameraLookTarget instanceof Vector3, true);
 });
+
+
+test('liminal animation runtime applies movement once per frame without duplicate velocity steps', () => {
+  const scheduled = [];
+  const camera = {
+    position: new Vector3(0, 1.6, -5),
+    quaternion: {
+      setFromEuler(nextEuler) {
+        this.lastEuler = { x: nextEuler.x, y: nextEuler.y, z: nextEuler.z };
+      }
+    }
+  };
+  const euler = createEuler();
+  const velocity = new Vector3(0, 0, 0);
+
+  const runtime = animationRuntime.init({
+    window: {
+      visualFreezeActive: false,
+      gamePaused: false,
+      requestAnimationFrame(callback) {
+        scheduled.push(callback);
+      }
+    },
+    requestAnimationFrame(callback) {
+      scheduled.push(callback);
+    },
+    performanceNow: (() => {
+      let now = 1000;
+      return () => {
+        now += 100;
+        return now;
+      };
+    })(),
+    getClock: () => ({ getDelta: () => 0.1, getElapsedTime: () => 1 }),
+    getCamera: () => camera,
+    getEuler: () => euler,
+    getRenderer: () => ({ render() {} }),
+    getScene: () => ({ children: [] }),
+    getVelocity: () => velocity,
+    getMoveState: () => ({ f: true, b: false, l: false, r: false }),
+    getMouse: () => ({ x: 0, y: 0 }),
+    setTargetMouseX: () => {},
+    setTargetMouseY: () => {},
+    getIsReadingMode: () => false,
+    getIsFallback2DMode: () => false,
+    getWorldInputLockReason: () => '',
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getMoveTarget: () => null,
+    setMoveTarget: () => {},
+    getCameraLookTarget: () => null,
+    setCameraLookTarget: () => {},
+    setIsLookingAtClickTarget: () => {},
+    getIsCenteringCamera: () => false,
+    setIsCenteringCamera: () => {},
+    syncLookTargetsToCamera: () => {},
+    flushDeferredReadingModeRender: () => {},
+    getTmpLookDir: () => new Vector3(),
+    getTmpMovementInput: () => new Vector3(),
+    getTmpForwardDir: () => new Vector3(),
+    getTmpRightDir: () => new Vector3(),
+    getTmpMoveDir: () => new Vector3(),
+    getTmpVelocityStep: () => new Vector3(),
+    updateSegments: () => {},
+    getSegments: () => [],
+    getActiveGlowingBooks: () => [],
+    getCurrentChapterProgress: () => ({ collected: 0, total: 0 }),
+    refreshLoreProgressUi: () => {},
+    renderArchive: () => {},
+    startLoreMode: () => {},
+    allowAuxSfxPlaybackLiminal: () => false,
+    getShimmerSound: () => null,
+    getLastShimmerAt: () => 0,
+    setLastShimmerAt: () => {},
+    getDebugLogs: () => false,
+    debugNote: () => {},
+    cause: () => {},
+    log: () => {},
+    error: () => {}
+  });
+
+  assert.equal(runtime.startAnimationLoop(), true);
+  scheduled.shift()();
+
+  assert.ok(camera.position.z < -5.05 && camera.position.z > -5.07);
+  assert.ok(camera.position.z > -5.1);
+});

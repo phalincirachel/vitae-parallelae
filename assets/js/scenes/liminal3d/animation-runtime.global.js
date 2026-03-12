@@ -249,11 +249,6 @@
       }
 
       velocity.multiplyScalar(1.0 - 5.0 * delta);
-      const velocityStep = getTmpVelocityStep();
-      if (velocityStep && camera.position && typeof camera.position.add === 'function') {
-        camera.position.add(velocityStep.copy(velocity).multiplyScalar(delta));
-      }
-
       if (velocity.length() > 0.5) {
         headBob += delta * 6;
         camera.position.y = 1.6 + Math.sin(headBob) * 0.0125;

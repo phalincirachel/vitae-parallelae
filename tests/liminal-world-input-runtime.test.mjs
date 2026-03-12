@@ -43,7 +43,7 @@ class Vector3 {
   }
 }
 
-test('liminal world input runtime sets move target from world click and updates mobile look target', () => {
+test('liminal world input runtime keeps mobile tap movement aligned without auto-look', () => {
   const documentObject = createEventTarget({
     elementFromPoint() {
       return { nodeType: 1, closest: () => null };
@@ -95,7 +95,7 @@ test('liminal world input runtime sets move target from world click and updates 
     setIsTouchValid: () => {},
     getPlayer: () => ({ isReadingMode: false }),
     getRenderer: () => ({ domElement: {} }),
-    getCamera: () => ({ position: { y: 1.6, z: -2 } }),
+    getCamera: () => ({ position: { x: 0, y: 1.6, z: -2 } }),
     getScene: () => ({ children: [] }),
     getRaycaster: () => raycaster,
     getGroundPlane: () => ({}),
@@ -116,14 +116,81 @@ test('liminal world input runtime sets move target from world click and updates 
   const applied = runtime.trySetMoveTargetFromScreenPoint(600, 300, true);
   assert.equal(applied, true);
   assert.ok(moveTarget);
-  assert.equal(moveTarget.x, 2.5);
+  assert.equal(moveTarget.x, 1.55);
   assert.equal(moveTarget.y, 1.6);
   assert.equal(moveTarget.z, -8);
-  assert.ok(cameraLookTarget);
-  assert.equal(cameraLookTarget.x, 2.5);
-  assert.equal(cameraLookTarget.y, 1.6);
-  assert.equal(cameraLookTarget.z, -8);
+  assert.equal(cameraLookTarget, null);
 });
+
+
+
+test('liminal world input runtime blocks pinch zoom gestures on mobile', () => {
+  const interactions = [];
+  const causes = [];
+  const documentObject = createEventTarget({
+    elementFromPoint() {
+      return { nodeType: 1, closest: () => null };
+    }
+  });
+
+  worldInputRuntime.init({
+    window: { innerWidth: 430, innerHeight: 800 },
+    document: documentObject,
+    THREE: { Vector2, Vector3 },
+    getWorldInputLockReason: () => '',
+    isUiClickTarget: () => false,
+    isPointInsideUi: () => false,
+    getUiDeadzoneTop: () => 700,
+    markUiInteraction: (reason) => { interactions.push(reason); },
+    isRendererElement: () => true,
+    getShieldRoots: () => [],
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getUiInteractionStarted: () => false,
+    setUiInteractionStarted: () => {},
+    getIsTouchDragging: () => false,
+    setIsTouchDragging: () => {},
+    getTouchMovedForTap: () => false,
+    setTouchMovedForTap: () => {},
+    getTouchStartedOnUi: () => false,
+    setTouchStartedOnUi: () => {},
+    getTouchStartedOnRenderer: () => true,
+    setTouchStartedOnRenderer: () => {},
+    getIsTouchValid: () => true,
+    setIsTouchValid: () => {},
+    getPlayer: () => ({ isReadingMode: false }),
+    getRenderer: () => ({ domElement: {} }),
+    getCamera: () => ({ position: { x: 0, y: 1.6, z: -2 } }),
+    getScene: () => ({ children: [] }),
+    getRaycaster: () => ({ ray: { intersectPlane: () => false }, setFromCamera() {}, intersectObjects: () => [] }),
+    getGroundPlane: () => ({}),
+    getMoveTarget: () => null,
+    setMoveTarget: () => {},
+    getCameraLookTarget: () => null,
+    setCameraLookTarget: () => {},
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    isFallback2DMode: () => false,
+    performanceNow: () => 1000,
+    debugNote: () => {},
+    cause: (code, detail) => { causes.push([code, detail]); },
+    log: () => {}
+  });
+
+  const event = {
+    type: 'touchmove',
+    touches: [{ clientX: 10, clientY: 10 }, { clientX: 30, clientY: 30 }],
+    preventDefault() {
+      this.defaultPrevented = true;
+    }
+  };
+
+  documentObject.emit('touchmove', event);
+
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(interactions, ['gesture:touchmove']);
+  assert.deepEqual(causes, [['C09_PINCH_ZOOM_BLOCKED', 'touchmove']]);
+});
+
 
 test('liminal world input runtime blocks move target updates when input is locked or backward', () => {
   let moveTarget = null;

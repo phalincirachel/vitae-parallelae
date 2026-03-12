@@ -41,6 +41,11 @@
       ? options.performanceNow
       : () => ((windowObject.performance && typeof windowObject.performance.now === 'function') ? windowObject.performance.now() : Date.now());
     const uiClickSuppressMs = Number.isFinite(options.uiClickSuppressMs) ? options.uiClickSuppressMs : 700;
+    const disablePinchZoom = options.disablePinchZoom !== false;
+    const mobileViewportMaxWidth = Number.isFinite(options.mobileViewportMaxWidth) ? options.mobileViewportMaxWidth : 768;
+    const mobileTapMaxX = Number.isFinite(options.mobileTapMaxX) ? options.mobileTapMaxX : 1.75;
+    const mobileTapMaxLateralStep = Number.isFinite(options.mobileTapMaxLateralStep) ? options.mobileTapMaxLateralStep : 1.55;
+    const mobileTapLookEnabled = !!options.mobileTapLookEnabled;
     const debugNote = typeof options.debugNote === 'function' ? options.debugNote : () => {};
     const cause = typeof options.cause === 'function' ? options.cause : () => {};
     const syncLookTargetsToCamera = typeof options.syncLookTargetsToCamera === 'function' ? options.syncLookTargetsToCamera : () => {};
@@ -56,6 +61,21 @@
       setTouchStartedOnUi(false);
       setTouchStartedOnRenderer(false);
       setIsTouchValid(true);
+    }
+
+    function isMobileViewport() {
+      return Number(windowObject.innerWidth || 0) <= mobileViewportMaxWidth;
+    }
+
+    function preventPinchZoom(event) {
+      if (!disablePinchZoom || !isMobileViewport()) return false;
+      if (event && typeof event.preventDefault === 'function') {
+        event.preventDefault();
+      }
+      markUiInteraction(`gesture:${event && event.type ? event.type : 'unknown'}`);
+      debugNote('gesture-block', event && event.type ? event.type : 'unknown');
+      cause('C09_PINCH_ZOOM_BLOCKED', event && event.type ? event.type : 'unknown');
+      return true;
     }
 
     function bindUiInputShield() {
@@ -124,8 +144,17 @@
 
       if (!target) return false;
 
-      const clampedX = Math.max(-2.5, Math.min(2.5, target.x));
-      const navigationTarget = new THREE.Vector3(clampedX, camera.position.y, target.z);
+      const baseClampedX = Math.max(-2.5, Math.min(2.5, target.x));
+      const currentCameraX = Number(camera.position && camera.position.x);
+      const safeCameraX = Number.isFinite(currentCameraX) ? currentCameraX : 0;
+      let navigationX = baseClampedX;
+      if (isMobileTap) {
+        const mobileClampedX = Math.max(-mobileTapMaxX, Math.min(mobileTapMaxX, baseClampedX));
+        const lateralDelta = mobileClampedX - safeCameraX;
+        const limitedDelta = Math.max(-mobileTapMaxLateralStep, Math.min(mobileTapMaxLateralStep, lateralDelta));
+        navigationX = safeCameraX + limitedDelta;
+      }
+      const navigationTarget = new THREE.Vector3(navigationX, camera.position.y, target.z);
 
       if (isPointInsideUi(clientX, clientY) || clientY >= getUiDeadzoneTop()) {
         cause('C05_MOVE_SET_FROM_UI_REGION', `x=${clientX} y=${clientY}`);
@@ -142,7 +171,11 @@
       }
 
       if (isMobileTap) {
-        setCameraLookTarget(navigationTarget.clone());
+        if (mobileTapLookEnabled) {
+          setCameraLookTarget(navigationTarget.clone());
+        } else {
+          setCameraLookTarget(null);
+        }
       }
 
       setMoveTarget(navigationTarget);
@@ -154,6 +187,24 @@
     bindUiInputShield();
 
     if (documentObject && typeof documentObject.addEventListener === 'function') {
+      documentObject.addEventListener('touchstart', (event) => {
+        if (event && event.touches && event.touches.length > 1) {
+          preventPinchZoom(event);
+        }
+      }, { passive: false });
+
+      documentObject.addEventListener('touchmove', (event) => {
+        if (event && event.touches && event.touches.length > 1) {
+          preventPinchZoom(event);
+        }
+      }, { passive: false });
+
+      ['gesturestart', 'gesturechange', 'gestureend'].forEach((eventName) => {
+        documentObject.addEventListener(eventName, (event) => {
+          preventPinchZoom(event);
+        }, { passive: false });
+      });
+
       documentObject.addEventListener('pointerdown', (event) => {
         const worldLockReason = getWorldInputLockReason();
         if (worldLockReason) {
