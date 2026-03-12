@@ -776,6 +776,14 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     overflow-wrap: normal;
 }
 
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line.flat-line-smart {
+    word-spacing: var(--flat-smart-word-spacing, normal);
+    letter-spacing: var(--flat-smart-letter-spacing, normal);
+    font-stretch: var(--flat-smart-stretch, 100%);
+    font-variation-settings: "wdth" var(--flat-smart-wdth, 100);
+    font-kerning: normal;
+}
+
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
     font-weight: 400 !important;
     padding-left: 0;
@@ -2580,6 +2588,25 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
         overflow-y: auto !important;
     }
 
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat,
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps {
+        text-align: var(--reader-text-align, justify) !important;
+        text-justify: inter-word;
+    }
+
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line,
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
+        text-align: inherit !important;
+    }
+
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line {
+        width: auto;
+    }
+
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
+        width: 100%;
+    }
+
     #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern {
         padding: 0 !important;
         height: calc(100% - 70px) !important;
@@ -2592,6 +2619,13 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
 
     #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-page-layer {
         padding: clamp(44px, 7vh, 76px) 16px clamp(30px, 5vh, 56px);
+        text-align: var(--reader-text-align, justify) !important;
+        text-justify: inter-word;
+    }
+
+    #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line {
+        text-align: inherit !important;
+        width: auto;
     }
 
     #audioPlayerUI.reading-mode #audioControls,

@@ -215,8 +215,11 @@
         }
 
         const renderer = getRenderer();
-        if (isMobile && (!renderer || clickedEl !== renderer.domElement)) {
-          cause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
+        const clickHitsRenderer = isRendererElement(clickedEl)
+          || isRendererElement(event.target)
+          || !!(renderer && clickedEl === renderer.domElement);
+        if (!clickHitsRenderer) {
+          cause('C02_WORLD_BLOCKED_CLICK', isMobile ? 'mobile-not-renderer' : 'not-renderer');
           return;
         }
 

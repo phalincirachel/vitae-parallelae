@@ -244,3 +244,64 @@ test('liminal world input runtime binds keyboard movement listeners', () => {
   assert.equal(move.f, false);
   assert.equal(move.l, false);
 });
+
+
+test('liminal world input runtime ignores desktop clicks outside the renderer', () => {
+  const overlayEl = { nodeType: 1, closest: () => null };
+  const canvasEl = { nodeType: 1, closest: () => null };
+  const documentObject = createEventTarget({
+    elementFromPoint() {
+      return overlayEl;
+    }
+  });
+  const causes = [];
+  let moveTarget = null;
+
+  worldInputRuntime.init({
+    window: { innerWidth: 1200, innerHeight: 800 },
+    document: documentObject,
+    THREE: { Vector2, Vector3 },
+    getWorldInputLockReason: () => '',
+    isUiClickTarget: () => false,
+    isPointInsideUi: () => false,
+    getUiDeadzoneTop: () => 700,
+    markUiInteraction: () => {},
+    isRendererElement: (el) => el === canvasEl,
+    getShieldRoots: () => [],
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getUiInteractionStarted: () => false,
+    setUiInteractionStarted: () => {},
+    getIsTouchDragging: () => false,
+    setIsTouchDragging: () => {},
+    getTouchMovedForTap: () => false,
+    setTouchMovedForTap: () => {},
+    getTouchStartedOnUi: () => false,
+    setTouchStartedOnUi: () => {},
+    getTouchStartedOnRenderer: () => true,
+    setTouchStartedOnRenderer: () => {},
+    getIsTouchValid: () => true,
+    setIsTouchValid: () => {},
+    getPlayer: () => ({ isReadingMode: false }),
+    getRenderer: () => ({ domElement: canvasEl }),
+    getCamera: () => ({ position: { y: 1.6, z: -2 } }),
+    getScene: () => ({ children: [] }),
+    getRaycaster: () => ({ ray: { intersectPlane: () => false }, setFromCamera() {}, intersectObjects: () => [] }),
+    getGroundPlane: () => ({}),
+    getMoveTarget: () => moveTarget,
+    setMoveTarget: (value) => { moveTarget = value; },
+    getCameraLookTarget: () => null,
+    setCameraLookTarget: () => {},
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    isFallback2DMode: () => false,
+    performanceNow: () => 1000,
+    debugNote: () => {},
+    cause: (code, detail) => { causes.push([code, detail]); },
+    log: () => {}
+  });
+
+  documentObject.emit('click', { clientX: 400, clientY: 300, target: overlayEl });
+
+  assert.equal(moveTarget, null);
+  assert.deepEqual(causes, [['C02_WORLD_BLOCKED_CLICK', 'not-renderer']]);
+});

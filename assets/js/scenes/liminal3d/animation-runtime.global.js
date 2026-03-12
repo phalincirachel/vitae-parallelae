@@ -125,18 +125,26 @@
         const targetPitch = Math.asin(-lookDir.y);
 
         euler.setFromQuaternion(camera.quaternion);
-        const lookEase = 0.1 * delta;
-        euler.y += (targetYaw - euler.y) * lookEase;
-        euler.x += (targetPitch - euler.x) * lookEase;
+        let yawDiff = targetYaw - euler.y;
+        if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        if (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        const pitchDiff = targetPitch - euler.x;
+        const lookEase = Math.min(1, 6.0 * delta);
+        euler.y += yawDiff * lookEase;
+        euler.x += pitchDiff * lookEase;
         euler.z = 0;
         camera.quaternion.setFromEuler(euler);
+        setIsLookingAtClickTarget(true);
         syncMouseTargets(mouse, euler);
 
-        if (Math.abs(targetYaw - euler.y) < 0.02 && Math.abs(targetPitch - euler.x) < 0.02) {
+        if (Math.abs(yawDiff) < 0.02 && Math.abs(pitchDiff) < 0.02) {
           setCameraLookTarget(null);
+          setIsLookingAtClickTarget(false);
         }
         return;
       }
+
+      setIsLookingAtClickTarget(false);
 
       const targetPitch = -mouse.y * 0.5;
       const targetYaw = -mouse.x * 1.5;

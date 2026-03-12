@@ -119,7 +119,7 @@ function createThreeStub(shouldThrow = false) {
       this.shadowMap = {};
       this.sizeCalls = [];
       this.pixelRatios = [];
-      this.domElement = createEventTarget();
+      this.domElement = createEventTarget({ style: {} });
     }
 
     setSize(width, height, updateStyle) {
@@ -184,6 +184,10 @@ test('liminal scene bootstrap runtime initializes scene, renderer and viewport s
   assert.equal(runtime.camera.position.y, 1.6);
   assert.equal(runtime.scene.background.value, 0x010101);
   assert.equal(appended.length, 1);
+  assert.equal(runtime.renderer.domElement.style.touchAction, 'none');
+  assert.equal(runtime.renderer.domElement.style.userSelect, 'none');
+  assert.equal(runtime.renderer.domElement.style.webkitUserSelect, 'none');
+  assert.equal(runtime.renderer.domElement.style.webkitTapHighlightColor, 'transparent');
   assert.deepEqual(runtime.renderer.sizeCalls[0], [1200, 800, undefined]);
   assert.deepEqual(runtime.renderer.sizeCalls[1], [1000, 700, false]);
   assert.equal(runtime.camera.aspect, 1000 / 700);

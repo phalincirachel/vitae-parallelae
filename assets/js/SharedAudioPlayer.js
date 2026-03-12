@@ -323,20 +323,28 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const text = (currentText || '').trim();
         if (!text) return baseEm;
 
-        const closingTrail = String.raw`(?:["'»“”‘’)\]])*`;
-        const sentencePattern = new RegExp(`[.!?…]${closingTrail}$`);
+        const nextTrimmed = (nextText || '').trim();
+        if (!nextTrimmed) return 0;
+
+        const closingTrail = String.raw`(?:["'\u00bb\u201c\u201d\u2018\u2019)\]])*`;
+        const sentencePattern = new RegExp(`[.!?\u2026]${closingTrail}$`);
         const weakSentencePattern = new RegExp(`[:;]${closingTrail}$`);
         const pausePattern = new RegExp(`[,]${closingTrail}$`);
+        const hyphenPattern = /(?:-|\u2010|\u2011|\u2012|\u2013|\u2014)$/;
+        const continuationPattern = /^[\"'\u00bb\u201c\u201d\u2018\u2019(\[]*[a-z\u00e4\u00f6\u00fc\u00df]/;
+        const tightLeadingPattern = /^[,.;:!?\u2026)\]\u201d\u2019]/;
+
+        if (hyphenPattern.test(text) || tightLeadingPattern.test(nextTrimmed)) return 0;
 
         if (sentencePattern.test(text)) {
-            const nextTrimmed = (nextText || '').trim();
-            if (/^[\"'»“”‘’(\[]*[a-zäöüß]/.test(nextTrimmed)) {
+            if (continuationPattern.test(nextTrimmed)) {
                 return Math.max(minorEm, baseEm + 0.02);
             }
             return sentenceEm;
         }
         if (weakSentencePattern.test(text)) return Math.max(minorEm, baseEm + 0.03);
         if (pausePattern.test(text)) return minorEm;
+        if (continuationPattern.test(nextTrimmed)) return Math.max(0.04, Math.min(baseEm, baseEm * 0.45));
         return baseEm;
     }
 
@@ -363,6 +371,183 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         });
         lineEl.style.setProperty('--timestamp-gap', `${gapEm.toFixed(3)}em`);
     }
+
+    _isDesktopPointerLayout() {
+        return !!(typeof window !== 'undefined'
+            && typeof window.matchMedia === 'function'
+            && window.matchMedia('(hover: hover) and (pointer: fine)').matches);
+    }
+
+    _clearFlatSmartLineStyle(lineEl) {
+        if (!lineEl) return;
+        lineEl.classList.remove('flat-line-smart');
+        lineEl.style.removeProperty('--flat-smart-word-spacing');
+        lineEl.style.removeProperty('--flat-smart-letter-spacing');
+        lineEl.style.removeProperty('--flat-smart-stretch');
+        lineEl.style.removeProperty('--flat-smart-wdth');
+    }
+
+    _getFlatLineClientRects(lineEl) {
+        if (!lineEl || typeof lineEl.getClientRects !== 'function') return [];
+        return Array.from(lineEl.getClientRects()).filter((rect) => rect.width > 1 && rect.height > 1);
+    }
+
+    _getFlatLineBoundaryGapPx(elements) {
+        if (!Array.isArray(elements) || elements.length <= 1) return 0;
+        if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return 0;
+        let total = 0;
+        for (let i = 0; i < elements.length - 1; i += 1) {
+            total += parseFloat(window.getComputedStyle(elements[i]).marginRight) || 0;
+        }
+        return total;
+    }
+
+    _captureFlatLineGeometry(elements, containerRect) {
+        const geometry = new Map();
+        if (!Array.isArray(elements)) return geometry;
+        elements.forEach((el) => {
+            const rects = this._getFlatLineClientRects(el);
+            if (rects.length !== 1) return;
+            const rect = rects[0];
+            geometry.set(el, {
+                left: Math.round((rect.left - containerRect.left) * 10) / 10,
+                right: Math.round((rect.right - containerRect.left) * 10) / 10
+            });
+        });
+        return geometry;
+    }
+
+    _didFlatLineGeometryChange(elements, containerRect, baselineGeometry) {
+        if (!(baselineGeometry instanceof Map) || baselineGeometry.size !== elements.length) return true;
+        for (const el of elements) {
+            const rects = this._getFlatLineClientRects(el);
+            if (rects.length !== 1) return true;
+            const rect = rects[0];
+            const current = {
+                left: Math.round((rect.left - containerRect.left) * 10) / 10,
+                right: Math.round((rect.right - containerRect.left) * 10) / 10
+            };
+            const baseline = baselineGeometry.get(el);
+            if (!baseline) return true;
+            if (Math.abs(current.left - baseline.left) > 0.6 || Math.abs(current.right - baseline.right) > 0.6) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    _applyFlatSmartJustification() {
+        if (!this.container) return;
+        const lineElements = Array.from(this.container.querySelectorAll('.subtitle-line'));
+        if (!lineElements.length) return;
+
+        lineElements.forEach((lineEl) => this._clearFlatSmartLineStyle(lineEl));
+
+        if (!this.container.classList.contains('reader-layout-flat')) return;
+        if (!this.container.classList.contains('reader-text-justify')) return;
+        if (this._isDesktopPointerLayout()) return;
+        if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return;
+
+        const containerRect = this.container.getBoundingClientRect();
+        const containerStyle = window.getComputedStyle(this.container);
+        const paddingLeft = parseFloat(containerStyle.paddingLeft) || 0;
+        const paddingRight = parseFloat(containerStyle.paddingRight) || 0;
+        const innerWidth = Math.max(1, this.container.clientWidth - paddingLeft - paddingRight);
+        if (innerWidth <= 20) return;
+
+        const elementRectCount = new Map();
+        const linesByTop = new Map();
+
+        lineElements.forEach((lineEl) => {
+            const rects = this._getFlatLineClientRects(lineEl);
+            elementRectCount.set(lineEl, rects.length);
+            rects.forEach((rect) => {
+                const key = Math.round(rect.top - containerRect.top);
+                let line = linesByTop.get(key);
+                if (!line) {
+                    line = { left: rect.left, right: rect.right, elements: new Set() };
+                    linesByTop.set(key, line);
+                } else {
+                    line.left = Math.min(line.left, rect.left);
+                    line.right = Math.max(line.right, rect.right);
+                }
+                line.elements.add(lineEl);
+            });
+        });
+
+        const visualLines = Array.from(linesByTop.entries())
+            .sort((left, right) => left[0] - right[0])
+            .map((entry) => entry[1]);
+        if (visualLines.length <= 1) return;
+
+        for (let i = 0; i < visualLines.length - 1; i += 1) {
+            const line = visualLines[i];
+            const elements = Array.from(line.elements);
+            if (!elements.length) continue;
+            if (elements.some((el) => (elementRectCount.get(el) || 0) > 1)) continue;
+
+            const lineWidth = Math.max(0, line.right - line.left);
+            const boundaryCount = Math.max(0, elements.length - 1);
+            const boundaryGapPx = this._getFlatLineBoundaryGapPx(elements);
+            const lineVisualWidth = lineWidth + boundaryGapPx;
+            const slack = innerWidth - lineVisualWidth;
+            if (slack < 2.5 || slack > (innerWidth * 0.18)) continue;
+
+            let letters = 0;
+            let spaces = 0;
+            let words = 0;
+            elements.forEach((el) => {
+                const compact = (el.textContent || '').replace(/\s+/g, ' ').trim();
+                if (!compact) return;
+                words += compact.split(' ').filter(Boolean).length;
+                letters += compact.replace(/\s/g, '').length;
+                const localSpaces = compact.match(/\s+/g);
+                if (localSpaces) spaces += localSpaces.length;
+            });
+
+            const totalGapUnits = spaces + boundaryCount;
+            if (letters < 8) continue;
+            if (totalGapUnits < 2) continue;
+            if (words < 4 && slack > 9) continue;
+            if (totalGapUnits < 3 && slack > 14) continue;
+
+            const sparseLine = totalGapUnits < 6;
+            const wordShare = sparseLine ? 0.82 : 0.76;
+            const letterShare = sparseLine ? 0.13 : 0.18;
+            const stretchShare = sparseLine ? 0.05 : 0.06;
+
+            const addWord = Math.min(0.68, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
+            const addLetter = Math.min(0.032, Math.max(0, (slack * letterShare) / Math.max(44, letters)));
+            const usedSlack = (addWord * totalGapUnits) + (addLetter * letters);
+            const remainingSlack = Math.max(0, slack - usedSlack);
+            const stretchScale = 1 + Math.min(0.012, (remainingSlack * stretchShare) / Math.max(240, lineVisualWidth));
+            const stretchPercent = stretchScale * 100;
+            const hasStretch = stretchScale > 1.002;
+
+            if (addWord < 0.03 && addLetter < 0.004 && !hasStretch) continue;
+
+            const baselineGeometry = this._captureFlatLineGeometry(elements, containerRect);
+            if (baselineGeometry.size !== elements.length) continue;
+
+            elements.forEach((el) => {
+                el.classList.add('flat-line-smart');
+                el.style.setProperty('--flat-smart-word-spacing', `${addWord.toFixed(3)}px`);
+                el.style.setProperty('--flat-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
+                if (hasStretch) {
+                    el.style.setProperty('--flat-smart-stretch', `${stretchPercent.toFixed(2)}%`);
+                    el.style.setProperty('--flat-smart-wdth', stretchPercent.toFixed(2));
+                } else {
+                    el.style.removeProperty('--flat-smart-stretch');
+                    el.style.removeProperty('--flat-smart-wdth');
+                }
+            });
+
+            if (this._didFlatLineGeometryChange(elements, containerRect, baselineGeometry)) {
+                elements.forEach((el) => this._clearFlatSmartLineStyle(el));
+            }
+        }
+    }
+
 
     renderLines(centerIndex) {
         if (!this.container) return;
@@ -433,6 +618,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 }
             }
 
+            this._applyFlatSmartJustification();
             return;
         }
 
@@ -579,3 +765,4 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
     get src() { return this.audio.src; }
     set src(val) { this.audio.src = val; }
 }
+

@@ -85,6 +85,12 @@
         } else {
           renderer.setPixelRatio(windowObject.devicePixelRatio || 1);
         }
+        if (renderer.domElement && renderer.domElement.style) {
+          renderer.domElement.style.touchAction = 'none';
+          renderer.domElement.style.userSelect = 'none';
+          renderer.domElement.style.webkitUserSelect = 'none';
+          renderer.domElement.style.webkitTapHighlightColor = 'transparent';
+        }
         if (documentObject && documentObject.body && typeof documentObject.body.appendChild === 'function') {
           documentObject.body.appendChild(renderer.domElement);
         }

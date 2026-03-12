@@ -2016,20 +2016,28 @@
                     const text = (currentText || '').trim();
                     if (!text) return baseEm;
 
-                    const closingTrail = String.raw`(?:["'»“”‘’)\]])*`;
-                    const sentencePattern = new RegExp(`[.!?…]${closingTrail}$`);
+                    const nextTrimmed = (nextText || '').trim();
+                    if (!nextTrimmed) return 0;
+
+                    const closingTrail = String.raw`(?:["'\u00bb\u201c\u201d\u2018\u2019)\]])*`;
+                    const sentencePattern = new RegExp(`[.!?\u2026]${closingTrail}$`);
                     const weakSentencePattern = new RegExp(`[:;]${closingTrail}$`);
                     const pausePattern = new RegExp(`[,]${closingTrail}$`);
+                    const hyphenPattern = /(?:-|\u2010|\u2011|\u2012|\u2013|\u2014)$/;
+                    const continuationPattern = /^[\"'\u00bb\u201c\u201d\u2018\u2019(\[]*[a-z\u00e4\u00f6\u00fc\u00df]/;
+                    const tightLeadingPattern = /^[,.;:!?\u2026)\]\u201d\u2019]/;
+
+                    if (hyphenPattern.test(text) || tightLeadingPattern.test(nextTrimmed)) return 0;
 
                     if (sentencePattern.test(text)) {
-                        const nextTrimmed = (nextText || '').trim();
-                        if (/^[\"'»“”‘’(\[]*[a-zäöüß]/.test(nextTrimmed)) {
+                        if (continuationPattern.test(nextTrimmed)) {
                             return Math.max(minorEm, baseEm + 0.02);
                         }
                         return sentenceEm;
                     }
                     if (weakSentencePattern.test(text)) return Math.max(minorEm, baseEm + 0.03);
                     if (pausePattern.test(text)) return minorEm;
+                    if (continuationPattern.test(nextTrimmed)) return Math.max(0.04, Math.min(baseEm, baseEm * 0.45));
                     return baseEm;
                 }
 
