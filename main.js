@@ -1,11 +1,14 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const fs = require('fs');
+const { createSaveStore } = require('./electron/save-store');
 
-// Lazy load path to avoid "app is undefined" issues at startup if any
-function getSaveFile() {
-    // Version 3: FRESH START
-    return path.join(app.getPath('userData'), 'savegame_v3.json');
+let saveStore = null;
+
+function getSaveStore() {
+    if (!saveStore) {
+        saveStore = createSaveStore({ app });
+    }
+    return saveStore;
 }
 
 async function createWindow() {
@@ -46,10 +49,10 @@ async function createWindow() {
     await win.loadFile('index.html', !app.isPackaged
         ? { query: { v: String(Date.now()) } }
         : undefined);
-    // win.webContents.openDevTools(); // Optional for debugging
 }
 
 app.whenReady().then(async () => {
+    getSaveStore();
     await createWindow();
 
     app.on('activate', () => {
@@ -65,11 +68,9 @@ app.on('window-all-closed', () => {
     }
 });
 
-// IPC Handlers
-ipcMain.handle('save-data', async (event, data) => {
+ipcMain.handle('save-data', async (_event, data) => {
     try {
-        const file = getSaveFile();
-        fs.writeFileSync(file, JSON.stringify(data));
+        await getSaveStore().save(data);
         return { success: true };
     } catch (error) {
         console.error('Save failed:', error);
@@ -79,12 +80,7 @@ ipcMain.handle('save-data', async (event, data) => {
 
 ipcMain.handle('load-data', async () => {
     try {
-        const file = getSaveFile();
-        if (fs.existsSync(file)) {
-            const data = fs.readFileSync(file, 'utf8');
-            return JSON.parse(data);
-        }
-        return null;
+        return await getSaveStore().load();
     } catch (error) {
         console.error('Load failed:', error);
         return null;

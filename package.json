@@ -4,7 +4,11 @@
   "description": "",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "node tools/start-electron.cjs",
+    "test:unit": "node --test",
+    "verify:encoding": "node tools/verify-encoding.mjs",
+    "verify:assets": "node tools/verify-assets.mjs",
+    "check": "npm run verify:encoding && npm run verify:assets && npm run test:unit"
   },
   "keywords": [],
   "author": "",
