@@ -13,6 +13,7 @@
         : Date.now());
     const getClock = typeof options.getClock === 'function' ? options.getClock : () => null;
     const getCamera = typeof options.getCamera === 'function' ? options.getCamera : () => null;
+    const getControls = typeof options.getControls === 'function' ? options.getControls : () => null;
     const getEuler = typeof options.getEuler === 'function' ? options.getEuler : () => null;
     const getRenderer = typeof options.getRenderer === 'function' ? options.getRenderer : () => null;
     const getScene = typeof options.getScene === 'function' ? options.getScene : () => null;
@@ -165,8 +166,12 @@
 
       const baseAccel = 150.0;
       const gameSpeed = baseAccel * 0.15;
+      const clickSpeed = gameSpeed * 0.072;
       const readingSpeed = gameSpeed;
       const isReading = !!getIsReadingMode();
+      const controls = getControls();
+      const hasControlMovement = !!(controls && typeof controls.moveRight === 'function' && typeof controls.moveForward === 'function');
+      let moveUsingControls = false;
 
       input.set(0, 0, 0);
       velocity.x -= velocity.x * 10.0 * delta;
@@ -229,14 +234,23 @@
                 const moveDir = getTmpMoveDir();
                 if (!moveDir) return;
                 moveDir.set(dx, 0, dz).normalize();
-                velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
+                const localX = moveDir.dot(right);
+                const localZ = moveDir.dot(forward);
+                velocity.x -= localX * clickSpeed * delta * 50;
+                velocity.z -= localZ * clickSpeed * delta * 50;
+                moveUsingControls = hasControlMovement;
               }
             }
           }
         }
 
-        camera.position.x += velocity.x * delta;
-        camera.position.z += velocity.z * delta;
+        if (moveUsingControls) {
+          controls.moveRight(-velocity.x * delta);
+          controls.moveForward(-velocity.z * delta);
+        } else {
+          camera.position.x += velocity.x * delta;
+          camera.position.z += velocity.z * delta;
+        }
         if (velocity.z > 0) velocity.z = 0;
         camera.position.y += velocity.y * delta;
 

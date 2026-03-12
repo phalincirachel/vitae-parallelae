@@ -43,9 +43,9 @@
     const uiClickSuppressMs = Number.isFinite(options.uiClickSuppressMs) ? options.uiClickSuppressMs : 700;
     const disablePinchZoom = options.disablePinchZoom !== false;
     const mobileViewportMaxWidth = Number.isFinite(options.mobileViewportMaxWidth) ? options.mobileViewportMaxWidth : 768;
-    const mobileTapMaxX = Number.isFinite(options.mobileTapMaxX) ? options.mobileTapMaxX : 1.75;
-    const mobileTapMaxLateralStep = Number.isFinite(options.mobileTapMaxLateralStep) ? options.mobileTapMaxLateralStep : 1.55;
-    const mobileTapLookEnabled = !!options.mobileTapLookEnabled;
+    const mobileTapMaxX = Number.isFinite(options.mobileTapMaxX) ? options.mobileTapMaxX : 2.5;
+    const mobileTapMaxLateralStep = Number.isFinite(options.mobileTapMaxLateralStep) ? options.mobileTapMaxLateralStep : 2.5;
+    const mobileTapLookEnabled = options.mobileTapLookEnabled !== false;
     const debugNote = typeof options.debugNote === 'function' ? options.debugNote : () => {};
     const cause = typeof options.cause === 'function' ? options.cause : () => {};
     const syncLookTargetsToCamera = typeof options.syncLookTargetsToCamera === 'function' ? options.syncLookTargetsToCamera : () => {};

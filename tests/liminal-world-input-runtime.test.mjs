@@ -43,7 +43,7 @@ class Vector3 {
   }
 }
 
-test('liminal world input runtime keeps mobile tap movement aligned without auto-look', () => {
+test('liminal world input runtime restores mobile tap move target and look target', () => {
   const documentObject = createEventTarget({
     elementFromPoint() {
       return { nodeType: 1, closest: () => null };
@@ -116,10 +116,13 @@ test('liminal world input runtime keeps mobile tap movement aligned without auto
   const applied = runtime.trySetMoveTargetFromScreenPoint(600, 300, true);
   assert.equal(applied, true);
   assert.ok(moveTarget);
-  assert.equal(moveTarget.x, 1.55);
+  assert.equal(moveTarget.x, 2.5);
   assert.equal(moveTarget.y, 1.6);
   assert.equal(moveTarget.z, -8);
-  assert.equal(cameraLookTarget, null);
+  assert.ok(cameraLookTarget);
+  assert.equal(cameraLookTarget.x, 2.5);
+  assert.equal(cameraLookTarget.y, 1.6);
+  assert.equal(cameraLookTarget.z, -8);
 });
 
 
