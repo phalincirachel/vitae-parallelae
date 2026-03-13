@@ -476,3 +476,97 @@ test('liminal world input runtime accepts desktop clicks through non-ui overlays
   assert.equal(moveTarget.z, -8);
   assert.deepEqual(causes, [['C01_WORLD_PATH_CLICK', 'x=400 y=300']]);
 });
+
+test('liminal world input runtime accepts iPhone-style mobile touchend fallback when Safari reports body/html instead of canvas', () => {
+  const bodyEl = { nodeType: 1, closest: () => null };
+  const htmlEl = { nodeType: 1, closest: () => null };
+  const canvasEl = { nodeType: 1, closest: () => null };
+  const documentObject = createEventTarget({
+    body: bodyEl,
+    documentElement: htmlEl,
+    elementFromPoint() {
+      return bodyEl;
+    }
+  });
+  let moveTarget = null;
+  let cameraLookTarget = null;
+  let touchStartedOnRenderer = true;
+  let touchStartedOnUi = false;
+  let isTouchValid = true;
+  let isTouchDragging = false;
+  let touchMovedForTap = false;
+  const raycaster = {
+    ray: {
+      intersectPlane(_plane, target) {
+        target.x = 0.9;
+        target.y = 0;
+        target.z = -7.5;
+        return true;
+      }
+    },
+    setFromCamera() {},
+    intersectObjects() {
+      return [];
+    }
+  };
+
+  worldInputRuntime.init({
+    window: { innerWidth: 390, innerHeight: 844 },
+    document: documentObject,
+    THREE: { Vector2, Vector3 },
+    getWorldInputLockReason: () => '',
+    isUiClickTarget: () => false,
+    isPointInsideUi: () => false,
+    getUiDeadzoneTop: () => 760,
+    markUiInteraction: () => {},
+    isRendererElement: (el) => el === canvasEl,
+    getShieldRoots: () => [],
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getUiInteractionStarted: () => false,
+    setUiInteractionStarted: () => {},
+    getIsTouchDragging: () => isTouchDragging,
+    setIsTouchDragging: (value) => { isTouchDragging = !!value; },
+    getTouchMovedForTap: () => touchMovedForTap,
+    setTouchMovedForTap: (value) => { touchMovedForTap = !!value; },
+    getTouchStartedOnUi: () => touchStartedOnUi,
+    setTouchStartedOnUi: (value) => { touchStartedOnUi = !!value; },
+    getTouchStartedOnRenderer: () => touchStartedOnRenderer,
+    setTouchStartedOnRenderer: (value) => { touchStartedOnRenderer = !!value; },
+    getIsTouchValid: () => isTouchValid,
+    setIsTouchValid: (value) => { isTouchValid = !!value; },
+    getPlayer: () => ({ isReadingMode: false }),
+    getRenderer: () => ({ domElement: canvasEl }),
+    getCamera: () => ({ position: { x: 0, y: 1.6, z: -2 } }),
+    getScene: () => ({ children: [] }),
+    getRaycaster: () => raycaster,
+    getGroundPlane: () => ({}),
+    getMoveTarget: () => moveTarget,
+    setMoveTarget: (value) => { moveTarget = value; },
+    getCameraLookTarget: () => cameraLookTarget,
+    setCameraLookTarget: (value) => { cameraLookTarget = value; },
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    isFallback2DMode: () => false,
+    performanceNow: () => 1000,
+    debugNote: () => {},
+    cause: () => {},
+    log: () => {}
+  });
+
+  documentObject.emit('touchend', {
+    target: bodyEl,
+    changedTouches: [{ clientX: 200, clientY: 300 }]
+  });
+
+  assert.equal(touchStartedOnRenderer, false);
+  assert.equal(isTouchValid, true);
+  assert.ok(moveTarget);
+  assert.equal(moveTarget.x, 0.9);
+  assert.equal(moveTarget.y, 1.6);
+  assert.equal(moveTarget.z, -7.5);
+  assert.ok(cameraLookTarget);
+  assert.equal(cameraLookTarget.x, 0.9);
+  assert.equal(cameraLookTarget.y, 0);
+  assert.equal(cameraLookTarget.z, -7.5);
+});
+

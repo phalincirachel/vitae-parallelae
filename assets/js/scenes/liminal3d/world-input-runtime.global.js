@@ -67,6 +67,16 @@
       return Number(windowObject.innerWidth || 0) <= mobileViewportMaxWidth;
     }
 
+
+    function isRendererSurfaceTarget(target) {
+      const renderer = getRenderer();
+      if (isRendererElement(target)) return true;
+      if (!renderer || !renderer.domElement) return false;
+      return target === renderer.domElement
+        || target === documentObject.body
+        || target === documentObject.documentElement;
+    }
+
     function preventPinchZoom(event) {
       if (!disablePinchZoom || !isMobileViewport()) return false;
       if (event && typeof event.preventDefault === 'function') {
@@ -268,11 +278,8 @@
           return;
         }
 
-        const renderer = getRenderer();
-        const clickHitsRenderer = isRendererElement(clickedEl)
-          || isRendererElement(event.target)
-          || !!(renderer && clickedEl === renderer.domElement)
-          || !!(renderer && (clickedEl === documentObject.body || clickedEl === documentObject.documentElement));
+        const clickHitsRenderer = isRendererSurfaceTarget(clickedEl)
+          || isRendererSurfaceTarget(event.target);
         if (isMobile && !clickHitsRenderer) {
           cause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
           return;
@@ -374,7 +381,7 @@
           cause('C04_WORLD_BLOCKED_TOUCH', 'start-not-renderer');
           return;
         }
-        if (!isRendererElement(touchedEl)) {
+        if (!isRendererSurfaceTarget(touchedEl)) {
           debugNote('touchend-skip', 'not-renderer');
           resetTouchFlags();
           cause('C04_WORLD_BLOCKED_TOUCH', 'not-renderer');

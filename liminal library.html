@@ -4729,7 +4729,12 @@
                         }
 
                         const touchedEl = document.elementFromPoint(touch.clientX, touch.clientY);
-                        const startedOnRenderer = isRendererElement(event.target) || isRendererElement(touchedEl);
+                        const startedOnRenderer = isRendererElement(event.target)
+                            || isRendererElement(touchedEl)
+                            || event.target === document.body
+                            || event.target === document.documentElement
+                            || touchedEl === document.body
+                            || touchedEl === document.documentElement;
                         if (!startedOnRenderer) {
                             isTouchValid = false;
                             touchStartedOnUi = true;
