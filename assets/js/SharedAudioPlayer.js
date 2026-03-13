@@ -454,9 +454,9 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
 
         const fontSize = parseFloat(window.getComputedStyle(lineEl).fontSize) || 16;
         if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
-        if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.15, 4.2);
-        if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.12, 3.8);
-        if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.22, 5.8);
+        if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.26, 6.4);
+        if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.16, 4.4);
+        if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.34, 8.4);
         return 0;
     }
 

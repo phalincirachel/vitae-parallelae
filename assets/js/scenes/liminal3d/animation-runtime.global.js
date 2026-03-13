@@ -67,6 +67,7 @@
     let lastFrameTime = getPerformanceNow();
     let frameCount = 0;
     let fpsLogTimer = 0;
+    let lastReadingRenderAt = 0;
 
     function resetLookTargets() {
       setCameraLookTarget(null);
@@ -165,8 +166,8 @@
       if (!camera || !velocity || !move || !input) return;
 
       const baseAccel = 150.0;
-      const gameSpeed = baseAccel * 0.15;
-      const readingSpeed = gameSpeed;
+      const gameSpeed = baseAccel * 0.225;
+      const readingSpeed = baseAccel * 0.15;
       const isReading = !!getIsReadingMode();
 
       input.set(0, 0, 0);
@@ -366,23 +367,34 @@
         const clock = getClock();
         const delta = clock ? Math.min(clock.getDelta(), 0.05) : 0.05;
         const time = clock ? clock.getElapsedTime() : (getPerformanceNow() / 1000);
+        const now = getPerformanceNow();
         const worldLockReason = getWorldInputLockReason();
-        const lookSuppressed = (!getIsReadingMode()) && (!!worldLockReason || getPerformanceNow() < getSuppressWorldInputUntil());
+        const isReadingMode = !!getIsReadingMode();
+        const lookSuppressed = (!isReadingMode) && (!!worldLockReason || now < getSuppressWorldInputUntil());
+        const readingRenderIntervalMs = Number.isFinite(options.readingRenderIntervalMs) ? options.readingRenderIntervalMs : 66;
 
         if (!getIsFallback2DMode()) {
           updateLook(delta, lookSuppressed);
           updateMovement(delta);
-          updateSegmentsAndBooks(delta, time);
-          if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {
-            // Shared player updates on its own timeupdate event.
+
+          const shouldThrottleReadingRender = isReadingMode && !getIsCenteringCamera();
+          const shouldRenderFrame = !shouldThrottleReadingRender || (now - lastReadingRenderAt) >= readingRenderIntervalMs;
+          if (shouldRenderFrame) {
+            updateSegmentsAndBooks(delta, time);
+            if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {
+              // Shared player updates on its own timeupdate event.
+            }
+            const renderer = getRenderer();
+            const scene = getScene();
+            const camera = getCamera();
+            if (renderer && scene && camera && typeof renderer.render === 'function') {
+              renderer.render(scene, camera);
+            }
+            updateDebugHud();
+            if (shouldThrottleReadingRender) {
+              lastReadingRenderAt = now;
+            }
           }
-          const renderer = getRenderer();
-          const scene = getScene();
-          const camera = getCamera();
-          if (renderer && scene && camera && typeof renderer.render === 'function') {
-            renderer.render(scene, camera);
-          }
-          updateDebugHud();
         }
       } catch (runtimeError) {
         error('Animation Loop Crash:', runtimeError);
@@ -395,6 +407,7 @@
       if (animationLoopRunning || windowObject.visualFreezeActive) return false;
       animationLoopRunning = true;
       lastFrameTime = getPerformanceNow();
+      lastReadingRenderAt = 0;
       requestFrame(animate);
       return true;
     }

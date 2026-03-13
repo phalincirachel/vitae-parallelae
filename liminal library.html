@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de">
 
 <head>
@@ -2089,6 +2089,26 @@
                     return total;
                 }
 
+                function tokenizeBlaetternText(text) {
+                    if (!text) return [];
+                    const tokens = String(text).match(/\S+\s*|\s+/gu);
+                    return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
+                }
+
+                function wrapBlaetternLineFragments(lineEl) {
+                    if (!lineEl || lineEl.childElementCount > 0) return;
+                    const text = lineEl.textContent || '';
+                    const tokens = tokenizeBlaetternText(text);
+                    if (tokens.length <= 1) return;
+                    lineEl.textContent = '';
+                    tokens.forEach((token) => {
+                        const fragmentEl = document.createElement('span');
+                        fragmentEl.className = 'subtitle-fragment';
+                        fragmentEl.textContent = token;
+                        lineEl.appendChild(fragmentEl);
+                    });
+                }
+
                 function createBlaetternLineElement(index, options = {}) {
                     const track = getBlaetternTracks()[index];
                     const span = document.createElement('span');
@@ -2106,6 +2126,7 @@
                     } else {
                         span.innerText = track ? track.text : '';
                     }
+                    wrapBlaetternLineFragments(span);
                     applyBlaetternTimestampBoundaryGap(span, index);
                     if (!options.forMeasure) {
                         span.title = 'Tippen zum Abspielen';
@@ -2194,9 +2215,9 @@
 
                     const fontSize = parseFloat(window.getComputedStyle(lineEl).fontSize) || 16;
                     if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
-                    if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.15, 4.2);
-                    if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.12, 3.8);
-                    if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.22, 5.8);
+                    if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.26, 6.4);
+                    if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.16, 4.4);
+                    if (/[\\-\\u2010\\u2011\\u2012\\u2013\\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.34, 8.4);
                     return 0;
                 }
 
@@ -2205,7 +2226,12 @@
                     const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
                     if (!lineElements.length) return;
                     if (isDesktopPointerLayout()) {
-                        lineElements.forEach((lineEl) => clearBlaetternSmartLineStyle(lineEl));
+                        lineElements.forEach((lineEl) => {
+                            clearBlaetternSmartLineStyle(lineEl);
+                            Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
+                                clearBlaetternSmartLineStyle(fragmentEl);
+                            });
+                        });
                         return;
                     }
 
@@ -2218,11 +2244,22 @@
 
                     const elementRectCount = new Map();
                     const linesByTop = new Map();
+                    const measureElements = [];
 
                     lineElements.forEach((lineEl) => {
                         clearBlaetternSmartLineStyle(lineEl);
-                        const rects = getBlaetternLineClientRects(lineEl);
-                        elementRectCount.set(lineEl, rects.length);
+                        const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment'));
+                        if (fragments.length) {
+                            fragments.forEach((fragmentEl) => clearBlaetternSmartLineStyle(fragmentEl));
+                            measureElements.push(...fragments);
+                        } else {
+                            measureElements.push(lineEl);
+                        }
+                    });
+
+                    measureElements.forEach((measureEl) => {
+                        const rects = getBlaetternLineClientRects(measureEl);
+                        elementRectCount.set(measureEl, rects.length);
                         rects.forEach((rect) => {
                             const key = Math.round(rect.top - layerRect.top);
                             let line = linesByTop.get(key);
@@ -2237,7 +2274,7 @@
                                 line.left = Math.min(line.left, rect.left);
                                 line.right = Math.max(line.right, rect.right);
                             }
-                            line.elements.add(lineEl);
+                            line.elements.add(measureEl);
                         });
                     });
 
@@ -3492,14 +3529,14 @@
                         const subtitleRect = subtitleContainer.getBoundingClientRect();
                         const controlsRect = audioControlsEl ? audioControlsEl.getBoundingClientRect() : null;
                         let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
-                        let top = subtitleRect.bottom - btnRect.height - gap;
+                        let top = subtitleRect.bottom + gap;
 
                         if (controlsRect && controlsRect.top > 0) {
                             top = Math.min(top, controlsRect.top - btnRect.height - gap);
                         }
 
                         left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
-                        top = Math.max(subtitleRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
+                        top = Math.max(subtitleRect.bottom + 4, Math.min(window.innerHeight - btnRect.height - 6, top));
                         subtitleRecenterBtn.style.left = `${left}px`;
                         subtitleRecenterBtn.style.top = `${top}px`;
                         return;
@@ -4029,7 +4066,7 @@
 
                 // Auto-Resume when Lore ends or Transition
                 // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
-                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                // ZusÃ¤tzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
                 let _endedHandled = false;
                 function handleAudioEnded() {
                     if (_endedHandled) return;
@@ -4044,8 +4081,8 @@
                     }
 
                     // MAIN CHAPTER ENDED
-                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
-                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurÃ¼cksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd wÃ¼rde false liefern).
                     const tracks = getActiveSubtitleTracks();
                     const subtitleIdx = getActiveSubtitleIndex();
                     const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
@@ -4065,7 +4102,7 @@
                         showNextChapterPrompt('main-ended');
                     }
                 }
-                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                // PrimÃ¤r: SharedAudioPlayer.onEnded (garantiert aufgerufen)
                 player.onEnded = handleAudioEnded;
                 // Fallback: DOM-Event auf dem Audio-Element
                 player.audio.addEventListener('ended', handleAudioEnded);
@@ -5070,6 +5107,7 @@
 </body>
 
 </html>
+
 
 
 

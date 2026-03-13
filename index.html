@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="de">
 
 <head>
@@ -117,7 +117,7 @@
 
 
 
-    <!-- LOADING SCREEN (über ALLEM) -->
+    <!-- LOADING SCREEN (Ã¼ber ALLEM) -->
     <div id="loading-screen">
         <div class="spinner"></div>
         <p>INITIALIZING...</p>
@@ -335,14 +335,14 @@
             <div class="archive-tab-content" data-tab="lore">
                 <!-- LORE -->
                 <div class="col-left" id="loreList" style="flex:1;">
-                    <!-- Dynamisch gefüllt -->
+                    <!-- Dynamisch gefÃ¼llt -->
                 </div>
             </div>
 
             <div class="archive-tab-content" data-tab="lesezeichen" data-loading-tutorial="bookmark-list-tab">
                 <!-- LESEZEICHEN -->
                 <div id="bookmarkList" style="width:100%;">
-                    <!-- Dynamisch gefüllt -->
+                    <!-- Dynamisch gefÃ¼llt -->
                 </div>
             </div>
 
@@ -498,18 +498,18 @@
             gameWrapper.classList.remove('effect-pal');
         }
 
-        // Turbulenz für Glitch laufend aktualisieren für "Randomness"
+        // Turbulenz fÃ¼r Glitch laufend aktualisieren fÃ¼r "Randomness"
         // const turb = document.querySelector('#glitch-filter feTurbulence');
         // const disp = document.querySelector('#glitch-filter feDisplacementMap');
 
-        // Glitch Loop: Manchmal stärker, manchmal schwächer
+        // Glitch Loop: Manchmal stÃ¤rker, manchmal schwÃ¤cher
         // setInterval(() => {
         //     if (Math.random() > 0.95) {
         //         // Kurzer starker Glitch
         //         disp.setAttribute('scale', (Math.random() * 30 + 10).toString());
         //         turb.setAttribute('seed', Math.floor(Math.random() * 100).toString());
         //         setTimeout(() => {
-        //             disp.setAttribute('scale', '4'); // Zurück zu subtil
+        //             disp.setAttribute('scale', '4'); // ZurÃ¼ck zu subtil
         //         }, 100);
         //     }
         // }, 500);
@@ -579,7 +579,7 @@
         let spriteReady = false;
         let collisionData = [];   // true = Wand
         let foregroundData = [];  // true = Vordergrund (verdeckt Spieler)
-        let flowData = [];        // true = Magischer Fluss (Grün)
+        let flowData = [];        // true = Magischer Fluss (GrÃ¼n)
         let magentaPixels = [];
         let cyanPixels = new Set();
         let greenPixels = [];     // Zum Verstecken
@@ -1051,7 +1051,7 @@
 
         // YellowLight class - now loaded from assets/js/shared-game-systems.js
 
-// Click-to-Move für Mobile
+// Click-to-Move fÃ¼r Mobile
         let moveTarget = null; // {x, y} oder null
 
         // ============================================
@@ -1061,7 +1061,7 @@
         const NUM_PARTICLES = 300; // Reduziert um 50%
         let particleSprite = null;
 
-        // Spotlight-System: Sammelt Lichtquellen mit Richtung und Intensität
+        // Spotlight-System: Sammelt Lichtquellen mit Richtung und IntensitÃ¤t
         let nearbyLights = []; // {x, y, intensity}
 
         // Dust-Particles: Staubwolken beim Laufen
@@ -1117,7 +1117,7 @@
 
         let mapW = 0, mapH = 0;
 
-        // Dynamische Auflösung
+        // Dynamische AuflÃ¶sung
         let SCREEN_W = 320;
         let SCREEN_H = 240;
 
@@ -1143,7 +1143,7 @@
                 SCREEN_H = Math.ceil(SCREEN_W / winRatio);
             }
 
-            // Canvas Größe aktualisieren
+            // Canvas GrÃ¶ÃŸe aktualisieren
             if (canvas) {
                 canvas.width = SCREEN_W;
                 canvas.height = SCREEN_H;
@@ -1156,7 +1156,7 @@
         updateDimensions(); // Keep the original initial call
         window.addEventListener('resize', () => { // Keep the original resize listener
             updateDimensions();
-            // Auch Subtitles neu rendern falls nötig
+            // Auch Subtitles neu rendern falls nÃ¶tig
             if (isReadingMode && subtitleTracks.length > 0) {
                 renderSubtitleLines(Math.max(0, currentSubtitleIndex));
             }
@@ -1364,10 +1364,10 @@
         // Spieler
         const player = {
             x: 50, y: 50,
-            w: 14, h: 8,      // Kollisionsbox (Füße)
+            w: 14, h: 8,      // Kollisionsbox (FÃ¼ÃŸe)
             speed: 35,        // Pixels per second (was 0.54 per frame)
             dir: 0,           // 0=down, 1=up, 2=left, 3=right
-            frame: 0,         // 0-3 für Animation
+            frame: 0,         // 0-3 fÃ¼r Animation
             animTimer: 0,
             isMoving: false,
             isBehindForeground: false,
@@ -1385,7 +1385,7 @@
         // SPRITES LADEN (alle 4 Richtungen)
         // ============================================
         let spriteFront = null;   // Frontalansicht (down)
-        let spriteBack = null;    // Rückenansicht (up)
+        let spriteBack = null;    // RÃ¼ckenansicht (up)
         let spriteSide = null;    // Seitenansicht (right, links wird gespiegelt)
         let spritesLoaded = 0;
         const TOTAL_SPRITES = 3;
@@ -1394,8 +1394,8 @@
             // Frontal (nach unten schauend, NEU: spriteneu.png)
             spriteFront = new Image();
             spriteFront.onload = function () {
-                // WICHTIG: Math.floor() für ganzzahlige Frame-Breite!
-                SPRITE.frameWidth = Math.floor(this.width / SPRITE.cols); // Fallback-Wert, wird für DrawCoords überschrieben
+                // WICHTIG: Math.floor() fÃ¼r ganzzahlige Frame-Breite!
+                SPRITE.frameWidth = Math.floor(this.width / SPRITE.cols); // Fallback-Wert, wird fÃ¼r DrawCoords Ã¼berschrieben
                 SPRITE.frameHeight = this.height;
                 spritesLoaded++;
                 checkAllSpritesLoaded();
@@ -1404,7 +1404,7 @@
             spriteFront.src = 'assets/spriteneu.png';
             spriteFront.onerror = () => console.warn('assets/spriteneu.png nicht gefunden');
 
-            // Rücken (nach oben schauend, NEU: spriterueckenneu.png)
+            // RÃ¼cken (nach oben schauend, NEU: spriterueckenneu.png)
             spriteBack = new Image();
             spriteBack.onload = function () {
                 spritesLoaded++;
@@ -1414,7 +1414,7 @@
             spriteBack.src = 'assets/spriterueckenneu.png';
             spriteBack.onerror = () => console.warn('assets/spriterueckenneu.png nicht gefunden');
 
-            // Seitlich (für rechts, links wird gespiegelt)
+            // Seitlich (fÃ¼r rechts, links wird gespiegelt)
             spriteSide = new Image();
             spriteSide.onload = function () {
                 spritesLoaded++;
@@ -1432,7 +1432,7 @@
             { left: 361, width: 140, footX: 436, footY: 270 },
             { left: 534, width: 137, footX: 604, footY: 268 }
         ];
-        // Ping-Pong Animation für Front (0-1-2-3-2-1)
+        // Ping-Pong Animation fÃ¼r Front (0-1-2-3-2-1)
         const FRONT_ANIM_CYCLE = [0, 1, 2, 3, 2, 1];
 
         // Back (spriterueckenneu.png)
@@ -1441,10 +1441,10 @@
             { left: 177, width: 144, footX: 253, footY: 283 },
             { left: 336, width: 152, footX: 417, footY: 285 }
         ];
-        // Ping-Pong Animation für Back (0-1-2-1)
+        // Ping-Pong Animation fÃ¼r Back (0-1-2-1)
         const BACK_ANIM_CYCLE = [0, 1, 2, 1];
 
-        // NEU: Marker-Daten für seitlichneu.png (X, Y)
+        // NEU: Marker-Daten fÃ¼r seitlichneu.png (X, Y)
         const SIDE_SPRITE_DATA = [
             { left: 20, footX: 92, footY: 275 },
             { left: 200, footX: 268, footY: 281 },
@@ -1452,7 +1452,7 @@
             { left: 528, footX: 595, footY: 284 }
         ];
 
-        // Ping-Pong Animation für Seitlich (0-1-2-3-2-1)
+        // Ping-Pong Animation fÃ¼r Seitlich (0-1-2-3-2-1)
         const SIDE_ANIM_CYCLE = [0, 1, 2, 3, 2, 1];
 
         function checkAllSpritesLoaded() {
@@ -1877,14 +1877,14 @@
         // ============================================
 
         // --- AUTO-WALK PATH SORTER (Pure Nearest Neighbor) ---
-        // Immer den ALLERNÄCHSTEN Pixel. Keine Bereiche, keine Schwellen.
+        // Immer den ALLERNÃ„CHSTEN Pixel. Keine Bereiche, keine Schwellen.
         function sortAutoWalkPath(pixels, startPoint) {
             if (pixels.length === 0) return [];
 
             const path = [];
             let pool = [...pixels];
 
-            // 1. Startpunkt: Der Pixel, der am nächsten zum Spawn liegt.
+            // 1. Startpunkt: Der Pixel, der am nÃ¤chsten zum Spawn liegt.
             let minDistSq = Infinity;
             let startIndex = -1;
 
@@ -1903,7 +1903,7 @@
             let current = pool.splice(startIndex, 1)[0];
             path.push(current);
 
-            // 2. Stur: Immer den ALLERNÄCHSTEN noch nicht besuchten Pixel wählen.
+            // 2. Stur: Immer den ALLERNÃ„CHSTEN noch nicht besuchten Pixel wÃ¤hlen.
             while (pool.length > 0) {
                 let bestIndex = -1;
                 let bestDistSq = Infinity;
@@ -1988,7 +1988,7 @@
                         else if (r < 80 && g > 200 && b > 200) {
                             cyanPixels.add(`${x},${y}`);
                         }
-                        // Grün = Flow (Lichter)
+                        // GrÃ¼n = Flow (Lichter)
                         else if (r < 80 && g > 200 && b < 80) {
                             flowData[y][x] = true;
                             greenPixels.push({ x, y, i });
@@ -2275,11 +2275,11 @@
         }
 
         // ============================================
-        // PIXEL-PULLING (Spiralförmige Suche für alle Linienrichtungen)
+        // PIXEL-PULLING (SpiralfÃ¶rmige Suche fÃ¼r alle Linienrichtungen)
         // ============================================
         function pullNearbyPixel(data, x, y, w, h, cyanPixels) {
-            // Spiralförmige Suche: Sucht in expandierenden Kreisen
-            // Funktioniert für horizontale, vertikale UND diagonale Linien
+            // SpiralfÃ¶rmige Suche: Sucht in expandierenden Kreisen
+            // Funktioniert fÃ¼r horizontale, vertikale UND diagonale Linien
             const maxRadius = 15;  // Maximaler Suchradius
 
             for (let radius = 1; radius <= maxRadius; radius++) {
@@ -2300,7 +2300,7 @@
                         if (r < 80 && g > 200 && b > 200) continue;
                         if (cyanPixels.has(`${nx},${ny}`)) continue;
 
-                        // Gültiges Pixel gefunden!
+                        // GÃ¼ltiges Pixel gefunden!
                         return { r, g, b };
                     }
                 }
@@ -2444,7 +2444,7 @@
         }
 
         // ============================================
-        // KOLLISIONSPRÜFUNG - ROBUST (Ecken-Check)
+        // KOLLISIONSPRÃœFUNG - ROBUST (Ecken-Check)
         // ============================================
         function checkCollisionAt(px, py) {
             const foot = getPlayerFootPosition(px, py);
@@ -3014,9 +3014,9 @@
 
             const fontSize = parseFloat(window.getComputedStyle(lineEl).fontSize) || 16;
             if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
-            if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.15, 4.2);
-            if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.12, 3.8);
-            if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.22, 5.8);
+            if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.26, 6.4);
+            if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.16, 4.4);
+            if (/[\\-\\u2010\\u2011\\u2012\\u2013\\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.34, 8.4);
             return 0;
         }
 
@@ -3025,7 +3025,12 @@
             const lineElements = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'));
             if (!lineElements.length) return;
 
-            lineElements.forEach((lineEl) => clearFlatSmartLineStyle(lineEl));
+            lineElements.forEach((lineEl) => {
+                clearFlatSmartLineStyle(lineEl);
+                Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
+                    clearFlatSmartLineStyle(fragmentEl);
+                });
+            });
 
             if (readerSentenceLayout !== READER_LAYOUT_FLAT) return;
             if (readerTextAlign !== READER_TEXT_ALIGN_JUSTIFY) return;
@@ -3040,10 +3045,20 @@
 
             const elementRectCount = new Map();
             const linesByTop = new Map();
+            const measureElements = [];
 
             lineElements.forEach((lineEl) => {
-                const rects = getFlatLineClientRects(lineEl);
-                elementRectCount.set(lineEl, rects.length);
+                const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment'));
+                if (fragments.length) {
+                    measureElements.push(...fragments);
+                } else {
+                    measureElements.push(lineEl);
+                }
+            });
+
+            measureElements.forEach((measureEl) => {
+                const rects = getFlatLineClientRects(measureEl);
+                elementRectCount.set(measureEl, rects.length);
                 rects.forEach((rect) => {
                     const key = Math.round(rect.top - containerRect.top);
                     let line = linesByTop.get(key);
@@ -3054,7 +3069,7 @@
                         line.left = Math.min(line.left, rect.left);
                         line.right = Math.max(line.right, rect.right);
                     }
-                    line.elements.add(lineEl);
+                    line.elements.add(measureEl);
                 });
             });
 
@@ -3177,6 +3192,26 @@
             lineEl.textContent = safeTrack && typeof safeTrack.text === 'string'
                 ? safeTrack.text
                 : '';
+        }
+
+        function tokenizeFlatText(text) {
+            if (!text) return [];
+            const tokens = String(text).match(/\S+\s*|\s+/gu);
+            return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
+        }
+
+        function wrapFlatTextFragments(lineEl) {
+            if (!lineEl || readerSentenceLayout !== READER_LAYOUT_FLAT || lineEl.childElementCount > 0) return;
+            const text = lineEl.textContent || '';
+            const tokens = tokenizeFlatText(text);
+            if (tokens.length <= 1) return;
+            lineEl.textContent = '';
+            tokens.forEach((token) => {
+                const fragmentEl = document.createElement('span');
+                fragmentEl.className = 'subtitle-fragment';
+                fragmentEl.textContent = token;
+                lineEl.appendChild(fragmentEl);
+            });
         }
 
         function applyReaderColorSettings() {
@@ -3569,12 +3604,33 @@
             return clamped;
         }
 
+        function tokenizeBlaetternText(text) {
+            if (!text) return [];
+            const tokens = String(text).match(/\S+\s*|\s+/gu);
+            return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
+        }
+
+        function wrapBlaetternLineFragments(lineEl) {
+            if (!lineEl || lineEl.childElementCount > 0) return;
+            const text = lineEl.textContent || '';
+            const tokens = tokenizeBlaetternText(text);
+            if (tokens.length <= 1) return;
+            lineEl.textContent = '';
+            tokens.forEach((token) => {
+                const fragmentEl = document.createElement('span');
+                fragmentEl.className = 'subtitle-fragment';
+                fragmentEl.textContent = token;
+                lineEl.appendChild(fragmentEl);
+            });
+        }
+
         function createBlaetternLineElement(index, options = {}) {
             const track = subtitleTracks[index];
             const span = document.createElement('span');
             span.className = 'subtitle-line blaettern-line';
             span.dataset.index = String(index);
             renderSubtitleTrackContent(span, track || { text: '' }, { disableInfoLinks: !!options.forMeasure });
+            wrapBlaetternLineFragments(span);
             applyTimestampBoundaryGap(span, index, subtitleTracks, 'blaettern');
             if (!options.forMeasure) {
                 span.title = 'Tippen zum Abspielen';
@@ -3661,7 +3717,12 @@
             const lineElements = Array.from(layer.querySelectorAll('.blaettern-line'));
             if (!lineElements.length) return;
             if (isDesktopPointerLayout()) {
-                lineElements.forEach((lineEl) => clearBlaetternSmartLineStyle(lineEl));
+                lineElements.forEach((lineEl) => {
+                    clearBlaetternSmartLineStyle(lineEl);
+                    Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
+                        clearBlaetternSmartLineStyle(fragmentEl);
+                    });
+                });
                 return;
             }
 
@@ -3674,11 +3735,22 @@
 
             const elementRectCount = new Map();
             const linesByTop = new Map();
+            const measureElements = [];
 
             lineElements.forEach((lineEl) => {
                 clearBlaetternSmartLineStyle(lineEl);
-                const rects = getBlaetternLineClientRects(lineEl);
-                elementRectCount.set(lineEl, rects.length);
+                const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment'));
+                if (fragments.length) {
+                    fragments.forEach((fragmentEl) => clearBlaetternSmartLineStyle(fragmentEl));
+                    measureElements.push(...fragments);
+                } else {
+                    measureElements.push(lineEl);
+                }
+            });
+
+            measureElements.forEach((measureEl) => {
+                const rects = getBlaetternLineClientRects(measureEl);
+                elementRectCount.set(measureEl, rects.length);
                 rects.forEach((rect) => {
                     const key = Math.round(rect.top - layerRect.top);
                     let line = linesByTop.get(key);
@@ -3693,7 +3765,7 @@
                         line.left = Math.min(line.left, rect.left);
                         line.right = Math.max(line.right, rect.right);
                     }
-                    line.elements.add(lineEl);
+                    line.elements.add(measureEl);
                 });
             });
 
@@ -4673,11 +4745,11 @@
 
         console.log('[Audio] Created SCAudioAdapters for main/ambient/footsteps');
 
-        // Berechne die Anzahl sichtbarer Zeilen basierend auf Bildschirmhöhe
+        // Berechne die Anzahl sichtbarer Zeilen basierend auf BildschirmhÃ¶he
         function getMaxVisibleLines() {
             if (!isReadingMode) return 3;
-            const lineHeight = 28; // Ungefähre Zeilenhöhe in px
-            const availableHeight = window.innerHeight * 0.6; // 60% der Bildschirmhöhe
+            const lineHeight = 28; // UngefÃ¤hre ZeilenhÃ¶he in px
+            const availableHeight = window.innerHeight * 0.6; // 60% der BildschirmhÃ¶he
             return Math.min(15, Math.max(5, Math.floor(availableHeight / lineHeight)));
         }
 
@@ -4853,14 +4925,14 @@
                 const controlsRef = audioControlsEl || document.getElementById('audioControls');
                 const controlsRect = controlsRef ? controlsRef.getBoundingClientRect() : null;
                 let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
-                let top = subtitleRect.bottom - btnRect.height - gap;
+                let top = subtitleRect.bottom + gap;
 
                 if (controlsRect && controlsRect.top > 0) {
                     top = Math.min(top, controlsRect.top - btnRect.height - gap);
                 }
 
                 left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
-                top = Math.max(subtitleRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
+                top = Math.max(subtitleRect.bottom + 4, Math.min(window.innerHeight - btnRect.height - 6, top));
                 subtitleRecenterBtn.style.left = `${left}px`;
                 subtitleRecenterBtn.style.top = `${top}px`;
                 if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
@@ -4992,7 +5064,7 @@
 
         // Generiert die Untertitel-Zeilen dynamisch
         function renderSubtitleLines(centerIndex) {
-            // A) Reading Mode: Rendere ALLE Zeilen (für Scrollbar)
+            // A) Reading Mode: Rendere ALLE Zeilen (fÃ¼r Scrollbar)
             if (isReadingMode) {
                 // Version Check: Ensure we are rendering the current set of subtitles
                 if (subtitleTracks.length === 0) {
@@ -5453,7 +5525,7 @@
 
 
 
-        // 2. Parser für Timestamps - CORRECTLY distinguishes between formats:
+        // 2. Parser fÃ¼r Timestamps - CORRECTLY distinguishes between formats:
         // [hh:mm:ss] - Colon before third part means SECONDS (kapitel1.txt uses [00:mm:ss])
         // [mm:ss.xx] - Dot before third part means CENTISECONDS (lore format)
         function parseSubtitles(rawText) {
@@ -5535,7 +5607,7 @@
             window.subtitleVersion = (window.subtitleVersion || 0) + 1;
         }
 
-        // 3. Update-Funktion für Anzeige
+        // 3. Update-Funktion fÃ¼r Anzeige
         function updateSubtitleDisplay(index) {
             if (index === currentSubtitleIndex) return;
             currentSubtitleIndex = index;
@@ -5612,7 +5684,7 @@
             nextChapterPromptTrackbackReference = current;
         }
 
-        // 4. Synchronisation (läuft bei jedem Audio-Update)
+        // 4. Synchronisation (lÃ¤uft bei jedem Audio-Update)
         audioPlayer.addEventListener('timeupdate', () => {
             const t = audioPlayer.currentTime;
 
@@ -5694,7 +5766,7 @@
             if (overlay) overlay.classList.add('active');
 
             const nextTarget = LEVEL.nextChapterTarget;
-            if (!nextTarget) return; // Kein Folgekapitel für dieses Level
+            if (!nextTarget) return; // Kein Folgekapitel fÃ¼r dieses Level
 
             await waitForContentSwitchIdle('transition:next-chapter');
             await saveCurrentContentState({ reason: 'transition:next-chapter' });
@@ -5834,7 +5906,7 @@
                     // Apply velocity
                     subtitleContainer.scrollTop += velocityPxPerSec * dt;
 
-                    // Decay — 0.96 is much gentler than 0.92, so hard swipes coast far
+                    // Decay â€” 0.96 is much gentler than 0.92, so hard swipes coast far
                     velocityPxPerSec *= Math.pow(0.96, dt * 60);
 
                     // Stop when effectively still
@@ -5929,7 +6001,7 @@
             }
         });
 
-        // 6. Skip Buttons (±15 Sekunden)
+        // 6. Skip Buttons (Â±15 Sekunden)
         async function skipBySecondsGlobal(deltaSec, reason = 'skip') {
             if (contentSwitchInProgress) return;
             const delta = Number(deltaSec) || 0;
@@ -6121,7 +6193,7 @@
 
         // 9. Bei Fenster-Resize: Canvas anpassen & Zeilen neu berechnen
         window.addEventListener('resize', () => {
-            // A) Canvas Resize Logic (Vollbild Unterstützung)
+            // A) Canvas Resize Logic (Vollbild UnterstÃ¼tzung)
             if (mapW > 0 && mapH > 0 && gameReady) {
                 SCREEN_W = Math.min(mapW, window.innerWidth);
                 SCREEN_H = Math.min(mapH, window.innerHeight);
@@ -6141,7 +6213,7 @@
 
             // B) Untertitel Logic: Force Rebuild bei Resize
             if (isReadingMode && subtitleTracks.length > 0) {
-                // Leere Container um Rebuild zu erzwingen (Fix für Scrollbar Resize Bug)
+                // Leere Container um Rebuild zu erzwingen (Fix fÃ¼r Scrollbar Resize Bug)
                 subtitleContainer.innerHTML = '';
                 renderSubtitleLines(Math.max(0, currentSubtitleIndex));
             }
@@ -6250,7 +6322,7 @@
                 return;
             }
 
-            // Throttle: Nur alle 1000ms prüfen (Performance!)
+            // Throttle: Nur alle 1000ms prÃ¼fen (Performance!)
             if (!timestamp) timestamp = performance.now();
             if (timestamp - lastBrightnessCheck < 1000) {
                 scheduleBackgroundBrightnessCheck(260);
@@ -6290,7 +6362,7 @@
                     const avgBrightness = totalBrightness / (pixelCount / 4);
                     lastBrightness = lastBrightness * 0.85 + avgBrightness * 0.15;
 
-                    // Stärkerer Kontrast: noch früher einsetzen, höhere Basis
+                    // StÃ¤rkerer Kontrast: noch frÃ¼her einsetzen, hÃ¶here Basis
                     const threshold = 60;
                     const maxBrightness = 180;
                     const baseOpacity = 0.5;
@@ -6314,7 +6386,7 @@
             scheduleBackgroundBrightnessCheck(700);
         }
 
-        // Starte die Hintergrund-Prüfung
+        // Starte die Hintergrund-PrÃ¼fung
         scheduleBackgroundBrightnessCheck(350);
 
         // Global Start Time for Grace Period
@@ -6333,18 +6405,18 @@
             const hatOffset = Math.floor(refH * 0.15);
 
             // Bounding Box des Charakters (synchron mit der visuellen Anzeige)
-            // Nur der "Körper" (Hut bis Füße) löst den Trigger aus
+            // Nur der "KÃ¶rper" (Hut bis FÃ¼ÃŸe) lÃ¶st den Trigger aus
             const pLeft = player.x;
             const pRight = player.x + refW;
             const pTop = player.y + offsetY + hatOffset;
             const pBottom = player.y + offsetY + refH;
 
-            // Finde das nächste Licht und die Distanz zur Bounding Box
+            // Finde das nÃ¤chste Licht und die Distanz zur Bounding Box
             let nearestId = null;
             let minDist = Infinity;
 
             yellowLights.forEach(light => {
-                // Finde den nächsten Punkt auf der Bounding Box zum Licht
+                // Finde den nÃ¤chsten Punkt auf der Bounding Box zum Licht
                 const closestX = Math.max(pLeft, Math.min(light.x, pRight));
                 const closestY = Math.max(pTop, Math.min(light.y, pBottom));
 
@@ -6361,7 +6433,7 @@
             const TRIGGER_DIST = 6; // Reduced by ~70% (was 20)
             const EXIT_DIST = 25; // Adjusted Hysteresis
 
-            // SHIMMER SOUND TRIGGER (Unabhängig vom Text)
+            // SHIMMER SOUND TRIGGER (UnabhÃ¤ngig vom Text)
             if (nearestId && minDist < TRIGGER_DIST) {
                 // BUGFIX: Do not play shimmer if already collected!
                 const sc = (typeof SCENE_NAME !== 'undefined') ? SCENE_NAME : "index";
@@ -6983,6 +7055,8 @@
 </body>
 
 </html>
+
+
 
 
 
