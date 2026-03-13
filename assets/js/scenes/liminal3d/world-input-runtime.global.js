@@ -130,15 +130,18 @@
       raycaster.setFromCamera(clickMouse, camera);
 
       let target = null;
-      const groundTarget = new THREE.Vector3();
-      if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
-        target = groundTarget;
-      } else if (scene && Array.isArray(scene.children)) {
+      if (scene && Array.isArray(scene.children)) {
         const intersects = raycaster.intersectObjects(scene.children, true);
         for (let i = 0; i < intersects.length; i++) {
           if (intersects[i].object.type === 'Points') continue;
           target = intersects[i].point;
           break;
+        }
+      }
+      if (!target) {
+        const groundTarget = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(groundPlane, groundTarget)) {
+          target = groundTarget;
         }
       }
 
@@ -172,7 +175,7 @@
 
       if (isMobileTap) {
         if (mobileTapLookEnabled) {
-          setCameraLookTarget(navigationTarget.clone());
+          setCameraLookTarget(target.clone());
         } else {
           setCameraLookTarget(null);
         }

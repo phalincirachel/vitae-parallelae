@@ -120,12 +120,92 @@ test('liminal world input runtime restores mobile tap move target and look targe
   assert.equal(moveTarget.y, 1.6);
   assert.equal(moveTarget.z, -8);
   assert.ok(cameraLookTarget);
-  assert.equal(cameraLookTarget.x, 2.5);
-  assert.equal(cameraLookTarget.y, 1.6);
+  assert.equal(cameraLookTarget.x, 5);
+  assert.equal(cameraLookTarget.y, 0);
   assert.equal(cameraLookTarget.z, -8);
 });
 
 
+
+test('liminal world input runtime prefers scene hits over ground-plane hits for mobile taps', () => {
+  const documentObject = createEventTarget({
+    elementFromPoint() {
+      return { nodeType: 1, closest: () => null };
+    }
+  });
+  let moveTarget = null;
+  let cameraLookTarget = null;
+  const scenePoint = new Vector3(2.1, 0.8, -6.5);
+  const groundPoint = new Vector3(-2.4, 0, -20);
+  const raycaster = {
+    ray: {
+      intersectPlane(_plane, target) {
+        target.x = groundPoint.x;
+        target.y = groundPoint.y;
+        target.z = groundPoint.z;
+        return true;
+      }
+    },
+    setFromCamera() {},
+    intersectObjects() {
+      return [{ object: { type: 'Mesh' }, point: scenePoint }];
+    }
+  };
+
+  const runtime = worldInputRuntime.init({
+    window: { innerWidth: 430, innerHeight: 800 },
+    document: documentObject,
+    THREE: { Vector2, Vector3 },
+    getWorldInputLockReason: () => '',
+    isUiClickTarget: () => false,
+    isPointInsideUi: () => false,
+    getUiDeadzoneTop: () => 700,
+    markUiInteraction: () => {},
+    isRendererElement: () => true,
+    getShieldRoots: () => [],
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getUiInteractionStarted: () => false,
+    setUiInteractionStarted: () => {},
+    getIsTouchDragging: () => false,
+    setIsTouchDragging: () => {},
+    getTouchMovedForTap: () => false,
+    setTouchMovedForTap: () => {},
+    getTouchStartedOnUi: () => false,
+    setTouchStartedOnUi: () => {},
+    getTouchStartedOnRenderer: () => true,
+    setTouchStartedOnRenderer: () => {},
+    getIsTouchValid: () => true,
+    setIsTouchValid: () => {},
+    getPlayer: () => ({ isReadingMode: false }),
+    getRenderer: () => ({ domElement: {} }),
+    getCamera: () => ({ position: { x: 0, y: 1.6, z: -2 } }),
+    getScene: () => ({ children: [{ id: 'shelf' }] }),
+    getRaycaster: () => raycaster,
+    getGroundPlane: () => ({}),
+    getMoveTarget: () => moveTarget,
+    setMoveTarget: (value) => { moveTarget = value; },
+    getCameraLookTarget: () => cameraLookTarget,
+    setCameraLookTarget: (value) => { cameraLookTarget = value; },
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    isFallback2DMode: () => false,
+    performanceNow: () => 1000,
+    debugNote: () => {},
+    cause: () => {},
+    log: () => {}
+  });
+
+  const applied = runtime.trySetMoveTargetFromScreenPoint(200, 200, true);
+  assert.equal(applied, true);
+  assert.ok(moveTarget);
+  assert.equal(moveTarget.x, 2.1);
+  assert.equal(moveTarget.y, 1.6);
+  assert.equal(moveTarget.z, -6.5);
+  assert.ok(cameraLookTarget);
+  assert.equal(cameraLookTarget.x, 2.1);
+  assert.equal(cameraLookTarget.y, 0.8);
+  assert.equal(cameraLookTarget.z, -6.5);
+});
 
 test('liminal world input runtime blocks pinch zoom gestures on mobile', () => {
   const interactions = [];
