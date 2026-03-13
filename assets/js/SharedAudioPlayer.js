@@ -29,6 +29,9 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this._flatCompMeasureCtx = null;
         this._flatCompMeasureCache = new Map();
         this._seekGuard = { index: -1, target: NaN, at: 0 };
+        this._pendingReadingLayoutFrame = 0;
+        this._pendingReadingLayoutSettleFrame = 0;
+        this._pendingReadingLayoutTimer = null;
 
         // Default volumes
         const requestedVolume = Number(options.volume ?? 1.0);
@@ -281,18 +284,114 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
     }
 
-    _wrapFlatTextFragments(lineEl) {
-        if (!lineEl || !this.container || !this.container.classList.contains('reader-layout-flat')) return;
+    _wrapFlatTextFragments(lineEl, force = false) {
+        if (!lineEl || !this.container) return;
+        const isSupportedLayout = this.container.classList.contains('reader-layout-flat')
+            || this.container.classList.contains('reader-layout-timestamps');
+        if (!isSupportedLayout) return;
+
+        if (force && lineEl.dataset.fragmentMode === 'tokenized') {
+            const sourceText = lineEl.dataset.fragmentSource || lineEl.textContent || '';
+            lineEl.textContent = sourceText;
+        }
+
         if (lineEl.childElementCount > 0) return;
-        const text = lineEl.textContent || '';
+        const text = lineEl.dataset.fragmentSource || lineEl.textContent || '';
         const tokens = this._tokenizeFlatText(text);
-        if (tokens.length <= 1) return;
+        if (tokens.length <= 1) {
+            lineEl.removeAttribute('data-fragment-mode');
+            lineEl.removeAttribute('data-fragment-source');
+            return;
+        }
+
+        lineEl.dataset.fragmentMode = 'tokenized';
+        lineEl.dataset.fragmentSource = text;
         lineEl.textContent = '';
         tokens.forEach((token) => {
             const fragmentEl = document.createElement('span');
             fragmentEl.className = 'subtitle-fragment';
             fragmentEl.textContent = token;
             lineEl.appendChild(fragmentEl);
+        });
+    }
+
+    _getRenderedFragmentTextSegments(fragmentEl) {
+        if (!fragmentEl || fragmentEl.childElementCount > 0) return [];
+        const textNode = Array.from(fragmentEl.childNodes).find((node) => node && node.nodeType === Node.TEXT_NODE && node.textContent);
+        if (!textNode) return [];
+        const text = textNode.textContent || '';
+        if (text.length < 4) return [];
+        const fragmentRects = this._getFlatLineClientRects(fragmentEl);
+        if (fragmentRects.length <= 1) return [];
+
+        const glyphs = Array.from(text);
+        const segments = [];
+        const range = document.createRange();
+        let codeUnitOffset = 0;
+        let currentSegment = null;
+
+        glyphs.forEach((glyph) => {
+            const nextOffset = codeUnitOffset + glyph.length;
+            range.setStart(textNode, codeUnitOffset);
+            range.setEnd(textNode, nextOffset);
+            const rect = Array.from(range.getClientRects()).find((entry) => entry.width > 0.2 && entry.height > 0.2) || null;
+            if (!rect) {
+                if (!currentSegment) {
+                    currentSegment = { top: null, text: glyph };
+                } else {
+                    currentSegment.text += glyph;
+                }
+                codeUnitOffset = nextOffset;
+                return;
+            }
+
+            const topKey = Math.round(rect.top * 2) / 2;
+            if (!currentSegment || currentSegment.top === null || Math.abs(currentSegment.top - topKey) > 0.6) {
+                if (currentSegment && currentSegment.text) segments.push(currentSegment);
+                currentSegment = { top: topKey, text: glyph };
+            } else {
+                currentSegment.text += glyph;
+            }
+            codeUnitOffset = nextOffset;
+        });
+
+        if (currentSegment && currentSegment.text) segments.push(currentSegment);
+        if (typeof range.detach === 'function') range.detach();
+        return segments.filter((segment) => segment && segment.text);
+    }
+
+    _shouldAppendSyntheticHyphen(segmentText, nextSegmentText) {
+        const trimmedEnd = String(segmentText || '').trimEnd();
+        const trimmedStart = String(nextSegmentText || '').trimStart();
+        if (!trimmedEnd || !trimmedStart) return false;
+        if (/[-\u2010\u2011\u2012\u2013\u2014]$/u.test(trimmedEnd)) return false;
+        if (/[.,;:!?\u2026)\]"'\u00bb\u201d\u2019]$/u.test(trimmedEnd)) return false;
+        if (/^[,.;:!?\u2026)\]"'\u00bb\u201d\u2019]/u.test(trimmedStart)) return false;
+        if (/^\s/u.test(nextSegmentText || '')) return false;
+        const lastChar = Array.from(trimmedEnd).pop() || '';
+        const nextChar = Array.from(trimmedStart)[0] || '';
+        return /[\p{L}\p{N}]/u.test(lastChar) && /[\p{L}\p{N}]/u.test(nextChar);
+    }
+
+    _expandAutoHyphenatedFragments(lineEl) {
+        if (!lineEl) return;
+        const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment')).filter((fragmentEl) => fragmentEl.childElementCount === 0);
+        fragments.forEach((fragmentEl) => {
+            const segments = this._getRenderedFragmentTextSegments(fragmentEl);
+            if (segments.length <= 1) return;
+            const replacement = document.createDocumentFragment();
+            segments.forEach((segment, index) => {
+                const pieceEl = document.createElement('span');
+                pieceEl.className = 'subtitle-fragment subtitle-fragment-fixed-break';
+                let pieceText = segment.text;
+                if (index < segments.length - 1 && this._shouldAppendSyntheticHyphen(segment.text, segments[index + 1].text)) {
+                    pieceText += '-';
+                    pieceEl.dataset.syntheticHyphen = 'true';
+                }
+                pieceEl.textContent = pieceText;
+                replacement.appendChild(pieceEl);
+            });
+            fragmentEl.replaceWith(replacement);
         });
     }
 
@@ -499,15 +598,19 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const lineElements = Array.from(this.container.querySelectorAll('.subtitle-line'));
         if (!lineElements.length) return;
 
+        const isFlatLayout = this.container.classList.contains('reader-layout-flat');
+        const isTimestampLayout = this.container.classList.contains('reader-layout-timestamps');
+
         lineElements.forEach((lineEl) => {
             this._clearFlatSmartLineStyle(lineEl);
+            this._wrapFlatTextFragments(lineEl, true);
+            this._expandAutoHyphenatedFragments(lineEl);
             Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
                 this._clearFlatSmartLineStyle(fragmentEl);
             });
         });
 
-        if (!this.container.classList.contains('reader-layout-flat')) return;
-        if (!this.container.classList.contains('reader-text-justify')) return;
+        if (!isFlatLayout && !isTimestampLayout) return;
         if (this._isDesktopPointerLayout()) return;
         if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return;
 
@@ -564,6 +667,8 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
             }
         });
 
+        const canStretchJustify = isFlatLayout && this.container.classList.contains('reader-text-justify');
+        if (!canStretchJustify) return;
         if (visualLines.length <= 1) return;
 
         for (let i = 0; i < visualLines.length - 1; i += 1) {
@@ -634,6 +739,41 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         }
     }
 
+    _scheduleReadingLayoutPass() {
+        if (!this.container || !this.isReadingMode) return;
+        const runLayoutPass = () => this._applyFlatSmartJustification();
+
+        if (this._pendingReadingLayoutFrame) {
+            cancelAnimationFrame(this._pendingReadingLayoutFrame);
+            this._pendingReadingLayoutFrame = 0;
+        }
+        if (this._pendingReadingLayoutSettleFrame) {
+            cancelAnimationFrame(this._pendingReadingLayoutSettleFrame);
+            this._pendingReadingLayoutSettleFrame = 0;
+        }
+        if (this._pendingReadingLayoutTimer) {
+            clearTimeout(this._pendingReadingLayoutTimer);
+            this._pendingReadingLayoutTimer = null;
+        }
+
+        if (typeof requestAnimationFrame === 'function') {
+            this._pendingReadingLayoutFrame = requestAnimationFrame(() => {
+                this._pendingReadingLayoutFrame = 0;
+                runLayoutPass();
+                this._pendingReadingLayoutSettleFrame = requestAnimationFrame(() => {
+                    this._pendingReadingLayoutSettleFrame = 0;
+                    runLayoutPass();
+                });
+            });
+        } else {
+            runLayoutPass();
+        }
+
+        this._pendingReadingLayoutTimer = setTimeout(() => {
+            this._pendingReadingLayoutTimer = null;
+            runLayoutPass();
+        }, 120);
+    }
 
     renderLines(centerIndex) {
         if (!this.container) return;
@@ -713,6 +853,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
             }
 
             this._applyFlatSmartJustification();
+            this._scheduleReadingLayoutPass();
             return;
         }
 

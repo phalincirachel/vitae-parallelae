@@ -744,11 +744,23 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     text-align: var(--reader-text-align, justify);
     text-justify: inter-word;
     white-space: normal;
+    hyphenate-character: "-";
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line {
     display: block;
     margin-right: 0;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-timestamps .subtitle-line .subtitle-fragment {
+    display: inline;
+    line-height: inherit;
+    padding: 0;
+    margin: 0;
+    hyphens: inherit;
+    -webkit-hyphens: inherit;
+    word-break: normal;
+    overflow-wrap: normal;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat {
@@ -761,6 +773,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     hyphens: auto;
     -webkit-hyphens: auto;
     hanging-punctuation: first allow-end last;
+    hyphenate-character: "-";
     --flat-timestamp-gap: 0.12em;
 }
 
@@ -785,6 +798,11 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     -webkit-hyphens: inherit;
     word-break: normal;
     overflow-wrap: normal;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer .subtitle-line .subtitle-fragment.subtitle-fragment-fixed-break {
+    hyphens: none !important;
+    -webkit-hyphens: none !important;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line.flat-line-smart,
@@ -848,6 +866,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
     hyphens: auto;
     -webkit-hyphens: auto;
     hanging-punctuation: first allow-end last;
+    hyphenate-character: "-";
     will-change: transform;
 }
 

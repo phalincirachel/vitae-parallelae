@@ -3025,15 +3025,19 @@
             const lineElements = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'));
             if (!lineElements.length) return;
 
+            const isFlatLayout = readerSentenceLayout === READER_LAYOUT_FLAT;
+            const isTimestampLayout = readerSentenceLayout === READER_LAYOUT_TIMESTAMPS;
+
             lineElements.forEach((lineEl) => {
                 clearFlatSmartLineStyle(lineEl);
+                wrapFlatTextFragments(lineEl, true);
+                expandAutoHyphenatedFragments(lineEl);
                 Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
                     clearFlatSmartLineStyle(fragmentEl);
                 });
             });
 
-            if (readerSentenceLayout !== READER_LAYOUT_FLAT) return;
-            if (readerTextAlign !== READER_TEXT_ALIGN_JUSTIFY) return;
+            if (!isFlatLayout && !isTimestampLayout) return;
             if (isDesktopPointerLayout()) return;
 
             const containerRect = subtitleContainer.getBoundingClientRect();
@@ -3089,6 +3093,8 @@
                 }
             });
 
+            const canStretchJustify = isFlatLayout && readerTextAlign === READER_TEXT_ALIGN_JUSTIFY;
+            if (!canStretchJustify) return;
             if (visualLines.length <= 1) return;
 
             for (let i = 0; i < visualLines.length - 1; i += 1) {
@@ -3159,6 +3165,50 @@
             }
         }
 
+        let pendingReadingLayoutRefreshFrame = 0;
+        let pendingReadingLayoutRefreshSettleFrame = 0;
+        let pendingReadingLayoutRefreshTimer = null;
+        function scheduleReadingLayoutRefresh(reason = 'unspecified') {
+            if (!subtitleContainer || !isReadingMode) return;
+            const runLayoutRefresh = () => {
+                if (!isReadingMode) return;
+                if (readerSentenceLayout === READER_LAYOUT_BLAETTERN) {
+                    const root = getBlaetternRoot();
+                    const refs = root ? getBlaetternLayerRefs(root) : null;
+                    if (refs) {
+                        [refs.prev, refs.current, refs.next].forEach((layer) => applyBlaetternSmartJustification(layer));
+                    }
+                    return;
+                }
+                applyFlatSmartJustification();
+            };
+
+            if (pendingReadingLayoutRefreshFrame) {
+                cancelAnimationFrame(pendingReadingLayoutRefreshFrame);
+                pendingReadingLayoutRefreshFrame = 0;
+            }
+            if (pendingReadingLayoutRefreshSettleFrame) {
+                cancelAnimationFrame(pendingReadingLayoutRefreshSettleFrame);
+                pendingReadingLayoutRefreshSettleFrame = 0;
+            }
+            if (pendingReadingLayoutRefreshTimer) {
+                clearTimeout(pendingReadingLayoutRefreshTimer);
+                pendingReadingLayoutRefreshTimer = null;
+            }
+
+            pendingReadingLayoutRefreshFrame = requestAnimationFrame(() => {
+                pendingReadingLayoutRefreshFrame = 0;
+                runLayoutRefresh();
+                pendingReadingLayoutRefreshSettleFrame = requestAnimationFrame(() => {
+                    pendingReadingLayoutRefreshSettleFrame = 0;
+                    runLayoutRefresh();
+                });
+            });
+            pendingReadingLayoutRefreshTimer = setTimeout(() => {
+                pendingReadingLayoutRefreshTimer = null;
+                runLayoutRefresh();
+            }, 120);
+        }
 
         function renderSubtitleTrackContent(lineEl, track, options = {}) {
             if (!lineEl) return;
@@ -3200,17 +3250,109 @@
             return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
         }
 
-        function wrapFlatTextFragments(lineEl) {
-            if (!lineEl || readerSentenceLayout !== READER_LAYOUT_FLAT || lineEl.childElementCount > 0) return;
-            const text = lineEl.textContent || '';
+        function wrapFlatTextFragments(lineEl, force = false) {
+            const supportsFragments = readerSentenceLayout === READER_LAYOUT_FLAT || readerSentenceLayout === READER_LAYOUT_TIMESTAMPS;
+            if (!lineEl || !supportsFragments) return;
+            if (force && lineEl.dataset.fragmentMode === 'tokenized') {
+                const sourceText = lineEl.dataset.fragmentSource || lineEl.textContent || '';
+                lineEl.textContent = sourceText;
+            }
+            if (lineEl.childElementCount > 0) return;
+            const text = lineEl.dataset.fragmentSource || lineEl.textContent || '';
             const tokens = tokenizeFlatText(text);
-            if (tokens.length <= 1) return;
+            if (tokens.length <= 1) {
+                lineEl.removeAttribute('data-fragment-mode');
+                lineEl.removeAttribute('data-fragment-source');
+                return;
+            }
+            lineEl.dataset.fragmentMode = 'tokenized';
+            lineEl.dataset.fragmentSource = text;
             lineEl.textContent = '';
             tokens.forEach((token) => {
                 const fragmentEl = document.createElement('span');
                 fragmentEl.className = 'subtitle-fragment';
                 fragmentEl.textContent = token;
                 lineEl.appendChild(fragmentEl);
+            });
+        }
+
+        function getRenderedFragmentTextSegments(fragmentEl) {
+            if (!fragmentEl || fragmentEl.childElementCount > 0) return [];
+            const textNode = Array.from(fragmentEl.childNodes).find((node) => node && node.nodeType === Node.TEXT_NODE && node.textContent);
+            if (!textNode) return [];
+            const text = textNode.textContent || '';
+            if (text.length < 4) return [];
+            const fragmentRects = getFlatLineClientRects(fragmentEl);
+            if (fragmentRects.length <= 1) return [];
+
+            const glyphs = Array.from(text);
+            const segments = [];
+            const range = document.createRange();
+            let codeUnitOffset = 0;
+            let currentSegment = null;
+
+            glyphs.forEach((glyph) => {
+                const nextOffset = codeUnitOffset + glyph.length;
+                range.setStart(textNode, codeUnitOffset);
+                range.setEnd(textNode, nextOffset);
+                const rect = Array.from(range.getClientRects()).find((entry) => entry.width > 0.2 && entry.height > 0.2) || null;
+                if (!rect) {
+                    if (!currentSegment) {
+                        currentSegment = { top: null, text: glyph };
+                    } else {
+                        currentSegment.text += glyph;
+                    }
+                    codeUnitOffset = nextOffset;
+                    return;
+                }
+
+                const topKey = Math.round(rect.top * 2) / 2;
+                if (!currentSegment || currentSegment.top === null || Math.abs(currentSegment.top - topKey) > 0.6) {
+                    if (currentSegment && currentSegment.text) segments.push(currentSegment);
+                    currentSegment = { top: topKey, text: glyph };
+                } else {
+                    currentSegment.text += glyph;
+                }
+                codeUnitOffset = nextOffset;
+            });
+
+            if (currentSegment && currentSegment.text) segments.push(currentSegment);
+            if (typeof range.detach === 'function') range.detach();
+            return segments.filter((segment) => segment && segment.text);
+        }
+
+        function shouldAppendSyntheticHyphen(segmentText, nextSegmentText) {
+            const trimmedEnd = String(segmentText || '').trimEnd();
+            const trimmedStart = String(nextSegmentText || '').trimStart();
+            if (!trimmedEnd || !trimmedStart) return false;
+            if (/[-\u2010\u2011\u2012\u2013\u2014]$/u.test(trimmedEnd)) return false;
+            if (/[.,;:!?\u2026)\]"'\u00bb\u201d\u2019]$/u.test(trimmedEnd)) return false;
+            if (/^[,.;:!?\u2026)\]"'\u00bb\u201d\u2019]/u.test(trimmedStart)) return false;
+            if (/^\s/u.test(nextSegmentText || '')) return false;
+            const lastChar = Array.from(trimmedEnd).pop() || '';
+            const nextChar = Array.from(trimmedStart)[0] || '';
+            return /[\p{L}\p{N}]/u.test(lastChar) && /[\p{L}\p{N}]/u.test(nextChar);
+        }
+
+        function expandAutoHyphenatedFragments(lineEl) {
+            if (!lineEl) return;
+            const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment')).filter((fragmentEl) => fragmentEl.childElementCount === 0);
+            fragments.forEach((fragmentEl) => {
+                const segments = getRenderedFragmentTextSegments(fragmentEl);
+                if (segments.length <= 1) return;
+                const replacement = document.createDocumentFragment();
+                segments.forEach((segment, index) => {
+                    const pieceEl = document.createElement('span');
+                    pieceEl.className = 'subtitle-fragment subtitle-fragment-fixed-break';
+                    let pieceText = segment.text;
+                    if (index < segments.length - 1 && shouldAppendSyntheticHyphen(segment.text, segments[index + 1].text)) {
+                        pieceText += '-';
+                        pieceEl.dataset.syntheticHyphen = 'true';
+                    }
+                    pieceEl.textContent = pieceText;
+                    replacement.appendChild(pieceEl);
+                });
+                fragmentEl.replaceWith(replacement);
             });
         }
 
@@ -3360,6 +3502,7 @@
             if (!audioControlsEl) return;
             audioControlsEl.classList.toggle('blaettern-controls-hidden', !shouldShow);
             audioControlsEl.classList.toggle('blaettern-controls-visible', shouldShow);
+            queueRecenterButtonPosition(`blaettern-controls:${reason}`);
             indexTrace('blaettern:controls', {
                 reason,
                 visible: shouldShow,
@@ -3610,11 +3753,22 @@
             return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
         }
 
-        function wrapBlaetternLineFragments(lineEl) {
-            if (!lineEl || lineEl.childElementCount > 0) return;
-            const text = lineEl.textContent || '';
+        function wrapBlaetternLineFragments(lineEl, force = false) {
+            if (!lineEl) return;
+            if (force && lineEl.dataset.fragmentMode === 'tokenized') {
+                const sourceText = lineEl.dataset.fragmentSource || lineEl.textContent || '';
+                lineEl.textContent = sourceText;
+            }
+            if (lineEl.childElementCount > 0) return;
+            const text = lineEl.dataset.fragmentSource || lineEl.textContent || '';
             const tokens = tokenizeBlaetternText(text);
-            if (tokens.length <= 1) return;
+            if (tokens.length <= 1) {
+                lineEl.removeAttribute('data-fragment-mode');
+                lineEl.removeAttribute('data-fragment-source');
+                return;
+            }
+            lineEl.dataset.fragmentMode = 'tokenized';
+            lineEl.dataset.fragmentSource = text;
             lineEl.textContent = '';
             tokens.forEach((token) => {
                 const fragmentEl = document.createElement('span');
@@ -3739,6 +3893,8 @@
 
             lineElements.forEach((lineEl) => {
                 clearBlaetternSmartLineStyle(lineEl);
+                wrapBlaetternLineFragments(lineEl, true);
+                expandAutoHyphenatedFragments(lineEl);
                 const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment'));
                 if (fragments.length) {
                     fragments.forEach((fragmentEl) => clearBlaetternSmartLineStyle(fragmentEl));
@@ -3785,6 +3941,8 @@
                 }
             });
 
+            const canStretchJustify = readerTextAlign === READER_TEXT_ALIGN_JUSTIFY;
+            if (!canStretchJustify) return;
             if (visualLines.length <= 1) return;
 
             for (let i = 0; i < visualLines.length - 1; i++) {
@@ -3818,30 +3976,28 @@
                 if (totalGapUnits < 3 && slack > 14) continue;
 
                 const sparseLine = totalGapUnits < 6;
-                const wordShare = sparseLine ? 0.84 : 0.78;
-                const letterShare = sparseLine ? 0.12 : 0.16;
-                const stretchShare = sparseLine ? 0.04 : 0.06;
-
-                const addWord = Math.min(0.72, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
-                const addLetter = Math.min(0.035, Math.max(0, (slack * letterShare) / Math.max(44, letters)));
+                const wordShare = sparseLine ? 0.82 : 0.75;
+                const letterShare = sparseLine ? 0.12 : 0.18;
+                const stretchShare = sparseLine ? 0.06 : 0.07;
+                const addWord = Math.min(0.62, Math.max(0, (slack * wordShare) / Math.max(1, totalGapUnits)));
+                const addLetter = Math.min(0.03, Math.max(0, (slack * letterShare) / Math.max(52, letters)));
                 const usedSlack = (addWord * totalGapUnits) + (addLetter * letters);
                 const remainingSlack = Math.max(0, slack - usedSlack);
-                const stretchScale = 1 + Math.min(0.012, (remainingSlack * stretchShare) / Math.max(260, lineVisualWidth));
+                const stretchScale = 1 + Math.min(0.012, (remainingSlack * stretchShare) / Math.max(240, lineVisualWidth));
                 const stretchPercent = stretchScale * 100;
-                const wdthValue = stretchPercent;
                 const hasStretch = stretchScale > 1.002;
+                if (addWord < 0.025 && addLetter < 0.0035 && !hasStretch) continue;
 
-                if (addWord < 0.03 && addLetter < 0.004 && !hasStretch) continue;
-
-                const baselineGeometry = captureBlaetternLineGeometry(elements, layerRect);
-                if (baselineGeometry.size !== elements.length) continue;
+                const baseline = captureBlaetternLineGeometry(elements, layerRect);
+                if (baseline.size !== elements.length) continue;
 
                 elements.forEach((el) => {
                     el.classList.add('blaettern-line-smart');
                     el.style.setProperty('--blaettern-smart-word-spacing', `${addWord.toFixed(3)}px`);
                     el.style.setProperty('--blaettern-smart-letter-spacing', `${addLetter.toFixed(3)}px`);
                     if (hasStretch) {
-                        el.style.setProperty('--blaettern-smart-stretch', `${stretchPercent.toFixed(2)}%`);
+                        const wdthValue = Math.min(101.2, stretchPercent);
+                        el.style.setProperty('--blaettern-smart-stretch', `${wdthValue.toFixed(2)}%`);
                         el.style.setProperty('--blaettern-smart-wdth', wdthValue.toFixed(2));
                     } else {
                         el.style.removeProperty('--blaettern-smart-stretch');
@@ -3849,11 +4005,8 @@
                     }
                 });
 
-                // Guard: keep style only if glyph flow stays on the same visual line.
-                if (didBlaetternLineGeometryChange(elements, layerRect, baselineGeometry)) {
-                    elements.forEach((el) => {
-                        clearBlaetternSmartLineStyle(el);
-                    });
+                if (didBlaetternLineGeometryChange(elements, layerRect, baseline)) {
+                    elements.forEach((el) => clearBlaetternSmartLineStyle(el));
                 }
             }
         }
@@ -4124,6 +4277,8 @@
             resetBlaetternLayerTransforms(root);
             updateBlaetternProgressBadge(root);
             hideBlaetternBookmarkButton();
+            scheduleReadingLayoutRefresh('blaettern-page-window');
+            queueRecenterButtonPosition('blaettern-page-window');
         }
 
         function renderBlaetternReadingPage(centerIndex) {
@@ -4817,6 +4972,111 @@
             currentScrollAnimation = requestAnimationFrame(animate);
         }
 
+        let pendingRecenterPositionFrame = 0;
+        let pendingRecenterPositionSettleFrame = 0;
+        let pendingRecenterPositionTimer = null;
+
+        function queueRecenterButtonPosition(reason = 'unspecified') {
+            if (!subtitleRecenterBtn) return;
+            if (pendingRecenterPositionFrame) {
+                cancelAnimationFrame(pendingRecenterPositionFrame);
+                pendingRecenterPositionFrame = 0;
+            }
+            if (pendingRecenterPositionSettleFrame) {
+                cancelAnimationFrame(pendingRecenterPositionSettleFrame);
+                pendingRecenterPositionSettleFrame = 0;
+            }
+            if (pendingRecenterPositionTimer) {
+                clearTimeout(pendingRecenterPositionTimer);
+                pendingRecenterPositionTimer = null;
+            }
+            pendingRecenterPositionFrame = requestAnimationFrame(() => {
+                pendingRecenterPositionFrame = 0;
+                positionRecenterButton(`${reason}:raf`);
+                pendingRecenterPositionSettleFrame = requestAnimationFrame(() => {
+                    pendingRecenterPositionSettleFrame = 0;
+                    positionRecenterButton(`${reason}:settle`);
+                });
+            });
+            pendingRecenterPositionTimer = setTimeout(() => {
+                pendingRecenterPositionTimer = null;
+                positionRecenterButton(`${reason}:late`);
+            }, 180);
+        }
+
+        function buildUnionRect(rects) {
+            const validRects = rects.filter((rect) => rect && rect.width > 0 && rect.height > 0);
+            if (!validRects.length) return null;
+            const left = Math.min(...validRects.map((rect) => rect.left));
+            const top = Math.min(...validRects.map((rect) => rect.top));
+            const right = Math.max(...validRects.map((rect) => rect.right));
+            const bottom = Math.max(...validRects.map((rect) => rect.bottom));
+            return {
+                left,
+                top,
+                right,
+                bottom,
+                width: Math.max(0, right - left),
+                height: Math.max(0, bottom - top)
+            };
+        }
+
+        function getVisibleControlDockRect() {
+            const controlsRef = audioControlsEl || document.getElementById('audioControls');
+            if (!controlsRef) return null;
+            const buttonRects = Array.from(controlsRef.querySelectorAll('button, [role="button"]'))
+                .filter((el) => el && el !== subtitleRecenterBtn)
+                .map((el) => {
+                    const style = window.getComputedStyle(el);
+                    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity || '1') < 0.05) return null;
+                    const rect = el.getBoundingClientRect();
+                    return (rect.width > 1 && rect.height > 1) ? rect : null;
+                })
+                .filter(Boolean);
+            if (buttonRects.length) return buildUnionRect(buttonRects);
+            const rect = controlsRef.getBoundingClientRect();
+            return rect.width > 1 && rect.height > 1 ? rect : null;
+        }
+
+        function getVisibleReadingTextRect() {
+            if (!subtitleContainer) return null;
+            const containerRect = subtitleContainer.getBoundingClientRect();
+            const intersectsViewport = (rect) => rect && rect.bottom > containerRect.top + 2 && rect.top < containerRect.bottom - 2 && rect.width > 1 && rect.height > 1;
+
+            if (isBlaetternLayoutActive()) {
+                const root = getBlaetternRoot();
+                const currentLayer = root ? root.querySelector('.blaettern-page-current') : null;
+                if (currentLayer) {
+                    const lineRects = Array.from(currentLayer.querySelectorAll('.blaettern-line'))
+                        .flatMap((lineEl) => Array.from(lineEl.getClientRects()))
+                        .filter(intersectsViewport);
+                    const lineUnion = buildUnionRect(lineRects);
+                    if (lineUnion) return lineUnion;
+
+                    const layerRect = currentLayer.getBoundingClientRect();
+                    const layerStyle = window.getComputedStyle(currentLayer);
+                    const padLeft = parseFloat(layerStyle.paddingLeft) || 0;
+                    const padRight = parseFloat(layerStyle.paddingRight) || 0;
+                    const padTop = parseFloat(layerStyle.paddingTop) || 0;
+                    const padBottom = parseFloat(layerStyle.paddingBottom) || 0;
+                    const fallback = {
+                        left: layerRect.left + padLeft,
+                        top: layerRect.top + padTop,
+                        right: layerRect.right - padRight,
+                        bottom: layerRect.bottom - padBottom,
+                    };
+                    fallback.width = Math.max(0, fallback.right - fallback.left);
+                    fallback.height = Math.max(0, fallback.bottom - fallback.top);
+                    return fallback;
+                }
+            }
+
+            const visibleLineRects = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'))
+                .flatMap((lineEl) => Array.from(lineEl.getClientRects()))
+                .filter(intersectsViewport);
+            return buildUnionRect(visibleLineRects) || containerRect;
+        }
+
         function updateRecenterButtonVisibility(reason = 'unspecified') {
             if (!subtitleRecenterBtn) return;
             const isMobileLayout = isEffectiveMobileLayout();
@@ -4834,7 +5094,7 @@
 
             subtitleRecenterBtn.style.setProperty('display', 'inline-flex', 'important');
             subtitleRecenterBtn.setAttribute('aria-hidden', 'false');
-            requestAnimationFrame(() => positionRecenterButton(`visibility-show:${reason}`));
+            queueRecenterButtonPosition(`visibility-show:${reason}`);
         }
 
         function setSubtitleFollowLocked(nextLocked, reason = 'unspecified') {
@@ -4858,7 +5118,6 @@
             }
 
             if (subtitleRecenterBtn.parentElement !== document.body) {
-                // Mobile uses a viewport-fixed overlay placement.
                 document.body.appendChild(subtitleRecenterBtn);
             }
             subtitleRecenterBtn.style.position = 'fixed';
@@ -4917,41 +5176,18 @@
             syncRecenterButtonMount(isMobileLayout);
             const btnRect = subtitleRecenterBtn.getBoundingClientRect();
             const gap = 10;
-            const isBlaetternLayout = isBlaetternLayoutActive();
             const isDesktopLayout = !isMobileLayout;
-
-            if (isBlaetternLayout && !isDesktopLayout) {
-                const subtitleRect = subtitleContainer.getBoundingClientRect();
-                const controlsRef = audioControlsEl || document.getElementById('audioControls');
-                const controlsRect = controlsRef ? controlsRef.getBoundingClientRect() : null;
-                let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
-                const lowerBound = subtitleRect.bottom + 4;
-                let top = lowerBound + gap;
-
-                if (controlsRect && controlsRect.top > lowerBound) {
-                    const availableGap = controlsRect.top - lowerBound;
-                    top = lowerBound + Math.max(0, (availableGap - btnRect.height) * 0.5);
-                } else if (controlsRect && controlsRect.top > 0) {
-                    top = controlsRect.top - btnRect.height - gap;
-                }
-
-                left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
-                top = Math.max(lowerBound, Math.min(window.innerHeight - btnRect.height - 6, top));
-                subtitleRecenterBtn.style.left = `${left}px`;
-                subtitleRecenterBtn.style.top = `${top}px`;
-                if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
-                return;
-            }
+            const textRect = getVisibleReadingTextRect() || subtitleContainer.getBoundingClientRect();
+            const dockRect = getVisibleControlDockRect();
 
             if (isDesktopLayout) {
-                const subtitleRect = subtitleContainer.getBoundingClientRect();
                 const left = Math.max(
                     6,
-                    Math.min(window.innerWidth - btnRect.width - 6, subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5)
+                    Math.min(window.innerWidth - btnRect.width - 6, textRect.left + (textRect.width - btnRect.width) * 0.5)
                 );
-                const dockTop = window.innerHeight - btnRect.height - 18;
-                let top = Math.min(subtitleRect.bottom - btnRect.height - gap, dockTop);
-                top = Math.max(subtitleRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
+                const dockTop = dockRect ? (dockRect.top - btnRect.height - gap) : (window.innerHeight - btnRect.height - 18);
+                let top = Math.min(textRect.bottom - btnRect.height - gap, dockTop);
+                top = Math.max(textRect.top + 6, Math.min(window.innerHeight - btnRect.height - 6, top));
                 subtitleRecenterBtn.style.left = `${left}px`;
                 subtitleRecenterBtn.style.top = `${top}px`;
                 if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
@@ -4964,25 +5200,39 @@
             }
 
             const anchorRect = fullscreenBtn ? fullscreenBtn.getBoundingClientRect() : null;
-            if (!anchorRect) return;
+            let left = anchorRect
+                ? anchorRect.left + (anchorRect.width - btnRect.width) * 0.5
+                : textRect.left + (textRect.width - btnRect.width) * 0.5;
+            const minTop = Math.max(6, textRect.bottom + gap);
+            const maxTop = dockRect
+                ? (dockRect.top - btnRect.height - gap)
+                : (window.innerHeight - btnRect.height - 6);
+            let top = maxTop > minTop
+                ? (minTop + ((maxTop - minTop) * 0.5))
+                : maxTop;
 
-            const rawLeft = anchorRect.left + (anchorRect.width - btnRect.width) * 0.5;
-            let rawTop = anchorRect.top - btnRect.height - gap;
-
-            if (isMobileLayout) {
-                const subtitleRect = subtitleContainer.getBoundingClientRect();
-                const targetCenterY = subtitleRect.top + subtitleRect.height * 0.5;
-                rawTop = targetCenterY - btnRect.height * 0.5;
-            }
-
-            let left = rawLeft;
-            let top = rawTop;
             left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
             top = Math.max(6, Math.min(window.innerHeight - btnRect.height - 6, top));
+            if (dockRect && top + btnRect.height + gap > dockRect.top) {
+                top = Math.max(6, dockRect.top - btnRect.height - gap);
+            }
 
             subtitleRecenterBtn.style.left = `${left}px`;
             subtitleRecenterBtn.style.top = `${top}px`;
-            updateMobileRecenterRadius(left, top, btnRect.width, btnRect.height);
+            if (isBlaetternLayoutActive()) {
+                if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
+            } else {
+                updateMobileRecenterRadius(left, top, btnRect.width, btnRect.height);
+            }
+        }
+
+        if (typeof ResizeObserver === 'function') {
+            const recenterLayoutObserver = new ResizeObserver(() => queueRecenterButtonPosition('resize-observer'));
+            if (subtitleContainer) recenterLayoutObserver.observe(subtitleContainer);
+            if (audioControlsEl) recenterLayoutObserver.observe(audioControlsEl);
+        }
+        if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
+            document.fonts.ready.then(() => queueRecenterButtonPosition('fonts-ready')).catch(() => { });
         }
 
         function recenterToCurrentTimestamp() {
@@ -5044,12 +5294,12 @@
         }
 
         window.addEventListener('resize', () => {
-            positionRecenterButton('resize');
+            queueRecenterButtonPosition('resize');
             markBlaetternPaginationDirty();
             if (isBlaetternLayoutActive()) renderSubtitleLines(Math.max(0, currentSubtitleIndex));
         });
         window.addEventListener('orientationchange', () => {
-            positionRecenterButton('orientationchange');
+            queueRecenterButtonPosition('orientationchange');
             markBlaetternPaginationDirty();
             if (isBlaetternLayoutActive()) renderSubtitleLines(Math.max(0, currentSubtitleIndex));
             positionNextChapterPrompt();
@@ -5098,6 +5348,7 @@
                         const div = document.createElement('div');
                         div.className = 'subtitle-line';
                         renderSubtitleTrackContent(div, track);
+                        wrapFlatTextFragments(div);
                         div.dataset.index = i;
                         applyTimestampBoundaryGap(div, i, subtitleTracks, 'flat');
 
@@ -5487,6 +5738,7 @@
                     }
                 }
                 applyFlatSmartJustification();
+                scheduleReadingLayoutRefresh('render-reading');
                 return;
             }
 
@@ -6259,7 +6511,7 @@
                 iconFsEnter.style.display = 'block';
                 iconFsExit.style.display = 'none';
             }
-            positionRecenterButton();
+            queueRecenterButtonPosition('generic');
         }
 
         fullscreenBtn.addEventListener('click', async () => {
