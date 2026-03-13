@@ -4972,9 +4972,9 @@
             currentScrollAnimation = requestAnimationFrame(animate);
         }
 
-        let pendingRecenterPositionFrame = 0;
-        let pendingRecenterPositionSettleFrame = 0;
-        let pendingRecenterPositionTimer = null;
+        var pendingRecenterPositionFrame = pendingRecenterPositionFrame || 0;
+        var pendingRecenterPositionSettleFrame = pendingRecenterPositionSettleFrame || 0;
+        var pendingRecenterPositionTimer = pendingRecenterPositionTimer || null;
 
         function queueRecenterButtonPosition(reason = 'unspecified') {
             if (!subtitleRecenterBtn) return;
