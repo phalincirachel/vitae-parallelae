@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Heidelberg RPG - Main Stylesheet
  * Extracted from index.html during refactoring
  */
@@ -298,7 +298,7 @@ body {
     filter: url(#pal-filter) url(#glitch-filter) contrast(1.0) brightness(1.15) saturate(0.85);
 }
 
-/* CRT OVERLAY - Vignette only (Scanlines removed due to Moiré) */
+/* CRT OVERLAY - Vignette only (Scanlines removed due to MoirÃ©) */
 #crtOverlay {
     position: absolute;
     top: 0;
@@ -922,7 +922,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-progress-indicator {
     position: absolute;
-    bottom: calc(54px + env(safe-area-inset-bottom));
+    top: max(10px, env(safe-area-inset-top));
     right: 16px;
     z-index: 3;
     font-family: "Georgia", serif;
@@ -1975,7 +1975,7 @@ input[type="range"] {
     height: 20px;
 }
 
-/* Track – WebKit (Chrome, Safari, Edge) */
+/* Track â€“ WebKit (Chrome, Safari, Edge) */
 input[type="range"]::-webkit-slider-runnable-track {
     height: 4px;
     border-radius: 2px;
@@ -1983,7 +1983,7 @@ input[type="range"]::-webkit-slider-runnable-track {
     border: none;
 }
 
-/* Track – Firefox */
+/* Track â€“ Firefox */
 input[type="range"]::-moz-range-track {
     height: 4px;
     border-radius: 2px;
@@ -1991,7 +1991,7 @@ input[type="range"]::-moz-range-track {
     border: none;
 }
 
-/* Filled progress – Firefox (disabled – plain white track only) */
+/* Filled progress â€“ Firefox (disabled â€“ plain white track only) */
 /*
 input[type="range"]::-moz-range-progress {
     height: 4px;
@@ -2000,7 +2000,7 @@ input[type="range"]::-moz-range-progress {
 }
 */
 
-/* Thumb – WebKit */
+/* Thumb â€“ WebKit */
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 14px;
@@ -2018,7 +2018,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     box-shadow: 0 0 10px rgba(200, 180, 120, 0.50);
 }
 
-/* Thumb – Firefox */
+/* Thumb â€“ Firefox */
 input[type="range"]::-moz-range-thumb {
     width: 14px;
     height: 14px;
@@ -2665,4 +2665,5 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+
 

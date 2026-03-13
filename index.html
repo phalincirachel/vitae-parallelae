@@ -3016,7 +3016,7 @@
             if (/[.\u2026]/u.test(coreChar)) return -Math.min(fontSize * 0.18, 4.8);
             if (/[,;:]/u.test(coreChar)) return -Math.min(fontSize * 0.26, 6.4);
             if (/[!?]/u.test(coreChar)) return -Math.min(fontSize * 0.16, 4.4);
-            if (/[\\-\\u2010\\u2011\\u2012\\u2013\\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.34, 8.4);
+            if (/[\-\u2010\u2011\u2012\u2013\u2014]/u.test(coreChar)) return -Math.min(fontSize * 0.34, 8.4);
             return 0;
         }
 
@@ -4925,14 +4925,18 @@
                 const controlsRef = audioControlsEl || document.getElementById('audioControls');
                 const controlsRect = controlsRef ? controlsRef.getBoundingClientRect() : null;
                 let left = subtitleRect.left + (subtitleRect.width - btnRect.width) * 0.5;
-                let top = subtitleRect.bottom + gap;
+                const lowerBound = subtitleRect.bottom + 4;
+                let top = lowerBound + gap;
 
-                if (controlsRect && controlsRect.top > 0) {
-                    top = Math.min(top, controlsRect.top - btnRect.height - gap);
+                if (controlsRect && controlsRect.top > lowerBound) {
+                    const availableGap = controlsRect.top - lowerBound;
+                    top = lowerBound + Math.max(0, (availableGap - btnRect.height) * 0.5);
+                } else if (controlsRect && controlsRect.top > 0) {
+                    top = controlsRect.top - btnRect.height - gap;
                 }
 
                 left = Math.max(6, Math.min(window.innerWidth - btnRect.width - 6, left));
-                top = Math.max(subtitleRect.bottom + 4, Math.min(window.innerHeight - btnRect.height - 6, top));
+                top = Math.max(lowerBound, Math.min(window.innerHeight - btnRect.height - 6, top));
                 subtitleRecenterBtn.style.left = `${left}px`;
                 subtitleRecenterBtn.style.top = `${top}px`;
                 if (subtitleRecenterMobileRadius) subtitleRecenterMobileRadius.style.display = 'none';
@@ -7055,6 +7059,7 @@
 </body>
 
 </html>
+
 
 
 
