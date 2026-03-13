@@ -275,6 +275,27 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         lineEl.textContent = safeTrack.text || '';
     }
 
+    _tokenizeFlatText(text) {
+        if (!text) return [];
+        const tokens = String(text).match(/\S+\s*|\s+/gu);
+        return Array.isArray(tokens) && tokens.length ? tokens : [String(text)];
+    }
+
+    _wrapFlatTextFragments(lineEl) {
+        if (!lineEl || !this.container || !this.container.classList.contains('reader-layout-flat')) return;
+        if (lineEl.childElementCount > 0) return;
+        const text = lineEl.textContent || '';
+        const tokens = this._tokenizeFlatText(text);
+        if (tokens.length <= 1) return;
+        lineEl.textContent = '';
+        tokens.forEach((token) => {
+            const fragmentEl = document.createElement('span');
+            fragmentEl.className = 'subtitle-fragment';
+            fragmentEl.textContent = token;
+            lineEl.appendChild(fragmentEl);
+        });
+    }
+
     _getFlatLeadingCompensationPx(text, sampleEl) {
         if (!this.container || !this.container.classList.contains('reader-layout-flat')) return 0;
         if (!sampleEl || !text) return 0;
@@ -478,7 +499,12 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const lineElements = Array.from(this.container.querySelectorAll('.subtitle-line'));
         if (!lineElements.length) return;
 
-        lineElements.forEach((lineEl) => this._clearFlatSmartLineStyle(lineEl));
+        lineElements.forEach((lineEl) => {
+            this._clearFlatSmartLineStyle(lineEl);
+            Array.from(lineEl.querySelectorAll('.subtitle-fragment')).forEach((fragmentEl) => {
+                this._clearFlatSmartLineStyle(fragmentEl);
+            });
+        });
 
         if (!this.container.classList.contains('reader-layout-flat')) return;
         if (!this.container.classList.contains('reader-text-justify')) return;
@@ -494,10 +520,20 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
 
         const elementRectCount = new Map();
         const linesByTop = new Map();
+        const measureElements = [];
 
         lineElements.forEach((lineEl) => {
-            const rects = this._getFlatLineClientRects(lineEl);
-            elementRectCount.set(lineEl, rects.length);
+            const fragments = Array.from(lineEl.querySelectorAll('.subtitle-fragment'));
+            if (fragments.length) {
+                measureElements.push(...fragments);
+            } else {
+                measureElements.push(lineEl);
+            }
+        });
+
+        measureElements.forEach((measureEl) => {
+            const rects = this._getFlatLineClientRects(measureEl);
+            elementRectCount.set(measureEl, rects.length);
             rects.forEach((rect) => {
                 const key = Math.round(rect.top - containerRect.top);
                 let line = linesByTop.get(key);
@@ -508,7 +544,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                     line.left = Math.min(line.left, rect.left);
                     line.right = Math.max(line.right, rect.right);
                 }
-                line.elements.add(lineEl);
+                line.elements.add(measureEl);
             });
         });
 
@@ -619,6 +655,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                     const div = document.createElement('div');
                     div.className = 'subtitle-line';
                     this._renderSubtitleTrackContent(div, this.subtitleTracks[i]);
+                    this._wrapFlatTextFragments(div);
                     div.dataset.index = String(i);
                     this._applyFlatTimestampBoundaryGap(div, i);
 

@@ -776,7 +776,19 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     overflow-wrap: normal;
 }
 
-#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line.flat-line-smart {
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line .subtitle-fragment {
+    display: inline;
+    line-height: inherit;
+    padding: 0;
+    margin: 0;
+    hyphens: inherit;
+    -webkit-hyphens: inherit;
+    word-break: normal;
+    overflow-wrap: normal;
+}
+
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line.flat-line-smart,
+#audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-line .subtitle-fragment.flat-line-smart {
     word-spacing: var(--flat-smart-word-spacing, normal);
     letter-spacing: var(--flat-smart-letter-spacing, normal);
     font-stretch: var(--flat-smart-stretch, 100%);

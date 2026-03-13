@@ -373,6 +373,100 @@ test('liminal animation runtime wraps click-look yaw to the short rotation path'
 });
 
 
+test('liminal animation runtime uses world-space auto movement for move targets', () => {
+  const scheduled = [];
+  const camera = {
+    position: new Vector3(0, 1.6, -5),
+    quaternion: {
+      setFromEuler(nextEuler) {
+        this.lastEuler = { x: nextEuler.x, y: nextEuler.y, z: nextEuler.z };
+      }
+    }
+  };
+  const euler = createEuler();
+  const velocity = new Vector3(0, 0, 0);
+  const controlsCalls = [];
+  let moveTarget = new Vector3(2, 1.6, -8);
+
+  const runtime = animationRuntime.init({
+    window: {
+      visualFreezeActive: false,
+      gamePaused: false,
+      requestAnimationFrame(callback) {
+        scheduled.push(callback);
+      }
+    },
+    requestAnimationFrame(callback) {
+      scheduled.push(callback);
+    },
+    performanceNow: (() => {
+      let now = 1000;
+      return () => {
+        now += 16;
+        return now;
+      };
+    })(),
+    getClock: () => ({ getDelta: () => 0.016, getElapsedTime: () => 1 }),
+    getCamera: () => camera,
+    getEuler: () => euler,
+    getRenderer: () => ({ render() {} }),
+    getScene: () => ({ children: [] }),
+    getVelocity: () => velocity,
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    getMouse: () => ({ x: 0, y: 0 }),
+    setTargetMouseX: () => {},
+    setTargetMouseY: () => {},
+    getIsReadingMode: () => false,
+    getIsFallback2DMode: () => false,
+    getWorldInputLockReason: () => '',
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getMoveTarget: () => moveTarget,
+    setMoveTarget: (value) => { moveTarget = value; },
+    getCameraLookTarget: () => null,
+    setCameraLookTarget: () => {},
+    setIsLookingAtClickTarget: () => {},
+    getIsCenteringCamera: () => false,
+    setIsCenteringCamera: () => {},
+    syncLookTargetsToCamera: () => {},
+    flushDeferredReadingModeRender: () => {},
+    getTmpLookDir: () => new Vector3(),
+    getTmpMovementInput: () => new Vector3(),
+    getTmpForwardDir: () => new Vector3(),
+    getTmpRightDir: () => new Vector3(),
+    getTmpMoveDir: () => new Vector3(),
+    getTmpVelocityStep: () => new Vector3(),
+    getControls: () => ({
+      moveRight(value) { controlsCalls.push(['right', value]); },
+      moveForward(value) { controlsCalls.push(['forward', value]); }
+    }),
+    updateSegments: () => {},
+    getSegments: () => [],
+    getActiveGlowingBooks: () => [],
+    getCurrentChapterProgress: () => ({ collected: 0, total: 0 }),
+    refreshLoreProgressUi: () => {},
+    renderArchive: () => {},
+    startLoreMode: () => {},
+    allowAuxSfxPlaybackLiminal: () => false,
+    getShimmerSound: () => null,
+    getLastShimmerAt: () => 0,
+    setLastShimmerAt: () => {},
+    getDebugLogs: () => false,
+    debugNote: () => {},
+    cause: () => {},
+    log: () => {},
+    error: () => {}
+  });
+
+  assert.equal(runtime.startAnimationLoop(), true);
+  scheduled.shift()();
+
+  assert.equal(controlsCalls.length, 0);
+  assert.ok(camera.position.x > 0);
+  assert.ok(camera.position.z < -5);
+  assert.ok(velocity.length() > 0);
+});
+
 test('liminal animation runtime applies movement once per frame without duplicate velocity steps', () => {
   const scheduled = [];
   const camera = {

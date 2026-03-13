@@ -130,7 +130,7 @@
         if (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
         if (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
         const pitchDiff = targetPitch - euler.x;
-        const lookEase = Math.min(1, 6.0 * delta);
+        const lookEase = Math.min(1, 0.1 * delta);
         euler.y += yawDiff * lookEase;
         euler.x += pitchDiff * lookEase;
         euler.z = 0;
@@ -166,12 +166,8 @@
 
       const baseAccel = 150.0;
       const gameSpeed = baseAccel * 0.15;
-      const clickSpeed = gameSpeed * 0.072;
       const readingSpeed = gameSpeed;
       const isReading = !!getIsReadingMode();
-      const controls = getControls();
-      const hasControlMovement = !!(controls && typeof controls.moveRight === 'function' && typeof controls.moveForward === 'function');
-      let moveUsingControls = false;
 
       input.set(0, 0, 0);
       velocity.x -= velocity.x * 10.0 * delta;
@@ -234,23 +230,14 @@
                 const moveDir = getTmpMoveDir();
                 if (!moveDir) return;
                 moveDir.set(dx, 0, dz).normalize();
-                const localX = moveDir.dot(right);
-                const localZ = moveDir.dot(forward);
-                velocity.x -= localX * clickSpeed * delta * 50;
-                velocity.z -= localZ * clickSpeed * delta * 50;
-                moveUsingControls = hasControlMovement;
+                velocity.add(moveDir.multiplyScalar(gameSpeed * delta));
               }
             }
           }
         }
 
-        if (moveUsingControls) {
-          controls.moveRight(-velocity.x * delta);
-          controls.moveForward(-velocity.z * delta);
-        } else {
-          camera.position.x += velocity.x * delta;
-          camera.position.z += velocity.z * delta;
-        }
+        camera.position.x += velocity.x * delta;
+        camera.position.z += velocity.z * delta;
         if (velocity.z > 0) velocity.z = 0;
         camera.position.y += velocity.y * delta;
 
