@@ -398,16 +398,32 @@ test('liminal world input runtime binds keyboard movement listeners', () => {
 });
 
 
-test('liminal world input runtime ignores desktop clicks outside the renderer', () => {
+test('liminal world input runtime accepts desktop clicks through non-ui overlays', () => {
   const overlayEl = { nodeType: 1, closest: () => null };
   const canvasEl = { nodeType: 1, closest: () => null };
   const documentObject = createEventTarget({
+    body: { nodeType: 1 },
+    documentElement: { nodeType: 1 },
     elementFromPoint() {
       return overlayEl;
     }
   });
   const causes = [];
   let moveTarget = null;
+  const raycaster = {
+    ray: {
+      intersectPlane(_plane, target) {
+        target.x = 1.2;
+        target.y = 0;
+        target.z = -8;
+        return true;
+      }
+    },
+    setFromCamera() {},
+    intersectObjects() {
+      return [];
+    }
+  };
 
   worldInputRuntime.init({
     window: { innerWidth: 1200, innerHeight: 800 },
@@ -436,9 +452,9 @@ test('liminal world input runtime ignores desktop clicks outside the renderer', 
     setIsTouchValid: () => {},
     getPlayer: () => ({ isReadingMode: false }),
     getRenderer: () => ({ domElement: canvasEl }),
-    getCamera: () => ({ position: { y: 1.6, z: -2 } }),
+    getCamera: () => ({ position: { x: 0, y: 1.6, z: -2 } }),
     getScene: () => ({ children: [] }),
-    getRaycaster: () => ({ ray: { intersectPlane: () => false }, setFromCamera() {}, intersectObjects: () => [] }),
+    getRaycaster: () => raycaster,
     getGroundPlane: () => ({}),
     getMoveTarget: () => moveTarget,
     setMoveTarget: (value) => { moveTarget = value; },
@@ -454,6 +470,9 @@ test('liminal world input runtime ignores desktop clicks outside the renderer', 
 
   documentObject.emit('click', { clientX: 400, clientY: 300, target: overlayEl });
 
-  assert.equal(moveTarget, null);
-  assert.deepEqual(causes, [['C02_WORLD_BLOCKED_CLICK', 'not-renderer']]);
+  assert.ok(moveTarget);
+  assert.equal(moveTarget.x, 1.2);
+  assert.equal(moveTarget.y, 1.6);
+  assert.equal(moveTarget.z, -8);
+  assert.deepEqual(causes, [['C01_WORLD_PATH_CLICK', 'x=400 y=300']]);
 });

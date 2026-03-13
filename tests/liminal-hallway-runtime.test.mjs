@@ -340,6 +340,62 @@ test('liminal hallway runtime exposes temp vectors, shimmer controls and segment
   assert.equal(runtime.allowAuxSfxPlaybackLiminal(), true);
 });
 
+
+test('liminal hallway runtime keeps built books visible when a segment is recycled', () => {
+  const THREE = createThreeStub();
+  const runtime = hallwayRuntime.init({
+    window: {
+      fallback2DMode: false,
+      dustTex: null,
+      AudioVisibilityManager: { unregister() {} },
+      matchMedia() {
+        return { matches: false };
+      },
+      audioPlayer: { paused: true, audio: { isProbablyPlaying: () => false } },
+      visualFreezeActive: false,
+      requestAnimationFrame(callback) {
+        return callback();
+      },
+      cancelAnimationFrame() {}
+    },
+    document: createDocument(),
+    THREE,
+    scene: { add() {}, remove() {} },
+    config: { roomWidth: 5, segmentLength: 10, shelfDepth: 1, roomHeight: 4 },
+    isIOSSafari: false,
+    SCAudioAdapter: class {
+      constructor() {
+        this.audio = null;
+        this.paused = true;
+        this.volume = 0;
+        this.src = '';
+      }
+      pause() {}
+      play() { return Promise.resolve(); }
+    },
+    getSCUrl: (value) => value,
+    getReaderBackgroundVolume: () => 1,
+    liminalDebugNote: () => {},
+    currentSceneName: 'liminal_library',
+    loreProgressDefaultTotal: 8,
+    debugLogs: false,
+    requestAnimationFrame: (callback) => callback(),
+    cancelAnimationFrame() {},
+    getHasStartedGame: () => true,
+    getContentSwitchInProgress: () => false
+  });
+
+  const segment = runtime.createPreloadSegment(40, 10, () => {});
+  const initialBookCount = segment.meshBooks.count;
+  assert.ok(initialBookCount > 0);
+
+  segment.reset(-10);
+
+  assert.equal(segment.meshBooks.count, initialBookCount);
+  assert.equal(segment.bookBuildRaf, null);
+  assert.equal(segment.bookBuildPaused, false);
+});
+
 test('liminal hallway runtime recycles the oldest segment when the player advances', () => {
   const runtime = hallwayRuntime.init({
     window: {

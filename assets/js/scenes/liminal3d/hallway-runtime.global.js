@@ -536,6 +536,12 @@ class HallwaySegment {
             if (typeof this.pauseBookGeneration === 'function') {
                 this.pauseBookGeneration();
             }
+            const hasBuiltBooks = !!(this.meshBooks && this.meshBooks.count > 0);
+            if (hasBuiltBooks) {
+                this.bookBuildPaused = false;
+                this.bookBuildRaf = null;
+                return;
+            }
             this.meshBooks.count = 0;
             this.startBookGeneration();
         };

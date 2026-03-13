@@ -271,9 +271,10 @@
         const renderer = getRenderer();
         const clickHitsRenderer = isRendererElement(clickedEl)
           || isRendererElement(event.target)
-          || !!(renderer && clickedEl === renderer.domElement);
-        if (!clickHitsRenderer) {
-          cause('C02_WORLD_BLOCKED_CLICK', isMobile ? 'mobile-not-renderer' : 'not-renderer');
+          || !!(renderer && clickedEl === renderer.domElement)
+          || !!(renderer && (clickedEl === documentObject.body || clickedEl === documentObject.documentElement));
+        if (isMobile && !clickHitsRenderer) {
+          cause('C02_WORLD_BLOCKED_CLICK', 'mobile-not-renderer');
           return;
         }
 
