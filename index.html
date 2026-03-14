@@ -1530,6 +1530,10 @@
         let loadingScreenHideToken = 0;
         let pendingDeferredReadingRenderUntilReady = false;
         let pendingDeferredReadingRenderReason = '';
+        let postMapBootTasksReady = false;
+        let postMapBootTasksStarted = false;
+        let pendingPostMapBootTaskReason = '';
+        let runPostMapBootTasks = async () => {};
 
         function shouldDeferReadingRenderUntilReady() {
             return !gameReady && isReadingMode;
@@ -1559,6 +1563,22 @@
             window.requestAnimationFrame(() => {
                 window.requestAnimationFrame(runDeferredReadingRender);
             });
+        }
+
+        async function triggerPostMapBootTasks(reason = 'map-ready') {
+            if (postMapBootTasksStarted) return false;
+            if (!postMapBootTasksReady) {
+                pendingPostMapBootTaskReason = reason;
+                return false;
+            }
+            postMapBootTasksStarted = true;
+            pendingPostMapBootTaskReason = '';
+            try {
+                await runPostMapBootTasks(reason);
+            } catch (e) {
+                console.warn('Deferred boot tasks failed (non-fatal):', e);
+            }
+            return true;
         }
 
         function hideLoadingScreenSafely(reason = 'ready') {
@@ -1592,26 +1612,6 @@
         window.addEventListener('DOMContentLoaded', async () => {
             console.log("Electron Mode: Auto-Loading...");
 
-            // 0. IMMEDIATE AUDIO PRELOAD (User Request: Buffer early)
-            // WRAPPED IN TRY-CATCH TO PREVENT CRASHING THE LOADING SCREEN
-            try {
-                const mainAudioSrc = window.mainAudioUrl || LEVEL.audioUrl;
-                window.mainAudioUrl = mainAudioSrc;
-                if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
-                    const scUrl = getSCUrl(mainAudioSrc);
-                    audioPlayer.src = scUrl;
-                    if (audioPlayer.mode === 'html5' && audioPlayer.audioNode) {
-                        audioPlayer.audioNode.preload = "auto";
-                        // audioPlayer.audioNode.load(); // Reduced aggression to prevent hang
-                        console.log("Audio Preloading Configured (Lazy)");
-                    }
-                } else {
-                    console.warn("AudioPlayer or getSCUrl not ready yet.");
-                }
-            } catch (e) {
-                console.warn("Audio Preload Failed (Non-Fatal):", e);
-            }
-
             // RESTORE READING MODE STATE
             const savedMode = localStorage.getItem('gameboy_reading_mode');
             if (savedMode === 'true') {
@@ -1643,6 +1643,21 @@
 
             // 1. Load Map (Default)
             const mapImg = new Image();
+            try {
+                mapImg.decoding = 'async';
+                mapImg.loading = 'eager';
+                mapImg.fetchPriority = 'high';
+            } catch (_) { }
+            try {
+                if (document.head && LEVEL.mapFile && !document.querySelector(`link[rel="preload"][href="${LEVEL.mapFile}"]`)) {
+                    const preloadLink = document.createElement('link');
+                    preloadLink.rel = 'preload';
+                    preloadLink.as = 'image';
+                    preloadLink.href = LEVEL.mapFile;
+                    preloadLink.fetchPriority = 'high';
+                    document.head.appendChild(preloadLink);
+                }
+            } catch (_) { }
             mapImg.onload = () => {
                 console.log("Map Loaded, processing...");
                 try {
@@ -1678,6 +1693,72 @@
                 return started;
             };
 
+            const bootBookmarkTargetRaw = sessionStorage.getItem('bookmark_seek_target');
+            if (bootBookmarkTargetRaw) {
+                sessionStorage.removeItem('bookmark_seek_target');
+            }
+
+            runPostMapBootTasks = async (reason = 'map-ready') => {
+                try {
+                    const mainAudioSrc = window.mainAudioUrl || LEVEL.audioUrl;
+                    window.mainAudioUrl = mainAudioSrc;
+                    if (typeof getSCUrl === 'function' && typeof audioPlayer !== 'undefined') {
+                        const scUrl = getSCUrl(mainAudioSrc);
+                        if (audioPlayer.src !== scUrl) {
+                            audioPlayer.src = scUrl;
+                        }
+                    } else {
+                        console.warn('AudioPlayer or getSCUrl not ready yet.');
+                    }
+                } catch (e) {
+                    console.warn('Deferred audio bootstrap failed (non-fatal):', e);
+                }
+
+                await attemptAutoPlay();
+
+                const bmTarget = bootBookmarkTargetRaw;
+                if (!bmTarget) return;
+                try {
+                    const target = JSON.parse(bmTarget);
+                    const time = Number(target && target.time);
+                    if (!Number.isFinite(time) || time < 0) return;
+                    console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
+                    setTimeout(async () => {
+                        try {
+                            const targetPage = (target && typeof target.page === 'string' && target.page) ? target.page : CURRENT_PAGE;
+                            const targetContentKey = resolveBookmarkContentKey(target);
+                            const isLoreTarget = /^lore\d+$/i.test(targetContentKey);
+                            if (targetPage !== CURRENT_PAGE && !isLoreTarget) {
+                                console.warn('[Bookmark] Ignored stale on-load bookmark target for other page.', targetPage);
+                                return;
+                            }
+
+                            const ready = await ensureBookmarkContentForCurrentPage(target, 'bookmark:on-load');
+                            if (!ready) {
+                                console.warn('[Bookmark] Could not activate bookmark target content on load.', target);
+                                return;
+                            }
+
+                            await seekAndSyncSubtitle(time, 'bookmark:on-load');
+                            if (audioPlayer.paused) {
+                                try { await audioPlayer.play(); } catch (_) { }
+                            }
+                            syncPlayPauseIcon();
+                        } catch (e) {
+                            console.warn('[Bookmark] Failed to apply on-load bookmark target:', e);
+                        }
+                    }, 800);
+                } catch (e) {
+                    console.warn('[Bookmark] Failed to parse seek target:', e);
+                }
+            };
+            postMapBootTasksReady = true;
+            if (pendingPostMapBootTaskReason) {
+                void triggerPostMapBootTasks(pendingPostMapBootTaskReason);
+            } else if (gameReady) {
+                void triggerPostMapBootTasks('dom-ready-after-map');
+            }
+
             try {
                 // debugLog('Fetching subtitle file...');
                 const response = await fetch(LEVEL.subtitleFile);
@@ -1689,48 +1770,6 @@
                 // debugLog('subtitleTracks: ' + subtitleTracks.length);
                 renderSubtitleLines(0);
                 // debugLog('Chapter 1 Loaded OK');
-
-                await attemptAutoPlay();
-
-                // --- BOOKMARK SEEK ON LOAD ---
-                const bmTarget = sessionStorage.getItem('bookmark_seek_target');
-                if (bmTarget) {
-                    sessionStorage.removeItem('bookmark_seek_target');
-                    try {
-                        const target = JSON.parse(bmTarget);
-                        const time = Number(target && target.time);
-                        if (Number.isFinite(time) && time >= 0) {
-                            console.log(`[Bookmark] Seeking to bookmarked time: ${time}s`);
-                            setTimeout(async () => {
-                                try {
-                                    const targetPage = (target && typeof target.page === 'string' && target.page) ? target.page : CURRENT_PAGE;
-                                    const targetContentKey = resolveBookmarkContentKey(target);
-                                    const isLoreTarget = /^lore\d+$/i.test(targetContentKey);
-                                    if (targetPage !== CURRENT_PAGE && !isLoreTarget) {
-                                        console.warn('[Bookmark] Ignored stale on-load bookmark target for other page.', targetPage);
-                                        return;
-                                    }
-
-                                    const ready = await ensureBookmarkContentForCurrentPage(target, 'bookmark:on-load');
-                                    if (!ready) {
-                                        console.warn('[Bookmark] Could not activate bookmark target content on load.', target);
-                                        return;
-                                    }
-
-                                    await seekAndSyncSubtitle(time, 'bookmark:on-load');
-                                    if (audioPlayer.paused) {
-                                        try { await audioPlayer.play(); } catch (_) { }
-                                    }
-                                    syncPlayPauseIcon();
-                                } catch (e) {
-                                    console.warn('[Bookmark] Failed to apply on-load bookmark target:', e);
-                                }
-                            }, 800);
-                        }
-                    } catch (e) {
-                        console.warn('[Bookmark] Failed to parse seek target:', e);
-                    }
-                }
             } catch (e) {
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
@@ -2203,6 +2242,7 @@
                     }
 
                     startGameLoop();
+                    void triggerPostMapBootTasks('map-ready');
                     flushDeferredReadingRenderUntilReady('map-ready');
                     console.log("Map Processed & Ready.");
                 };
@@ -2226,6 +2266,7 @@
                 if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
                 hideLoadingScreenSafely('map-fallback-ready');
                 startGameLoop();
+                void triggerPostMapBootTasks('map-fallback-ready');
                 flushDeferredReadingRenderUntilReady('map-fallback-ready');
             }
         }
