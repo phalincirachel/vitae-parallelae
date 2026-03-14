@@ -467,6 +467,89 @@ test('liminal animation runtime uses world-space auto movement for move targets'
   assert.ok(velocity.length() > 0);
 });
 
+test('liminal animation runtime keeps segment upkeep running while reading render is throttled', () => {
+  const scheduled = [];
+  let renderCalls = 0;
+  let segmentUpdateCalls = 0;
+
+  const runtime = animationRuntime.init({
+    window: {
+      visualFreezeActive: false,
+      gamePaused: false,
+      requestAnimationFrame(callback) {
+        scheduled.push(callback);
+      }
+    },
+    requestAnimationFrame(callback) {
+      scheduled.push(callback);
+    },
+    performanceNow: (() => {
+      let now = 1000;
+      return () => {
+        now += 20;
+        return now;
+      };
+    })(),
+    getClock: () => ({ getDelta: () => 0.016, getElapsedTime: () => 1 }),
+    getCamera: () => ({
+      position: new Vector3(0, 1.6, -5),
+      quaternion: { setFromEuler() {} }
+    }),
+    getEuler: () => createEuler(),
+    getRenderer: () => ({ render() { renderCalls += 1; } }),
+    getScene: () => ({ children: [] }),
+    getVelocity: () => new Vector3(0, 0, 0),
+    getMoveState: () => ({ f: false, b: false, l: false, r: false }),
+    getMouse: () => ({ x: 0, y: 0 }),
+    setTargetMouseX: () => {},
+    setTargetMouseY: () => {},
+    getIsReadingMode: () => true,
+    getIsFallback2DMode: () => false,
+    getWorldInputLockReason: () => '',
+    getSuppressWorldInputUntil: () => 0,
+    getLastUiInteractionAt: () => 0,
+    getMoveTarget: () => null,
+    setMoveTarget: () => {},
+    getCameraLookTarget: () => null,
+    setCameraLookTarget: () => {},
+    setIsLookingAtClickTarget: () => {},
+    getIsCenteringCamera: () => false,
+    setIsCenteringCamera: () => {},
+    syncLookTargetsToCamera: () => {},
+    flushDeferredReadingModeRender: () => {},
+    getTmpLookDir: () => new Vector3(),
+    getTmpMovementInput: () => new Vector3(),
+    getTmpForwardDir: () => new Vector3(),
+    getTmpRightDir: () => new Vector3(),
+    getTmpMoveDir: () => new Vector3(),
+    getTmpVelocityStep: () => new Vector3(),
+    updateSegments: () => { segmentUpdateCalls += 1; },
+    getSegments: () => [],
+    getActiveGlowingBooks: () => [],
+    getCurrentChapterProgress: () => ({ collected: 0, total: 0 }),
+    refreshLoreProgressUi: () => {},
+    renderArchive: () => {},
+    startLoreMode: () => {},
+    allowAuxSfxPlaybackLiminal: () => false,
+    getShimmerSound: () => null,
+    getLastShimmerAt: () => 0,
+    setLastShimmerAt: () => {},
+    getDebugLogs: () => false,
+    debugNote: () => {},
+    cause: () => {},
+    log: () => {},
+    error: () => {}
+  });
+
+  assert.equal(runtime.startAnimationLoop(), true);
+  scheduled.shift()();
+  scheduled.shift()();
+
+  assert.equal(renderCalls, 1);
+  assert.equal(segmentUpdateCalls, 2);
+});
+
+
 test('liminal animation runtime throttles 3d rendering while reading mode is active', () => {
   const scheduled = [];
   let renderCalls = 0;

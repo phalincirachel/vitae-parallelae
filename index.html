@@ -2319,16 +2319,13 @@
                 window,
                 document,
                 requestAnimationFrame: (callback) => requestAnimationFrame(callback),
-                performanceNow: () => performance.now(),
                 hideLoadingScreenSafely,
                 update,
                 updateLoreSystem,
                 draw,
                 getGameReady: () => gameReady,
-                getIsReadingMode: () => isReadingMode,
                 getLastTime: () => lastTime,
                 setLastTime: (value) => { lastTime = value; },
-                readingRenderIntervalMs: 66,
                 log: (message) => console.log(message)
             })
             : {
@@ -4290,6 +4287,17 @@
             }, 4000);
         }
 
+        function syncBlaetternCurrentLineState(root, activeIndex) {
+            if (!root) return;
+            const currentLayer = root.querySelector('.blaettern-page-current');
+            if (!currentLayer) return;
+            currentLayer.querySelectorAll('.subtitle-current').forEach((el) => {
+                el.classList.remove('subtitle-current');
+            });
+            const activeLine = currentLayer.querySelector(`.blaettern-line[data-index="${activeIndex}"]`);
+            if (activeLine) activeLine.classList.add('subtitle-current');
+        }
+
         function renderBlaetternPageWindow() {
             const root = ensureBlaetternRoot();
             const refs = getBlaetternLayerRefs(root);
@@ -4336,13 +4344,24 @@
                 )
             );
 
+            const root = ensureBlaetternRoot();
+            const refs = root ? getBlaetternLayerRefs(root) : null;
+            const previousPageIndex = blaetternPageIndex;
             if (!blaetternSwipeAnimating && !subtitleFollowLocked) {
                 if (blaetternLastSyncedSubtitleIndex !== safeIndex) {
                     blaetternPageIndex = findBlaetternPageIndexForSubtitle(safeIndex);
                 }
             }
             blaetternLastSyncedSubtitleIndex = safeIndex;
-            renderBlaetternPageWindow();
+
+            const currentPageIndexAttr = refs && refs.current ? Number(refs.current.dataset.pageIndex) : NaN;
+            const needsFullWindowRender = !refs || currentPageIndexAttr !== blaetternPageIndex || previousPageIndex !== blaetternPageIndex;
+            if (needsFullWindowRender) {
+                renderBlaetternPageWindow();
+                return;
+            }
+
+            syncBlaetternCurrentLineState(root, safeIndex);
         }
 
         function resolveBlaetternSwipeDirection(offsetPx, velocityPxPerMs) {

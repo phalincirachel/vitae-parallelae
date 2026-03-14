@@ -13,20 +13,9 @@
     const updateLoreSystem = typeof options.updateLoreSystem === 'function' ? options.updateLoreSystem : () => {};
     const draw = typeof options.draw === 'function' ? options.draw : () => {};
     const getGameReady = typeof options.getGameReady === 'function' ? options.getGameReady : () => false;
-    const getIsReadingMode = typeof options.getIsReadingMode === 'function' ? options.getIsReadingMode : () => false;
     const getLastTime = typeof options.getLastTime === 'function' ? options.getLastTime : () => 0;
     const setLastTime = typeof options.setLastTime === 'function' ? options.setLastTime : () => {};
-    const getPerformanceNow = typeof options.performanceNow === 'function'
-      ? options.performanceNow
-      : () => {
-        if (windowObject.performance && typeof windowObject.performance.now === 'function') {
-          return windowObject.performance.now();
-        }
-        return Date.now();
-      };
-    const readingRenderIntervalMs = Number.isFinite(options.readingRenderIntervalMs) ? options.readingRenderIntervalMs : 66;
     const log = typeof options.log === 'function' ? options.log : () => {};
-    let lastReadingRenderAt = 0;
 
     function gameLoop(timestamp) {
       if (windowObject.visualFreezeActive) {
@@ -48,21 +37,8 @@
       if (dt > 0.1) dt = 0.1;
 
       update(dt);
-
-      const now = getPerformanceNow();
-      const shouldThrottleReadingRender = !!getIsReadingMode();
-      const shouldRenderFrame = !shouldThrottleReadingRender
-        || lastReadingRenderAt === 0
-        || (now - lastReadingRenderAt) >= readingRenderIntervalMs;
-
-      if (shouldRenderFrame) {
-        updateLoreSystem();
-        draw();
-        if (shouldThrottleReadingRender) {
-          lastReadingRenderAt = now;
-        }
-      }
-
+      updateLoreSystem();
+      draw();
       requestFrame(gameLoop);
       return dt;
     }
@@ -71,7 +47,6 @@
       if (windowObject.gameLoopRunning) return false;
       if (windowObject.visualFreezeActive) return false;
       windowObject.gameLoopRunning = true;
-      lastReadingRenderAt = 0;
       setLastTime(0);
       if (getGameReady()) {
         hideLoadingScreenSafely('start-game-loop');

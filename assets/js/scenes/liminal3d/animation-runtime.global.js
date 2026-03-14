@@ -376,11 +376,11 @@
         if (!getIsFallback2DMode()) {
           updateLook(delta, lookSuppressed);
           updateMovement(delta);
+          updateSegmentsAndBooks(delta, time);
 
           const shouldThrottleReadingRender = isReadingMode && !getIsCenteringCamera();
           const shouldRenderFrame = !shouldThrottleReadingRender || (now - lastReadingRenderAt) >= readingRenderIntervalMs;
           if (shouldRenderFrame) {
-            updateSegmentsAndBooks(delta, time);
             if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {
               // Shared player updates on its own timeupdate event.
             }
