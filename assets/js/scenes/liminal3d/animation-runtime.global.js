@@ -378,7 +378,12 @@
           updateMovement(delta);
           updateSegmentsAndBooks(delta, time);
 
-          const shouldThrottleReadingRender = isReadingMode && !getIsCenteringCamera();
+          const velocity = getVelocity();
+          const readingMotionActive = isReadingMode
+            && !!velocity
+            && typeof velocity.length === 'function'
+            && velocity.length() > 0.2;
+          const shouldThrottleReadingRender = isReadingMode && !getIsCenteringCamera() && !readingMotionActive;
           const shouldRenderFrame = !shouldThrottleReadingRender || (now - lastReadingRenderAt) >= readingRenderIntervalMs;
           if (shouldRenderFrame) {
             if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {

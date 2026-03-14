@@ -4298,10 +4298,66 @@
             if (activeLine) activeLine.classList.add('subtitle-current');
         }
 
+        let pendingBlaetternDeferredEdgeRenderTimer = null;
+        let pendingBlaetternDeferredEdgeRenderFrame = 0;
+        function clearBlaetternDeferredEdgeRender() {
+            if (pendingBlaetternDeferredEdgeRenderTimer) {
+                clearTimeout(pendingBlaetternDeferredEdgeRenderTimer);
+                pendingBlaetternDeferredEdgeRenderTimer = null;
+            }
+            if (pendingBlaetternDeferredEdgeRenderFrame) {
+                cancelAnimationFrame(pendingBlaetternDeferredEdgeRenderFrame);
+                pendingBlaetternDeferredEdgeRenderFrame = 0;
+            }
+        }
+
+        function assignBlaetternLayerRole(layer, roleClassName) {
+            if (!layer) return;
+            layer.classList.remove('blaettern-page-prev', 'blaettern-page-current', 'blaettern-page-next');
+            layer.classList.add(roleClassName);
+        }
+
+        function recycleBlaetternLayersAfterSwipe(root, direction) {
+            const refs = getBlaetternLayerRefs(root);
+            if (!refs || !direction) return getBlaetternLayerRefs(root);
+            if (direction === 1) {
+                assignBlaetternLayerRole(refs.prev, 'blaettern-page-next');
+                assignBlaetternLayerRole(refs.current, 'blaettern-page-prev');
+                assignBlaetternLayerRole(refs.next, 'blaettern-page-current');
+            } else if (direction === -1) {
+                assignBlaetternLayerRole(refs.next, 'blaettern-page-prev');
+                assignBlaetternLayerRole(refs.prev, 'blaettern-page-current');
+                assignBlaetternLayerRole(refs.current, 'blaettern-page-next');
+            }
+            return getBlaetternLayerRefs(root);
+        }
+
+        function scheduleBlaetternDeferredEdgeRender(root, direction) {
+            if (!root || !direction) return;
+            clearBlaetternDeferredEdgeRender();
+            pendingBlaetternDeferredEdgeRenderTimer = setTimeout(() => {
+                pendingBlaetternDeferredEdgeRenderTimer = null;
+                pendingBlaetternDeferredEdgeRenderFrame = requestAnimationFrame(() => {
+                    pendingBlaetternDeferredEdgeRenderFrame = 0;
+                    const refs = getBlaetternLayerRefs(root);
+                    if (!refs) return;
+                    if (direction === 1) {
+                        renderBlaetternLayer(refs.next, blaetternPageIndex + 1);
+                    } else if (direction === -1) {
+                        renderBlaetternLayer(refs.prev, blaetternPageIndex - 1);
+                    }
+                    updateBlaetternProgressBadge(root);
+                    hideBlaetternBookmarkButton();
+                    queueRecenterButtonPosition('blaettern-edge-refresh');
+                });
+            }, 60);
+        }
+
         function renderBlaetternPageWindow() {
             const root = ensureBlaetternRoot();
             const refs = getBlaetternLayerRefs(root);
             if (!refs) return;
+            clearBlaetternDeferredEdgeRender();
             renderBlaetternLayer(refs.prev, blaetternPageIndex - 1);
             renderBlaetternLayer(refs.current, blaetternPageIndex);
             renderBlaetternLayer(refs.next, blaetternPageIndex + 1);
@@ -4405,10 +4461,20 @@
                 blaetternSwipeAnimating = false;
                 if (direction === 1) blaetternPageIndex = Math.min(blaetternPages.length - 1, blaetternPageIndex + 1);
                 if (direction === -1) blaetternPageIndex = Math.max(0, blaetternPageIndex - 1);
+                if (direction !== 0) {
+                    recycleBlaetternLayersAfterSwipe(root, direction);
+                    setBlaetternLayerTransition(root, false);
+                    resetBlaetternLayerTransforms(root);
+                    updateBlaetternProgressBadge(root);
+                    hideBlaetternBookmarkButton();
+                    queueRecenterButtonPosition('blaettern-swipe-finish');
+                    scheduleBlaetternDeferredEdgeRender(root, direction);
+                } else {
+                    renderBlaetternPageWindow();
+                }
                 if (direction !== 0 && isBlaetternLayoutActive()) {
                     setSubtitleFollowLocked(true, 'blaettern-swipe');
                 }
-                renderBlaetternPageWindow();
                 if (isBlaetternLayoutActive()) scheduleBlaetternControlsAutoHide('swipe-finish');
             }, BLAETTERN_SWIPE_SETTLE_MS + 10);
         }
