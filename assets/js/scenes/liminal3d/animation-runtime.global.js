@@ -67,7 +67,6 @@
     let lastFrameTime = getPerformanceNow();
     let frameCount = 0;
     let fpsLogTimer = 0;
-    let lastReadingRenderAt = 0;
 
     function resetLookTargets() {
       setCameraLookTarget(null);
@@ -371,35 +370,21 @@
         const worldLockReason = getWorldInputLockReason();
         const isReadingMode = !!getIsReadingMode();
         const lookSuppressed = (!isReadingMode) && (!!worldLockReason || now < getSuppressWorldInputUntil());
-        const readingRenderIntervalMs = Number.isFinite(options.readingRenderIntervalMs) ? options.readingRenderIntervalMs : 66;
 
         if (!getIsFallback2DMode()) {
           updateLook(delta, lookSuppressed);
           updateMovement(delta);
           updateSegmentsAndBooks(delta, time);
-
-          const velocity = getVelocity();
-          const readingMotionActive = isReadingMode
-            && !!velocity
-            && typeof velocity.length === 'function'
-            && velocity.length() > 0.2;
-          const shouldThrottleReadingRender = isReadingMode && !getIsCenteringCamera() && !readingMotionActive;
-          const shouldRenderFrame = !shouldThrottleReadingRender || (now - lastReadingRenderAt) >= readingRenderIntervalMs;
-          if (shouldRenderFrame) {
-            if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {
-              // Shared player updates on its own timeupdate event.
-            }
-            const renderer = getRenderer();
-            const scene = getScene();
-            const camera = getCamera();
-            if (renderer && scene && camera && typeof renderer.render === 'function') {
-              renderer.render(scene, camera);
-            }
-            updateDebugHud();
-            if (shouldThrottleReadingRender) {
-              lastReadingRenderAt = now;
-            }
+          if (windowObject.audioPlayer && windowObject.audioPlayer.onTimeUpdate) {
+            // Shared player updates on its own timeupdate event.
           }
+          const renderer = getRenderer();
+          const scene = getScene();
+          const camera = getCamera();
+          if (renderer && scene && camera && typeof renderer.render === 'function') {
+            renderer.render(scene, camera);
+          }
+          updateDebugHud();
         }
       } catch (runtimeError) {
         error('Animation Loop Crash:', runtimeError);
@@ -412,7 +397,6 @@
       if (animationLoopRunning || windowObject.visualFreezeActive) return false;
       animationLoopRunning = true;
       lastFrameTime = getPerformanceNow();
-      lastReadingRenderAt = 0;
       requestFrame(animate);
       return true;
     }

@@ -1528,6 +1528,39 @@
         // ELECTRON AUTO-LOAD
         // ============================================
         let loadingScreenHideToken = 0;
+        let pendingDeferredReadingRenderUntilReady = false;
+        let pendingDeferredReadingRenderReason = '';
+
+        function shouldDeferReadingRenderUntilReady() {
+            return !gameReady && isReadingMode;
+        }
+
+        function queueDeferredReadingRenderUntilReady(reason = 'boot') {
+            pendingDeferredReadingRenderUntilReady = true;
+            pendingDeferredReadingRenderReason = reason;
+        }
+
+        function flushDeferredReadingRenderUntilReady(reason = 'map-ready') {
+            if (!pendingDeferredReadingRenderUntilReady) return;
+            pendingDeferredReadingRenderUntilReady = false;
+            pendingDeferredReadingRenderReason = '';
+
+            const runDeferredReadingRender = () => {
+                if (!isReadingMode) return;
+                const targetIndex = Number.isFinite(currentSubtitleIndex) && currentSubtitleIndex >= 0
+                    ? currentSubtitleIndex
+                    : 0;
+                renderSubtitleLines(Math.max(0, targetIndex));
+                if (isBlaetternLayoutSelected()) {
+                    scheduleBlaetternPaginationRetry(`${reason}:flush`);
+                }
+            };
+
+            window.requestAnimationFrame(() => {
+                window.requestAnimationFrame(runDeferredReadingRender);
+            });
+        }
+
         function hideLoadingScreenSafely(reason = 'ready') {
             const screen = document.getElementById('loading-screen');
             if (!screen) return;
@@ -2170,6 +2203,7 @@
                     }
 
                     startGameLoop();
+                    flushDeferredReadingRenderUntilReady('map-ready');
                     console.log("Map Processed & Ready.");
                 };
                 bgImage.onerror = (e) => {
@@ -2192,6 +2226,7 @@
                 if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
                 hideLoadingScreenSafely('map-fallback-ready');
                 startGameLoop();
+                flushDeferredReadingRenderUntilReady('map-fallback-ready');
             }
         }
 
@@ -2683,6 +2718,10 @@
         }
 
         function scheduleBlaetternPaginationRetry(reason = 'layout') {
+            if (!gameReady) {
+                queueDeferredReadingRenderUntilReady(`${reason}:wait-for-map`);
+                return;
+            }
             if (blaetternPaginationRetryTimer) return;
             blaetternPaginationRetryTimer = setTimeout(() => {
                 blaetternPaginationRetryTimer = null;
@@ -5437,6 +5476,18 @@
         function renderSubtitleLines(centerIndex) {
             // A) Reading Mode: Rendere ALLE Zeilen (fÃ¼r Scrollbar)
             if (isReadingMode) {
+                if (shouldDeferReadingRenderUntilReady()) {
+                    queueDeferredReadingRenderUntilReady('render-subtitle-lines');
+                    if (!subtitleContainer.children.length) {
+                        subtitleContainer.innerHTML = '';
+                        const pendingLine = document.createElement('div');
+                        pendingLine.className = 'subtitle-line subtitle-current';
+                        pendingLine.innerText = 'Lesemodus wird vorbereitet...';
+                        subtitleContainer.appendChild(pendingLine);
+                    }
+                    return;
+                }
+
                 // Version Check: Ensure we are rendering the current set of subtitles
                 if (subtitleTracks.length === 0) {
                     syncReadingTopFadeMask(-1);
