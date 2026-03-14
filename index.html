@@ -574,6 +574,74 @@
         const LORE_PROGRESS_DEFAULT_TOTAL = indexSceneBootstrap.loreProgressDefaultTotal;
         const CHAPTER_PROGRESS_SCENE_BY_BUTTON = indexSceneBootstrap.chapterProgressSceneByButton;
         const BOOKMARK_PAGE_KEY_MAP = indexSceneBootstrap.bookmarkPageKeyMap;
+        let eagerMapBootImage = null;
+        let eagerMapBootProcessingStarted = false;
+        let deferredLoreTextPreloadStarted = false;
+        const deferredLoreTextPreloadEntries = [];
+
+        function ensureIndexMapPreloadLink() {
+            try {
+                if (!document.head || !LEVEL.mapFile) return;
+                if (document.querySelector(`link[rel="preload"][href="${LEVEL.mapFile}"]`)) return;
+                const preloadLink = document.createElement('link');
+                preloadLink.rel = 'preload';
+                preloadLink.as = 'image';
+                preloadLink.href = LEVEL.mapFile;
+                preloadLink.fetchPriority = 'high';
+                document.head.appendChild(preloadLink);
+            } catch (_) { }
+        }
+
+        function ensureIndexMapBootImage() {
+            if (eagerMapBootImage) return eagerMapBootImage;
+            eagerMapBootImage = new Image();
+            try {
+                eagerMapBootImage.decoding = 'async';
+                eagerMapBootImage.loading = 'eager';
+                eagerMapBootImage.fetchPriority = 'high';
+            } catch (_) { }
+            ensureIndexMapPreloadLink();
+            eagerMapBootImage.src = LEVEL.mapFile;
+            return eagerMapBootImage;
+        }
+
+        function scheduleDeferredLoreTextPreload(delayMs = 900) {
+            const start = () => { void preloadDeferredLoreTexts(); };
+            if (typeof window.requestIdleCallback === 'function') {
+                window.requestIdleCallback(() => start(), { timeout: Math.max(500, delayMs) });
+                return;
+            }
+            setTimeout(start, Math.max(0, delayMs));
+        }
+
+        async function preloadDeferredLoreTexts() {
+            if (deferredLoreTextPreloadStarted) return;
+            deferredLoreTextPreloadStarted = true;
+            const prioritized = deferredLoreTextPreloadEntries
+                .slice()
+                .sort((a, b) => {
+                    const idA = Number(a && a.id);
+                    const idB = Number(b && b.id);
+                    if (idA === 1 && idB !== 1) return -1;
+                    if (idB === 1 && idA !== 1) return 1;
+                    return idA - idB;
+                });
+            for (const entry of prioritized) {
+                if (!entry || !entry.id || !entry.textUrl) continue;
+                if (typeof loreData.text[entry.id] === 'string' && loreData.text[entry.id].length > 0) continue;
+                try {
+                    const res = await fetch(entry.textUrl);
+                    if (res.ok) {
+                        loreData.text[entry.id] = await res.text();
+                        console.log(`[Init] Pre-loaded text for lore ${entry.id}`);
+                    }
+                } catch (e) {
+                    console.warn(`[Init] Could not pre-load text for lore ${entry.id}:`, e);
+                }
+            }
+        }
+
+        ensureIndexMapBootImage();
         let bgImage = null;
         let foregroundImage = null;
         let spriteReady = false;
@@ -927,19 +995,13 @@
                 await GameState.init();
                 console.log("[Index] GameState Loaded & Initialized");
 
-                // Populate loreData for compatibility (audio + text)
+                // Populate loreData for compatibility (audio now, text after map boot)
                 const db = GameState.getAllLore();
+                deferredLoreTextPreloadEntries.length = 0;
                 for (const [id, content] of Object.entries(db)) {
                     loreData.audio[id] = content.audio;
-                    // Pre-fetch text for reliability
-                    try {
-                        const res = await fetch(content.text);
-                        if (res.ok) {
-                            loreData.text[id] = await res.text();
-                            console.log(`[Init] Pre-loaded text for lore ${id}`);
-                        }
-                    } catch (e) {
-                        console.warn(`[Init] Could not pre-load text for lore ${id}:`, e);
+                    if (content && content.text) {
+                        deferredLoreTextPreloadEntries.push({ id: Number(id), textUrl: content.text });
                     }
                 }
                 refreshLoreProgressUi();
@@ -1393,6 +1455,7 @@
         function loadAllSprites() {
             // Frontal (nach unten schauend, NEU: spriteneu.png)
             spriteFront = new Image();
+            try { spriteFront.decoding = 'async'; spriteFront.fetchPriority = 'low'; } catch (_) { }
             spriteFront.onload = function () {
                 // WICHTIG: Math.floor() fÃ¼r ganzzahlige Frame-Breite!
                 SPRITE.frameWidth = Math.floor(this.width / SPRITE.cols); // Fallback-Wert, wird fÃ¼r DrawCoords Ã¼berschrieben
@@ -1406,6 +1469,7 @@
 
             // RÃ¼cken (nach oben schauend, NEU: spriterueckenneu.png)
             spriteBack = new Image();
+            try { spriteBack.decoding = 'async'; spriteBack.fetchPriority = 'low'; } catch (_) { }
             spriteBack.onload = function () {
                 spritesLoaded++;
                 checkAllSpritesLoaded();
@@ -1416,6 +1480,7 @@
 
             // Seitlich (fÃ¼r rechts, links wird gespiegelt)
             spriteSide = new Image();
+            try { spriteSide.decoding = 'async'; spriteSide.fetchPriority = 'low'; } catch (_) { }
             spriteSide.onload = function () {
                 spritesLoaded++;
                 checkAllSpritesLoaded();
@@ -1642,23 +1707,10 @@
             }, 10000);
 
             // 1. Load Map (Default)
-            const mapImg = new Image();
-            try {
-                mapImg.decoding = 'async';
-                mapImg.loading = 'eager';
-                mapImg.fetchPriority = 'high';
-            } catch (_) { }
-            try {
-                if (document.head && LEVEL.mapFile && !document.querySelector(`link[rel="preload"][href="${LEVEL.mapFile}"]`)) {
-                    const preloadLink = document.createElement('link');
-                    preloadLink.rel = 'preload';
-                    preloadLink.as = 'image';
-                    preloadLink.href = LEVEL.mapFile;
-                    preloadLink.fetchPriority = 'high';
-                    document.head.appendChild(preloadLink);
-                }
-            } catch (_) { }
-            mapImg.onload = () => {
+            const mapImg = ensureIndexMapBootImage();
+            const beginMapProcessing = () => {
+                if (eagerMapBootProcessingStarted) return;
+                eagerMapBootProcessingStarted = true;
                 console.log("Map Loaded, processing...");
                 try {
                     processMap(mapImg);
@@ -1666,7 +1718,7 @@
                     console.error("Critical: processMap crashed!", e);
                 }
             };
-            mapImg.onerror = (e) => {
+            const handleMapError = (e) => {
                 console.error("Map Load Error", e);
                 if (processingInfo) {
                     processingInfo.style.display = 'block';
@@ -1676,7 +1728,12 @@
                 }
                 if (loadingScreen) loadingScreen.style.display = 'flex';
             };
-            mapImg.src = LEVEL.mapFile;
+            if (mapImg.complete && Number(mapImg.naturalWidth || 0) > 0) {
+                beginMapProcessing();
+            } else {
+                mapImg.addEventListener('load', beginMapProcessing, { once: true });
+                mapImg.addEventListener('error', handleMapError, { once: true });
+            }
 
             // 2. Load Audio & Text (Chapter 1) -> Audio already preloaded above!
             // const mainAudioSrc = 'assets/kapitel1.mp3'; // Removed redundant def
@@ -1715,6 +1772,7 @@
                 }
 
                 await attemptAutoPlay();
+                scheduleDeferredLoreTextPreload(1200);
 
                 const bmTarget = bootBookmarkTargetRaw;
                 if (!bmTarget) return;
@@ -1776,15 +1834,6 @@
                 subtitleTracks = [];
             }
 
-            // 2b. Preload Lore 1 Text
-            try {
-                const lRes = await fetch('assets/lore1.txt');
-                loreData.text[1] = await lRes.text();
-                console.log("Lore 1 Loaded");
-            } catch (e) {
-                console.error("Lore 1 Text Load Error:", e);
-                loreData.text[1] = "";
-            }
 
             // Always show UI
             if (typeof uiContainer !== 'undefined' && uiContainer) uiContainer.style.display = 'flex';
