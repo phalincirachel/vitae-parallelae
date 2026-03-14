@@ -32,6 +32,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this._pendingReadingLayoutFrame = 0;
         this._pendingReadingLayoutSettleFrame = 0;
         this._pendingReadingLayoutTimer = null;
+        this._lastReadingLayoutSignature = '';
 
         // Default volumes
         const requestedVolume = Number(options.volume ?? 1.0);
@@ -739,8 +740,21 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         }
     }
 
-    _scheduleReadingLayoutPass() {
+    _getReadingLayoutSignature() {
+        if (!this.container || !this.isReadingMode) return '';
+        const versionKey = String(this.container.dataset.version || this.renderVersion || 0);
+        const classKey = this.container.className || '';
+        const sizeKey = `${this.container.clientWidth || 0}x${this.container.clientHeight || 0}`;
+        const childKey = String(this.container.childElementCount || 0);
+        const styleKey = this.container.style ? this.container.style.cssText : '';
+        return [versionKey, classKey, sizeKey, childKey, styleKey].join('|');
+    }
+
+    _scheduleReadingLayoutPass(force = false) {
         if (!this.container || !this.isReadingMode) return;
+        const signature = this._getReadingLayoutSignature();
+        if (!force && signature && signature === this._lastReadingLayoutSignature) return;
+        if (signature) this._lastReadingLayoutSignature = signature;
         const runLayoutPass = () => this._applyFlatSmartJustification();
 
         if (this._pendingReadingLayoutFrame) {
@@ -786,8 +800,10 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         if (this.isReadingMode) {
             const currentVersion = String(this.renderVersion);
             const renderedVersion = this.container.dataset.version || '';
+            let didRebuildReadingDom = false;
 
             if (this.container.children.length !== this.subtitleTracks.length || renderedVersion !== currentVersion) {
+                didRebuildReadingDom = true;
                 this.container.innerHTML = '';
                 this.container.dataset.version = currentVersion;
 
@@ -852,8 +868,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 }
             }
 
-            this._applyFlatSmartJustification();
-            this._scheduleReadingLayoutPass();
+            this._scheduleReadingLayoutPass(didRebuildReadingDom);
             return;
         }
 
@@ -899,13 +914,22 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const distance = Math.abs(targetY - startY);
 
         if (distance < 5) return;
-
-        let duration = 1000;
-        if (distance > 200) {
-            const extraDist = Math.min(800, distance - 200);
-            duration = 1000 + (extraDist / 800) * 2000;
+        if (this.isReadingMode && distance < 16) {
+            container.scrollTop = targetY;
+            return;
         }
-        duration = Math.min(3000, duration);
+
+        let duration;
+        if (this.isReadingMode) {
+            duration = Math.min(360, Math.max(140, distance * 0.9));
+        } else {
+            duration = 1000;
+            if (distance > 200) {
+                const extraDist = Math.min(800, distance - 200);
+                duration = 1000 + (extraDist / 800) * 2000;
+            }
+            duration = Math.min(3000, duration);
+        }
 
         const startTime = performance.now();
         const easeOutQuad = (t) => t * (2 - t);
@@ -929,6 +953,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
 
     setReadingMode(active) {
         this.isReadingMode = active;
+        this._lastReadingLayoutSignature = '';
         this.renderLines(this.currentSubtitleIndex);
     }
 

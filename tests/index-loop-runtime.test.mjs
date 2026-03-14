@@ -113,3 +113,59 @@ test('index loop runtime clamps dt and drives update, lore update and draw in or
   assert.equal(lastTime, 310);
   assert.equal(frames.length, 1);
 });
+
+test('index loop runtime throttles lore and draw work while reading mode is active', () => {
+  const calls = [];
+  const frames = [];
+  const windowObject = createWindow();
+  let lastTime = 0;
+  let now = 1000;
+  const runtime = loopRuntime.init({
+    window: windowObject,
+    requestAnimationFrame: (callback) => {
+      frames.push(callback);
+      return frames.length;
+    },
+    performanceNow: () => now,
+    update: (dt) => calls.push(['update', Number(dt.toFixed(3))]),
+    updateLoreSystem: () => calls.push(['lore']),
+    draw: () => calls.push(['draw']),
+    getIsReadingMode: () => true,
+    getLastTime: () => lastTime,
+    setLastTime: (value) => { lastTime = value; },
+    readingRenderIntervalMs: 66
+  });
+
+  runtime.startGameLoop();
+  calls.length = 0;
+  frames.length = 0;
+  lastTime = 10;
+  now = 1000;
+  runtime.gameLoop(26);
+  assert.deepEqual(calls, [
+    ['update', 0.016],
+    ['lore'],
+    ['draw']
+  ]);
+
+  calls.length = 0;
+  frames.length = 0;
+  lastTime = 26;
+  now = 1030;
+  runtime.gameLoop(42);
+  assert.deepEqual(calls, [
+    ['update', 0.016]
+  ]);
+
+  calls.length = 0;
+  frames.length = 0;
+  lastTime = 42;
+  now = 1098;
+  runtime.gameLoop(58);
+  assert.deepEqual(calls, [
+    ['update', 0.016],
+    ['lore'],
+    ['draw']
+  ]);
+});
+

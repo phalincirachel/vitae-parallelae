@@ -236,19 +236,19 @@
             }
           }
         }
-
-        camera.position.x += velocity.x * delta;
-        camera.position.z += velocity.z * delta;
-        if (velocity.z > 0) velocity.z = 0;
-        camera.position.y += velocity.y * delta;
-
-        if (camera.position.y < 1.6) {
-          velocity.y = 0;
-          camera.position.y = 1.6;
-        }
-
-        camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
       }
+
+      camera.position.x += velocity.x * delta;
+      camera.position.z += velocity.z * delta;
+      if (velocity.z > 0) velocity.z = 0;
+      camera.position.y += velocity.y * delta;
+
+      if (camera.position.y < 1.6) {
+        velocity.y = 0;
+        camera.position.y = 1.6;
+      }
+
+      camera.position.x = Math.max(-2.5, Math.min(2.5, camera.position.x));
 
       velocity.multiplyScalar(1.0 - 5.0 * delta);
       if (velocity.length() > 0.5) {

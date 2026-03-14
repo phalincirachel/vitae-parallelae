@@ -2319,13 +2319,16 @@
                 window,
                 document,
                 requestAnimationFrame: (callback) => requestAnimationFrame(callback),
+                performanceNow: () => performance.now(),
                 hideLoadingScreenSafely,
                 update,
                 updateLoreSystem,
                 draw,
                 getGameReady: () => gameReady,
+                getIsReadingMode: () => isReadingMode,
                 getLastTime: () => lastTime,
                 setLastTime: (value) => { lastTime = value; },
+                readingRenderIntervalMs: 66,
                 log: (message) => console.log(message)
             })
             : {
@@ -3168,8 +3171,29 @@
         let pendingReadingLayoutRefreshFrame = 0;
         let pendingReadingLayoutRefreshSettleFrame = 0;
         let pendingReadingLayoutRefreshTimer = null;
-        function scheduleReadingLayoutRefresh(reason = 'unspecified') {
+        let lastReadingLayoutRefreshSignature = '';
+        function getReadingLayoutRefreshSignature() {
+            if (!subtitleContainer || !isReadingMode) return '';
+            const layoutKey = readerSentenceLayout || '';
+            const versionKey = String(subtitleContainer.dataset.version || window.subtitleVersion || 0);
+            const sizeKey = `${subtitleContainer.clientWidth || 0}x${subtitleContainer.clientHeight || 0}`;
+            const styleKey = subtitleContainer.style ? subtitleContainer.style.cssText : '';
+            const classKey = subtitleContainer.className || '';
+            const childKey = String(subtitleContainer.childElementCount || 0);
+            const blaetternKey = layoutKey === READER_LAYOUT_BLAETTERN
+                ? `${blaetternPageIndex}|${blaetternPages.length}|${blaetternPaginationKey || ''}`
+                : '';
+            return [layoutKey, versionKey, sizeKey, styleKey, classKey, childKey, blaetternKey].join('|');
+        }
+        function invalidateReadingLayoutRefreshSignature() {
+            lastReadingLayoutRefreshSignature = '';
+        }
+        function scheduleReadingLayoutRefresh(reason = 'unspecified', options = {}) {
             if (!subtitleContainer || !isReadingMode) return;
+            const force = !!(options && options.force);
+            const signature = getReadingLayoutRefreshSignature();
+            if (!force && signature && signature === lastReadingLayoutRefreshSignature) return;
+            if (signature) lastReadingLayoutRefreshSignature = signature;
             const runLayoutRefresh = () => {
                 if (!isReadingMode) return;
                 if (readerSentenceLayout === READER_LAYOUT_BLAETTERN) {
@@ -4932,21 +4956,29 @@
             const targetY = relativeTop - (container.clientHeight / 2) + (targetHeight / 2);
 
             const distance = Math.abs(targetY - startY);
+            const isReadingScroll = container === subtitleContainer && isReadingMode;
 
             // Skip if already very close (within 5px)
             if (distance < 5) return;
-
-            // Dynamic Duration: 1s (near) to 3s (far)
-            // "Near" = within 200px, "Far" = 1000px+
-            let duration = 1000; // Base 1s
-            if (distance > 200) {
-                // Scale from 1s to 3s between 200px and 1000px
-                const extraDist = Math.min(800, distance - 200);
-                duration = 1000 + (extraDist / 800) * 2000;
+            if (isReadingScroll && distance < 16) {
+                container.scrollTop = targetY;
+                return;
             }
-            duration = Math.min(3000, duration); // Cap at 3s
 
-            console.log(`[SmoothScroll] Dist=${distance.toFixed(0)}px -> Duration=${duration.toFixed(0)}ms`);
+            let duration;
+            if (isReadingScroll) {
+                duration = Math.min(360, Math.max(140, distance * 0.9));
+            } else {
+                // Dynamic Duration: 1s (near) to 3s (far)
+                // "Near" = within 200px, "Far" = 1000px+
+                duration = 1000; // Base 1s
+                if (distance > 200) {
+                    // Scale from 1s to 3s between 200px and 1000px
+                    const extraDist = Math.min(800, distance - 200);
+                    duration = 1000 + (extraDist / 800) * 2000;
+                }
+                duration = Math.min(3000, duration); // Cap at 3s
+            }
 
             const startTime = performance.now();
 
@@ -5338,9 +5370,11 @@
 
                 const currentVersion = window.subtitleVersion || 0;
                 const renderedVersion = parseInt(subtitleContainer.dataset.version || '-1');
+                let didRebuildReadingDom = false;
 
                 // Nur neu bauen, wenn Anzahl nicht stimmt ODER Version anders ist
                 if (subtitleContainer.children.length !== subtitleTracks.length || renderedVersion !== currentVersion) {
+                    didRebuildReadingDom = true;
                     subtitleContainer.innerHTML = '';
                     subtitleContainer.dataset.version = currentVersion;
 
@@ -5737,8 +5771,7 @@
                         smoothScrollToElement(subtitleContainer, activeEl);
                     }
                 }
-                applyFlatSmartJustification();
-                scheduleReadingLayoutRefresh('render-reading');
+                scheduleReadingLayoutRefresh('render-reading', { force: didRebuildReadingDom });
                 return;
             }
 
@@ -6355,6 +6388,7 @@
                 syncAutoWalkToIndex();
                 uiContainer.classList.add('reading-mode');
                 hideNextChapterPrompt('reading-mode-on');
+                stopBackgroundBrightnessCheck();
             } else {
                 clearBlaetternPaginationRetryTimer();
                 setSubtitleFollowLocked(false, 'mode-off');
@@ -6365,8 +6399,10 @@
                     endLoreMode();
                 }
                 uiContainer.classList.remove('reading-mode');
+                scheduleBackgroundBrightnessCheck(120);
             }
             syncModeDimmerLevel({ force: true });
+            invalidateReadingLayoutRefreshSignature();
             markBlaetternPaginationDirty();
             syncBlaetternUiState(`mode-switch:${reason}`);
 
@@ -6552,10 +6588,18 @@
 
         let lastBrightnessCheck = 0;
         let backgroundBrightnessTimer = null;
+        function stopBackgroundBrightnessCheck() {
+            if (backgroundBrightnessTimer) {
+                clearTimeout(backgroundBrightnessTimer);
+                backgroundBrightnessTimer = null;
+            }
+        }
 
         function scheduleBackgroundBrightnessCheck(delayMs = 600) {
-            if (backgroundBrightnessTimer) clearTimeout(backgroundBrightnessTimer);
+            stopBackgroundBrightnessCheck();
+            if (isReadingMode) return;
             backgroundBrightnessTimer = setTimeout(() => {
+                backgroundBrightnessTimer = null;
                 requestAnimationFrame(checkBackgroundBrightness);
             }, Math.max(120, delayMs || 0));
         }
@@ -6569,7 +6613,6 @@
 
             // Im Lesemodus immer dunkler Hintergrund
             if (isReadingMode) {
-                scheduleBackgroundBrightnessCheck(700);
                 return;
             }
 
