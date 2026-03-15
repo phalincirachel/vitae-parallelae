@@ -62,8 +62,9 @@ export function createIntroNarrationAdapter(options = {}) {
   let currentSession = null;
   let monitorTimer = null;
   let silentTimer = null;
-  let readyPromise = null;
-  let gestureCleanup = null;
+  let readyPromise = null
+  let gestureCleanup = null
+  let gestureRetryHandler = null;
 
   function clearTimers() {
     if (monitorTimer) {
@@ -79,6 +80,7 @@ export function createIntroNarrationAdapter(options = {}) {
   function clearGestureRetry() {
     if (typeof gestureCleanup === 'function') gestureCleanup();
     gestureCleanup = null;
+    gestureRetryHandler = null;
   }
 
   function promoteWidgetIframe() {
@@ -275,6 +277,7 @@ export function createIntroNarrationAdapter(options = {}) {
           finish(false);
         }
       };
+      gestureRetryHandler = handler;
       gestureCleanup = () => {
         GESTURE_EVENTS.forEach((eventName) => {
           documentRef.removeEventListener(eventName, handler, listenerOptions);
@@ -420,6 +423,15 @@ export function createIntroNarrationAdapter(options = {}) {
     return false;
   }
 
+  function acknowledgeGesture() {
+    if (typeof gestureRetryHandler === 'function') {
+      void gestureRetryHandler();
+      return true;
+    }
+    if (isPaused()) return resume();
+    return false;
+  }
+
   function setVolume(nextVolume) {
     volume = Math.max(0, Math.min(1, Number(nextVolume) || 0));
     if (player) player.volume = volume;
@@ -474,6 +486,7 @@ export function createIntroNarrationAdapter(options = {}) {
     resume,
     stop,
     toggle,
+    acknowledgeGesture,
     setVolume,
     isPlaying,
     isPaused,
@@ -488,3 +501,6 @@ export function createIntroNarrationAdapter(options = {}) {
 }
 
 export default createIntroNarrationAdapter;
+
+
+

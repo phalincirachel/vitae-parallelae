@@ -68,21 +68,13 @@ export function createInteractiveFocusOverlay(options = {}) {
     };
   }
 
-  function applyRect(rect) {
-    const normalized = normalizeRect(rect);
+  function applyRect(rect) {`r`n    const normalized = normalizeRect(rect);
     if (!normalized) {
       hide();
       return null;
     }
 
-    const padding = 18;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const inset = 8;
-    let left = normalized.left - padding;
-    let top = normalized.top - padding;
-    let right = normalized.right + padding;
-    let bottom = normalized.bottom + padding;
+    const paddingX = Number.isFinite(Number(rect?.paddingX)) ? Number(rect.paddingX) : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);`r`n    const paddingY = Number.isFinite(Number(rect?.paddingY)) ? Number(rect.paddingY) : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);`r`n    const viewportWidth = window.innerWidth;`r`n    const viewportHeight = window.innerHeight;`r`n    const inset = Number.isFinite(Number(rect?.inset)) ? Number(rect.inset) : 8;`r`n    let left = normalized.left - paddingX;`r`n    let top = normalized.top - paddingY;`r`n    let right = normalized.right + paddingX;`r`n    let bottom = normalized.bottom + paddingY;
 
     if (left < inset) {
       right = Math.min(viewportWidth - inset, right + (inset - left));

@@ -196,7 +196,17 @@ async function initIntroApp() {
   const setAudioPromptVisible = (visible) => {
     const prompt = refs.introAudioPrompt;
     if (!prompt) return;
-    prompt.classList.toggle('is-visible', !!visible);
+    if (visible) {
+      prompt.hidden = false;
+      prompt.disabled = false;
+      windowRef.requestAnimationFrame(() => prompt.classList.add('is-visible'));
+      return;
+    }
+    prompt.classList.remove('is-visible');
+    prompt.disabled = true;
+    windowRef.setTimeout(() => {
+      if (!prompt.classList.contains('is-visible')) prompt.hidden = true;
+    }, 220);
   };
   const runtimeState = {
     currentTrackName: 'main',
@@ -320,17 +330,7 @@ async function initIntroApp() {
     }
   };
 
-  const scheduleUiRecovery = (reason = 'refresh') => {
-    if (runtimeState.destroyed) return;
-    windowRef.cancelAnimationFrame(uiRecoveryFrame);
-    uiRecoveryFrame = windowRef.requestAnimationFrame(() => {
-      windowRef.requestAnimationFrame(() => {
-        refreshInteractiveState(reason);
-      });
-    });
-  };
-
-  const clearAutoResumeTimer = () => {
+ param($m) $m.Value + $insert + "  const clearAutoResumeTimer"  = () => {
     if (!autoResumeTimer) return;
     windowRef.clearTimeout(autoResumeTimer);
     autoResumeTimer = 0;
@@ -366,6 +366,9 @@ async function initIntroApp() {
     const resolver = runtimeState.waitResolver;
     runtimeState.waitingAction = null;
     runtimeState.waitResolver = null;
+    clearDynamicFocus();
+    focusOverlay.clear();
+    runtimeState.currentFocusConfig = null;
     if (!narration.isPlaying() && !narration.isPaused()) {
       clearPresentation();
     }
@@ -565,6 +568,16 @@ async function initIntroApp() {
     void redirectToGame(false);
   });
 
+  refs.introAudioPrompt?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    clearAutoResumeTimer();
+    setAudioPromptVisible(false);
+    if (runtimeState.destroyed) return;
+    runtimeState.autoPausedForVisibility = false;
+    narration.acknowledgeGesture?.();
+  }, true);
+
   refs.nextChapterBtn?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -653,17 +666,17 @@ async function initIntroApp() {
   refs.nextChapterBtn.classList.remove('visible');
   refs.archiveModal?.classList?.remove?.('visible');
   hooks.refreshLoreProgressUi({ forceHidden: true });
-  setGate({ includeAudio: false, targets: [refs.startSkipBtn] });
+  setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   syncAudioIcons(false);
   void narration.prepare?.();
   setAudioPromptVisible(false);
 
   const startPromise = (async () => {
-    await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn] });
+    await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
-    await speakSegment('start', 1, { includeAudio: false, targets: [refs.startSkipBtn] });
+    await speakSegment('start', 1, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
-    setGate({ includeAudio: false, targets: [refs.startSkipBtn] });
+    setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   })();
 
   await Promise.all([startPromise, readyPromise]);
@@ -793,7 +806,7 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('souvenir', 1, 'back-to-chapter', {
     targets: ['#backToChapterBtn'],
-    rectProvider: () => refs.backToChapterBtn?.getBoundingClientRect?.() || null
+    rectProvider: () => createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 })
   });
   if (runtimeState.destroyed) return;
 
@@ -814,7 +827,7 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('main', 17, 'open-lore-hud', {
     targets: ['#loreProgressHud'],
-    rectProvider: () => refs.loreProgressHud?.getBoundingClientRect?.() || null
+    rectProvider: () => createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 })
   });
   if (runtimeState.destroyed) return;
 
@@ -841,6 +854,7 @@ async function initIntroApp() {
 }
 
 void initIntroApp();
+
 
 
 
