@@ -90,6 +90,7 @@ function getRefs(documentRef) {
     skipBackBtn: documentRef.getElementById('skipBackBtn'),
     skipForwardBtn: documentRef.getElementById('skipForwardBtn'),
     startScreen: documentRef.getElementById('introStartScreen'),
+    startImage: documentRef.getElementById('introStartImage'),
     startSkipBtn: documentRef.getElementById('startSkipBtn'),
     introAudioPrompt: documentRef.getElementById('introAudioPrompt')
   };
@@ -169,6 +170,32 @@ function createAudioIconSync(refs) {
     if (refs.iconPlay) refs.iconPlay.style.display = isPlaying ? 'none' : 'block';
     if (refs.iconPause) refs.iconPause.style.display = isPlaying ? 'block' : 'none';
   };
+}
+
+function waitForStartImageReady(imageElement, timeoutMs = 4000) {
+  if (!imageElement) return Promise.resolve(false);
+  if (imageElement.complete && Number(imageElement.naturalWidth) > 0) {
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      globalThis.clearTimeout(timeoutId);
+      imageElement.removeEventListener('load', handleLoad);
+      imageElement.removeEventListener('error', handleError);
+      resolve(result);
+    };
+    const handleLoad = () => finish(true);
+    const handleError = () => finish(false);
+    const timeoutId = globalThis.setTimeout(() => finish(false), Math.max(500, Number(timeoutMs) || 0));
+    imageElement.addEventListener('load', handleLoad, { once: true });
+    imageElement.addEventListener('error', handleError, { once: true });
+    try {
+      imageElement.decode?.().then(() => finish(true)).catch(() => {});
+    } catch (_) {}
+  });
 }
 
 async function initIntroApp() {
@@ -695,6 +722,8 @@ async function initIntroApp() {
   setAudioPromptVisible(false);
 
   const startPromise = (async () => {
+    await waitForStartImageReady(refs.startImage, 4000);
+    await wait(40);
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
     setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });

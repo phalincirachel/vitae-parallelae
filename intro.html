@@ -51,13 +51,28 @@
             inset: 0;
             z-index: 10050;
             background-color: #050507;
+            overflow: hidden;
+        }
+
+        #introStartScreen::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            z-index: 1;
             background-image:
                 linear-gradient(180deg, rgba(5, 5, 7, 0.18), rgba(5, 5, 7, 0.42)),
-                linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.58)),
-                url('assets/intro/start.png');
-            background-position: center center;
-            background-size: cover;
-            background-repeat: no-repeat;
+                linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.58));
+            pointer-events: none;
+        }
+
+        #introStartImage {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center center;
         }
 
         #loading-screen {
@@ -7909,6 +7924,7 @@
     </script>
 
     <div id="introStartScreen" class="intro-start-screen">
+        <img id="introStartImage" src="assets/intro/start.png" alt="" aria-hidden="true" decoding="sync" fetchpriority="high">
         <div class="intro-start-panel">
             <div class="intro-start-copy">Ihre F&uuml;hrung beginnt in K&uuml;rze</div>
             <button id="introAudioPrompt" class="intro-audio-prompt intro-audio-start" type="button" hidden disabled>F&uuml;hrung beginnen</button>

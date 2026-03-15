@@ -84,7 +84,16 @@ class SCAudioAdapter {
 
         console.log('[SCAudioAdapter] Creating dynamic iframe for SoundCloud...');
         this.iframe = document.createElement('iframe');
-        this.iframe.style.display = 'none';
+        this.iframe.style.position = 'fixed';
+        this.iframe.style.width = '1px';
+        this.iframe.style.height = '1px';
+        this.iframe.style.opacity = '0.01';
+        this.iframe.style.pointerEvents = 'none';
+        this.iframe.style.left = '0';
+        this.iframe.style.bottom = '0';
+        this.iframe.style.border = '0';
+        this.iframe.style.clipPath = 'inset(50%)';
+        this.iframe.style.overflow = 'hidden';
         this.iframe.setAttribute('allow', 'autoplay');
         this.iframe.setAttribute('frameborder', '0');
         if (this.iframeId) this.iframe.id = this.iframeId;

@@ -90,10 +90,13 @@ export function createIntroNarrationAdapter(options = {}) {
     iframe.style.position = 'fixed';
     iframe.style.width = '1px';
     iframe.style.height = '1px';
-    iframe.style.opacity = '0';
+    iframe.style.opacity = '0.01';
     iframe.style.pointerEvents = 'none';
-    iframe.style.left = '-9999px';
-    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.bottom = '0';
+    iframe.style.border = '0';
+    iframe.style.clipPath = 'inset(50%)';
+    iframe.style.overflow = 'hidden';
     iframe.setAttribute?.('aria-hidden', 'true');
     iframe.setAttribute?.('tabindex', '-1');
     iframe.setAttribute?.('allow', 'autoplay');
