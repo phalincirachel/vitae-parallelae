@@ -3,7 +3,7 @@
  * Maps game audio assets to SoundCloud Widget API URLs
  */
 const SC_URLS = {
-    // Hauptkapitel (API Format für Private Tracks: api.soundcloud.com/tracks/[ID]?secret_token=[TOKEN])
+    // Hauptkapitel (API Format fuer Private Tracks: api.soundcloud.com/tracks/[ID]?secret_token=[TOKEN])
 
     // Kapitel 1 (Marktplatz): ID 2250158609, Token s-yW40KmlWr2b
     KAPITEL_1: 'https://api.soundcloud.com/tracks/2250158609?secret_token=s-yW40KmlWr2b',
@@ -33,7 +33,10 @@ const SC_URLS = {
     LORE_2: 'https://api.soundcloud.com/tracks/2268724265?secret_token=s-8pz7WG4egJJ',
 
     // Lore3: ID 2268724358, Token s-t5jtK51t3dK
-    LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK'
+    LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK',
+
+    // Intro (Lita)
+    INTRO_LITA_1: 'https://api.soundcloud.com/tracks/2284299347?secret_token=s-ayl0JnZXdSq'
 };
 
 
@@ -72,7 +75,7 @@ const MP3_TO_SC_MAP = {
 
 /**
  * Konvertiert einen lokalen MP3-Pfad in eine SoundCloud-URL.
- * Falls kein Mapping existiert, wird der Originalpfad zurückgegeben.
+ * Falls kein Mapping existiert, wird der Originalpfad zurueckgegeben.
  * 
  * @param {string} localPath Der Pfad zur MP3-Datei
  * @returns {string} Die SoundCloud-URL oder der Originalpfad
@@ -82,7 +85,7 @@ function getSCUrl(localPath) {
     return MP3_TO_SC_MAP[localPath] || localPath;
 }
 
-// Global verfügbar machen falls nötig (für Module)
+// Global verfuegbar machen falls noetig (fuer Module)
 if (typeof window !== 'undefined') {
     window.getSCUrl = getSCUrl;
 }

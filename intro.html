@@ -33,6 +33,7 @@
     <link rel="preload" href="assets/fonts/reader-renaissance-palatino.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/intro/start.png" as="image" fetchpriority="high">
     <link rel="preload" href="assets/intro/einfuehrungsplatz.png" as="image" fetchpriority="high">
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/intro.css">
@@ -43,6 +44,13 @@
             background-color: #000;
             margin: 0;
             padding: 0;
+        }
+
+        #introStartScreen {
+            position: fixed;
+            inset: 0;
+            z-index: 10050;
+            background: #050507;
         }
 
         #loading-screen {
@@ -2023,6 +2031,7 @@
                 navCollisionPaddingY: NAV_COLLISION_PADDING_Y,
                 navMaxGoalSearchCells: NAV_MAX_GOAL_SEARCH_CELLS,
                 navMaxStartSearchCells: NAV_MAX_START_SEARCH_CELLS,
+                hasPointerEvent: IS_INTRO_SCENE ? false : !!window.PointerEvent,
                 dragThresholdPx: GAME_CAMERA_DRAG_THRESHOLD_PX,
                 onTogglePal: () => { usePAL = !usePAL; updateFilterStyle(); },
                 onToggleHalftone: () => { useHalftone = !useHalftone; updateFilterStyle(); },
@@ -8067,7 +8076,15 @@
                 const button = document.getElementById('backToChapterBtn');
                 if (!button) return;
                 button.classList.toggle('visible', !!visible);
-                if (!visible) button.style.removeProperty('--back-btn-top');
+                if (!visible) {
+                    button.style.removeProperty('--back-btn-top');
+                    return;
+                }
+                window.requestAnimationFrame(() => {
+                    try {
+                        if (typeof positionBackToChapterPrompt === 'function') positionBackToChapterPrompt();
+                    } catch (_) {}
+                });
             },
             showNextButton(label) {
                 const button = document.getElementById('nextChapterBtn');

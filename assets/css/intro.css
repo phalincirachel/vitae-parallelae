@@ -28,9 +28,12 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   display: flex;
   align-items: center;
   justify-content: center;
+  background-color: #050507;
   background:
+    linear-gradient(180deg, rgba(5, 5, 7, 1), rgba(5, 5, 7, 1)),
     linear-gradient(180deg, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.58)),
     url('../intro/start.png') center center / cover no-repeat;
+  isolation: isolate;
   transition: opacity 0.45s ease, visibility 0.45s ease;
 }
 
@@ -63,6 +66,7 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
 
 .intro-start-skip {
   margin-top: auto;
+  margin-bottom: clamp(18px, 5vh, 40px);
   padding: 12px 22px;
   border: 1px solid rgba(255, 248, 233, 0.72);
   background: rgba(12, 14, 18, 0.58);

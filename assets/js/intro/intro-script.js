@@ -1,36 +1,132 @@
-﻿export const INTRO_DEMO_LORE_ID = 9001;
+export const INTRO_DEMO_LORE_ID = 9001;
+
+function freezeSegment(id, text, audioStartSec, audioEndSec, options = {}) {
+  return Object.freeze({
+    id,
+    text,
+    audioStartSec: Number.isFinite(audioStartSec) ? Number(audioStartSec) : null,
+    audioEndSec: Number.isFinite(audioEndSec) ? Number(audioEndSec) : null,
+    holdDurationMs: Number.isFinite(options.holdDurationMs) ? Math.max(0, Math.trunc(options.holdDurationMs)) : 0
+  });
+}
+
+function getSegmentCueTime(segment, fallbackSec = 0) {
+  if (segment && Number.isFinite(segment.audioStartSec)) return Number(segment.audioStartSec);
+  return Number.isFinite(fallbackSec) ? Number(fallbackSec) : 0;
+}
+
+function getSegmentVisualDurationSec(segment) {
+  if (segment && Number.isFinite(segment.audioStartSec) && Number.isFinite(segment.audioEndSec)) {
+    return Math.max(0, Number(segment.audioEndSec) - Number(segment.audioStartSec));
+  }
+  if (segment && Number.isFinite(segment.holdDurationMs) && segment.holdDurationMs > 0) {
+    return segment.holdDurationMs / 1000;
+  }
+  return 0;
+}
 
 export const START_SCREEN_TRACK = Object.freeze([
-  Object.freeze({ id: 'start-0', text: 'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford.' }),
-  Object.freeze({ id: 'start-1', text: 'F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.' })
+  freezeSegment(
+    'start-0',
+    'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford.',
+    1,
+    13
+  ),
+  freezeSegment(
+    'start-1',
+    'F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
+    13,
+    23
+  )
 ]);
 
 export const MAIN_INTRO_TRACK = Object.freeze([
-  Object.freeze({ id: 'main-0', text: 'Sp\u00fcren Sie mich?' }),
-  Object.freeze({ id: 'main-1', text: 'Hier bin ich.' }),
-  Object.freeze({ id: 'main-2', text: 'Um Ihren Aufenthalt optimal zu gestalten, w\u00e4hlen Sie nun bitte, ob Sie lieber Bl\u00e4ttern wie in einem Buch, oder Scrollen wie in einer Schriftrolle.' }),
-  Object.freeze({ id: 'main-3', text: 'Keine Sorge, sie k\u00f6nnen jederzeit wechseln. Ihnen stehen alle M\u00f6glichkeiten offen.' }),
-  Object.freeze({ id: 'main-4', text: 'Wenn Sie auf das Buch klicken, gelangen Sie zum Inhaltsverzeichnis.' }),
-  Object.freeze({ id: 'main-5', text: 'Hier k\u00f6nnen Sie Ihren Fortschritt speichern.' }),
-  Object.freeze({ id: 'main-6', text: 'Und Ihre Souveniers sind hier.' }),
-  Object.freeze({ id: 'main-7', text: 'Was Souveniers sind? Jeder Pilger liebt doch Souveniers, nicht?' }),
-  Object.freeze({ id: 'main-8', text: 'Sehen Sie, sie haben zwei M\u00f6glichkeiten, diese Stadt zu erfahren.' }),
-  Object.freeze({ id: 'main-9', text: 'Erste M\u00f6glichkeit: Sie lesen einfach nur.' }),
-  Object.freeze({ id: 'main-10', text: 'Sie k\u00f6nnen nat\u00fcrlich auch im Dunkeln lesen, wenn Sie m\u00f6gen. Hierzu bet\u00e4tigen Sie einfach den Lichtschalter' }),
-  Object.freeze({ id: 'main-11', text: 'Wenn Sie nun nocheinmal darauf klicken, sehen Sie pl\u00f6tzlich, wie die Stadt dahinter auftaucht.' }),
-  Object.freeze({ id: 'main-12', text: 'Wenn Sie dies nun dazu reizt, selbst einmal die Stadt zu erkunden, die vorgegebenen Pfade zu verlassen, dann klicken Sie doch einmal auf das Erkunden-Symbol.' }),
-  Object.freeze({ id: 'main-13', text: 'Nun k\u00f6nnen Sie sich frei bewegen und die Stadt erkunden. Sie k\u00f6nnen jederzeit durch Blick auf die Brille zur\u00fcck in den Lesemodus gelangen' }),
-  Object.freeze({ id: 'main-14', text: 'In diesem Erkundungs-Modus k\u00f6nnen Sie nun auch Souveniers einsammeln. Es sind die gelben Lichter, die Sie \u00fcberall in der Stadt finden.' }),
-  Object.freeze({ id: 'main-15', text: 'Sammeln Sie beispielsweise einmal dieses gelbe Licht ein, indem Sie darauf klicken' }),
-  Object.freeze({ id: 'main-16', text: 'Rechts oben wird Ihnen angezeigt, wie viele Souveniers Sie in diesem Kapitel schon gefunden haben. Wer alle Souveniers eines Kapitels findet, bekommt eine zus\u00e4tzliche Belohnung.' }),
-  Object.freeze({ id: 'main-17', text: 'Klicken Sie oben auf die Anzeige' }),
-  Object.freeze({ id: 'main-18', text: 'und Sie gelangen direkt zu ihrer Souvenier-Box.' }),
-  Object.freeze({ id: 'main-19', text: 'Nun sind Sie bereit f\u00fcr Ihre Tour. Um zu beginnen, klicken Sie auf den Button.' })
+  freezeSegment('main-0', 'Sp\u00fcren Sie mich?', 23, 26.1),
+  freezeSegment('main-1', 'Hier bin ich.', 26.1, 31),
+  freezeSegment(
+    'main-2',
+    'Um Ihren Aufenthalt optimal zu gestalten, w\u00e4hlen Sie nun bitte, ob Sie lieber Bl\u00e4ttern wie in einem Buch, oder Scrollen wie in einer Schriftrolle.',
+    31,
+    44
+  ),
+  freezeSegment(
+    'main-3',
+    'Keine Sorge, sie k\u00f6nnen jederzeit wechseln. Ihnen stehen alle M\u00f6glichkeiten offen.',
+    44,
+    52
+  ),
+  freezeSegment(
+    'main-4',
+    'Wenn Sie auf das Buch klicken, gelangen Sie zum Inhaltsverzeichnis.',
+    52,
+    58.7
+  ),
+  freezeSegment(
+    'main-5',
+    'Hier k\u00f6nnen Sie Ihren Fortschritt speichern.',
+    null,
+    null,
+    { holdDurationMs: 1500 }
+  ),
+  freezeSegment('main-6', 'Und Ihre Souveniers sind hier.', 58.7, 62),
+  freezeSegment('main-7', 'Was Souveniers sind? Jeder Pilger liebt doch Souveniers, nicht?', 62, 69),
+  freezeSegment('main-8', 'Sehen Sie, sie haben zwei M\u00f6glichkeiten, diese Stadt zu erfahren.', 69, 73.4),
+  freezeSegment('main-9', 'Erste M\u00f6glichkeit: Sie lesen einfach nur.', 73.4, 77),
+  freezeSegment(
+    'main-10',
+    'Sie k\u00f6nnen nat\u00fcrlich auch im Dunkeln lesen, wenn Sie m\u00f6gen. Hierzu bet\u00e4tigen Sie einfach den Lichtschalter',
+    77,
+    85
+  ),
+  freezeSegment(
+    'main-11',
+    'Wenn Sie nun nocheinmal darauf klicken, sehen Sie pl\u00f6tzlich, wie die Stadt dahinter auftaucht.',
+    85,
+    93
+  ),
+  freezeSegment(
+    'main-12',
+    'Wenn Sie dies nun dazu reizt, selbst einmal die Stadt zu erkunden, die vorgegebenen Pfade zu verlassen, dann klicken Sie doch einmal auf das Erkunden-Symbol.',
+    93,
+    106
+  ),
+  freezeSegment(
+    'main-13',
+    'Nun k\u00f6nnen Sie sich frei bewegen und die Stadt erkunden. Sie k\u00f6nnen jederzeit durch Blick auf die Brille zur\u00fcck in den Lesemodus gelangen',
+    106,
+    120
+  ),
+  freezeSegment(
+    'main-14',
+    'In diesem Erkundungs-Modus k\u00f6nnen Sie nun auch Souveniers einsammeln. Es sind die gelben Lichter, die Sie \u00fcberall in der Stadt finden.',
+    120,
+    128
+  ),
+  freezeSegment('main-15', 'Sammeln Sie beispielsweise einmal dieses gelbe Licht ein, indem Sie darauf klicken', 128, 135),
+  freezeSegment(
+    'main-16',
+    'Rechts oben wird Ihnen angezeigt, wie viele Souveniers Sie in diesem Kapitel schon gefunden haben. Wer alle Souveniers eines Kapitels findet, bekommt eine zus\u00e4tzliche Belohnung.',
+    156,
+    171
+  ),
+  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige', 171, 174.4),
+  freezeSegment('main-18', 'und Sie gelangen direkt zu ihrer Souvenier-Box.', 174.4, 177),
+  freezeSegment('main-19', 'Nun sind Sie bereit f\u00fcr Ihre Tour. Um zu beginnen, klicken Sie auf den Button.', 177, 184.8)
 ]);
 
 export const SOUVENIR_DEMO_TRACK = Object.freeze([
-  Object.freeze({ id: 'souvenir-0', text: 'In den Souveniers liegen Kleinode versteckt. Hier k\u00f6nnen Sie etwas \u00fcber Geschichte der Stadt oder \u00fcber die Werke ihrer Bewohner erfahren.' }),
-  Object.freeze({ id: 'souvenir-1', text: 'Wenn Sie sie fertig gelesen haben, kehrt es automatisch zum Kapitel zur\u00fcck. Oder Sie klick auf \u201eZur\u00fcck zum Kapitel\u201c.' })
+  freezeSegment(
+    'souvenir-0',
+    'In den Souveniers liegen Kleinode versteckt. Hier k\u00f6nnen Sie etwas \u00fcber Geschichte der Stadt oder \u00fcber die Werke ihrer Bewohner erfahren.',
+    135,
+    147
+  ),
+  freezeSegment(
+    'souvenir-1',
+    'Wenn Sie sie fertig gelesen haben, kehrt es automatisch zum Kapitel zur\u00fcck. Oder Sie klick auf \u201eZur\u00fcck zum Kapitel\u201c.',
+    147,
+    156
+  )
 ]);
 
 export const INTRO_TRACKS = Object.freeze({
@@ -145,6 +241,19 @@ export function getTrackText(trackName) {
   return track.map((segment) => segment.text).join('\n\n');
 }
 
+export function getTrackEntries(trackName) {
+  const track = INTRO_TRACKS[trackName] || [];
+  let fallbackSec = 0;
+  return track.map((segment) => {
+    const entry = Object.freeze({
+      time: getSegmentCueTime(segment, fallbackSec),
+      text: segment.text
+    });
+    fallbackSec = entry.time + getSegmentVisualDurationSec(segment);
+    return entry;
+  });
+}
+
 export default {
   INTRO_DEMO_LORE_ENTRY,
   INTRO_DEMO_LORE_ID,
@@ -153,5 +262,6 @@ export default {
   MAIN_INTRO_TRACK,
   SOUVENIR_DEMO_TRACK,
   START_SCREEN_TRACK,
+  getTrackEntries,
   getTrackText
 };

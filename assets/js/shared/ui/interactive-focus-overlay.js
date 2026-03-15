@@ -78,12 +78,30 @@ export function createInteractiveFocusOverlay(options = {}) {
     const padding = 18;
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
-    const frame = {
-      left: Math.max(8, normalized.left - padding),
-      top: Math.max(8, normalized.top - padding),
-      right: Math.min(viewportWidth - 8, normalized.right + padding),
-      bottom: Math.min(viewportHeight - 8, normalized.bottom + padding)
-    };
+    const inset = 8;
+    let left = normalized.left - padding;
+    let top = normalized.top - padding;
+    let right = normalized.right + padding;
+    let bottom = normalized.bottom + padding;
+
+    if (left < inset) {
+      right = Math.min(viewportWidth - inset, right + (inset - left));
+      left = inset;
+    }
+    if (right > (viewportWidth - inset)) {
+      left = Math.max(inset, left - (right - (viewportWidth - inset)));
+      right = viewportWidth - inset;
+    }
+    if (top < inset) {
+      bottom = Math.min(viewportHeight - inset, bottom + (inset - top));
+      top = inset;
+    }
+    if (bottom > (viewportHeight - inset)) {
+      top = Math.max(inset, top - (bottom - (viewportHeight - inset)));
+      bottom = viewportHeight - inset;
+    }
+
+    const frame = { left, top, right, bottom };
     frame.width = Math.max(16, frame.right - frame.left);
     frame.height = Math.max(16, frame.bottom - frame.top);
 

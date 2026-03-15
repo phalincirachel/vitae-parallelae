@@ -1,4 +1,4 @@
-﻿export const SC_URLS = Object.freeze({
+export const SC_URLS = Object.freeze({
   KAPITEL_1: 'https://api.soundcloud.com/tracks/2250158609?secret_token=s-yW40KmlWr2b',
   KAPITEL_1C: 'https://api.soundcloud.com/tracks/2250158603?secret_token=s-Aj6rsLMlFG1',
   LIMINAL_LIBRARY: 'https://api.soundcloud.com/tracks/2250158606?secret_token=s-2olKSU8eJOH',
@@ -7,7 +7,8 @@
   SHIMMER: 'https://api.soundcloud.com/tracks/2250168776?secret_token=s-3bZeXboRF2l',
   LORE_1: 'https://api.soundcloud.com/tracks/2250892529?secret_token=s-XrlxZtj8935',
   LORE_2: 'https://api.soundcloud.com/tracks/2268724265?secret_token=s-8pz7WG4egJJ',
-  LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK'
+  LORE_3: 'https://api.soundcloud.com/tracks/2268724358?secret_token=s-t5jtK51t3dK',
+  INTRO_LITA_1: 'https://api.soundcloud.com/tracks/2284299347?secret_token=s-ayl0JnZXdSq'
 });
 
 export const MP3_TO_SC_MAP = Object.freeze({

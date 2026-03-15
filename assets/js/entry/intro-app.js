@@ -2,7 +2,8 @@ import { INTRO_ROUTE, INTRO_VERSION } from '../shared/data/intro-config.js';
 import {
   INTRO_DEMO_LORE_ENTRY,
   INTRO_DEMO_LORE_ID,
-  INTRO_TRACKS
+  INTRO_TRACKS,
+  getTrackEntries
 } from '../intro/intro-script.js';
 import { createIntroNarrationAdapter } from '../intro/intro-narration-adapter.js';
 import { createInteractiveFocusOverlay } from '../shared/ui/interactive-focus-overlay.js';
@@ -18,9 +19,14 @@ const MOVE_KEYS = Object.freeze([
   'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
   'w', 'a', 's', 'd', 'W', 'A', 'S', 'D'
 ]);
-const SEGMENT_TIME_STEP = 8;
 const INTRO_SCENE_NAME = globalThis.window?.__GAMEBOY_INTRO_BOOTSTRAP__?.level?.sceneName || 'intro_einfuehrung';
 const INTRO_WEB_BYPASS_KEY = 'gameboy_intro_bypass_once';
+const INTRO_LAYOUT_STEP_TARGETS = Object.freeze([
+  '.reader-settings-panel .reader-radio-option',
+  '.reader-settings-panel .reader-font-option',
+  '#readerFontSizeRange',
+  '#readerFontSizeNumber'
+]);
 
 function wait(ms) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
@@ -65,11 +71,7 @@ function restoreStorage(storageRef, snapshot, preservedKeys = new Set()) {
 }
 
 function buildTrackEntries(trackName) {
-  const track = INTRO_TRACKS[trackName] || [];
-  return track.map((segment, index) => ({
-    time: index * SEGMENT_TIME_STEP,
-    text: segment.text
-  }));
+  return getTrackEntries(trackName);
 }
 
 function getRefs(documentRef) {
@@ -196,13 +198,14 @@ async function initIntroApp() {
     waitResolver: null,
     demoOrbCollected: false,
     destroyed: false,
-    lastReplayText: '',
+    lastReplaySegment: null,
     dynamicFocusCleanup: null,
     currentFocusConfig: null,
     currentGateConfig: null,
     autoPausedForVisibility: false,
     finalButtonVisible: false,
     layoutChosen: false,
+    pendingActions: new Map(),
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -326,6 +329,24 @@ async function initIntroApp() {
     hooks.refreshLayout?.('track:' + trackName + ':' + segmentIndex);
   };
 
+  const rememberAction = (actionId, payload = true) => {
+    if (!actionId) return false;
+    runtimeState.pendingActions.set(actionId, payload);
+    return true;
+  };
+
+  const consumePendingAction = (actionId) => {
+    if (!runtimeState.pendingActions.has(actionId)) return undefined;
+    const payload = runtimeState.pendingActions.get(actionId);
+    runtimeState.pendingActions.delete(actionId);
+    return payload;
+  };
+
+  const rememberAllowedAction = (actionId, event, payload = true) => {
+    if (!event || !interactionGate.isAllowedEventTarget(event.target)) return false;
+    return rememberAction(actionId, payload);
+  };
+
   const resolveAction = (actionId, payload) => {
     if (runtimeState.waitingAction !== actionId || typeof runtimeState.waitResolver !== 'function') return false;
     const resolver = runtimeState.waitResolver;
@@ -339,6 +360,9 @@ async function initIntroApp() {
   };
 
   runtimeState.onOrbCollected = () => {
+    clearDynamicFocus();
+    focusOverlay.clear();
+    runtimeState.currentFocusConfig = null;
     hooks.renderArchive();
     hooks.refreshLoreProgressUi({ forceHidden: !runtimeState.finalButtonVisible });
     resolveAction('collect-orb', { loreId: INTRO_DEMO_LORE_ID });
@@ -382,6 +406,10 @@ async function initIntroApp() {
     });
     return new Promise((resolve) => {
       runtimeState.waitResolver = resolve;
+      if (runtimeState.pendingActions.has(actionId)) {
+        const buffered = consumePendingAction(actionId);
+        windowRef.setTimeout(() => resolveAction(actionId, buffered), 0);
+      }
     });
   };
 
@@ -391,7 +419,7 @@ async function initIntroApp() {
     const segment = track[segmentIndex];
     if (!segment) return false;
     setTrack(trackName, segmentIndex);
-    runtimeState.lastReplayText = segment.text;
+    runtimeState.lastReplaySegment = segment;
     applyFocus(config);
     setGate({
       includeAudio: config.includeAudio !== false,
@@ -400,7 +428,7 @@ async function initIntroApp() {
       allowCanvas: config.allowCanvas === true,
       allowAll: config.allowAll === true
     });
-    const result = await narration.play(segment.text);
+    const result = await narration.play(segment, { trackName, segmentIndex });
     if (!runtimeState.waitingAction) clearPresentation();
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
@@ -417,10 +445,10 @@ async function initIntroApp() {
   };
 
   const replayCurrentSegment = async () => {
-    if (!runtimeState.lastReplayText || runtimeState.destroyed) return;
+    if (!runtimeState.lastReplaySegment || runtimeState.destroyed) return;
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
-    await narration.play(runtimeState.lastReplayText);
+    await narration.play(runtimeState.lastReplaySegment, { replay: true });
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
     scheduleUiRecovery('replay');
@@ -514,7 +542,6 @@ async function initIntroApp() {
     event.stopImmediatePropagation();
     resolveAction('back-to-chapter', true);
   }, true);
-
   refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
     event.preventDefault();
@@ -529,10 +556,12 @@ async function initIntroApp() {
     }
   });
 
-  refs.bookBtn?.addEventListener('click', () => {
+  refs.bookBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-book') {
       windowRef.setTimeout(() => resolveAction('open-book', true), 0);
+      return;
     }
+    rememberAllowedAction('open-book', event, true);
   });
 
   refs.readingModeBtn?.addEventListener('click', () => {
@@ -558,7 +587,11 @@ async function initIntroApp() {
       event.stopImmediatePropagation();
       hooks.applySentenceLayout(value);
       runtimeState.layoutChosen = true;
-      resolveAction('choose-layout', value);
+      if (runtimeState.waitingAction === 'choose-layout') {
+        resolveAction('choose-layout', value);
+        return;
+      }
+      rememberAllowedAction('choose-layout', event, value);
     }, true);
   });
 
@@ -621,10 +654,7 @@ async function initIntroApp() {
   hooks.forceControlsVisible?.();
   await wait(60);
   await speakCheckpointSegment('main', 2, 'choose-layout', {
-    targets: [
-      '.reader-radio-option[data-layout="blaettern"]',
-      '.reader-radio-option[data-layout="flat"]'
-    ],
+    targets: INTRO_LAYOUT_STEP_TARGETS,
     selectors: ['[data-loading-tutorial="layout-group"]']
   });
   if (runtimeState.destroyed) return;
@@ -633,7 +663,10 @@ async function initIntroApp() {
   hooks.forceControlsVisible?.();
   await wait(40);
   hooks.closeArchive();
-  await speakSegment('main', 3, { selectors: ['#bookBtn'] });
+  await speakSegment('main', 3, {
+    targets: ['#bookBtn'],
+    selectors: ['#bookBtn']
+  });
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('main', 4, 'open-book', {
     targets: ['#bookBtn'],
@@ -655,8 +688,9 @@ async function initIntroApp() {
   clearPresentation();
   hooks.refreshLayout?.('main-9-clear');
   scheduleUiRecovery('main-9-clear');
-  await wait(40);
+  await wait(120);
   clearPresentation();
+  focusOverlay.clear();
   await speakSegment('main', 9, { selectors: [] });
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('main', 10, 'dimmer-dark', {
@@ -705,22 +739,28 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('souvenir', 1, 'back-to-chapter', {
     targets: ['#backToChapterBtn'],
-    selectors: ['#backToChapterBtn']
+    rectProvider: () => refs.backToChapterBtn?.getBoundingClientRect?.() || null
   });
   if (runtimeState.destroyed) return;
 
   hooks.showBackToChapter(false);
+  clearPresentation();
   hooks.setReadingMode(true, 'intro-return');
   hooks.setDimmerMode('reading-clear');
   setTrack('main', 16);
   hooks.renderArchive();
   hooks.refreshLoreProgressUi({ forceVisible: true });
+  hooks.refreshLayout?.('intro-return-main');
+  hooks.forceSceneRender?.('intro-return-main');
+  scheduleUiRecovery('intro-return-main');
+  await wait(80);
+  clearPresentation();
 
-  await speakSegment('main', 16);
+  await speakSegment('main', 16, { selectors: [] });
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('main', 17, 'open-lore-hud', {
     targets: ['#loreProgressHud'],
-    selectors: ['#loreProgressHud']
+    rectProvider: () => refs.loreProgressHud?.getBoundingClientRect?.() || null
   });
   if (runtimeState.destroyed) return;
 
