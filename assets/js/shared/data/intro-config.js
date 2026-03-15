@@ -1,4 +1,4 @@
-export const INTRO_VERSION = 1;
+export const INTRO_VERSION = 2;
 
 export const INTRO_ASSET_PATHS = Object.freeze([
   'assets/intro/start.png',

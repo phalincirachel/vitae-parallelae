@@ -10,7 +10,7 @@ import { getBookmarkScope } from '../core/bookmark-scope.js';
 
 const WEB_SAVE_KEY = 'liminal_save';
 const SESSION_KEY = 'GAME_SESSION_ACTIVE';
-const INTRO_VERSION_FALLBACK = 1;
+const INTRO_VERSION_FALLBACK = 2;
 const READER_KEYS = Object.freeze({
   layout: 'gameboy_reader_sentence_layout',
   fontSize: 'gameboy_reader_font_size_px',

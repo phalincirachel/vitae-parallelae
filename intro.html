@@ -116,7 +116,7 @@
                 audioUrl: 'assets/intro/silence.wav',
                 subtitleFile: 'assets/intro/placeholder.txt',
                 activeChapterBtn: 'chapter1Btn',
-                nextChapterTarget: 'index.html',
+                nextChapterTarget: null,
                 page: 'intro.html',
                 chapterLabel: 'Intro',
                 chapterTitle: 'Einfuehrung',
@@ -7856,6 +7856,18 @@
             closeArchive() {
                 document.getElementById('archiveModal')?.classList?.remove?.('visible');
             },
+            disableBaseChapterFlow() {
+                try {
+                    if (LEVEL && typeof LEVEL === 'object') {
+                        LEVEL.nextChapterTarget = null;
+                    }
+                } catch (_) {}
+                try {
+                    window.transitionToNextChapter = async function introNoopTransition() {
+                        return null;
+                    };
+                } catch (_) {}
+            },
             stopMainAudio() {
                 try {
                     if (audioPlayer && typeof audioPlayer.pause === 'function') audioPlayer.pause();
@@ -7865,6 +7877,12 @@
                 } catch (_) {}
                 try {
                     if (audioPlayer) audioPlayer.volume = 0;
+                } catch (_) {}
+                try {
+                    if (audioPlayer && typeof audioPlayer.removeAttribute === 'function') audioPlayer.removeAttribute('src');
+                } catch (_) {}
+                try {
+                    if (audioPlayer && typeof audioPlayer.load === 'function') audioPlayer.load();
                 } catch (_) {}
                 try {
                     if (typeof syncPlayPauseIcon === 'function') syncPlayPauseIcon();

@@ -8,14 +8,15 @@
     <script>
         (function routeWebIntro() {
             const INTRO_ROUTE = 'intro.html';
-            const INTRO_VERSION = 1;
+            const INTRO_VERSION = 2;
             const SAVE_KEY = 'liminal_save';
             const BYPASS_KEY = 'gameboy_intro_bypass_once';
             try {
                 const params = new URLSearchParams(window.location.search || '');
                 if (params.get('chapter')) return;
 
-                const bypass = sessionStorage.getItem(BYPASS_KEY) === '1';
+                const forceIntro = params.get('intro') === '1';
+                const bypass = !forceIntro && sessionStorage.getItem(BYPASS_KEY) === '1';
                 if (bypass) {
                     sessionStorage.removeItem(BYPASS_KEY);
                     return;
@@ -25,7 +26,7 @@
                 const save = raw ? JSON.parse(raw) : null;
                 const intro = save && typeof save === 'object' ? save.intro : null;
                 const introCompleted = !!(intro && intro.completed === true && Number(intro.version) === INTRO_VERSION);
-                if (introCompleted) return;
+                if (!forceIntro && introCompleted) return;
 
                 const target = new URL(INTRO_ROUTE, window.location.href);
                 if (target.pathname === window.location.pathname && target.search === window.location.search) return;

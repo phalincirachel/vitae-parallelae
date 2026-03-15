@@ -8,7 +8,7 @@ import {
 } from '../assets/js/shared/data/intro-config.js';
 
 test('intro config exposes stable intro metadata', () => {
-  assert.equal(INTRO_VERSION, 1);
+  assert.equal(INTRO_VERSION, 2);
   assert.equal(INTRO_ROUTE.introFile, 'intro.html');
   assert.equal(INTRO_ROUTE.gameFile, 'index.html');
   assert.deepEqual(listIntroAssetPaths(), INTRO_ASSET_PATHS.slice());

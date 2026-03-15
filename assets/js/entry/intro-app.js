@@ -174,6 +174,8 @@ async function initIntroApp() {
   const storageRef = windowRef.localStorage;
   const refs = getRefs(documentRef);
   const hooks = await waitFor(() => windowRef.GameboyIntroHooks, { label: 'intro hooks' });
+  hooks.disableBaseChapterFlow?.();
+  hooks.stopMainAudio?.();
   const readyPromise = waitFor(() => hooks.getGameReady && hooks.getGameReady(), {
     label: 'intro scene runtime',
     timeoutMs: 45000
