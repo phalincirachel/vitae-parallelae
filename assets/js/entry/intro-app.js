@@ -858,7 +858,7 @@ async function initIntroApp() {
 
   runtimeState.finalButtonVisible = true;
   documentRef.body.classList.add('intro-ready-to-begin');
-  hooks.showNextButton('F\u00fchrung beginnen');
+  hooks.showNextButton('Reise beginnen');
   hooks.refreshLayout?.('intro-finish');
   hooks.forceSceneRender?.('intro-finish');
   applyFocus({
