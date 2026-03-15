@@ -2,7 +2,9 @@ export const INTRO_VERSION = 1;
 
 export const INTRO_ASSET_PATHS = Object.freeze([
   'assets/intro/start.png',
-  'assets/intro/einfuehrungsplatz.png'
+  'assets/intro/einfuehrungsplatz.png',
+  'assets/intro/placeholder.txt',
+  'assets/intro/silence.wav'
 ]);
 
 export const INTRO_ROUTE = Object.freeze({

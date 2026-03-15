@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Heidelberg RPG - Einf&uuml;hrung</title>
+    <title>Heidelberg RPG</title>
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
     <script src="assets/js/SoundCloudURLs.js"></script>
@@ -34,7 +34,6 @@
     <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="assets/css/main.css">
-    <link rel="stylesheet" href="assets/css/intro.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
     <style>
         html,
@@ -107,34 +106,9 @@
         }
     </style>
     <link rel="stylesheet" href="assets/css/loading-tutorial.css">
-    <script>
-        window.__GAMEBOY_INTRO_BOOTSTRAP__ = Object.freeze({
-            level: Object.freeze({
-                sceneName: 'intro_einfuehrung',
-                contentKey: 'intro',
-                mapFile: 'assets/intro/einfuehrungsplatz.png',
-                audioUrl: 'assets/intro/silence.wav',
-                subtitleFile: 'assets/intro/placeholder.txt',
-                activeChapterBtn: 'chapter1Btn',
-                nextChapterTarget: 'index.html',
-                page: 'intro.html',
-                chapterLabel: 'Intro',
-                chapterTitle: 'Einfuehrung',
-                loreProgressTotal: 1
-            }),
-            chapterProgressSceneByButton: Object.freeze({
-                chapter1Btn: 'intro_einfuehrung',
-                chapter1bBtn: 'intro_einfuehrung',
-                chapter1cBtn: 'intro_einfuehrung'
-            }),
-            bookmarkPageKeyMap: Object.freeze({
-                'intro.html': 'intro'
-            })
-        });
-    </script>
 </head>
 
-<body class="intro-page">
+<body>
 
 
 
@@ -374,11 +348,15 @@
                 <div class="reader-settings-panel">
                     <div class="reader-settings-group" data-loading-tutorial="layout-group">
                         <div class="reader-settings-title">Anordnung</div>
-                        <label class="reader-radio-option" data-layout="blaettern">
+                        <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="blaettern" checked>
                             <span>Bl&auml;ttern (Buch)</span>
                         </label>
-                        <label class="reader-radio-option" data-layout="flat">
+                        <label class="reader-radio-option">
+                            <input type="radio" name="readerSentenceLayout" value="timestamps">
+                            <span>Timestamps</span>
+                        </label>
+                        <label class="reader-radio-option">
                             <input type="radio" name="readerSentenceLayout" value="flat">
                             <span>Feed (Schriftrolle)</span>
                         </label>
@@ -545,60 +523,50 @@
         // ============================================
         // MULTI-LEVEL CONFIG (URL-Parameter: ?chapter=kapitel1c)
         // ============================================
-        const introBootstrap = window.__GAMEBOY_INTRO_BOOTSTRAP__ || null;
-        const indexSceneBootstrap = introBootstrap
-            ? {
+        const indexSceneBootstrap = window.GameboyIndexSceneBootstrap
+            ? window.GameboyIndexSceneBootstrap.init({ locationLike: window.location })
+            : {
                 sceneRuntime: window.GameboySceneRuntime || null,
-                level: introBootstrap.level,
-                sceneName: introBootstrap.level.sceneName,
-                loreProgressDefaultTotal: introBootstrap.level.loreProgressTotal || 1,
-                chapterProgressSceneByButton: introBootstrap.chapterProgressSceneByButton,
-                bookmarkPageKeyMap: introBootstrap.bookmarkPageKeyMap
-            }
-            : window.GameboyIndexSceneBootstrap
-                ? window.GameboyIndexSceneBootstrap.init({ locationLike: window.location, initOverlay: false })
-                : {
-                    sceneRuntime: window.GameboySceneRuntime || null,
-                    level: window.location.search.includes('kapitel1c')
-                        ? {
-                            sceneName: 'steingasse',
-                            contentKey: 'kapitel1c',
-                            mapFile: 'assets/kapitel1c.png',
-                            audioUrl: 'assets/kapitel1c.mp3',
-                            subtitleFile: 'assets/kapitel1c.txt',
-                            activeChapterBtn: 'chapter1cBtn',
-                            nextChapterTarget: null,
-                            page: 'index.html?chapter=kapitel1c',
-                            chapterLabel: '1c',
-                            chapterTitle: 'Steingasse',
-                            loreProgressTotal: 5
-                        }
-                        : {
-                            sceneName: 'marktplatz',
-                            contentKey: 'kapitel1',
-                            mapFile: 'assets/platz3.png',
-                            audioUrl: 'assets/kapitel1.mp3',
-                            subtitleFile: 'assets/kapitel1.txt',
-                            activeChapterBtn: 'chapter1Btn',
-                            nextChapterTarget: 'liminal library.html',
-                            page: 'index.html',
-                            chapterLabel: '1a',
-                            chapterTitle: 'Marktplatz',
-                            loreProgressTotal: 5
-                        },
-                    sceneName: window.location.search.includes('kapitel1c') ? 'steingasse' : 'marktplatz',
-                    loreProgressDefaultTotal: 5,
-                    chapterProgressSceneByButton: Object.freeze({
-                        chapter1Btn: 'marktplatz',
-                        chapter1bBtn: 'liminal_library',
-                        chapter1cBtn: 'steingasse'
-                    }),
-                    bookmarkPageKeyMap: Object.freeze({
-                        'index.html': 'kapitel1',
-                        'liminal library.html': 'liminal_library',
-                        'index.html?chapter=kapitel1c': 'kapitel1c'
-                    })
-                };
+                level: window.location.search.includes('kapitel1c')
+                    ? {
+                        sceneName: 'steingasse',
+                        contentKey: 'kapitel1c',
+                        mapFile: 'assets/kapitel1c.png',
+                        audioUrl: 'assets/kapitel1c.mp3',
+                        subtitleFile: 'assets/kapitel1c.txt',
+                        activeChapterBtn: 'chapter1cBtn',
+                        nextChapterTarget: null,
+                        page: 'index.html?chapter=kapitel1c',
+                        chapterLabel: '1c',
+                        chapterTitle: 'Steingasse',
+                        loreProgressTotal: 5
+                    }
+                    : {
+                        sceneName: 'marktplatz',
+                        contentKey: 'kapitel1',
+                        mapFile: 'assets/platz3.png',
+                        audioUrl: 'assets/kapitel1.mp3',
+                        subtitleFile: 'assets/kapitel1.txt',
+                        activeChapterBtn: 'chapter1Btn',
+                        nextChapterTarget: 'liminal library.html',
+                        page: 'index.html',
+                        chapterLabel: '1a',
+                        chapterTitle: 'Marktplatz',
+                        loreProgressTotal: 5
+                    },
+                sceneName: window.location.search.includes('kapitel1c') ? 'steingasse' : 'marktplatz',
+                loreProgressDefaultTotal: 5,
+                chapterProgressSceneByButton: Object.freeze({
+                    chapter1Btn: 'marktplatz',
+                    chapter1bBtn: 'liminal_library',
+                    chapter1cBtn: 'steingasse'
+                }),
+                bookmarkPageKeyMap: Object.freeze({
+                    'index.html': 'kapitel1',
+                    'liminal library.html': 'liminal_library',
+                    'index.html?chapter=kapitel1c': 'kapitel1c'
+                })
+            };
 
         const sceneRuntime = indexSceneBootstrap.sceneRuntime || null;
         const LEVEL = indexSceneBootstrap.level;
@@ -7770,151 +7738,6 @@
 
 
     </script>
-
-    <div id="introStartScreen" class="intro-start-screen">
-        <div class="intro-start-panel">
-            <div class="intro-start-copy">Ihre F&uuml;hrung beginnt in K&uuml;rze</div>
-            <button id="startSkipBtn" class="intro-start-skip" type="button">Einf&uuml;hrung &uuml;berspringen</button>
-        </div>
-    </div>
-
-    <script>
-        window.GameboyIntroHooks = {
-            getGameReady() {
-                return !!gameReady;
-            },
-            hideLoadingScreenSafely(reason) {
-                if (typeof hideLoadingScreenSafely === 'function') hideLoadingScreenSafely(reason || 'intro-ready');
-            },
-            renderArchive() {
-                return typeof renderArchive === 'function' ? renderArchive() : 0;
-            },
-            refreshLoreProgressUi(options) {
-                return typeof refreshLoreProgressUi === 'function' ? refreshLoreProgressUi(options || {}) : null;
-            },
-            updateLoreProgressHud(options) {
-                return typeof updateLoreProgressHud === 'function' ? updateLoreProgressHud(options || {}) : null;
-            },
-            setSubtitleTracks(trackEntries, activeIndex) {
-                const safeTracks = Array.isArray(trackEntries)
-                    ? trackEntries.map((entry, index) => ({
-                        time: Number.isFinite(Number(entry && entry.time)) ? Number(entry.time) : index,
-                        text: String(entry && entry.text ? entry.text : '')
-                    }))
-                    : [];
-                subtitleTracks = safeTracks;
-                currentSubtitleIndex = safeTracks.length
-                    ? Math.max(0, Math.min(Number.isFinite(Number(activeIndex)) ? Math.trunc(Number(activeIndex)) : 0, safeTracks.length - 1))
-                    : -1;
-                if (typeof setSubtitleFollowLocked === 'function') setSubtitleFollowLocked(false, 'intro-track');
-                if (typeof markBlaetternPaginationDirty === 'function') markBlaetternPaginationDirty();
-                window.subtitleVersion = (window.subtitleVersion || 0) + 1;
-                renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-            },
-            setActiveSubtitleIndex(activeIndex) {
-                if (!Array.isArray(subtitleTracks) || subtitleTracks.length === 0) return;
-                currentSubtitleIndex = Math.max(0, Math.min(Number.isFinite(Number(activeIndex)) ? Math.trunc(Number(activeIndex)) : 0, subtitleTracks.length - 1));
-                renderSubtitleLines(Math.max(0, currentSubtitleIndex));
-            },
-            applySentenceLayout(value) {
-                if (!readerSettingsController || typeof readerSettingsController.setSentenceLayout !== 'function') return null;
-                return readerSettingsController.setSentenceLayout(value);
-            },
-            openArchiveSettings() {
-                const archive = document.getElementById('archiveModal');
-                if (!archive || !archive.classList.contains('visible')) document.getElementById('bookBtn')?.click();
-                document.getElementById('archivePrimarySettingsBtn')?.click();
-            },
-            openArchiveLore() {
-                const archive = document.getElementById('archiveModal');
-                if (!archive || !archive.classList.contains('visible')) document.getElementById('bookBtn')?.click();
-                document.getElementById('archivePrimaryInhaltBtn')?.click();
-                document.querySelector('.archive-tab[data-tab="lore"]')?.click();
-            },
-            closeArchive() {
-                document.getElementById('archiveModal')?.classList?.remove?.('visible');
-            },
-            stopMainAudio() {
-                try {
-                    if (audioPlayer && typeof audioPlayer.pause === 'function') audioPlayer.pause();
-                } catch (_) {}
-                try {
-                    if (audioPlayer) audioPlayer.currentTime = 0;
-                } catch (_) {}
-                try {
-                    if (audioPlayer) audioPlayer.volume = 0;
-                } catch (_) {}
-                try {
-                    if (typeof syncPlayPauseIcon === 'function') syncPlayPauseIcon();
-                } catch (_) {}
-            },
-            setDimmerMode(mode) {
-                if (!globalVisualDimmer || typeof globalVisualDimmer.setLevel !== 'function') return;
-                switch (String(mode || '')) {
-                    case 'white-freeze':
-                        globalVisualDimmer.setLevel(100, { modeKey: 'white-freeze', forceEmit: true });
-                        break;
-                    case 'black-freeze':
-                        globalVisualDimmer.setLevel(100, { modeKey: 'black-freeze', forceEmit: true });
-                        break;
-                    case 'reading-half':
-                        globalVisualDimmer.setLevel(50, { modeKey: 'reading-half', forceEmit: true });
-                        break;
-                    case 'reading-clear':
-                        globalVisualDimmer.setLevel(0, { modeKey: 'reading-clear', forceEmit: true });
-                        break;
-                    default:
-                        globalVisualDimmer.setLevel(0, { modeKey: 'off', forceEmit: true });
-                        break;
-                }
-            },
-            getDimmerMode() {
-                return globalVisualDimmer && typeof globalVisualDimmer.getMode === 'function'
-                    ? globalVisualDimmer.getMode()
-                    : 'off';
-            },
-            setReadingMode(nextMode, reason) {
-                if (typeof setReadingMode === 'function') setReadingMode(!!nextMode, reason || 'intro', { syncDimmer: false });
-            },
-            showBackToChapter(visible) {
-                const button = document.getElementById('backToChapterBtn');
-                if (!button) return;
-                button.classList.toggle('visible', !!visible);
-                if (!visible) button.style.removeProperty('--back-btn-top');
-            },
-            showNextButton(label) {
-                const button = document.getElementById('nextChapterBtn');
-                if (!button) return;
-                button.textContent = label || 'Weiter';
-                button.classList.add('visible');
-            },
-            hideNextButton() {
-                const button = document.getElementById('nextChapterBtn');
-                if (!button) return;
-                button.classList.remove('visible');
-            },
-            getOrbHighlightRect() {
-                if (!gameCanvas) return null;
-                const visibleLight = Array.isArray(yellowLights)
-                    ? yellowLights.find((light) => light && !(window.GameState && typeof window.GameState.isLightCollected === 'function' && window.GameState.isLightCollected(SCENE_NAME, light.id)))
-                    : null;
-                if (!visibleLight) return gameCanvas.getBoundingClientRect();
-                const canvasRect = gameCanvas.getBoundingClientRect();
-                const scaleX = canvasRect.width / Math.max(1, Number(gameCanvas.width) || 1);
-                const scaleY = canvasRect.height / Math.max(1, Number(gameCanvas.height) || 1);
-                const canvasX = (visibleLight.x - camX) * cameraZoom;
-                const canvasY = (visibleLight.y - camY) * cameraZoom;
-                const size = 28 * cameraZoom;
-                return {
-                    left: canvasRect.left + ((canvasX - size) * scaleX),
-                    top: canvasRect.top + ((canvasY - size) * scaleY),
-                    width: (size * 2) * scaleX,
-                    height: (size * 2) * scaleY
-                };
-            }
-        };
-    </script>
-    <script type="module" src="assets/js/entry/intro-app.js"></script>
 </body>
 
 </html>

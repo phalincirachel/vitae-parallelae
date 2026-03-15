@@ -14,4 +14,6 @@ test('intro config exposes stable intro metadata', () => {
   assert.deepEqual(listIntroAssetPaths(), INTRO_ASSET_PATHS.slice());
   assert.equal(INTRO_ASSET_PATHS.includes('assets/intro/start.png'), true);
   assert.equal(INTRO_ASSET_PATHS.includes('assets/intro/einfuehrungsplatz.png'), true);
+  assert.equal(INTRO_ASSET_PATHS.includes('assets/intro/placeholder.txt'), true);
+  assert.equal(INTRO_ASSET_PATHS.includes('assets/intro/silence.wav'), true);
 });
