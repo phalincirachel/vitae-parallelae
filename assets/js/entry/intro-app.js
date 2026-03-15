@@ -521,12 +521,15 @@ async function initIntroApp() {
       return;
     }
     scheduleUiRecovery('visibility');
-    resumeNarrationIfNeeded();
   });
 
   windowRef.addEventListener('focus', () => {
     scheduleUiRecovery('focus');
-    resumeNarrationIfNeeded();
+    windowRef.setTimeout(() => resumeNarrationIfNeeded(), 60);
+  });
+  windowRef.addEventListener('pageshow', () => {
+    scheduleUiRecovery('pageshow');
+    windowRef.setTimeout(() => resumeNarrationIfNeeded(), 60);
   });
   windowRef.addEventListener('resize', () => scheduleUiRecovery('resize'));
   windowRef.addEventListener('orientationchange', () => scheduleUiRecovery('orientationchange'));
@@ -728,6 +731,7 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('off');
   hooks.setReadingMode(false, 'intro-enter-explore');
+  hooks.setActiveSubtitleIndex?.(13);
   hooks.disableAmbientDecor?.();
   hooks.refreshLayout?.('intro-enter-explore');
   hooks.forceSceneRender?.('intro-enter-explore');

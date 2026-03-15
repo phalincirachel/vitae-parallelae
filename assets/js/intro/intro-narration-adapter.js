@@ -53,6 +53,9 @@ export function createIntroNarrationAdapter(options = {}) {
   const AudioAdapter = options.AudioAdapter || windowRef.SCAudioAdapter || globalThis.SCAudioAdapter || null;
   const sourceUrl = String(options.sourceUrl || DEFAULT_SOURCE_URL || '');
   const player = AudioAdapter ? new AudioAdapter({ iframeId: options.iframeId || 'introNarrationAudio' }) : null;
+  try {
+    windowRef.AudioVisibilityManager?.unregister?.(player);
+  } catch (_) {}
 
   let volume = 1;
   let currentText = '';
@@ -311,15 +314,7 @@ export function createIntroNarrationAdapter(options = {}) {
     if (currentSession !== session || session.settled || session.paused) return false;
     emitStart(session);
     await player.play();
-    try {
-      await player.seekAndConfirm(targetStart, {
-        maxAttempts: 2,
-        settleMs: 100,
-        tolerance: 0.45,
-        readyTimeoutMs: 1200
-      });
-      session.resumeFromSec = targetStart;
-    } catch (_) {}
+    session.resumeFromSec = targetStart;
     if (currentSession !== session || session.settled || session.paused) {
       try {
         player.pause();
@@ -377,6 +372,8 @@ export function createIntroNarrationAdapter(options = {}) {
     clearGestureRetry();
 
     if (hasFiniteAudioRange(session.segment)) {
+      const immediatePos = Number.isFinite(player?.currentTime) ? Number(player.currentTime) : (session.resumeFromSec || 0);
+      session.resumeFromSec = Math.max(session.segment.audioStartSec || 0, immediatePos);
       try {
         player?.pause?.();
       } catch (_) {}
