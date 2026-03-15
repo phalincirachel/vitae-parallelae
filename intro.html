@@ -7820,16 +7820,38 @@
                 if (!readerSettingsController || typeof readerSettingsController.setSentenceLayout !== 'function') return null;
                 return readerSettingsController.setSentenceLayout(value);
             },
+            isArchiveReady() {
+                return !!archiveTabsController;
+            },
             openArchiveSettings() {
                 const archive = document.getElementById('archiveModal');
-                if (!archive || !archive.classList.contains('visible')) document.getElementById('bookBtn')?.click();
+                if (typeof renderArchive === 'function') renderArchive();
+                archive?.classList?.add?.('visible');
+                if (archiveTabsController) {
+                    archiveTabsController.setPrimaryMode('einstellungen');
+                    archiveTabsController.showSettingsPanel();
+                    return true;
+                }
                 document.getElementById('archivePrimarySettingsBtn')?.click();
+                return !!archive?.classList?.contains?.('visible');
+            },
+            openArchiveContentTab(tabName) {
+                const archive = document.getElementById('archiveModal');
+                if (typeof renderArchive === 'function') renderArchive();
+                archive?.classList?.add?.('visible');
+                if (archiveTabsController) {
+                    archiveTabsController.setPrimaryMode('inhalt');
+                    archiveTabsController.showContentTab(tabName || 'kapitel');
+                    return true;
+                }
+                document.getElementById('archivePrimaryInhaltBtn')?.click();
+                if (tabName) {
+                    document.querySelector('.archive-tab[data-tab="' + String(tabName) + '"]')?.click();
+                }
+                return !!archive?.classList?.contains?.('visible');
             },
             openArchiveLore() {
-                const archive = document.getElementById('archiveModal');
-                if (!archive || !archive.classList.contains('visible')) document.getElementById('bookBtn')?.click();
-                document.getElementById('archivePrimaryInhaltBtn')?.click();
-                document.querySelector('.archive-tab[data-tab="lore"]')?.click();
+                return this.openArchiveContentTab('lore');
             },
             closeArchive() {
                 document.getElementById('archiveModal')?.classList?.remove?.('visible');

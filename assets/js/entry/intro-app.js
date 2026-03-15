@@ -20,6 +20,7 @@ const MOVE_KEYS = Object.freeze([
 ]);
 const SEGMENT_TIME_STEP = 8;
 const INTRO_SCENE_NAME = globalThis.window?.__GAMEBOY_INTRO_BOOTSTRAP__?.level?.sceneName || 'intro_einfuehrung';
+const INTRO_WEB_BYPASS_KEY = 'gameboy_intro_bypass_once';
 
 function wait(ms) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
@@ -295,6 +296,11 @@ async function initIntroApp() {
     windowRef.GameState = realGameState;
     const preservedKeys = runtimeState.layoutChosen ? new Set(['gameboy_reader_sentence_layout']) : new Set();
     restoreStorage(storageRef, storageSnapshot, preservedKeys);
+    if (!markCompleted) {
+      try {
+        windowRef.sessionStorage?.setItem?.(INTRO_WEB_BYPASS_KEY, '1');
+      } catch (_) {}
+    }
     if (markCompleted && typeof realGameState.markIntroCompleted === 'function') {
       await realGameState.markIntroCompleted(INTRO_VERSION);
     }
@@ -475,7 +481,9 @@ async function initIntroApp() {
   await speakSegment('main', 1);
   if (runtimeState.destroyed) return;
 
+  await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
   hooks.openArchiveSettings();
+  await wait(60);
   await speakSegment('main', 2, { selectors: ['[data-loading-tutorial="layout-group"]'] });
   if (runtimeState.destroyed) return;
   await waitForAction('choose-layout', {
@@ -487,7 +495,8 @@ async function initIntroApp() {
   });
   if (runtimeState.destroyed) return;
 
-  documentRef.getElementById('archivePrimaryInhaltBtn')?.click();
+  hooks.openArchiveContentTab('kapitel');
+  await wait(40);
   hooks.closeArchive();
   await speakSegment('main', 3, { selectors: ['#bookBtn'] });
   if (runtimeState.destroyed) return;
@@ -580,7 +589,8 @@ async function initIntroApp() {
   });
   if (runtimeState.destroyed) return;
 
-  hooks.renderArchive();
+  hooks.openArchiveLore();
+  await wait(60);
   await speakSegment('main', 18, { selectors: ['#loreList'] });
   if (runtimeState.destroyed) return;
 

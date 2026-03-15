@@ -5,6 +5,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Heidelberg RPG</title>
+    <script>
+        (function routeWebIntro() {
+            const INTRO_ROUTE = 'intro.html';
+            const INTRO_VERSION = 1;
+            const SAVE_KEY = 'liminal_save';
+            const BYPASS_KEY = 'gameboy_intro_bypass_once';
+            try {
+                const params = new URLSearchParams(window.location.search || '');
+                if (params.get('chapter')) return;
+
+                const bypass = sessionStorage.getItem(BYPASS_KEY) === '1';
+                if (bypass) {
+                    sessionStorage.removeItem(BYPASS_KEY);
+                    return;
+                }
+
+                const raw = localStorage.getItem(SAVE_KEY);
+                const save = raw ? JSON.parse(raw) : null;
+                const intro = save && typeof save === 'object' ? save.intro : null;
+                const introCompleted = !!(intro && intro.completed === true && Number(intro.version) === INTRO_VERSION);
+                if (introCompleted) return;
+
+                const target = new URL(INTRO_ROUTE, window.location.href);
+                if (target.pathname === window.location.pathname && target.search === window.location.search) return;
+                window.location.replace(target.href);
+            } catch (_) {
+                // Fail open to the chapter page if storage is unavailable.
+            }
+        })();
+    </script>
     <!-- SoundCloud Widget API & System -->
     <script src="https://w.soundcloud.com/player/api.js"></script>
     <script src="assets/js/SoundCloudURLs.js"></script>
