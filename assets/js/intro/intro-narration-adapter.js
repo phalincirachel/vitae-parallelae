@@ -3,7 +3,7 @@ import { SC_URLS } from '../shared/audio/soundcloud-urls.js';
 const DEFAULT_SOURCE_URL = SC_URLS.INTRO_LITA_1;
 const MONITOR_INTERVAL_MS = 120;
 const END_TOLERANCE_SEC = 0.2;
-const GESTURE_EVENTS = Object.freeze(['pointerdown', 'touchstart', 'keydown']);
+const GESTURE_EVENTS = Object.freeze(['pointerdown', 'touchstart', 'touchend', 'click', 'keydown']);
 
 function wait(ms) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -45,7 +45,8 @@ function hasFiniteAudioRange(segment) {
 export function createIntroNarrationAdapter(options = {}) {
   const listeners = {
     start: new Set(),
-    end: new Set()
+    end: new Set(),
+    blocked: new Set()
   };
   const windowRef = globalThis.window || globalThis;
   const documentRef = windowRef.document || null;
@@ -77,6 +78,22 @@ export function createIntroNarrationAdapter(options = {}) {
     gestureCleanup = null;
   }
 
+  function promoteWidgetIframe() {
+    const iframe = player?.iframe || null;
+    if (!iframe || !iframe.style) return;
+    iframe.style.display = 'block';
+    iframe.style.position = 'fixed';
+    iframe.style.width = '1px';
+    iframe.style.height = '1px';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
+    iframe.style.left = '-9999px';
+    iframe.style.top = '0';
+    iframe.setAttribute?.('aria-hidden', 'true');
+    iframe.setAttribute?.('tabindex', '-1');
+    iframe.setAttribute?.('allow', 'autoplay');
+  }
+
   function cleanupSession(session) {
     if (!session || session.cleanedUp) return;
     session.cleanedUp = true;
@@ -89,6 +106,18 @@ export function createIntroNarrationAdapter(options = {}) {
     session.started = true;
     emitListeners(listeners, 'start', { text: session.segment.text, id: session.segment.id || '' });
     session.options.onSegmentStart?.({ text: session.segment.text, id: session.segment.id || '' });
+  }
+
+  function emitBlocked(session) {
+    if (!session || session.blockedEmitted) return;
+    session.blockedEmitted = true;
+    const payload = {
+      text: session.segment.text,
+      id: session.segment.id || '',
+      requiresGesture: true
+    };
+    emitListeners(listeners, 'blocked', payload);
+    session.options.onAutoplayBlocked?.(payload);
   }
 
   function settleSession(session, result, settleOptions = {}) {
@@ -119,12 +148,15 @@ export function createIntroNarrationAdapter(options = {}) {
     if (!player.src) {
       player.src = sourceUrl;
       player.volume = volume;
+      promoteWidgetIframe();
     }
+    promoteWidgetIframe();
     if (typeof player._waitForScReady === 'function') {
       return player._waitForScReady(Math.max(6000, Number(timeoutMs) || 0));
     }
     const deadline = Date.now() + Math.max(6000, Number(timeoutMs) || 0);
     while (Date.now() < deadline) {
+      promoteWidgetIframe();
       if (player.widget && player._isReady) return true;
       await wait(100);
     }
@@ -137,8 +169,8 @@ export function createIntroNarrationAdapter(options = {}) {
     try {
       return !!(await helper({
         player,
-        retries: 3,
-        delayMs: 280,
+        retries: 2,
+        delayMs: 180,
         requireAdvance: true
       }));
     } catch (_) {
@@ -212,6 +244,7 @@ export function createIntroNarrationAdapter(options = {}) {
       return Promise.resolve(false);
     }
     clearGestureRetry();
+    emitBlocked(session);
     return new Promise((resolve) => {
       const listenerOptions = { capture: true, passive: true };
       const finish = (started) => {
@@ -225,10 +258,11 @@ export function createIntroNarrationAdapter(options = {}) {
           return;
         }
         try {
+          promoteWidgetIframe();
           await player.play();
           await player.seekAndConfirm(targetStart, {
             maxAttempts: 2,
-            settleMs: 120,
+            settleMs: 100,
             tolerance: 0.45,
             readyTimeoutMs: 1200
           });
@@ -269,7 +303,7 @@ export function createIntroNarrationAdapter(options = {}) {
     try {
       await player.seekAndConfirm(targetStart, {
         maxAttempts: 4,
-        settleMs: 180,
+        settleMs: 140,
         tolerance: 0.55,
         readyTimeoutMs: 5000
       });
@@ -280,7 +314,7 @@ export function createIntroNarrationAdapter(options = {}) {
     try {
       await player.seekAndConfirm(targetStart, {
         maxAttempts: 2,
-        settleMs: 120,
+        settleMs: 100,
         tolerance: 0.45,
         readyTimeoutMs: 1200
       });
@@ -315,6 +349,7 @@ export function createIntroNarrationAdapter(options = {}) {
       started: false,
       paused: false,
       cleanedUp: false,
+      blockedEmitted: false,
       resumeFromSec: hasFiniteAudioRange(segment) ? Number(segment.audioStartSec) : null,
       remainingHoldMs: Number.isFinite(segment.holdDurationMs) ? Math.max(0, segment.holdDurationMs) : 0,
       startedAtMs: 0
@@ -404,6 +439,11 @@ export function createIntroNarrationAdapter(options = {}) {
     return () => listeners.end.delete(listener);
   }
 
+  function onAutoplayBlocked(listener) {
+    if (typeof listener === 'function') listeners.blocked.add(listener);
+    return () => listeners.blocked.delete(listener);
+  }
+
   function isPlaying() {
     return !!currentSession && !currentSession.paused && !currentSession.settled;
   }
@@ -427,6 +467,7 @@ export function createIntroNarrationAdapter(options = {}) {
     try {
       player.src = sourceUrl;
       player.volume = volume;
+      promoteWidgetIframe();
     } catch (_) {}
   }
 
@@ -444,6 +485,7 @@ export function createIntroNarrationAdapter(options = {}) {
     },
     onSegmentStart,
     onSegmentEnd,
+    onAutoplayBlocked,
     prepare
   };
 }

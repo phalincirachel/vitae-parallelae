@@ -90,7 +90,8 @@ function getRefs(documentRef) {
     skipBackBtn: documentRef.getElementById('skipBackBtn'),
     skipForwardBtn: documentRef.getElementById('skipForwardBtn'),
     startScreen: documentRef.getElementById('introStartScreen'),
-    startSkipBtn: documentRef.getElementById('startSkipBtn')
+    startSkipBtn: documentRef.getElementById('startSkipBtn'),
+    introAudioPrompt: documentRef.getElementById('introAudioPrompt')
   };
 }
 
@@ -191,6 +192,12 @@ async function initIntroApp() {
   const focusOverlay = createInteractiveFocusOverlay({ document: documentRef });
   const interactionGate = createInteractionGate({ document: documentRef });
   const syncAudioIcons = createAudioIconSync(refs);
+
+  const setAudioPromptVisible = (visible) => {
+    const prompt = refs.introAudioPrompt;
+    if (!prompt) return;
+    prompt.classList.toggle('is-visible', !!visible);
+  };
   const runtimeState = {
     currentTrackName: 'main',
     currentSegmentIndex: 0,
@@ -463,12 +470,18 @@ async function initIntroApp() {
     syncNarrationActiveFlag(true);
   };
 
+  narration.onAutoplayBlocked?.(() => {
+    setAudioPromptVisible(true);
+  });
+
   narration.onSegmentStart(() => {
+    setAudioPromptVisible(false);
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(true);
     syncNarrationActiveFlag(true);
   });
   narration.onSegmentEnd(() => {
+    setAudioPromptVisible(false);
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(false);
     syncNarrationActiveFlag(false);
@@ -476,6 +489,7 @@ async function initIntroApp() {
   });
 
   refs.audioToggleBtn?.addEventListener('click', (event) => {
+    setAudioPromptVisible(false);
     event.preventDefault();
     event.stopImmediatePropagation();
     if (runtimeState.destroyed) return;
@@ -611,7 +625,8 @@ async function initIntroApp() {
   hooks.refreshLoreProgressUi({ forceHidden: true });
   setGate({ includeAudio: false, targets: [refs.startSkipBtn] });
   syncAudioIcons(false);
-  await narration.prepare?.();
+  void narration.prepare?.();
+  setAudioPromptVisible(false);
 
   const startPromise = (async () => {
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn] });

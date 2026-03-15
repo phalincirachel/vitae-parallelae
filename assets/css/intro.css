@@ -64,6 +64,24 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   text-shadow: 0 8px 26px rgba(0, 0, 0, 0.42);
 }
 
+.intro-audio-prompt {
+  margin-top: 18px;
+  min-height: 1.4em;
+  color: rgba(255, 248, 232, 0.92);
+  font-family: 'Reader Grotesk', 'Segoe UI', sans-serif;
+  font-size: clamp(13px, 1.8vw, 16px);
+  letter-spacing: 0.02em;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.intro-audio-prompt.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 .intro-start-skip {
   margin-top: auto;
   margin-bottom: clamp(18px, 5vh, 40px);
@@ -155,7 +173,25 @@ body.intro-page.intro-ready-to-begin #nextChapterBtn.visible {
     font-size: clamp(28px, 9vw, 42px);
   }
 
-  .intro-start-skip {
+  .intro-audio-prompt {
+  margin-top: 18px;
+  min-height: 1.4em;
+  color: rgba(255, 248, 232, 0.92);
+  font-family: 'Reader Grotesk', 'Segoe UI', sans-serif;
+  font-size: clamp(13px, 1.8vw, 16px);
+  letter-spacing: 0.02em;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+}
+
+.intro-audio-prompt.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.intro-start-skip {
     width: calc(100vw - 36px);
     max-width: 340px;
     font-size: 15px;
