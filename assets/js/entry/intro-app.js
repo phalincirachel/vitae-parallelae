@@ -513,6 +513,11 @@ async function initIntroApp() {
     scheduleUiRecovery('replay');
   };
 
+  const ensureSceneReadyForReveal = async () => {
+    await readyPromise;
+    return !runtimeState.destroyed;
+  };
+
   const resumeNarrationIfNeeded = () => {
     if (!runtimeState.autoPausedForVisibility || runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
@@ -729,7 +734,7 @@ async function initIntroApp() {
     setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   })();
 
-  await Promise.all([startPromise, readyPromise]);
+  await startPromise;
   if (runtimeState.destroyed) return;
 
   realGameState = await realGameStatePromise;
@@ -807,6 +812,8 @@ async function initIntroApp() {
     selectors: ['#sceneDimmerToggleBtn']
   });
   if (runtimeState.destroyed) return;
+
+  if (!(await ensureSceneReadyForReveal())) return;
 
   await speakCheckpointSegment('main', 11, 'dimmer-light', {
     targets: ['#sceneDimmerToggleBtn'],
