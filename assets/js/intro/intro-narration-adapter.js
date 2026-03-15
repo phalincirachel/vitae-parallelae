@@ -3,6 +3,7 @@ import { SC_URLS } from '../shared/audio/soundcloud-urls.js';
 const DEFAULT_SOURCE_URL = SC_URLS.INTRO_LITA_1;
 const MONITOR_INTERVAL_MS = 120;
 const END_TOLERANCE_SEC = 0.2;
+const GESTURE_EVENTS = Object.freeze(['pointerdown', 'touchstart', 'keydown']);
 
 function wait(ms) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, Math.max(0, Number(ms) || 0)));
@@ -47,17 +48,18 @@ export function createIntroNarrationAdapter(options = {}) {
     end: new Set()
   };
   const windowRef = globalThis.window || globalThis;
+  const documentRef = windowRef.document || null;
   const AudioAdapter = options.AudioAdapter || windowRef.SCAudioAdapter || globalThis.SCAudioAdapter || null;
   const sourceUrl = String(options.sourceUrl || DEFAULT_SOURCE_URL || '');
   const player = AudioAdapter ? new AudioAdapter({ iframeId: options.iframeId || 'introNarrationAudio' }) : null;
 
   let volume = 1;
   let currentText = '';
-  let activeToken = 0;
   let currentSession = null;
   let monitorTimer = null;
   let silentTimer = null;
   let readyPromise = null;
+  let gestureCleanup = null;
 
   function clearTimers() {
     if (monitorTimer) {
@@ -70,10 +72,16 @@ export function createIntroNarrationAdapter(options = {}) {
     }
   }
 
+  function clearGestureRetry() {
+    if (typeof gestureCleanup === 'function') gestureCleanup();
+    gestureCleanup = null;
+  }
+
   function cleanupSession(session) {
     if (!session || session.cleanedUp) return;
     session.cleanedUp = true;
     clearTimers();
+    clearGestureRetry();
   }
 
   function emitStart(session) {
@@ -121,6 +129,21 @@ export function createIntroNarrationAdapter(options = {}) {
       await wait(100);
     }
     return !!(player.widget && player._isReady);
+  }
+
+  async function verifyTransportStart() {
+    const helper = windowRef.GameboyPlaybackHelpers?.verifyPlaybackStarted;
+    if (!player || typeof helper !== 'function') return true;
+    try {
+      return !!(await helper({
+        player,
+        retries: 3,
+        delayMs: 280,
+        requireAdvance: true
+      }));
+    } catch (_) {
+      return !player.paused;
+    }
   }
 
   async function capturePosition(session) {
@@ -184,6 +207,55 @@ export function createIntroNarrationAdapter(options = {}) {
     }, MONITOR_INTERVAL_MS);
   }
 
+  function waitForGestureResume(session, targetStart) {
+    if (!documentRef || typeof documentRef.addEventListener !== 'function') {
+      return Promise.resolve(false);
+    }
+    clearGestureRetry();
+    return new Promise((resolve) => {
+      const listenerOptions = { capture: true, passive: true };
+      const finish = (started) => {
+        clearGestureRetry();
+        resolve(!!started);
+      };
+      const handler = async () => {
+        clearGestureRetry();
+        if (currentSession !== session || session.settled || session.paused) {
+          finish(false);
+          return;
+        }
+        try {
+          await player.play();
+          await player.seekAndConfirm(targetStart, {
+            maxAttempts: 2,
+            settleMs: 120,
+            tolerance: 0.45,
+            readyTimeoutMs: 1200
+          });
+          const started = await verifyTransportStart();
+          finish(started);
+        } catch (_) {
+          finish(false);
+        }
+      };
+      gestureCleanup = () => {
+        GESTURE_EVENTS.forEach((eventName) => {
+          documentRef.removeEventListener(eventName, handler, listenerOptions);
+        });
+      };
+      GESTURE_EVENTS.forEach((eventName) => {
+        documentRef.addEventListener(eventName, handler, listenerOptions);
+      });
+    });
+  }
+
+  async function ensureTransportStarted(session, targetStart) {
+    const started = await verifyTransportStart();
+    if (started) return true;
+    if (currentSession !== session || session.settled || session.paused) return false;
+    return waitForGestureResume(session, targetStart);
+  }
+
   async function startStreamingSession(session) {
     const ready = await waitForPlayerReady(20000);
     if (!ready || currentSession !== session || session.settled) {
@@ -220,6 +292,13 @@ export function createIntroNarrationAdapter(options = {}) {
       } catch (_) {}
       return false;
     }
+    const transportStarted = await ensureTransportStarted(session, targetStart);
+    if (!transportStarted || currentSession !== session || session.settled || session.paused) {
+      if (!session.paused && !session.settled) {
+        settleSession(session, false, { emitEnd: true, cancelled: true });
+      }
+      return false;
+    }
     void monitorStreamingPlayback(session);
     return true;
   }
@@ -229,7 +308,6 @@ export function createIntroNarrationAdapter(options = {}) {
     const segment = normalizeSegment(segmentOrText, optionsForPlay);
     currentText = segment.text;
     const session = {
-      token: ++activeToken,
       segment,
       options: optionsForPlay,
       resolve: null,
@@ -261,6 +339,7 @@ export function createIntroNarrationAdapter(options = {}) {
     const session = currentSession;
     session.paused = true;
     clearTimers();
+    clearGestureRetry();
 
     if (hasFiniteAudioRange(session.segment)) {
       try {
@@ -290,10 +369,10 @@ export function createIntroNarrationAdapter(options = {}) {
   }
 
   function stop() {
-    activeToken += 1;
     const session = currentSession;
     currentSession = null;
     clearTimers();
+    clearGestureRetry();
     try {
       player?.pause?.();
     } catch (_) {}
