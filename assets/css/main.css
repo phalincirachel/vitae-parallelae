@@ -686,7 +686,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
 }
 
 .subtitle-current {
-    color: inherit !important;
+    color: #ffffff !important;
     text-shadow: inherit;
     text-decoration-line: underline;
     text-decoration-thickness: 0.08em;
@@ -695,6 +695,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
 }
 
 .subtitle-current .subtitle-fragment {
+    color: inherit !important;
     text-decoration-line: inherit;
     text-decoration-thickness: inherit;
     text-underline-offset: inherit;
@@ -707,7 +708,7 @@ body.scene-dimmer-light-mode .subtitle-line {
 }
 
 body.scene-dimmer-light-mode .subtitle-current {
-    color: inherit !important;
+    color: #000000 !important;
     text-shadow: inherit;
 }
 
@@ -715,8 +716,16 @@ body.scene-dimmer-light-mode .subtitle-current {
     color: var(--reader-custom-text, #ffffff) !important;
 }
 
+#subtitleContainer.reader-custom-text .subtitle-current {
+    color: #ffffff !important;
+}
+
 body.scene-dimmer-light-mode #subtitleContainer.reader-custom-text .subtitle-line {
     color: var(--reader-custom-text, #000000) !important;
+}
+
+body.scene-dimmer-light-mode #subtitleContainer.reader-custom-text .subtitle-current {
+    color: #000000 !important;
 }
 
 /* Reading mode: stronger text shadow for readability */
