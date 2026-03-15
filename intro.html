@@ -6920,7 +6920,7 @@
         function setReadingMode(nextMode, reason = 'manual', options = {}) {
             const syncDimmer = options.syncDimmer !== false;
             let normalized = !!nextMode;
-            if (!normalized && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
+            if (!normalized && !options.ignoreFrozen && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                 normalized = true;
             }
             const now = performance.now();
@@ -8051,8 +8051,11 @@
                     ? globalVisualDimmer.getMode()
                     : 'off';
             },
-            setReadingMode(nextMode, reason) {
-                if (typeof setReadingMode === 'function') setReadingMode(!!nextMode, reason || 'intro', { syncDimmer: false });
+            setReadingMode(nextMode, reason, options) {
+                if (typeof setReadingMode === 'function') {
+                    const mergedOptions = Object.assign({ syncDimmer: false }, options || {});
+                    setReadingMode(!!nextMode, reason || 'intro', mergedOptions);
+                }
             },
             disableAmbientDecor() {
                 try { if (Array.isArray(particles)) particles.length = 0; } catch (_) {}
@@ -8130,6 +8133,7 @@
 </body>
 
 </html>
+
 
 
 

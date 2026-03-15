@@ -222,6 +222,7 @@ async function initIntroApp() {
 
   let realGameState = null;
   let uiRecoveryFrame = 0;
+  let autoResumeTimer = 0;
 
   const normalizeUiConfig = (config = {}) => ({
     includeAudio: config.includeAudio !== false,
@@ -327,6 +328,12 @@ async function initIntroApp() {
         refreshInteractiveState(reason);
       });
     });
+  };
+
+  const clearAutoResumeTimer = () => {
+    if (!autoResumeTimer) return;
+    windowRef.clearTimeout(autoResumeTimer);
+    autoResumeTimer = 0;
   };
 
   const setTrack = (trackName, segmentIndex) => {
@@ -470,17 +477,30 @@ async function initIntroApp() {
     syncNarrationActiveFlag(true);
   };
 
+  const scheduleAutoResume = (reason = 'focus') => {
+    if (runtimeState.destroyed || !runtimeState.autoPausedForVisibility) return;
+    clearAutoResumeTimer();
+    autoResumeTimer = windowRef.setTimeout(() => {
+      autoResumeTimer = 0;
+      scheduleUiRecovery(reason);
+      resumeNarrationIfNeeded();
+    }, 90);
+  };
+
   narration.onAutoplayBlocked?.(() => {
+    clearAutoResumeTimer();
     setAudioPromptVisible(true);
   });
 
   narration.onSegmentStart(() => {
+    clearAutoResumeTimer();
     setAudioPromptVisible(false);
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(true);
     syncNarrationActiveFlag(true);
   });
   narration.onSegmentEnd(() => {
+    clearAutoResumeTimer();
     setAudioPromptVisible(false);
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(false);
@@ -489,6 +509,7 @@ async function initIntroApp() {
   });
 
   refs.audioToggleBtn?.addEventListener('click', (event) => {
+    clearAutoResumeTimer();
     setAudioPromptVisible(false);
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -512,6 +533,7 @@ async function initIntroApp() {
   documentRef.addEventListener('visibilitychange', () => {
     if (runtimeState.destroyed) return;
     if (documentRef.hidden) {
+      clearAutoResumeTimer();
       if (narration.isPlaying()) {
         runtimeState.autoPausedForVisibility = true;
         narration.pause();
@@ -524,16 +546,13 @@ async function initIntroApp() {
   });
 
   windowRef.addEventListener('focus', () => {
-    scheduleUiRecovery('focus');
-    windowRef.setTimeout(() => resumeNarrationIfNeeded(), 60);
+    scheduleAutoResume('focus');
   });
   windowRef.addEventListener('pageshow', () => {
-    scheduleUiRecovery('pageshow');
-    windowRef.setTimeout(() => resumeNarrationIfNeeded(), 60);
+    scheduleAutoResume('pageshow');
   });
   windowRef.addEventListener('resize', () => scheduleUiRecovery('resize'));
   windowRef.addEventListener('orientationchange', () => scheduleUiRecovery('orientationchange'));
-  windowRef.addEventListener('pageshow', () => scheduleUiRecovery('pageshow'));
 
   [refs.skipBackBtn, refs.skipForwardBtn].forEach((button) => {
     button?.addEventListener('click', (event) => {
@@ -554,10 +573,13 @@ async function initIntroApp() {
   }, true);
 
   refs.backToChapterBtn?.addEventListener('click', (event) => {
-    if (runtimeState.waitingAction !== 'back-to-chapter') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    resolveAction('back-to-chapter', true);
+    if (runtimeState.waitingAction === 'back-to-chapter') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      resolveAction('back-to-chapter', true);
+      return;
+    }
+    rememberAllowedAction('back-to-chapter', event, true);
   }, true);
   refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
@@ -584,13 +606,17 @@ async function initIntroApp() {
   refs.readingModeBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction === 'enter-explore') {
       windowRef.setTimeout(() => resolveAction('enter-explore', true), 0);
+      return;
     }
+    rememberAction('enter-explore', true);
   });
 
-  refs.loreProgressHud?.addEventListener('click', () => {
+  refs.loreProgressHud?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-lore-hud') {
       windowRef.setTimeout(() => resolveAction('open-lore-hud', true), 0);
+      return;
     }
+    rememberAllowedAction('open-lore-hud', event, true);
   });
 
   documentRef.querySelectorAll('.reader-radio-option[data-layout], input[name="readerSentenceLayout"]').forEach((element) => {
@@ -614,6 +640,7 @@ async function initIntroApp() {
 
   windowRef.addEventListener('beforeunload', () => {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
+    clearAutoResumeTimer();
     narration.stop();
     syncNarrationActiveFlag(false);
     clearPresentation();
@@ -730,12 +757,19 @@ async function initIntroApp() {
   });
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('off');
-  hooks.setReadingMode(false, 'intro-enter-explore');
+  hooks.setReadingMode(false, 'intro-enter-explore', { syncDimmer: false, ignoreFrozen: true });
   hooks.setActiveSubtitleIndex?.(13);
   hooks.disableAmbientDecor?.();
   hooks.refreshLayout?.('intro-enter-explore');
   hooks.forceSceneRender?.('intro-enter-explore');
   scheduleUiRecovery('intro-enter-explore');
+  windowRef.setTimeout(() => {
+    if (runtimeState.destroyed) return;
+    hooks.setReadingMode(false, 'intro-enter-explore-confirm', { syncDimmer: false, ignoreFrozen: true });
+    hooks.refreshLayout?.('intro-enter-explore-confirm');
+    hooks.forceSceneRender?.('intro-enter-explore-confirm');
+    scheduleUiRecovery('intro-enter-explore-confirm');
+  }, 120);
   await wait(80);
 
   hooks.refreshLoreProgressUi({ forceHidden: true });
@@ -807,4 +841,7 @@ async function initIntroApp() {
 }
 
 void initIntroApp();
+
+
+
 
