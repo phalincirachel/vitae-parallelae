@@ -10,6 +10,7 @@ import { getBookmarkScope } from '../core/bookmark-scope.js';
 
 const WEB_SAVE_KEY = 'liminal_save';
 const SESSION_KEY = 'GAME_SESSION_ACTIVE';
+const INTRO_VERSION_FALLBACK = 1;
 const READER_KEYS = Object.freeze({
   layout: 'gameboy_reader_sentence_layout',
   fontSize: 'gameboy_reader_font_size_px',
@@ -40,6 +41,11 @@ function createStorageAdapter(storage) {
 
 function createDefaultState() {
   return {
+    intro: {
+      completed: false,
+      version: INTRO_VERSION_FALLBACK,
+      completedAt: null
+    },
     collectedLore: [],
     collectedLights: {},
     chapterCollectibleTargets: {},
@@ -94,6 +100,25 @@ export function createGameState(options = {}) {
     _ensureStateShape() {
       if (!this.state || typeof this.state !== 'object') {
         this.state = createDefaultState();
+      }
+
+      if (!this.state.intro || typeof this.state.intro !== 'object') {
+        this.state.intro = {
+          completed: false,
+          version: INTRO_VERSION_FALLBACK,
+          completedAt: null
+        };
+      } else {
+        const introCompleted = this.state.intro.completed === true;
+        const introVersion = Number(this.state.intro.version);
+        const introCompletedAt = typeof this.state.intro.completedAt === 'string' && this.state.intro.completedAt.trim()
+          ? this.state.intro.completedAt.trim()
+          : null;
+        this.state.intro = {
+          completed: introCompleted,
+          version: Number.isFinite(introVersion) && introVersion > 0 ? Math.trunc(introVersion) : INTRO_VERSION_FALLBACK,
+          completedAt: introCompletedAt
+        };
       }
 
       this.state.collectedLore = normalizeNumberArray(this.state.collectedLore);
@@ -307,6 +332,27 @@ export function createGameState(options = {}) {
 
     exportState() {
       return JSON.stringify(this.state, null, 2);
+    },
+
+    isIntroCompleted(version = INTRO_VERSION_FALLBACK) {
+      this._ensureStateShape();
+      const intro = this.state.intro || {};
+      return intro.completed === true && Math.trunc(Number(intro.version)) === Math.trunc(Number(version));
+    },
+
+    async markIntroCompleted(version = INTRO_VERSION_FALLBACK, completedAt = new Date().toISOString()) {
+      this._ensureStateShape();
+      this.state.intro = {
+        completed: true,
+        version: Number.isFinite(Number(version)) && Number(version) > 0
+          ? Math.trunc(Number(version))
+          : INTRO_VERSION_FALLBACK,
+        completedAt: typeof completedAt === 'string' && completedAt.trim()
+          ? completedAt
+          : new Date().toISOString()
+      };
+      await this.save();
+      return this.state.intro;
     },
 
     async importState(jsonString) {

@@ -1,14 +1,38 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const { pathToFileURL } = require('url');
 const { createSaveStore } = require('./electron/save-store');
 
 let saveStore = null;
+let introConfigPromise = null;
 
 function getSaveStore() {
     if (!saveStore) {
         saveStore = createSaveStore({ app });
     }
     return saveStore;
+}
+
+async function getIntroConfig() {
+    if (!introConfigPromise) {
+        const moduleUrl = pathToFileURL(path.join(__dirname, 'assets/js/shared/data/intro-config.js')).href;
+        introConfigPromise = import(moduleUrl);
+    }
+    return introConfigPromise;
+}
+
+async function resolveStartupTarget() {
+    const [{ INTRO_VERSION, INTRO_ROUTE }, save] = await Promise.all([
+        getIntroConfig(),
+        getSaveStore().load().catch((error) => {
+            console.warn('[Electron] Failed to read save before startup:', error);
+            return null;
+        })
+    ]);
+
+    const intro = save && typeof save === 'object' ? save.intro : null;
+    const introCompleted = !!(intro && intro.completed === true && Number(intro.version) === Number(INTRO_VERSION));
+    return introCompleted ? INTRO_ROUTE.gameFile : INTRO_ROUTE.introFile;
 }
 
 async function createWindow() {
@@ -46,7 +70,8 @@ async function createWindow() {
         }
     }
 
-    await win.loadFile('index.html', !app.isPackaged
+    const startupFile = await resolveStartupTarget();
+    await win.loadFile(startupFile, !app.isPackaged
         ? { query: { v: String(Date.now()) } }
         : undefined);
 }

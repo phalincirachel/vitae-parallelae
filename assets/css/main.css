@@ -644,7 +644,7 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    color: rgba(255, 255, 255, 0.8);
+    color: #ffffff;
     text-shadow: 2px 2px 10px rgba(0, 0, 0, 1), 0 0 20px rgba(0, 0, 0, 0.8);
     transition: color 0.3s, opacity 0.3s;
     opacity: 1;
@@ -686,26 +686,37 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer::-we
 }
 
 .subtitle-current {
-    color: rgba(255, 255, 255, 0.95) !important;
-    text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+    color: inherit !important;
+    text-shadow: inherit;
+    text-decoration-line: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.16em;
+    text-decoration-skip-ink: auto;
+}
+
+.subtitle-current .subtitle-fragment {
+    text-decoration-line: inherit;
+    text-decoration-thickness: inherit;
+    text-underline-offset: inherit;
+    text-decoration-skip-ink: inherit;
 }
 
 body.scene-dimmer-light-mode .subtitle-line {
-    color: rgba(0, 0, 0, 0.82);
+    color: #000000;
     text-shadow: 2px 2px 10px rgba(255, 255, 255, 1), 0 0 20px rgba(255, 255, 255, 0.85);
 }
 
 body.scene-dimmer-light-mode .subtitle-current {
-    color: rgba(0, 0, 0, 0.96) !important;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 1);
+    color: inherit !important;
+    text-shadow: inherit;
 }
 
 #subtitleContainer.reader-custom-text .subtitle-line {
-    color: var(--reader-custom-text, rgba(255, 255, 255, 0.8)) !important;
+    color: var(--reader-custom-text, #ffffff) !important;
 }
 
 body.scene-dimmer-light-mode #subtitleContainer.reader-custom-text .subtitle-line {
-    color: var(--reader-custom-text, rgba(0, 0, 0, 0.82)) !important;
+    color: var(--reader-custom-text, #000000) !important;
 }
 
 /* Reading mode: stronger text shadow for readability */
@@ -818,16 +829,12 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode .subtitle-line {
     font-weight: 400 !important;
     padding-left: 0;
     padding-right: 0;
-    -webkit-text-stroke: 0.02px currentColor;
-    text-shadow:
-        0 0 2px rgba(0, 0, 0, 0.85),
-        0 0 8px rgba(0, 0, 0, 0.58);
+    -webkit-text-stroke: 0 transparent;
+    text-shadow: inherit;
 }
 
 body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-flat .subtitle-current {
-    text-shadow:
-        0 0 2px rgba(255, 255, 255, 0.9),
-        0 0 8px rgba(255, 255, 255, 0.68);
+    text-shadow: inherit;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern {
@@ -927,16 +934,12 @@ body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.read
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
     font-weight: 400 !important;
-    -webkit-text-stroke: 0.02px currentColor;
-    text-shadow:
-        0 0 2px rgba(0, 0, 0, 0.85),
-        0 0 8px rgba(0, 0, 0, 0.58);
+    -webkit-text-stroke: 0 transparent;
+    text-shadow: inherit;
 }
 
 body.scene-dimmer-light-mode #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .subtitle-line.blaettern-line.subtitle-current {
-    text-shadow:
-        0 0 2px rgba(255, 255, 255, 0.9),
-        0 0 8px rgba(255, 255, 255, 0.68);
+    text-shadow: inherit;
 }
 
 #audioPlayerUI.reading-mode #subtitleContainer.reader-layout-blaettern .blaettern-progress-indicator {

@@ -1,0 +1,167 @@
+﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Heidelberg RPG - Einf&uuml;hrung</title>
+    <link rel="preload" href="assets/fonts/reader-grotesk-segoeui.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-renaissance-palatino.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/intro.css">
+    <script src="assets/js/scenes/index2d/map-runtime.global.js"></script>
+    <script src="assets/js/scenes/index2d/loop-runtime.global.js"></script>
+    <script src="assets/js/scenes/index2d/navigation-runtime.global.js"></script>
+    <script src="assets/js/scenes/index2d/update-runtime.global.js"></script>
+    <script src="assets/js/scenes/index2d/draw-runtime.global.js"></script>
+    <script src="assets/js/shared/ui/reader-settings-controller.global.js"></script>
+</head>
+<body class="scene-dimmer-light-mode intro-mode-white intro-reading-mode">
+    <svg style="position:absolute;width:0;height:0;overflow:hidden;" version="1.1" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <filter id="pal-filter">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="0.6 0" result="blur"></feGaussianBlur>
+                <feColorMatrix in="blur" type="matrix" values="0.9 0.1 0.0 0 0 0.0 0.9 0.1 0 0 0.0 0.0 0.9 0 0 0 0 0 1 0" result="colored"></feColorMatrix>
+            </filter>
+        </defs>
+    </svg>
+
+    <div id="transitionOverlay"></div>
+
+    <div id="gameWrapper" class="effect-pal effect-crt">
+        <canvas id="gameCanvas"></canvas>
+        <div id="crtOverlay"></div>
+    </div>
+
+    <div id="sceneDimmerOverlay" data-mode="white" aria-hidden="true"></div>
+
+    <div id="audioPlayerUI" class="reading-mode" style="display:none;">
+        <div id="subtitleContainer" class="reader-layout-blaettern" lang="de"></div>
+
+        <button id="backToChapterBtn" aria-label="Zur&uuml;ck zum Kapitel">Zur&uuml;ck zum Kapitel</button>
+        <button id="nextChapterBtn">Weiter</button>
+
+        <div id="audioControls">
+            <div class="controls-row">
+                <button id="skipBackBtn" class="audio-btn" title="-15 Sekunden" tabindex="-1" disabled aria-disabled="true">
+                    <svg viewBox="0 0 24 24" fill="white"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"></path></svg>
+                </button>
+                <button id="audioToggleBtn" class="audio-btn" tabindex="-1" aria-label="Vorlesen pausieren oder fortsetzen">
+                    <svg id="iconPlay" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"></path></svg>
+                    <svg id="iconPause" viewBox="0 0 24 24" fill="white" style="display:none;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path></svg>
+                </button>
+                <button id="skipForwardBtn" class="audio-btn" title="+15 Sekunden" tabindex="-1" disabled aria-disabled="true">
+                    <svg viewBox="0 0 24 24" fill="white"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"></path></svg>
+                </button>
+            </div>
+            <div class="mode-btn-wrapper">
+                <button id="bookBtn" class="audio-btn" title="Inhalt" tabindex="-1" aria-label="Inhalt">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 4.5h9a3 3 0 0 1 3 3V20a2 2 0 0 0-2-2H6.5A2.5 2.5 0 0 0 4 20V7a2.5 2.5 0 0 1 2.5-2.5Z"></path>
+                        <path d="M17 7.5H7.5A2.5 2.5 0 0 0 5 10v10"></path>
+                    </svg>
+                </button>
+                <button id="readingModeBtn" class="audio-btn" title="Erkunden" tabindex="-1" aria-label="Erkunden">
+                    <svg viewBox="0 0 24 24" fill="white">
+                        <path d="M12 5.5c-5.5 0-9.5 4.2-10.6 5.6a1.5 1.5 0 0 0 0 1.8C2.5 14.3 6.5 18.5 12 18.5s9.5-4.2 10.6-5.6a1.5 1.5 0 0 0 0-1.8C21.5 9.7 17.5 5.5 12 5.5Zm0 10A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5Z"></path>
+                    </svg>
+                </button>
+                <button id="sceneDimmerToggleBtn" class="audio-btn" title="Hintergrund abdunkeln" tabindex="-1" aria-label="Hintergrund abdunkeln">
+                    <svg id="sceneDimmerIconFull" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <circle cx="12" cy="12" r="6" fill="white" stroke="none"></circle>
+                    </svg>
+                    <svg id="sceneDimmerIconHalf" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <circle cx="12" cy="12" r="8"></circle>
+                        <path d="M12 4a8 8 0 0 0 0 16z" fill="white" stroke="none"></path>
+                    </svg>
+                    <svg id="sceneDimmerIconCrescent" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <path d="M16.5 4.5A8 8 0 1 0 16.5 19A6.8 6.8 0 1 1 16.5 4.5Z" fill="white" stroke="white"></path>
+                    </svg>
+                    <svg id="sceneDimmerIconSun" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                        <circle cx="12" cy="12" r="4" fill="white" stroke="none"></circle>
+                        <path d="M12 2v3"></path><path d="M12 19v3"></path><path d="M2 12h3"></path><path d="M19 12h3"></path><path d="M4.9 4.9l2.1 2.1"></path><path d="M17 17l2.1 2.1"></path><path d="M19.1 4.9L17 7"></path><path d="M7 17l-2.1 2.1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loreProgressHud" class="is-hidden" aria-live="polite" aria-atomic="true" title="Zu den Funden">
+        <span class="lore-progress-light" aria-hidden="true"></span>
+        <span id="loreProgressText">0/1</span>
+    </div>
+
+    <div id="archiveModal">
+        <div class="archive-card">
+            <div class="archive-header">
+                <div class="archive-title-wrap">
+                    <button class="archive-primary-btn active" id="archivePrimaryInhaltBtn" type="button">Inhalt</button>
+                    <button class="archive-primary-btn archive-primary-gear" id="archivePrimarySettingsBtn" type="button" aria-label="Einstellungen" title="Einstellungen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37c.996.608 2.296.07 2.572-1.065z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                    </button>
+                </div>
+                <button class="close-btn" id="closeArchiveBtn" type="button">&times;</button>
+            </div>
+
+            <div class="archive-tabs">
+                <button class="archive-tab active" data-tab="kapitel">Kapitel</button>
+                <button class="archive-tab" data-tab="lore">Funde</button>
+                <button class="archive-tab" data-tab="lesezeichen">Lesezeichen</button>
+            </div>
+
+            <div class="archive-tab-content active" data-tab="kapitel">
+                <div class="col-left" id="chapterList" style="flex:1;">
+                    <div class="menu-item" id="chapter1Btn"><div class="item-main-text">Kapitel 1</div><div class="item-sub-text">Marktplatz</div></div>
+                    <div class="menu-item" id="chapter1bBtn"><div class="item-main-text">Kapitel 1b</div><div class="item-sub-text">Antiquariat Hannrath</div></div>
+                    <div class="menu-item" id="chapter1cBtn"><div class="item-main-text">Kapitel 1c</div><div class="item-sub-text">Steingasse</div></div>
+                </div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="lore">
+                <div class="col-left" id="loreList" style="flex:1;"></div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="lesezeichen">
+                <div id="bookmarkList" style="width:100%;"></div>
+            </div>
+
+            <div class="archive-tab-content" data-tab="einstellungen">
+                <div class="reader-settings-panel">
+                    <div class="reader-settings-group" data-loading-tutorial="layout-group">
+                        <div class="reader-settings-title">Anordnung</div>
+                        <label class="reader-radio-option" data-layout="blaettern">
+                            <input type="radio" name="readerSentenceLayout" value="blaettern" checked>
+                            <span>Bl&auml;ttern (Buch)</span>
+                        </label>
+                        <label class="reader-radio-option" data-layout="flat">
+                            <input type="radio" name="readerSentenceLayout" value="flat">
+                            <span>Feed (Schriftrolle)</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="archive-footer">
+                <button id="btnSaveData" class="archive-footer-btn" type="button">SAVE (Export)</button>
+                <button id="btnLoadData" class="archive-footer-btn" type="button">LOAD (Import)</button>
+                <input type="file" id="fileInputSave" style="display:none;" accept=".json">
+            </div>
+        </div>
+    </div>
+
+    <div id="introStartScreen" class="intro-start-screen">
+        <div class="intro-start-panel">
+            <div class="intro-start-copy">Ihre F&uuml;hrung beginnt in K&uuml;rze</div>
+            <button id="startSkipBtn" class="intro-start-skip" type="button">Einf&uuml;hrung &uuml;berspringen</button>
+        </div>
+    </div>
+
+    <script type="module" src="assets/js/entry/intro-app.js"></script>
+</body>
+</html>
+

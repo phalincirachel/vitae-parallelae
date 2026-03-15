@@ -1,4 +1,5 @@
 ﻿import { listRuntimeAssetPaths } from '../assets/js/shared/data/content-manifest.js';
+import { listIntroAssetPaths } from '../assets/js/shared/data/intro-config.js';
 import { listSceneAssetPaths } from '../assets/js/shared/data/scene-config.js';
 import { getSCUrl } from '../assets/js/shared/audio/soundcloud-urls.js';
 import fs from 'node:fs/promises';
@@ -21,7 +22,7 @@ async function verifyAsset(assetPath) {
   }
 }
 
-for (const assetPath of [...listRuntimeAssetPaths(), ...listSceneAssetPaths()]) {
+for (const assetPath of [...listRuntimeAssetPaths(), ...listSceneAssetPaths(), ...listIntroAssetPaths()]) {
   await verifyAsset(assetPath);
 }
 
