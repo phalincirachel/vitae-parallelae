@@ -273,7 +273,9 @@ async function initIntroApp() {
     const resolver = runtimeState.waitResolver;
     runtimeState.waitingAction = null;
     runtimeState.waitResolver = null;
-    clearPresentation();
+    if (!narration.isPlaying() && !narration.isPaused()) {
+      clearPresentation();
+    }
     resolver(payload);
     return true;
   };
@@ -331,11 +333,25 @@ async function initIntroApp() {
     setTrack(trackName, segmentIndex);
     runtimeState.lastReplayText = segment.text;
     applyFocus(config);
-    setGate({ includeAudio: config.includeAudio !== false, targets: config.targets || [] });
+    setGate({
+      includeAudio: config.includeAudio !== false,
+      targets: config.targets || [],
+      keys: config.keys || [],
+      allowCanvas: config.allowCanvas === true,
+      allowAll: config.allowAll === true
+    });
     const result = await narration.play(segment.text);
     if (!runtimeState.waitingAction) clearPresentation();
     syncAudioIcons(false);
     return result;
+  };
+
+  const speakCheckpointSegment = async (trackName, segmentIndex, actionId, config = {}) => {
+    if (runtimeState.destroyed) return false;
+    const actionPromise = waitForAction(actionId, config);
+    const speechPromise = speakSegment(trackName, segmentIndex, config);
+    const [, actionResult] = await Promise.all([speechPromise, actionPromise]);
+    return actionResult;
   };
 
   const replayCurrentSegment = async () => {
@@ -469,10 +485,12 @@ async function initIntroApp() {
   hooks.applySentenceLayout('flat');
   hooks.hideLoadingScreenSafely('intro-ready');
   hooks.stopMainAudio();
+  hooks.disableAmbientDecor?.();
+  hooks.forceControlsVisible?.();
   hooks.closeArchive();
   hooks.setDimmerMode('white-freeze');
   refs.audioPlayerUI.style.display = 'flex';
-  refs.audioPlayerUI.classList.add('reading-mode');
+  hooks.setReadingMode(true, 'intro-init');
   refs.startScreen?.classList?.add?.('is-hidden');
   documentRef.body.classList.remove('intro-ready-to-begin');
   hooks.refreshLoreProgressUi({ forceHidden: true });
@@ -485,10 +503,9 @@ async function initIntroApp() {
 
   await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
   hooks.openArchiveSettings();
+  hooks.forceControlsVisible?.();
   await wait(60);
-  await speakSegment('main', 2, { selectors: ['[data-loading-tutorial="layout-group"]'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('choose-layout', {
+  await speakCheckpointSegment('main', 2, 'choose-layout', {
     targets: [
       '.reader-radio-option[data-layout="blaettern"]',
       '.reader-radio-option[data-layout="flat"]'
@@ -498,17 +515,17 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
 
   hooks.openArchiveContentTab('kapitel');
+  hooks.forceControlsVisible?.();
   await wait(40);
   hooks.closeArchive();
   await speakSegment('main', 3, { selectors: ['#bookBtn'] });
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 4, { selectors: ['#bookBtn'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('open-book', {
+  await speakCheckpointSegment('main', 4, 'open-book', {
     targets: ['#bookBtn'],
     selectors: ['#bookBtn']
   });
   if (runtimeState.destroyed) return;
+  hooks.forceControlsVisible?.();
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
@@ -520,40 +537,37 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
 
   hooks.closeArchive();
+  clearPresentation();
   await speakSegment('main', 9);
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 10, { selectors: ['#sceneDimmerToggleBtn'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('dimmer-dark', {
+  await speakCheckpointSegment('main', 10, 'dimmer-dark', {
     targets: ['#sceneDimmerToggleBtn'],
     selectors: ['#sceneDimmerToggleBtn']
   });
   if (runtimeState.destroyed) return;
 
-  await speakSegment('main', 11, { selectors: ['#sceneDimmerToggleBtn'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('dimmer-light', {
+  await speakCheckpointSegment('main', 11, 'dimmer-light', {
     targets: ['#sceneDimmerToggleBtn'],
     selectors: ['#sceneDimmerToggleBtn']
   });
   if (runtimeState.destroyed) return;
 
-  await speakSegment('main', 12, { selectors: ['#readingModeBtn'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('enter-explore', {
+  await speakCheckpointSegment('main', 12, 'enter-explore', {
     targets: ['#readingModeBtn'],
     selectors: ['#readingModeBtn']
   });
   if (runtimeState.destroyed) return;
+  hooks.setReadingMode(false, 'intro-enter-explore');
+  hooks.setDimmerMode('reading-clear');
+  hooks.disableAmbientDecor?.();
+  await wait(80);
 
   hooks.refreshLoreProgressUi({ forceHidden: true });
-  await speakSegment('main', 13, { selectors: ['#readingModeBtn'], includeAudio: true });
+  await speakSegment('main', 13, { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS });
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 14);
+  await speakSegment('main', 14, { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS });
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 15, { rectProvider: () => hooks.getOrbHighlightRect() });
-  if (runtimeState.destroyed) return;
-  await waitForAction('collect-orb', {
+  await speakCheckpointSegment('main', 15, 'collect-orb', {
     targets: [],
     keys: MOVE_KEYS,
     allowCanvas: true,
@@ -561,14 +575,13 @@ async function initIntroApp() {
   });
   if (runtimeState.destroyed) return;
 
+  setTrack('souvenir', 0);
   hooks.setReadingMode(true, 'intro-souvenir');
   hooks.setDimmerMode('reading-clear');
   hooks.showBackToChapter(true);
   await speakSegment('souvenir', 0);
   if (runtimeState.destroyed) return;
-  await speakSegment('souvenir', 1, { selectors: ['#backToChapterBtn'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('back-to-chapter', {
+  await speakCheckpointSegment('souvenir', 1, 'back-to-chapter', {
     targets: ['#backToChapterBtn'],
     selectors: ['#backToChapterBtn']
   });
@@ -583,17 +596,16 @@ async function initIntroApp() {
 
   await speakSegment('main', 16);
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 17, { selectors: ['#loreProgressHud'] });
-  if (runtimeState.destroyed) return;
-  await waitForAction('open-lore-hud', {
+  await speakCheckpointSegment('main', 17, 'open-lore-hud', {
     targets: ['#loreProgressHud'],
     selectors: ['#loreProgressHud']
   });
   if (runtimeState.destroyed) return;
 
   hooks.openArchiveLore();
+  hooks.forceControlsVisible?.();
   await wait(60);
-  await speakSegment('main', 18, { selectors: ['#loreList'] });
+  await speakSegment('main', 18);
   if (runtimeState.destroyed) return;
 
   hooks.closeArchive();
@@ -603,8 +615,10 @@ async function initIntroApp() {
   runtimeState.finalButtonVisible = true;
   documentRef.body.classList.add('intro-ready-to-begin');
   hooks.showNextButton('F\u00fchrung beginnen');
-  applyFocus({ selectors: ['#nextChapterBtn'] });
-  setGate({ includeAudio: false, targets: ['#nextChapterBtn'] });
+  applyFocus({
+    rectProvider: () => refs.nextChapterBtn?.getBoundingClientRect?.() || null
+  });
+  setGate({ includeAudio: true, targets: ['#nextChapterBtn'] });
 }
 
 void initIntroApp();

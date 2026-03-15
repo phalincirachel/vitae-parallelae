@@ -546,6 +546,7 @@
         // MULTI-LEVEL CONFIG (URL-Parameter: ?chapter=kapitel1c)
         // ============================================
         const introBootstrap = window.__GAMEBOY_INTRO_BOOTSTRAP__ || null;
+        const IS_INTRO_SCENE = !!introBootstrap;
         const indexSceneBootstrap = introBootstrap
             ? {
                 sceneRuntime: window.GameboySceneRuntime || null,
@@ -1711,11 +1712,13 @@
             console.log("Electron Mode: Auto-Loading...");
 
             // RESTORE READING MODE STATE
-            const savedMode = localStorage.getItem('gameboy_reading_mode');
-            if (savedMode === 'true') {
-                isReadingMode = true;
-                const ui = document.getElementById('audioPlayerUI');
-                if (ui) ui.classList.add('reading-mode');
+            if (!IS_INTRO_SCENE) {
+                const savedMode = localStorage.getItem('gameboy_reading_mode');
+                if (savedMode === 'true') {
+                    isReadingMode = true;
+                    const ui = document.getElementById('audioPlayerUI');
+                    if (ui) ui.classList.add('reading-mode');
+                }
             }
             syncBlaetternUiState('restore-reading-mode');
             // Load watchdog: never start the game loop without a loaded map.
@@ -2213,9 +2216,14 @@
                     // Sort path starting from spawn (or map center)
                     const startRef = spawnPixel || { x: mapW / 2, y: mapH / 2 };
 
-                    // Direct Sort (Strict 1px)
-                    autoWalkPath = sortAutoWalkPath(orangePixels, startRef);
-                    autoWalkIndex = 0;
+                    if (!IS_INTRO_SCENE) {
+                        // Direct Sort (Strict 1px)
+                        autoWalkPath = sortAutoWalkPath(orangePixels, startRef);
+                        autoWalkIndex = 0;
+                    } else {
+                        autoWalkPath = [];
+                        autoWalkIndex = 0;
+                    }
 
                     // Hide Orange Pixels
                     for (const op of orangePixels) {
@@ -2318,8 +2326,19 @@
                     camY = targetCamY = getCameraFollowTargetY();
 
                     // Init Extras
-                    initParticles();
-                    initClouds();
+                    if (IS_INTRO_SCENE) {
+                        particles.length = 0;
+                        nearbyLights.length = 0;
+                        clouds.length = 0;
+                        dustParticles.length = 0;
+                        greenPixels.length = 0;
+                        autoWalkPath = [];
+                        autoWalkIndex = 0;
+                        if (player && typeof player === 'object') player.slowdownTimer = 0;
+                    } else {
+                        initParticles();
+                        initClouds();
+                    }
                     generateNavGrid();
 
                     // Start Audio (aux tracks are gated to avoid SC widget pause races)
@@ -3736,6 +3755,10 @@
 
         function scheduleBlaetternControlsAutoHide(reason = 'idle') {
             clearBlaetternControlsHideTimer();
+            if (IS_INTRO_SCENE) {
+                setBlaetternControlsVisible(true, `${reason}:intro-lock`);
+                return;
+            }
             if (!isBlaetternLayoutActive()) {
                 setBlaetternControlsVisible(true, `${reason}:inactive`);
                 return;
@@ -3746,6 +3769,11 @@
         }
 
         function bumpBlaetternControlsAutoHide(reason = 'interaction') {
+            if (IS_INTRO_SCENE) {
+                clearBlaetternControlsHideTimer();
+                setBlaetternControlsVisible(true, `${reason}:intro-lock`);
+                return;
+            }
             if (!isBlaetternLayoutActive()) {
                 clearBlaetternControlsHideTimer();
                 setBlaetternControlsVisible(true, `${reason}:not-blaettern`);
@@ -6771,7 +6799,9 @@
             modeSwitchLockUntil = now + 120;
 
             isReadingMode = normalized;
-            localStorage.setItem('gameboy_reading_mode', normalized ? 'true' : 'false');
+            if (!IS_INTRO_SCENE) {
+                localStorage.setItem('gameboy_reading_mode', normalized ? 'true' : 'false');
+            }
 
             if (normalized) {
                 syncAutoWalkToIndex();
@@ -7915,6 +7945,20 @@
             },
             setReadingMode(nextMode, reason) {
                 if (typeof setReadingMode === 'function') setReadingMode(!!nextMode, reason || 'intro', { syncDimmer: false });
+            },
+            disableAmbientDecor() {
+                try { if (Array.isArray(particles)) particles.length = 0; } catch (_) {}
+                try { if (Array.isArray(nearbyLights)) nearbyLights.length = 0; } catch (_) {}
+                try { if (Array.isArray(clouds)) clouds.length = 0; } catch (_) {}
+                try { if (Array.isArray(dustParticles)) dustParticles.length = 0; } catch (_) {}
+                try { if (Array.isArray(greenPixels)) greenPixels.length = 0; } catch (_) {}
+                try { if (Array.isArray(autoWalkPath)) autoWalkPath.length = 0; } catch (_) {}
+                try { autoWalkIndex = 0; } catch (_) {}
+                try { if (player && typeof player === 'object') player.slowdownTimer = 0; } catch (_) {}
+            },
+            forceControlsVisible() {
+                try { if (typeof clearBlaetternControlsHideTimer === 'function') clearBlaetternControlsHideTimer(); } catch (_) {}
+                try { if (typeof setBlaetternControlsVisible === 'function') setBlaetternControlsVisible(true, 'intro-force'); } catch (_) {}
             },
             showBackToChapter(visible) {
                 const button = document.getElementById('backToChapterBtn');

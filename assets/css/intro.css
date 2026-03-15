@@ -112,6 +112,12 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   opacity: 0.5;
 }
 
+body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-hidden,
+body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-visible {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
 body.intro-page #archiveModal {
   z-index: 3000;
 }
