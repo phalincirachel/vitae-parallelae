@@ -1,10 +1,11 @@
 /**
  * Global scene dimmer with hard freeze at full coverage.
- * Click cycle: 0 -> 50 -> 100 black -> 100 white -> 0
+ * Click cycle: 0 -> 50 -> 100 white -> 100 black -> 0
  */
 (function initGlobalVisualDimmer() {
     const STORAGE_LEVEL_KEY = 'gb_background_dim_level';
     const STORAGE_PHASE_KEY = 'gb_background_dim_phase';
+    const STORAGE_MODE_KEY = 'gb_background_dim_mode';
     const LIGHT_MODE_CLASS = 'scene-dimmer-light-mode';
     const STEPS = [
         {
@@ -24,20 +25,20 @@
             aria: 'Hintergrunddimmer 50 Prozent'
         },
         {
-            key: 'black-freeze',
-            level: 100,
-            freeze: true,
-            overlayColor: '#000000',
-            icon: 'crescent',
-            aria: 'Hintergrunddimmer 100 Prozent schwarz, Grafik eingefroren'
-        },
-        {
             key: 'white-freeze',
             level: 100,
             freeze: true,
             overlayColor: '#ffffff',
             icon: 'sun',
             aria: 'Hintergrunddimmer 100 Prozent weiss, Grafik eingefroren'
+        },
+        {
+            key: 'black-freeze',
+            level: 100,
+            freeze: true,
+            overlayColor: '#000000',
+            icon: 'crescent',
+            aria: 'Hintergrunddimmer 100 Prozent schwarz, Grafik eingefroren'
         }
     ];
 
@@ -88,18 +89,44 @@
     }
 
     function phaseForLevel(level) {
-        if (level >= 100) return 2;
-        if (level >= 50) return 1;
-        return 0;
+        const targetLevel = level >= 100 ? 100 : (level >= 50 ? 50 : 0);
+        const match = STEPS.findIndex((step) => step.level === targetLevel);
+        return match >= 0 ? match : 0;
+    }
+
+    function phaseForKey(key) {
+        if (typeof key !== 'string') return -1;
+        const normalized = key.trim();
+        if (!normalized) return -1;
+        return STEPS.findIndex((step) => step.key === normalized);
+    }
+
+    function remapLegacyFrozenPhase(phase, level) {
+        if (level < 100) return phase;
+        if (phase === 2) return 3;
+        if (phase === 3) return 2;
+        return phase;
     }
 
     function loadStoredState() {
         let phase = 0;
         let level = 0;
+        let needsPersist = false;
 
         try {
-            phase = clampPhase(localStorage.getItem(STORAGE_PHASE_KEY));
-            level = clampLevel(localStorage.getItem(STORAGE_LEVEL_KEY));
+            const storedModePhase = phaseForKey(localStorage.getItem(STORAGE_MODE_KEY));
+            if (storedModePhase >= 0) {
+                phase = storedModePhase;
+                level = STEPS[phase].level;
+            } else {
+                phase = clampPhase(localStorage.getItem(STORAGE_PHASE_KEY));
+                level = clampLevel(localStorage.getItem(STORAGE_LEVEL_KEY));
+                const migratedPhase = remapLegacyFrozenPhase(phase, level);
+                if (migratedPhase !== phase) {
+                    phase = migratedPhase;
+                    needsPersist = true;
+                }
+            }
         } catch (_) {
             phase = 0;
             level = 0;
@@ -107,15 +134,19 @@
 
         if (STEPS[phase].level !== level) {
             phase = phaseForLevel(level);
+            level = STEPS[phase].level;
+            needsPersist = true;
         }
 
-        return { phase, level };
+        return { phase, level, needsPersist };
     }
 
     function persistState() {
         try {
+            const step = getCurrentStep();
             localStorage.setItem(STORAGE_LEVEL_KEY, String(state.level));
             localStorage.setItem(STORAGE_PHASE_KEY, String(state.phase));
+            localStorage.setItem(STORAGE_MODE_KEY, step.key);
         } catch (_) {
             // Ignore storage failures.
         }
@@ -213,7 +244,7 @@
         });
 
         window.addEventListener('storage', (event) => {
-            if (event.key !== STORAGE_PHASE_KEY && event.key !== STORAGE_LEVEL_KEY) return;
+            if (event.key !== STORAGE_PHASE_KEY && event.key !== STORAGE_LEVEL_KEY && event.key !== STORAGE_MODE_KEY) return;
             const loaded = loadStoredState();
             state.phase = loaded.phase;
             state.level = loaded.level;
@@ -234,16 +265,16 @@
     function init(config = {}) {
         resolveElements(config);
 
+        const loaded = loadStoredState();
+        state.phase = loaded.phase;
+        state.level = loaded.level;
+        if (loaded.needsPersist) {
+            persistState();
+        }
+
         if (!state.initialized) {
-            const loaded = loadStoredState();
-            state.phase = loaded.phase;
-            state.level = loaded.level;
             state.initialized = true;
             bindUi();
-        } else {
-            const loaded = loadStoredState();
-            state.phase = loaded.phase;
-            state.level = loaded.level;
         }
 
         syncUi();
