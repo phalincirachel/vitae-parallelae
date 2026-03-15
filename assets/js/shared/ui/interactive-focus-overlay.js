@@ -68,13 +68,26 @@ export function createInteractiveFocusOverlay(options = {}) {
     };
   }
 
-  function applyRect(rect) {`r`n    const normalized = normalizeRect(rect);
+  function applyRect(rect) {
+    const normalized = normalizeRect(rect);
     if (!normalized) {
       hide();
       return null;
     }
 
-    const paddingX = Number.isFinite(Number(rect?.paddingX)) ? Number(rect.paddingX) : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);`r`n    const paddingY = Number.isFinite(Number(rect?.paddingY)) ? Number(rect.paddingY) : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);`r`n    const viewportWidth = window.innerWidth;`r`n    const viewportHeight = window.innerHeight;`r`n    const inset = Number.isFinite(Number(rect?.inset)) ? Number(rect.inset) : 8;`r`n    let left = normalized.left - paddingX;`r`n    let top = normalized.top - paddingY;`r`n    let right = normalized.right + paddingX;`r`n    let bottom = normalized.bottom + paddingY;
+    const paddingX = Number.isFinite(Number(rect?.paddingX))
+      ? Number(rect.paddingX)
+      : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);
+    const paddingY = Number.isFinite(Number(rect?.paddingY))
+      ? Number(rect.paddingY)
+      : (Number.isFinite(Number(rect?.padding)) ? Number(rect.padding) : 18);
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const inset = Number.isFinite(Number(rect?.inset)) ? Number(rect.inset) : 8;
+    let left = normalized.left - paddingX;
+    let top = normalized.top - paddingY;
+    let right = normalized.right + paddingX;
+    let bottom = normalized.bottom + paddingY;
 
     if (left < inset) {
       right = Math.min(viewportWidth - inset, right + (inset - left));

@@ -109,9 +109,9 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     156,
     171
   ),
-  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige', 171, 174.4),
-  freezeSegment('main-18', 'und Sie gelangen direkt zu ihrer Souvenier-Box.', 174.4, 177),
-  freezeSegment('main-19', 'Nun sind Sie bereit f\u00fcr Ihre Tour. Um zu beginnen, klicken Sie auf den Button.', 177, 184.8)
+  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 171, 177),
+  freezeSegment('main-18', 'Nun sind Sie bereit für Ihre Tour.', 177, 180.8),
+  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button.', 180.8, 184.8)
 ]);
 
 export const SOUVENIR_DEMO_TRACK = Object.freeze([
@@ -265,3 +265,4 @@ export default {
   getTrackEntries,
   getTrackText
 };
+

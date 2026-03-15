@@ -330,7 +330,22 @@ async function initIntroApp() {
     }
   };
 
- param($m) $m.Value + $insert + "  const clearAutoResumeTimer"  = () => {
+  const createFocusRect = (element, options = {}) => {
+    const rect = element?.getBoundingClientRect?.();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return null;
+    return {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      padding: options.padding,
+      paddingX: options.paddingX,
+      paddingY: options.paddingY,
+      inset: options.inset
+    };
+  };
+
+  const clearAutoResumeTimer = () => {
     if (!autoResumeTimer) return;
     windowRef.clearTimeout(autoResumeTimer);
     autoResumeTimer = 0;
@@ -854,6 +869,7 @@ async function initIntroApp() {
 }
 
 void initIntroApp();
+
 
 
 
