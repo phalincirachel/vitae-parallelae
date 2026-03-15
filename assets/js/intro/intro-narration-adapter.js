@@ -174,9 +174,9 @@ export function createIntroNarrationAdapter(options = {}) {
     try {
       return !!(await helper({
         player,
-        retries: 2,
-        delayMs: 180,
-        requireAdvance: true
+        retries: 5,
+        delayMs: 260,
+        requireAdvance: false
       }));
     } catch (_) {
       return !player.paused;
@@ -249,7 +249,6 @@ export function createIntroNarrationAdapter(options = {}) {
       return Promise.resolve(false);
     }
     clearGestureRetry();
-    emitBlocked(session);
     return new Promise((resolve) => {
       const listenerOptions = { capture: true, passive: true };
       const finish = (started) => {
@@ -286,6 +285,7 @@ export function createIntroNarrationAdapter(options = {}) {
       GESTURE_EVENTS.forEach((eventName) => {
         documentRef.addEventListener(eventName, handler, listenerOptions);
       });
+      emitBlocked(session);
     });
   }
 
@@ -426,6 +426,24 @@ export function createIntroNarrationAdapter(options = {}) {
   function acknowledgeGesture() {
     if (typeof gestureRetryHandler === 'function') {
       void gestureRetryHandler();
+      return true;
+    }
+    if (currentSession && hasFiniteAudioRange(currentSession.segment) && !currentSession.paused && !currentSession.settled) {
+      const targetStart = Number.isFinite(currentSession.resumeFromSec)
+        ? Number(currentSession.resumeFromSec)
+        : Number(currentSession.segment.audioStartSec);
+      try {
+        promoteWidgetIframe();
+        player?.play?.();
+      } catch (_) {}
+      try {
+        void player?.seekAndConfirm?.(targetStart, {
+          maxAttempts: 2,
+          settleMs: 100,
+          tolerance: 0.45,
+          readyTimeoutMs: 1200
+        });
+      } catch (_) {}
       return true;
     }
     if (isPaused()) return resume();

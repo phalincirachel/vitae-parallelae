@@ -28,14 +28,8 @@ function getSegmentVisualDurationSec(segment) {
 export const START_SCREEN_TRACK = Object.freeze([
   freezeSegment(
     'start-0',
-    'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford.',
+    'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford. F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
     1,
-    13
-  ),
-  freezeSegment(
-    'start-1',
-    'F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
-    13,
     23
   )
 ]);
@@ -110,8 +104,8 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     171
   ),
   freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 171, 177),
-  freezeSegment('main-18', 'Nun sind Sie bereit f?r Ihre Tour.', 177, 180.8),
-  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa?.', 180.8, 184.8)
+  freezeSegment('main-18', 'Nun sind Sie bereit f\u00fcr Ihre Tour.', 177, 180.8),
+  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa\u00df.', 180.8, 184.8)
 ]);
 
 export const SOUVENIR_DEMO_TRACK = Object.freeze([

@@ -583,15 +583,23 @@ async function initIntroApp() {
     void redirectToGame(false);
   });
 
-  refs.introAudioPrompt?.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopImmediatePropagation();
+  const handleIntroAudioPromptActivation = (event) => {
+    const isKeyboardEvent = event?.type === 'keydown';
+    const key = isKeyboardEvent ? event.key : '';
+    if (isKeyboardEvent && key !== 'Enter' && key !== ' ') return;
+    if (refs.introAudioPrompt?.disabled) return;
     clearAutoResumeTimer();
-    setAudioPromptVisible(false);
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
-    narration.acknowledgeGesture?.();
-  }, true);
+    const started = narration.acknowledgeGesture?.();
+    if (started) setAudioPromptVisible(false);
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+
+  ['pointerdown', 'touchend', 'click', 'keydown'].forEach((eventName) => {
+    refs.introAudioPrompt?.addEventListener(eventName, handleIntroAudioPromptActivation, true);
+  });
 
   refs.nextChapterBtn?.addEventListener('click', (event) => {
     event.preventDefault();
@@ -688,8 +696,6 @@ async function initIntroApp() {
 
   const startPromise = (async () => {
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
-    if (runtimeState.destroyed) return;
-    await speakSegment('start', 1, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
     setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   })();

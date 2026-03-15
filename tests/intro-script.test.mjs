@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import { SC_URLS } from '../assets/js/shared/audio/soundcloud-urls.js';
 import {
@@ -13,7 +13,7 @@ import {
 test('intro script exposes the expected tracks and checkpoints', () => {
   assert.equal(INTRO_DEMO_LORE_ID, 9001);
   assert.equal(INTRO_DEMO_LORE_ENTRY.title, 'Einf\u00fchrungs-Souvenier');
-  assert.equal(INTRO_TRACKS.start.length, 2);
+  assert.equal(INTRO_TRACKS.start.length, 1);
   assert.equal(INTRO_TRACKS.main.length, 20);
   assert.equal(INTRO_TRACKS.souvenir.length, 2);
   assert.equal(INTRO_STEP_SCHEMA.some((step) => step.id === 'layout-choice'), true);
