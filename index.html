@@ -172,6 +172,9 @@
             <!-- Dynamisch generierte Zeilen -->
         </div>
 
+        <!-- Back To Chapter Button (Lore mode, hidden by default) -->
+        <button id="backToChapterBtn" aria-label="Zur&uuml;ck zum Kapitel">Zur&uuml;ck zum Kapitel</button>
+
         <!-- Next Chapter Button (Hidden by default) -->
         <button id="nextChapterBtn">Weiter</button>
 
@@ -515,6 +518,8 @@
         // }, 500);
 
         let gameReady = false;
+        let backToChapterBtn = null;
+        let backToChapterPromptActive = false;
         let nextChapterBtn = null;
         let nextChapterPromptShownAt = 0;
         let nextChapterPromptTrackbackReference = NaN;
@@ -1223,6 +1228,7 @@
                 renderSubtitleLines(Math.max(0, currentSubtitleIndex));
             }
             positionNextChapterPrompt();
+            positionBackToChapterPrompt();
         });
 
         // --- VISUAL CALIBRATION TOOL ---
@@ -2091,7 +2097,11 @@
                 greenPixels = [];
                 greenPixels = [];
                 let orangePixels = []; // For Auto-Walk
-                yellowLights = []; // Init global var
+                if (!Array.isArray(yellowLights)) {
+                    yellowLights = [];
+                } else {
+                    yellowLights.length = 0;
+                }
                 let spawnPixel = null;
 
                 // 2. Scan-Pass
@@ -2714,17 +2724,53 @@
         let manualBackgroundDimLevel = 0;
         const MODE_DIM_LEVEL_GAME = 0;
         const MODE_DIM_LEVEL_READING = 50;
+        const READER_FONT_LOAD_SPECS = [
+            '400 20px "Reader Grotesk"',
+            '400 20px "Reader Renaissance"',
+            '400 20px "Reader Baroque"',
+            '400 20px "Reader Neoclassical"'
+        ];
+        let readerFontWarmupPromise = null;
+        let readerFontRefreshTimer = null;
+        let lastReaderFontWarmupAt = 0;
 
-        if (document.fonts && typeof document.fonts.load === 'function') {
-            [
-                '400 20px "Reader Grotesk"',
-                '400 20px "Reader Renaissance"',
-                '400 20px "Reader Baroque"',
-                '400 20px "Reader Neoclassical"'
-            ].forEach((spec) => {
-                document.fonts.load(spec).catch(() => { });
-            });
+        function warmupReaderFonts() {
+            if (!document.fonts || typeof document.fonts.load !== 'function') {
+                return Promise.resolve(false);
+            }
+            const now = Date.now();
+            if (readerFontWarmupPromise && (now - lastReaderFontWarmupAt) < 1800) {
+                return readerFontWarmupPromise;
+            }
+            lastReaderFontWarmupAt = now;
+            readerFontWarmupPromise = Promise.allSettled(
+                READER_FONT_LOAD_SPECS.map((spec) => document.fonts.load(spec).catch(() => null))
+            )
+                .then(() => true)
+                .finally(() => {
+                    readerFontWarmupPromise = null;
+                });
+            return readerFontWarmupPromise;
         }
+
+        function scheduleReaderFontRefresh(reason = 'resume') {
+            if (readerFontRefreshTimer) {
+                clearTimeout(readerFontRefreshTimer);
+            }
+            readerFontRefreshTimer = setTimeout(() => {
+                readerFontRefreshTimer = null;
+                warmupReaderFonts().finally(() => {
+                    queueRecenterButtonPosition(`fonts-${reason}`);
+                    if (!subtitleTracks || subtitleTracks.length === 0) return;
+                    const targetIndex = Number.isFinite(currentSubtitleIndex) && currentSubtitleIndex >= 0
+                        ? currentSubtitleIndex
+                        : 0;
+                    renderSubtitleLines(Math.max(0, targetIndex));
+                });
+            }, 120);
+        }
+
+        warmupReaderFonts();
 
         audioPlayer.volume = readerTextVolume;
 
@@ -4968,12 +5014,12 @@
             })
             : null;
         manualBackgroundDimLevel = globalVisualDimmer ? globalVisualDimmer.getLevel() : 0;
-        let pendingForceReadingFromFreeze = false;
+        let pendingForceReadingFromDimmer = false;
         let shouldResumePlaybackAfterDimmerUnfreeze = false;
         let dimmerResumeToken = 0;
         let modeSwitchInitialized = false;
         if (globalVisualDimmer) {
-            globalVisualDimmer.onChange(({ level, frozen }) => {
+            globalVisualDimmer.onChange(({ level, frozen, mode, readingMode }) => {
                 manualBackgroundDimLevel = level;
                 window.visualFreezeActive = frozen;
                 applyReaderDimmerTint();
@@ -4986,13 +5032,7 @@
 
                 if (frozen) {
                     shouldResumePlaybackAfterDimmerUnfreeze = shouldResumePlaybackAfterDimmerUnfreeze || currentlyPlaying;
-                    pendingForceReadingFromFreeze = true;
-                    if (modeSwitchInitialized) {
-                        setReadingMode(true, 'dimmer-freeze');
-                        pendingForceReadingFromFreeze = false;
-                    }
                 } else {
-                    pendingForceReadingFromFreeze = false;
                     if (shouldResumePlaybackAfterDimmerUnfreeze && !contentSwitchInProgress && !document.hidden) {
                         setTimeout(async () => {
                             try {
@@ -5015,13 +5055,27 @@
                     }
                     shouldResumePlaybackAfterDimmerUnfreeze = false;
                 }
+
+                const wantsReadingMode = !!readingMode;
+                if (wantsReadingMode) {
+                    pendingForceReadingFromDimmer = true;
+                    if (modeSwitchInitialized) {
+                        setReadingMode(true, `dimmer:${mode || 'reading'}`, { syncDimmer: false });
+                        pendingForceReadingFromDimmer = false;
+                    }
+                } else {
+                    pendingForceReadingFromDimmer = false;
+                }
+
                 if (!frozen && gameReady && !document.hidden) {
                     lastTime = 0;
                     startGameLoop();
                 }
             });
             window.visualFreezeActive = globalVisualDimmer.isFrozen();
-            pendingForceReadingFromFreeze = window.visualFreezeActive;
+            pendingForceReadingFromDimmer = (typeof globalVisualDimmer.getMode === 'function')
+                ? globalVisualDimmer.getMode() !== 'off'
+                : window.visualFreezeActive;
 
         }
         applyReaderDimmerTint();
@@ -5480,6 +5534,14 @@
         if (document.fonts && document.fonts.ready && typeof document.fonts.ready.then === 'function') {
             document.fonts.ready.then(() => queueRecenterButtonPosition('fonts-ready')).catch(() => { });
         }
+        window.addEventListener('pageshow', () => {
+            scheduleReaderFontRefresh('pageshow');
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                scheduleReaderFontRefresh('visibility');
+            }
+        });
 
         function recenterToCurrentTimestamp() {
             if (!subtitleTracks || subtitleTracks.length === 0) {
@@ -5549,6 +5611,7 @@
             markBlaetternPaginationDirty();
             if (isBlaetternLayoutActive()) renderSubtitleLines(Math.max(0, currentSubtitleIndex));
             positionNextChapterPrompt();
+            positionBackToChapterPrompt();
         });
 
         const TOP_FADE_BYPASS_COUNT = 2;
@@ -6036,6 +6099,8 @@
             }
 
             positionNextChapterPrompt();
+
+            positionBackToChapterPrompt();
         }
 
 
@@ -6170,12 +6235,69 @@
 
         function showNextChapterPrompt(reason = 'main-ended') {
             if (!nextChapterBtn || !LEVEL.nextChapterTarget || isReadingMode) return;
+            hideBackToChapterPrompt('next-chapter-show');
             nextChapterPromptShownAt = performance.now();
             nextChapterPromptTrackbackReference = Number(audioPlayer && audioPlayer.currentTime) || 0;
             nextChapterPromptActive = true;
             nextChapterBtn.classList.add('visible');
             positionNextChapterPrompt();
+            positionBackToChapterPrompt();
             indexTrace('ui:next-chapter:show', { reason });
+        }
+
+        function hideBackToChapterPrompt(reason = 'auto-hide') {
+            if (!backToChapterBtn) return;
+            backToChapterBtn.classList.remove('visible');
+            backToChapterBtn.style.removeProperty('--back-btn-top');
+            backToChapterPromptActive = false;
+            indexTrace('ui:back-chapter:hide', { reason });
+        }
+
+        function getBackToChapterAnchorTop() {
+            if (!subtitleContainer) return NaN;
+            if (isReadingMode) {
+                const containerRect = subtitleContainer.getBoundingClientRect();
+                if (containerRect && containerRect.height > 1) {
+                    const containerStyle = window.getComputedStyle(subtitleContainer);
+                    const paddingTop = parseFloat(containerStyle.paddingTop) || 0;
+                    return containerRect.top + paddingTop;
+                }
+            }
+            return getSubtitleVisualTop();
+        }
+
+        function positionBackToChapterPrompt() {
+            if (!backToChapterBtn || !backToChapterBtn.classList.contains('visible')) return;
+
+            const btnHeight = Math.max(34, Number(backToChapterBtn.offsetHeight) || 0);
+            const anchorTop = getBackToChapterAnchorTop();
+            const fallbackTop = window.innerHeight * (isEffectiveMobileLayout() ? 0.3 : 0.24);
+            let targetTop = Number.isFinite(anchorTop)
+                ? anchorTop - btnHeight - 12
+                : fallbackTop;
+            const minTop = 10;
+            const maxTop = Math.max(minTop, window.innerHeight - btnHeight - 12);
+            targetTop = Math.max(minTop, Math.min(maxTop, targetTop));
+            backToChapterBtn.style.setProperty('--back-btn-top', `${Math.round(targetTop)}px`);
+        }
+
+        function showBackToChapterPrompt(reason = 'lore-active') {
+            if (!backToChapterBtn || !isLoreMode) {
+                hideBackToChapterPrompt('show-blocked');
+                return;
+            }
+            backToChapterPromptActive = true;
+            backToChapterBtn.classList.add('visible');
+            positionBackToChapterPrompt();
+            indexTrace('ui:back-chapter:show', { reason });
+        }
+
+        function syncBackToChapterPrompt(reason = 'sync') {
+            if (isLoreMode) {
+                showBackToChapterPrompt(reason);
+                return;
+            }
+            hideBackToChapterPrompt(reason);
         }
 
         function maybeHideNextChapterPromptForBackSeek(currentTime) {
@@ -6214,6 +6336,7 @@
             updateSubtitleDisplay(newIndex);
             maybeHideNextChapterPromptForBackSeek(t);
             positionNextChapterPrompt();
+            positionBackToChapterPrompt();
         });
 
         // 4b. Chapter Transition Logic (Main Audio Ended)
@@ -6297,6 +6420,17 @@
             }, 2000); // 2s Fade Time
         };
 
+        backToChapterBtn = document.getElementById('backToChapterBtn');
+        if (backToChapterBtn) {
+            backToChapterBtn.addEventListener('click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                if (contentSwitchInProgress || !isLoreMode) return;
+                hideBackToChapterPrompt('button-click');
+                endLoreMode();
+            });
+        }
+
         nextChapterBtn = document.getElementById('nextChapterBtn');
         if (nextChapterBtn) {
             nextChapterBtn.addEventListener('click', () => {
@@ -6304,6 +6438,7 @@
                 transitionToNextChapter();
             });
         }
+        syncBackToChapterPrompt('button-bind');
 
 
         // 11. Custom Drag-to-Scroll Logic for Subtitle Container (with Momentum)
@@ -6597,7 +6732,8 @@
             modeToggleBtn.setAttribute('aria-label', nextModeLabel);
         }
 
-        function setReadingMode(nextMode, reason = 'manual') {
+        function setReadingMode(nextMode, reason = 'manual', options = {}) {
+            const syncDimmer = options.syncDimmer !== false;
             let normalized = !!nextMode;
             if (!normalized && globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                 normalized = true;
@@ -6627,7 +6763,13 @@
                 uiContainer.classList.remove('reading-mode');
                 scheduleBackgroundBrightnessCheck(120);
             }
-            syncModeDimmerLevel({ force: true });
+
+            if (syncDimmer) {
+                syncModeDimmerLevel({ force: true });
+            } else {
+                applyReaderDimmerTint();
+            }
+
             invalidateReadingLayoutRefreshSignature();
             markBlaetternPaginationDirty();
             syncBlaetternUiState(`mode-switch:${reason}`);
@@ -6639,6 +6781,8 @@
             clickWalkPath = [];
             clickWalkGoal = null;
             renderSubtitleLines(Math.max(0, currentSubtitleIndex));
+            syncBackToChapterPrompt('mode-switch');
+            positionBackToChapterPrompt();
 
 
             indexDebugNote(
@@ -6652,22 +6796,31 @@
 
         syncModeToggleButton();
         modeSwitchInitialized = true;
-        if (pendingForceReadingFromFreeze) {
-            setReadingMode(true, 'dimmer-freeze-init');
-            pendingForceReadingFromFreeze = false;
+        if (pendingForceReadingFromDimmer) {
+            setReadingMode(true, 'dimmer-init', { syncDimmer: false });
+            pendingForceReadingFromDimmer = false;
         }
         syncModeDimmerLevel({ force: true });
         syncCanvasTouchAction();
         refreshLoreProgressUi();
+        syncBackToChapterPrompt('init');
 
         modeToggleBtn.addEventListener('click', () => {
-            // In frozen mode: reset dimmer to off + switch to game mode
+            if (isReadingMode) {
+                if (globalVisualDimmer) {
+                    globalVisualDimmer.setLevel(0, { forceEmit: true });
+                }
+                setReadingMode(false, 'ui-mode-toggle-game', { syncDimmer: false });
+                return;
+            }
+
             if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                 globalVisualDimmer.setLevel(0, { forceEmit: true });
-                setReadingMode(false, 'ui-mode-toggle-unfreeze');
-            } else {
-                setReadingMode(!isReadingMode, 'ui-mode-toggle');
+                setReadingMode(false, 'ui-mode-toggle-unfreeze', { syncDimmer: false });
+                return;
             }
+
+            setReadingMode(true, 'ui-mode-toggle');
         });
 
         // HELPER: Sync AutoWalk Index to current Player Position
@@ -6994,6 +7147,13 @@
                 }
 
                 activeLightSourceId = nearestId;
+
+                const nextSceneLoreId = (window.GameState && typeof window.GameState.getNextLockedLoreIdForScene === 'function')
+                    ? window.GameState.getNextLockedLoreIdForScene(sc)
+                    : null;
+                if (window.GameState && !nextSceneLoreId) {
+                    return;
+                }
 
                 // Use GameState for unified persistence (syncs with YellowLight.draw check)
                 if (window.GameState) {
@@ -7342,6 +7502,7 @@
                 indexTrace('switch:restore-main:blocked', { reason: 'contentSwitchInProgress' });
                 return;
             }
+            hideBackToChapterPrompt('restore-main-start');
             contentSwitchInProgress = true;
             const switchToken = ++contentSwitchToken;
             indexTrace('switch:restore-main:lock', { switchToken });
@@ -7437,6 +7598,7 @@
                     uiContainer.classList.remove('mode-switching');
                     indexTrace('switch:restore-main:unlock', { switchToken });
                 }
+                syncBackToChapterPrompt('restore-main-finally');
             }
         }
 
@@ -7485,6 +7647,8 @@
                 clickWalkPath = [];
                 clickWalkGoal = null;
                 applySceneAudioMix('start-lore:mode');
+                hideNextChapterPrompt('start-lore');
+                hideBackToChapterPrompt('start-lore-reset');
 
                 if (isReadingMode) {
                     uiContainer.classList.add('reading-mode');
@@ -7537,6 +7701,7 @@
                     iconPlay.style.display = 'block';
                     iconPause.style.display = 'none';
                 }
+                showBackToChapterPrompt('start-lore');
             } catch (e) {
                 console.error(`[Switch] Failed to start lore ${id}:`, e);
                 indexTrace('switch:start-lore:error', { id, message: e && e.message ? e.message : String(e) });
@@ -7553,6 +7718,7 @@
 
         function endLoreMode() {
             indexTrace('switch:end-lore', { activeLoreId: activeLoreId || null });
+            hideBackToChapterPrompt('end-lore');
             restoreMainAudio({ saveCurrent: true });
         }
 

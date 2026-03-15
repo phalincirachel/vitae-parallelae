@@ -43,3 +43,17 @@ test('game state collects light and unlocks next lore in same chapter', async ()
   assert.equal(unlockedLoreId, 1);
   assert.deepEqual(state.state.collectedLore, [1]);
 });
+
+
+test('game state ignores additional chapter lights when no lore remains', async () => {
+  const state = createGameState({ localStorage: createStorage(), sessionStorage: createStorage(), getElectronAPI: () => null, getPlayerStateManager: () => null, logger: { warn() {}, error() {} } });
+  state.state = state._createDefaultState();
+
+  const firstUnlock = await state.collectLight('marktplatz', 1);
+  const secondUnlock = await state.collectLight('marktplatz', 2);
+
+  assert.equal(firstUnlock, 1);
+  assert.equal(secondUnlock, null);
+  assert.deepEqual(state.state.collectedLore, [1]);
+  assert.deepEqual(state.state.collectedLights.marktplatz, [1]);
+});

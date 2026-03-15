@@ -122,7 +122,7 @@ await import('../assets/js/GlobalVisualDimmer.js');
 
 const dimmer = windowObject.GlobalVisualDimmer;
 
-test('global visual dimmer cycles freeze modes white before black', () => {
+test('global visual dimmer cycles white -> black -> reading-half -> reading-clear and repeats', () => {
   storage.clear();
   bodyClassList.remove('scene-dimmer-light-mode');
   htmlClassList.remove('scene-dimmer-light-mode');
@@ -131,31 +131,60 @@ test('global visual dimmer cycles freeze modes white before black', () => {
   assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'off');
 
   dimmer.cycleLevel();
-  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'half');
-  assert.equal(elements.sceneDimmerOverlay.style.backgroundColor, '#000000');
-
-  dimmer.cycleLevel();
   assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'white-freeze');
   assert.equal(elements.sceneDimmerOverlay.style.backgroundColor, '#ffffff');
   assert.equal(bodyClassList.contains('scene-dimmer-light-mode'), true);
-  assert.equal(htmlClassList.contains('scene-dimmer-light-mode'), true);
 
   dimmer.cycleLevel();
   assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'black-freeze');
   assert.equal(elements.sceneDimmerOverlay.style.backgroundColor, '#000000');
   assert.equal(bodyClassList.contains('scene-dimmer-light-mode'), false);
-  assert.equal(htmlClassList.contains('scene-dimmer-light-mode'), false);
+
+  dimmer.cycleLevel();
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'reading-half');
+  assert.equal(elements.sceneDimmerOverlay.style.opacity, '0.500');
+
+  dimmer.cycleLevel();
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'reading-clear');
+  assert.equal(elements.sceneDimmerOverlay.style.opacity, '0.000');
+
+  dimmer.cycleLevel();
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'white-freeze');
 });
 
-test('global visual dimmer migrates legacy frozen phase to preserve stored mode', () => {
+test('global visual dimmer setLevel(0) resets to neutral off state', () => {
+  storage.clear();
+  dimmer.init();
+
+  dimmer.cycleLevel();
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'white-freeze');
+
+  dimmer.setLevel(0, { forceEmit: true });
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'off');
+  assert.equal(storage.getItem('gb_background_dim_mode'), 'off');
+
+  dimmer.cycleLevel();
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'white-freeze');
+});
+
+test('global visual dimmer migrates legacy phase storage', () => {
+  storage.clear();
+  storage.setItem('gb_background_dim_level', '50');
+  storage.setItem('gb_background_dim_phase', '1');
+
+  dimmer.init();
+
+  assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'reading-half');
+  assert.equal(storage.getItem('gb_background_dim_mode'), 'reading-half');
+  assert.equal(storage.getItem('gb_background_dim_phase'), '3');
+
   storage.clear();
   storage.setItem('gb_background_dim_level', '100');
-  storage.setItem('gb_background_dim_phase', '2');
+  storage.setItem('gb_background_dim_phase', '3');
 
   dimmer.init();
 
   assert.equal(elements.sceneDimmerToggleBtn.dataset.dimState, 'black-freeze');
-  assert.equal(elements.sceneDimmerOverlay.style.backgroundColor, '#000000');
   assert.equal(storage.getItem('gb_background_dim_mode'), 'black-freeze');
-  assert.equal(storage.getItem('gb_background_dim_phase'), '3');
+  assert.equal(storage.getItem('gb_background_dim_phase'), '2');
 });

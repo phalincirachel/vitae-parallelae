@@ -244,18 +244,17 @@ export function createGameState(options = {}) {
       const numericLightId = Math.trunc(Number(lightId));
       if (!sceneKey || !Number.isFinite(numericLightId)) return null;
 
+      const nextId = this.getNextLockedLoreIdForScene(sceneKey);
+      if (!nextId) return null;
+
       if (!this.state.collectedLights[sceneKey]) this.state.collectedLights[sceneKey] = [];
       if (this.state.collectedLights[sceneKey].includes(numericLightId)) return null;
 
       const target = this.getChapterCollectibleTarget(sceneKey);
-      this.state.collectedLights[sceneKey].push(numericLightId);
-      if (this.state.collectedLights[sceneKey].length > target) {
-        await this.save();
-        return null;
-      }
+      if (this.state.collectedLights[sceneKey].length >= target) return null;
 
-      const nextId = this.getNextLockedLoreIdForScene(sceneKey);
-      if (nextId && !this.state.collectedLore.includes(nextId)) {
+      this.state.collectedLights[sceneKey].push(numericLightId);
+      if (!this.state.collectedLore.includes(nextId)) {
         this.state.collectedLore.push(nextId);
         await this.save();
         return nextId;

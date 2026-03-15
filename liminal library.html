@@ -83,6 +83,9 @@
 
 
     <div id="ui-layer">
+        <!-- Back To Chapter Button (Lore mode, hidden by default) -->
+        <button id="backToChapterBtn" aria-label="Zur&uuml;ck zum Kapitel">Zur&uuml;ck zum Kapitel</button>
+
         <!-- Next Chapter Button -->
         <button id="nextChapterBtn">Weiter</button>
         <div id="noise"></div>
@@ -445,6 +448,8 @@
                 let isLoreMode = false;
                 let activeLoreId = null;
                 let isReadingMode = false;
+                let backToChapterBtn = null;
+                let backToChapterPromptActive = false;
                 let nextChapterBtn = null;
                 let nextChapterPromptShownAt = 0;
                 let nextChapterPromptTrackbackReference = NaN;
@@ -1258,6 +1263,8 @@
                         return;
                     }
 
+                    hideBackToChapterPrompt('restore-main-start');
+
                     const p = window.audioPlayer;
                     if (!p || !p.audio) return;
 
@@ -1332,6 +1339,7 @@
                             contentSwitchInProgress = false;
                             liminalTrace('switch:restore-main:unlock', { switchToken });
                         }
+                        syncBackToChapterPrompt('restore-main-finally');
                     }
                 };
 
@@ -1361,6 +1369,8 @@
 
                         isLoreMode = true;
                         activeLoreId = id;
+                        hideNextChapterPrompt('start-lore');
+                        hideBackToChapterPrompt('start-lore-reset');
 
                         await pauseWithFade(320);
                         if (switchToken !== contentSwitchToken) return;
@@ -1406,6 +1416,7 @@
                             console.warn(`Lore ${id} loaded but still paused.`);
                         }
 
+                        showBackToChapterPrompt('start-lore');
                         updateIcons();
                     } catch (e) {
                         console.warn('Lore switch failed', e);
@@ -3874,6 +3885,7 @@
                         player.renderLines(Math.max(0, idx));
                     }
                     positionNextChapterPrompt();
+                    positionBackToChapterPrompt();
                 });
                 window.addEventListener('orientationchange', () => {
                     queueRecenterButtonPosition('orientationchange');
@@ -3883,6 +3895,7 @@
                         player.renderLines(Math.max(0, idx));
                     }
                     positionNextChapterPrompt();
+                    positionBackToChapterPrompt();
                 });
 
                 subtitleContainer.addEventListener('click', (e) => {
@@ -3982,12 +3995,69 @@
 
                 function showNextChapterPrompt(reason = 'main-ended') {
                     if (!nextChapterBtn || isReadingMode) return;
+                    hideBackToChapterPrompt('next-chapter-show');
                     nextChapterPromptShownAt = performance.now();
                     nextChapterPromptTrackbackReference = Number(player && player.currentTime) || 0;
                     nextChapterPromptActive = true;
                     nextChapterBtn.classList.add('visible');
                     positionNextChapterPrompt();
+                    positionBackToChapterPrompt();
                     liminalTrace('ui:next-chapter:show', { reason });
+                }
+
+                function hideBackToChapterPrompt(reason = 'auto-hide') {
+                    if (!backToChapterBtn) return;
+                    backToChapterBtn.classList.remove('visible');
+                    backToChapterBtn.style.removeProperty('--back-btn-top');
+                    backToChapterPromptActive = false;
+                    liminalTrace('ui:back-chapter:hide', { reason });
+                }
+
+                function getBackToChapterAnchorTop() {
+                    if (!subtitleContainer) return NaN;
+                    if (isReadingMode) {
+                        const containerRect = subtitleContainer.getBoundingClientRect();
+                        if (containerRect && containerRect.height > 1) {
+                            const containerStyle = window.getComputedStyle(subtitleContainer);
+                            const paddingTop = parseFloat(containerStyle.paddingTop) || 0;
+                            return containerRect.top + paddingTop;
+                        }
+                    }
+                    return getSubtitleVisualTop();
+                }
+
+                function positionBackToChapterPrompt() {
+                    if (!backToChapterBtn || !backToChapterBtn.classList.contains('visible')) return;
+
+                    const btnHeight = Math.max(34, Number(backToChapterBtn.offsetHeight) || 0);
+                    const anchorTop = getBackToChapterAnchorTop();
+                    const fallbackTop = window.innerHeight * (isEffectiveMobileLayout() ? 0.3 : 0.24);
+                    let targetTop = Number.isFinite(anchorTop)
+                        ? anchorTop - btnHeight - 12
+                        : fallbackTop;
+                    const minTop = 10;
+                    const maxTop = Math.max(minTop, window.innerHeight - btnHeight - 12);
+                    targetTop = Math.max(minTop, Math.min(maxTop, targetTop));
+                    backToChapterBtn.style.setProperty('--back-btn-top', `${Math.round(targetTop)}px`);
+                }
+
+                function showBackToChapterPrompt(reason = 'lore-active') {
+                    if (!backToChapterBtn || !isLoreMode) {
+                        hideBackToChapterPrompt('show-blocked');
+                        return;
+                    }
+                    backToChapterPromptActive = true;
+                    backToChapterBtn.classList.add('visible');
+                    positionBackToChapterPrompt();
+                    liminalTrace('ui:back-chapter:show', { reason });
+                }
+
+                function syncBackToChapterPrompt(reason = 'sync') {
+                    if (isLoreMode) {
+                        showBackToChapterPrompt(reason);
+                        return;
+                    }
+                    hideBackToChapterPrompt(reason);
                 }
 
                 function maybeHideNextChapterPromptForBackSeek(currentTime) {
@@ -4166,7 +4236,11 @@
                         }
                         lastAppliedReadingMode = isReadingMode;
                     }
-                    syncModeDimmerLevel({ force: true });
+                    if (options.syncDimmer === false) {
+                        applyReaderDimmerTint();
+                    } else {
+                        syncModeDimmerLevel({ force: true });
+                    }
                     syncModeToggleButton();
                     markBlaetternPaginationDirty();
                     syncBlaetternUiState(`mode-switch:${reason}`);
@@ -4175,6 +4249,8 @@
                     }
                     updateRecenterButtonVisibility();
                     updateLoreProgressHud();
+                    syncBackToChapterPrompt(`reading-mode:${reason}`);
+                    positionBackToChapterPrompt();
                 }
 
                 function isPlayerTransportPaused() {
@@ -4240,21 +4316,30 @@
                 });
 
                 modeToggleBtn.addEventListener('click', () => {
-                    // In frozen mode: reset dimmer to off + switch to game mode
+                    if (isReadingMode) {
+                        if (globalVisualDimmer) {
+                            globalVisualDimmer.setLevel(0, { forceEmit: true });
+                        }
+                        isReadingMode = false;
+                        updateReadingModeUI('ui-mode-toggle-game', { syncDimmer: false });
+                        markUiInteraction('btn:game-mode');
+                        return;
+                    }
+
                     if (globalVisualDimmer && globalVisualDimmer.isFrozen()) {
                         globalVisualDimmer.setLevel(0, { forceEmit: true });
                         isReadingMode = false;
-                    } else {
-                        isReadingMode = !isReadingMode;
+                        updateReadingModeUI('ui-mode-toggle-unfreeze', { syncDimmer: false });
+                        markUiInteraction('btn:game-mode');
+                        return;
                     }
+
+                    isReadingMode = true;
                     updateReadingModeUI('ui-mode-toggle');
-                    markUiInteraction(
-                        isReadingMode ? 'btn:reading-mode' : 'btn:game-mode',
-                        { keepCentering: isReadingMode }
-                    );
+                    markUiInteraction('btn:reading-mode', { keepCentering: true });
                 });
 
-                document.querySelectorAll('#audioControls button, #nextChapterBtn, #chapterMenu .menu-item').forEach(el => {
+                document.querySelectorAll('#audioControls button, #nextChapterBtn, #backToChapterBtn, #chapterMenu .menu-item').forEach(el => {
                     el.addEventListener('click', () => {
                         const name = el.id || el.className || 'ui';
                         liminalDebugNote('ui-click', String(name));
@@ -4338,6 +4423,7 @@
                 player.audio.addEventListener('timeupdate', () => {
                     maybeHideNextChapterPromptForBackSeek(player.currentTime || 0);
                     positionNextChapterPrompt();
+                    positionBackToChapterPrompt();
                 });
 
                 // Global Transition Logic
@@ -4364,12 +4450,24 @@
                     }, 2000);
                 };
 
+                backToChapterBtn = document.getElementById('backToChapterBtn');
+                if (backToChapterBtn) {
+                    backToChapterBtn.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (contentSwitchInProgress || !isLoreMode) return;
+                        hideBackToChapterPrompt('button-click');
+                        window.restoreMainAudio({ saveCurrent: true });
+                    });
+                }
+
                 nextChapterBtn = document.getElementById('nextChapterBtn');
                 if (nextChapterBtn) nextChapterBtn.addEventListener('click', () => {
                     hideNextChapterPrompt('button-click');
                     transitionToNextChapter();
                 });
 
+                syncBackToChapterPrompt('button-bind');
                 // RESTORE READING MODE STATE - MOVED TO TOP (Line 196)
                 // ALWAYS update UI to sync player state
                 updateReadingModeUI();
@@ -4686,6 +4784,7 @@
                         el.closest('.menu-item') ||
                         (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
+                        el.closest('#backToChapterBtn') ||
                         el.closest('#loading')
                     );
                 }
@@ -4931,22 +5030,27 @@
                 }
 
                 if (globalVisualDimmer) {
-                    globalVisualDimmer.onChange(({ level, frozen }) => {
+                    globalVisualDimmer.onChange(({ level, frozen, mode, readingMode }) => {
                         manualBackgroundDimLevel = level;
                         applyReaderDimmerTint();
                         syncVisualFreezeState();
 
-                        if (frozen && !isReadingMode) {
+                        if (readingMode && !isReadingMode) {
                             isReadingMode = true;
-                            updateReadingModeUI();
+                            updateReadingModeUI(`dimmer:${mode || 'reading'}`, { syncDimmer: false });
                         }
                     });
                 }
                 syncVisualFreezeState();
                 applyReaderDimmerTint();
-                if (globalVisualDimmer && globalVisualDimmer.isFrozen() && !isReadingMode) {
-                    isReadingMode = true;
-                    updateReadingModeUI();
+                if (globalVisualDimmer) {
+                    const initialDimmerMode = (typeof globalVisualDimmer.getMode === 'function')
+                        ? globalVisualDimmer.getMode()
+                        : (globalVisualDimmer.isFrozen() ? 'white-freeze' : 'off');
+                    if (initialDimmerMode !== 'off' && !isReadingMode) {
+                        isReadingMode = true;
+                        updateReadingModeUI('dimmer-init', { syncDimmer: false });
+                    }
                 }
 
 
@@ -5018,6 +5122,7 @@
                         el.closest('.menu-item') ||
                         (isReadingMode && subtitleHit) ||
                         el.closest('#nextChapterBtn') ||
+                        el.closest('#backToChapterBtn') ||
                         el.closest('#loading')
                     );
                 }
@@ -5058,6 +5163,7 @@
                     const roots = [
                         document.getElementById('audioControls'),
                         document.getElementById('nextChapterBtn'),
+                        document.getElementById('backToChapterBtn'),
                         document.getElementById('archiveModal'),
                         document.getElementById('chapterMenu')
                     ];
@@ -5090,6 +5196,7 @@
                             const roots = [
                                 document.getElementById('audioControls'),
                                 document.getElementById('nextChapterBtn'),
+                        document.getElementById('backToChapterBtn'),
                                 document.getElementById('archiveModal'),
                                 document.getElementById('chapterMenu')
                             ];
