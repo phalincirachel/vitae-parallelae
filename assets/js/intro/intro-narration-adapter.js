@@ -57,6 +57,7 @@ export function createIntroNarrationAdapter(options = {}) {
   let currentSession = null;
   let monitorTimer = null;
   let silentTimer = null;
+  let readyPromise = null;
 
   function clearTimers() {
     if (monitorTimer) {
@@ -105,16 +106,16 @@ export function createIntroNarrationAdapter(options = {}) {
     return result;
   }
 
-  async function waitForPlayerReady() {
+  async function waitForPlayerReady(timeoutMs = 20000) {
     if (!player || !sourceUrl) return false;
     if (!player.src) {
       player.src = sourceUrl;
       player.volume = volume;
     }
     if (typeof player._waitForScReady === 'function') {
-      return player._waitForScReady(6000);
+      return player._waitForScReady(Math.max(6000, Number(timeoutMs) || 0));
     }
-    const deadline = Date.now() + 6000;
+    const deadline = Date.now() + Math.max(6000, Number(timeoutMs) || 0);
     while (Date.now() < deadline) {
       if (player.widget && player._isReady) return true;
       await wait(100);
@@ -184,7 +185,7 @@ export function createIntroNarrationAdapter(options = {}) {
   }
 
   async function startStreamingSession(session) {
-    const ready = await waitForPlayerReady();
+    const ready = await waitForPlayerReady(20000);
     if (!ready || currentSession !== session || session.settled) {
       settleSession(session, false, { emitEnd: true, cancelled: true, pausePlayer: false });
       return false;
@@ -332,6 +333,17 @@ export function createIntroNarrationAdapter(options = {}) {
     return !!currentSession && currentSession.paused === true && !currentSession.settled;
   }
 
+  async function prepare() {
+    if (!player || !sourceUrl) return false;
+    if (!readyPromise) {
+      readyPromise = waitForPlayerReady(20000).then((ready) => {
+        if (!ready) readyPromise = null;
+        return ready;
+      });
+    }
+    return readyPromise;
+  }
+
   if (player && sourceUrl) {
     try {
       player.src = sourceUrl;
@@ -352,7 +364,8 @@ export function createIntroNarrationAdapter(options = {}) {
       return currentText;
     },
     onSegmentStart,
-    onSegmentEnd
+    onSegmentEnd,
+    prepare
   };
 }
 

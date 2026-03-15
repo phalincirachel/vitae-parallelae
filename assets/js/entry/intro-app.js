@@ -611,6 +611,7 @@ async function initIntroApp() {
   hooks.refreshLoreProgressUi({ forceHidden: true });
   setGate({ includeAudio: false, targets: [refs.startSkipBtn] });
   syncAudioIcons(false);
+  await narration.prepare?.();
 
   const startPromise = (async () => {
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn] });
