@@ -1,4 +1,4 @@
-﻿export function createIntroNarrationAdapter(options = {}) {
+export function createIntroNarrationAdapter(options = {}) {
   const speech = options.speechSynthesis || globalThis.speechSynthesis || null;
   const Utterance = options.SpeechSynthesisUtterance || globalThis.SpeechSynthesisUtterance;
   const listeners = {
@@ -10,6 +10,7 @@
   let currentText = '';
   let activeToken = 0;
   let paused = false;
+  let currentSession = null;
 
   function emit(type, payload) {
     listeners[type]?.forEach((listener) => {
@@ -44,82 +45,153 @@
       || null;
   }
 
+  function cleanupUtterance() {
+    if (!currentUtterance) return;
+    currentUtterance.onstart = null;
+    currentUtterance.onend = null;
+    currentUtterance.onerror = null;
+    currentUtterance.onboundary = null;
+    currentUtterance = null;
+  }
+
+  function settleSession(session, result, optionsForSettle = {}) {
+    if (!session || session.settled) return result;
+    session.settled = true;
+    if (currentSession === session) currentSession = null;
+    paused = false;
+    cleanupUtterance();
+    if (optionsForSettle.emitEnd) {
+      emit('end', { text: session.fullText, cancelled: optionsForSettle.cancelled === true });
+      session.options.onSegmentEnd?.({ text: session.fullText, cancelled: optionsForSettle.cancelled === true });
+    }
+    session.resolve?.(result);
+    return result;
+  }
+
+  async function speakSession(session) {
+    if (!speech || !Utterance || !session || !session.remainingText || session.settled) return false;
+    const token = session.token;
+    const voice = await resolveVoice();
+    if (token !== activeToken || currentSession !== session || session.stopped || session.settled) return false;
+
+    const utterance = new Utterance(session.remainingText);
+    utterance.lang = session.options.lang || 'de-DE';
+    utterance.rate = Number.isFinite(session.options.rate) ? session.options.rate : 1;
+    utterance.pitch = Number.isFinite(session.options.pitch) ? session.options.pitch : 1;
+    utterance.volume = volume;
+    if (voice) utterance.voice = voice;
+
+    session.chunkBoundaryIndex = 0;
+    currentUtterance = utterance;
+
+    utterance.onstart = () => {
+      if (!session.started) {
+        session.started = true;
+        emit('start', { text: session.fullText });
+        session.options.onSegmentStart?.({ text: session.fullText });
+      }
+    };
+    utterance.onboundary = (event) => {
+      if (typeof event?.charIndex === 'number' && event.charIndex >= 0) {
+        session.chunkBoundaryIndex = event.charIndex;
+      }
+    };
+    utterance.onend = () => {
+      cleanupUtterance();
+      if (token !== activeToken || session.settled || session.stopped) return;
+      if (session.paused) return;
+      if (currentSession !== session) return;
+      session.spokenOffset = session.fullText.length;
+      session.remainingText = '';
+      settleSession(session, true, { emitEnd: true, cancelled: false });
+    };
+    utterance.onerror = () => {
+      cleanupUtterance();
+      if (token !== activeToken || session.settled) return;
+      if (session.paused || session.stopped) return;
+      settleSession(session, false, { emitEnd: true, cancelled: true });
+    };
+    speech.speak(utterance);
+    return true;
+  }
+
+  function stopCurrentSpeech() {
+    cleanupUtterance();
+    if (speech?.speaking || speech?.paused) {
+      speech.cancel?.();
+    }
+  }
+
   async function play(text, optionsForPlay = {}) {
     if (!speech || !Utterance || !text) return false;
     stop();
     currentText = String(text);
-    const token = ++activeToken;
-    const voice = await resolveVoice();
-    if (token !== activeToken) return false;
-
-    const utterance = new Utterance(currentText);
-    utterance.lang = optionsForPlay.lang || 'de-DE';
-    utterance.rate = Number.isFinite(optionsForPlay.rate) ? optionsForPlay.rate : 1;
-    utterance.pitch = Number.isFinite(optionsForPlay.pitch) ? optionsForPlay.pitch : 1;
-    utterance.volume = volume;
-    if (voice) utterance.voice = voice;
-
-    currentUtterance = utterance;
+    const session = {
+      token: ++activeToken,
+      options: optionsForPlay,
+      fullText: currentText,
+      remainingText: currentText,
+      spokenOffset: 0,
+      chunkBoundaryIndex: 0,
+      paused: false,
+      stopped: false,
+      started: false,
+      settled: false,
+      resolve: null
+    };
+    currentSession = session;
     paused = false;
-
-    return new Promise((resolve) => {
-      utterance.onstart = () => {
-        emit('start', { text: currentText });
-        optionsForPlay.onSegmentStart?.({ text: currentText });
-      };
-      utterance.onend = () => {
-        if (token !== activeToken) {
-          resolve(false);
-          return;
-        }
-        currentUtterance = null;
-        paused = false;
-        emit('end', { text: currentText, cancelled: false });
-        optionsForPlay.onSegmentEnd?.({ text: currentText, cancelled: false });
-        resolve(true);
-      };
-      utterance.onerror = () => {
-        if (token !== activeToken) {
-          resolve(false);
-          return;
-        }
-        currentUtterance = null;
-        paused = false;
-        emit('end', { text: currentText, cancelled: true });
-        optionsForPlay.onSegmentEnd?.({ text: currentText, cancelled: true });
-        resolve(false);
-      };
-      speech.speak(utterance);
+    const promise = new Promise((resolve) => {
+      session.resolve = resolve;
     });
+    await speakSession(session);
+    return promise;
   }
 
   function pause() {
-    if (!speech?.speaking) return false;
-    speech.pause?.();
+    if (!currentSession || paused) return false;
+    const session = currentSession;
+    const boundaryOffset = Number.isFinite(session.chunkBoundaryIndex) ? session.chunkBoundaryIndex : 0;
+    const spokenOffset = Math.max(0, Math.min(session.fullText.length, session.spokenOffset + boundaryOffset));
+    session.spokenOffset = spokenOffset;
+    session.remainingText = session.fullText.slice(spokenOffset);
+    session.paused = true;
     paused = true;
+    stopCurrentSpeech();
     return true;
   }
 
   function resume() {
-    if (!speech?.paused) return false;
-    speech.resume?.();
+    if (!currentSession || !paused) return false;
+    if (!currentSession.remainingText) {
+      settleSession(currentSession, false, { emitEnd: false, cancelled: true });
+      return false;
+    }
+    currentSession.paused = false;
     paused = false;
+    void speakSession(currentSession);
     return true;
   }
 
   function stop() {
     activeToken += 1;
     paused = false;
-    currentUtterance = null;
-    if (speech?.speaking || speech?.paused) {
-      speech.cancel?.();
+    const session = currentSession;
+    currentSession = null;
+    if (session) {
+      session.stopped = true;
+      session.paused = false;
+    }
+    stopCurrentSpeech();
+    if (session && !session.settled) {
+      settleSession(session, false, { emitEnd: true, cancelled: true });
     }
   }
 
   function toggle() {
     if (!speech) return false;
-    if (speech.speaking && !speech.paused) return pause();
-    if (speech.paused) return resume();
+    if (isPlaying()) return pause();
+    if (isPaused()) return resume();
     return false;
   }
 
@@ -139,6 +211,14 @@
     return () => listeners.end.delete(listener);
   }
 
+  function isPlaying() {
+    return !!currentSession && !paused;
+  }
+
+  function isPaused() {
+    return !!currentSession && paused;
+  }
+
   return {
     play,
     pause,
@@ -146,12 +226,8 @@
     stop,
     toggle,
     setVolume,
-    isPlaying() {
-      return !!speech?.speaking && !speech?.paused;
-    },
-    isPaused() {
-      return !!speech?.paused || paused;
-    },
+    isPlaying,
+    isPaused,
     getCurrentText() {
       return currentText;
     },

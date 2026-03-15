@@ -97,6 +97,10 @@ export function createInteractiveFocusOverlay(options = {}) {
   }
 
   function highlightRect(rect) {
+    if (!rect) {
+      hide();
+      return null;
+    }
     return applyRect(rect);
   }
 

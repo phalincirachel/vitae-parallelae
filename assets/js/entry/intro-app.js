@@ -198,6 +198,9 @@ async function initIntroApp() {
     destroyed: false,
     lastReplayText: '',
     dynamicFocusCleanup: null,
+    currentFocusConfig: null,
+    currentGateConfig: null,
+    autoPausedForVisibility: false,
     finalButtonVisible: false,
     layoutChosen: false,
     currentTrackEntries: {
@@ -208,6 +211,23 @@ async function initIntroApp() {
   };
 
   let realGameState = null;
+  let uiRecoveryFrame = 0;
+
+  const normalizeUiConfig = (config = {}) => ({
+    includeAudio: config.includeAudio !== false,
+    targets: Array.isArray(config.targets) ? [...config.targets] : [],
+    keys: Array.isArray(config.keys) ? [...config.keys] : [],
+    selectors: Array.isArray(config.selectors) ? [...config.selectors] : [],
+    allowCanvas: config.allowCanvas === true,
+    allowAll: config.allowAll === true,
+    rectProvider: typeof config.rectProvider === 'function' ? config.rectProvider : null
+  });
+
+  const syncNarrationActiveFlag = (isActive) => {
+    windowRef.__GAMEBOY_INTRO_NARRATION_ACTIVE__ = !!isActive;
+  };
+
+  syncNarrationActiveFlag(false);
 
   const clearDynamicFocus = () => {
     if (typeof runtimeState.dynamicFocusCleanup === 'function') runtimeState.dynamicFocusCleanup();
@@ -215,22 +235,26 @@ async function initIntroApp() {
   };
 
   const clearPresentation = () => {
+    runtimeState.currentFocusConfig = null;
+    runtimeState.currentGateConfig = null;
     clearDynamicFocus();
     focusOverlay.clear();
     interactionGate.clear();
   };
 
   const setGate = (config = {}) => {
+    const normalizedConfig = normalizeUiConfig(config);
+    runtimeState.currentGateConfig = normalizedConfig;
     const targets = [];
-    if (config.includeAudio !== false && refs.audioToggleBtn && refs.audioPlayerUI?.style.display !== 'none') {
+    if (normalizedConfig.includeAudio && refs.audioToggleBtn && refs.audioPlayerUI?.style.display !== 'none') {
       targets.push(refs.audioToggleBtn);
     }
-    if (Array.isArray(config.targets)) targets.push(...config.targets);
+    if (Array.isArray(normalizedConfig.targets)) targets.push(...normalizedConfig.targets);
     interactionGate.setAllowed({
       targets,
-      keys: Array.isArray(config.keys) ? config.keys : [],
-      allowCanvas: config.allowCanvas === true,
-      allowAll: config.allowAll === true
+      keys: normalizedConfig.keys,
+      allowCanvas: normalizedConfig.allowCanvas,
+      allowAll: normalizedConfig.allowAll
     });
   };
 
@@ -240,8 +264,7 @@ async function initIntroApp() {
     let frameId = 0;
     const tick = () => {
       if (runtimeState.destroyed) return;
-      const rect = rectProvider();
-      if (rect) focusOverlay.highlightRect(rect);
+      focusOverlay.highlightRect(rectProvider());
       frameId = windowRef.requestAnimationFrame(tick);
     };
     tick();
@@ -249,12 +272,14 @@ async function initIntroApp() {
   };
 
   const applyFocus = (config = {}) => {
-    if (typeof config.rectProvider === 'function') {
-      startDynamicFocus(config.rectProvider);
+    const normalizedConfig = normalizeUiConfig(config);
+    runtimeState.currentFocusConfig = normalizedConfig;
+    if (typeof normalizedConfig.rectProvider === 'function') {
+      startDynamicFocus(normalizedConfig.rectProvider);
       return;
     }
     clearDynamicFocus();
-    const selectors = Array.isArray(config.selectors) ? config.selectors.filter(Boolean) : [];
+    const selectors = normalizedConfig.selectors.filter(Boolean);
     if (selectors.length > 0) {
       focusOverlay.highlightSelectors(selectors);
       return;
@@ -262,10 +287,43 @@ async function initIntroApp() {
     focusOverlay.clear();
   };
 
+  const refreshInteractiveState = (reason = 'refresh') => {
+    if (runtimeState.destroyed) return;
+    hooks.refreshLayout?.('intro-app:' + reason);
+    hooks.forceSceneRender?.('intro-app:' + reason);
+    hooks.forceControlsVisible?.();
+    if (runtimeState.currentGateConfig) {
+      const gateConfig = runtimeState.currentGateConfig;
+      runtimeState.currentGateConfig = null;
+      setGate(gateConfig);
+    } else {
+      interactionGate.clear();
+    }
+    if (runtimeState.currentFocusConfig) {
+      const focusConfig = runtimeState.currentFocusConfig;
+      runtimeState.currentFocusConfig = null;
+      applyFocus(focusConfig);
+    } else {
+      clearDynamicFocus();
+      focusOverlay.clear();
+    }
+  };
+
+  const scheduleUiRecovery = (reason = 'refresh') => {
+    if (runtimeState.destroyed) return;
+    windowRef.cancelAnimationFrame(uiRecoveryFrame);
+    uiRecoveryFrame = windowRef.requestAnimationFrame(() => {
+      windowRef.requestAnimationFrame(() => {
+        refreshInteractiveState(reason);
+      });
+    });
+  };
+
   const setTrack = (trackName, segmentIndex) => {
     runtimeState.currentTrackName = trackName;
     runtimeState.currentSegmentIndex = segmentIndex;
     hooks.setSubtitleTracks(runtimeState.currentTrackEntries[trackName], segmentIndex);
+    hooks.refreshLayout?.('track:' + trackName + ':' + segmentIndex);
   };
 
   const resolveAction = (actionId, payload) => {
@@ -289,7 +347,9 @@ async function initIntroApp() {
   const redirectToGame = async (markCompleted) => {
     if (runtimeState.destroyed) return;
     runtimeState.destroyed = true;
+    windowRef.cancelAnimationFrame(uiRecoveryFrame);
     narration.stop();
+    syncNarrationActiveFlag(false);
     clearPresentation();
     if (runtimeState.waitResolver) {
       const resolver = runtimeState.waitResolver;
@@ -342,7 +402,9 @@ async function initIntroApp() {
     });
     const result = await narration.play(segment.text);
     if (!runtimeState.waitingAction) clearPresentation();
+    syncNarrationActiveFlag(false);
     syncAudioIcons(false);
+    scheduleUiRecovery('segment:' + trackName + ':' + segmentIndex);
     return result;
   };
 
@@ -356,30 +418,77 @@ async function initIntroApp() {
 
   const replayCurrentSegment = async () => {
     if (!runtimeState.lastReplayText || runtimeState.destroyed) return;
+    syncNarrationActiveFlag(false);
     syncAudioIcons(false);
     await narration.play(runtimeState.lastReplayText);
+    syncNarrationActiveFlag(false);
     syncAudioIcons(false);
+    scheduleUiRecovery('replay');
   };
 
-  narration.onSegmentStart(() => syncAudioIcons(true));
-  narration.onSegmentEnd(() => syncAudioIcons(false));
+  const resumeNarrationIfNeeded = () => {
+    if (!runtimeState.autoPausedForVisibility || runtimeState.destroyed) return;
+    runtimeState.autoPausedForVisibility = false;
+    if (!narration.isPaused()) return;
+    narration.resume();
+    syncAudioIcons(true);
+    syncNarrationActiveFlag(true);
+  };
+
+  narration.onSegmentStart(() => {
+    runtimeState.autoPausedForVisibility = false;
+    syncAudioIcons(true);
+    syncNarrationActiveFlag(true);
+  });
+  narration.onSegmentEnd(() => {
+    runtimeState.autoPausedForVisibility = false;
+    syncAudioIcons(false);
+    syncNarrationActiveFlag(false);
+    scheduleUiRecovery('segment-end');
+  });
 
   refs.audioToggleBtn?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
     if (runtimeState.destroyed) return;
+    runtimeState.autoPausedForVisibility = false;
     if (narration.isPlaying()) {
       narration.pause();
+      syncNarrationActiveFlag(false);
       syncAudioIcons(false);
       return;
     }
     if (narration.isPaused()) {
       narration.resume();
+      syncNarrationActiveFlag(true);
       syncAudioIcons(true);
       return;
     }
     void replayCurrentSegment();
   }, true);
+
+  documentRef.addEventListener('visibilitychange', () => {
+    if (runtimeState.destroyed) return;
+    if (documentRef.hidden) {
+      if (narration.isPlaying()) {
+        runtimeState.autoPausedForVisibility = true;
+        narration.pause();
+        syncAudioIcons(false);
+      }
+      syncNarrationActiveFlag(false);
+      return;
+    }
+    scheduleUiRecovery('visibility');
+    resumeNarrationIfNeeded();
+  });
+
+  windowRef.addEventListener('focus', () => {
+    scheduleUiRecovery('focus');
+    resumeNarrationIfNeeded();
+  });
+  windowRef.addEventListener('resize', () => scheduleUiRecovery('resize'));
+  windowRef.addEventListener('orientationchange', () => scheduleUiRecovery('orientationchange'));
+  windowRef.addEventListener('pageshow', () => scheduleUiRecovery('pageshow'));
 
   [refs.skipBackBtn, refs.skipForwardBtn].forEach((button) => {
     button?.addEventListener('click', (event) => {
@@ -454,7 +563,9 @@ async function initIntroApp() {
   });
 
   windowRef.addEventListener('beforeunload', () => {
+    windowRef.cancelAnimationFrame(uiRecoveryFrame);
     narration.stop();
+    syncNarrationActiveFlag(false);
     clearPresentation();
   });
 
@@ -483,18 +594,22 @@ async function initIntroApp() {
   windowRef.GameState = createIntroGameState(realGameState, runtimeState);
 
   hooks.applySentenceLayout('flat');
-  hooks.hideLoadingScreenSafely('intro-ready');
   hooks.stopMainAudio();
   hooks.disableAmbientDecor?.();
   hooks.forceControlsVisible?.();
   hooks.closeArchive();
   hooks.setDimmerMode('white-freeze');
   refs.audioPlayerUI.style.display = 'flex';
+  hooks.forceSceneRender?.('intro-ready-prewarm');
+  hooks.hideLoadingScreenSafely('intro-ready');
   hooks.setReadingMode(true, 'intro-init');
+  hooks.refreshLayout?.('intro-init');
+  hooks.forceSceneRender?.('intro-init');
   refs.startScreen?.classList?.add?.('is-hidden');
   documentRef.body.classList.remove('intro-ready-to-begin');
   hooks.refreshLoreProgressUi({ forceHidden: true });
   setTrack('main', 0);
+  scheduleUiRecovery('intro-ready');
 
   await speakSegment('main', 0);
   if (runtimeState.destroyed) return;
@@ -538,7 +653,11 @@ async function initIntroApp() {
 
   hooks.closeArchive();
   clearPresentation();
-  await speakSegment('main', 9);
+  hooks.refreshLayout?.('main-9-clear');
+  scheduleUiRecovery('main-9-clear');
+  await wait(40);
+  clearPresentation();
+  await speakSegment('main', 9, { selectors: [] });
   if (runtimeState.destroyed) return;
   await speakCheckpointSegment('main', 10, 'dimmer-dark', {
     targets: ['#sceneDimmerToggleBtn'],
@@ -557,9 +676,12 @@ async function initIntroApp() {
     selectors: ['#readingModeBtn']
   });
   if (runtimeState.destroyed) return;
+  hooks.setDimmerMode('off');
   hooks.setReadingMode(false, 'intro-enter-explore');
-  hooks.setDimmerMode('reading-clear');
   hooks.disableAmbientDecor?.();
+  hooks.refreshLayout?.('intro-enter-explore');
+  hooks.forceSceneRender?.('intro-enter-explore');
+  scheduleUiRecovery('intro-enter-explore');
   await wait(80);
 
   hooks.refreshLoreProgressUi({ forceHidden: true });
@@ -615,10 +737,13 @@ async function initIntroApp() {
   runtimeState.finalButtonVisible = true;
   documentRef.body.classList.add('intro-ready-to-begin');
   hooks.showNextButton('F\u00fchrung beginnen');
+  hooks.refreshLayout?.('intro-finish');
+  hooks.forceSceneRender?.('intro-finish');
   applyFocus({
     rectProvider: () => refs.nextChapterBtn?.getBoundingClientRect?.() || null
   });
   setGate({ includeAudio: true, targets: ['#nextChapterBtn'] });
+  scheduleUiRecovery('intro-finish');
 }
 
 void initIntroApp();
