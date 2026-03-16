@@ -1006,11 +1006,18 @@ async function initIntroApp() {
     rememberAllowedAction('open-lore-hud', event, true);
   });
 
+  let layoutChoiceConfirmedResolver = null;
+
   const handleLayoutChoiceEvent = (event) => {
     const value = getLayoutChoiceFromTarget(event.target);
     if (value !== 'blaettern' && value !== 'flat') return;
     safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
     runtimeState.layoutChosen = true;
+    if (typeof layoutChoiceConfirmedResolver === 'function') {
+      const resolver = layoutChoiceConfirmedResolver;
+      layoutChoiceConfirmedResolver = null;
+      resolver(value);
+    }
     if (runtimeState.waitingAction === 'choose-layout') {
       resolveAction('choose-layout', value);
       return;
@@ -1085,10 +1092,20 @@ async function initIntroApp() {
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
     const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
-    await waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
+    const choiceGracePromise = new Promise((resolve) => {
+      if (runtimeState.layoutChosen) {
+        windowRef.setTimeout(() => resolve('choice-grace'), 1500);
+      } else {
+        layoutChoiceConfirmedResolver = () => {
+          windowRef.setTimeout(() => resolve('choice-grace'), 1500);
+        };
+      }
+    });
+    const narrationTimePromise = waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
       fallbackSinceStartMs,
       timeoutMs: 50000
-    });
+    }).then(() => 'narration-time');
+    await Promise.race([narrationTimePromise, choiceGracePromise]);
     if (runtimeState.waitingAction === 'choose-layout') {
       const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
       const fallbackChoice = normalizeLayoutChoice(checkedInput?.value || '');
