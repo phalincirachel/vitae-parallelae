@@ -30,12 +30,12 @@ export const START_SCREEN_TRACK = Object.freeze([
     'start-0',
     'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford. F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
     1,
-    23
+    23.25
   )
 ]);
 
 export const MAIN_INTRO_TRACK = Object.freeze([
-  freezeSegment('main-0', 'Sp\u00fcren Sie mich?', 23, 26.1),
+  freezeSegment('main-0', 'Sp\u00fcren Sie mich?', 23.25, 26.1),
   freezeSegment('main-1', 'Hier bin ich.', 26.1, 31),
   freezeSegment(
     'main-2',

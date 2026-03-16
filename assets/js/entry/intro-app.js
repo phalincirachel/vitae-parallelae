@@ -639,6 +639,10 @@ async function initIntroApp() {
     event.stopImmediatePropagation();
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
+    if (typeof narration.isAwaitingGesture === 'function' && narration.isAwaitingGesture()) {
+      narration.acknowledgeGesture?.();
+      return;
+    }
     if (narration.isPlaying()) {
       narration.pause();
       syncNarrationActiveFlag(false);

@@ -124,6 +124,7 @@ export function createIntroNarrationAdapter(options = {}) {
   function emitBlocked(session) {
     if (!session || session.blockedEmitted) return;
     session.blockedEmitted = true;
+    session.awaitingGesture = true;
     const payload = {
       text: session.segment.text,
       id: session.segment.id || '',
@@ -337,7 +338,6 @@ export function createIntroNarrationAdapter(options = {}) {
       });
     } catch (_) {}
     if (currentSession !== session || session.settled || session.paused) return false;
-    emitStart(session);
     await player.play();
     session.resumeFromSec = targetStart;
     if (currentSession !== session || session.settled || session.paused) {
@@ -353,6 +353,8 @@ export function createIntroNarrationAdapter(options = {}) {
       }
       return false;
     }
+    session.awaitingGesture = false;
+    emitStart(session);
     scheduleHardStop(session);
     void monitorStreamingPlayback(session);
     return true;
@@ -371,6 +373,7 @@ export function createIntroNarrationAdapter(options = {}) {
       paused: false,
       cleanedUp: false,
       blockedEmitted: false,
+      awaitingGesture: false,
       resumeFromSec: hasFiniteAudioRange(segment) ? Number(segment.audioStartSec) : null,
       remainingHoldMs: Number.isFinite(segment.holdDurationMs) ? Math.max(0, segment.holdDurationMs) : 0,
       startedAtMs: 0,
@@ -499,7 +502,11 @@ export function createIntroNarrationAdapter(options = {}) {
   }
 
   function isPlaying() {
-    return !!currentSession && !currentSession.paused && !currentSession.settled;
+    return !!currentSession && currentSession.started === true && currentSession.paused !== true && !currentSession.settled;
+  }
+
+  function isAwaitingGesture() {
+    return !!currentSession && currentSession.awaitingGesture === true && currentSession.started !== true && !currentSession.settled;
   }
 
   function isPaused() {
@@ -534,6 +541,7 @@ export function createIntroNarrationAdapter(options = {}) {
     acknowledgeGesture,
     setVolume,
     isPlaying,
+    isAwaitingGesture,
     isPaused,
     getCurrentText() {
       return currentText;

@@ -5225,7 +5225,7 @@
                 AudioAdapter: window.SCAudioAdapter,
                 visibilityManager: window.AudioVisibilityManager,
                 audioProfile: AUDIO_PROFILE,
-                ambientUrl: 'assets/medieval_town.mp3',
+                ambientUrl: 'assets/intro/silence.wav',
                 shimmerBaseVolume: SHIMMER_BASE_VOLUME,
                 getScUrl: getSCUrl,
                 getGameReady: () => gameReady,
@@ -8037,6 +8037,21 @@
                 } catch (_) {}
                 try {
                     if (audioPlayer && typeof audioPlayer.load === 'function') audioPlayer.load();
+                } catch (_) {}
+                try {
+                    if (ambientAudio && typeof ambientAudio.pause === 'function') ambientAudio.pause();
+                } catch (_) {}
+                try {
+                    if (ambientAudio) ambientAudio.currentTime = 0;
+                } catch (_) {}
+                try {
+                    if (ambientAudio) ambientAudio.volume = 0;
+                } catch (_) {}
+                try {
+                    if (ambientAudio && ambientAudio.audioNode && typeof ambientAudio.audioNode.removeAttribute === 'function') ambientAudio.audioNode.removeAttribute('src');
+                } catch (_) {}
+                try {
+                    if (ambientAudio && ambientAudio.audioNode && typeof ambientAudio.audioNode.load === 'function') ambientAudio.audioNode.load();
                 } catch (_) {}
                 try {
                     if (typeof syncPlayPauseIcon === 'function') syncPlayPauseIcon();
