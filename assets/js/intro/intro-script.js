@@ -30,7 +30,7 @@ export const START_SCREEN_TRACK = Object.freeze([
     'start-0',
     'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford. F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
     1.5,
-    23.58
+    28.52
   )
 ]);
 

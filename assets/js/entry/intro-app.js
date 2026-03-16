@@ -276,6 +276,7 @@ async function initIntroApp() {
   let realGameState = null;
   let uiRecoveryFrame = 0;
   let autoResumeTimer = 0;
+  let startPreludeTimer = 0;
 
   const normalizeUiConfig = (config = {}) => ({
     includeAudio: config.includeAudio !== false,
@@ -392,6 +393,12 @@ async function initIntroApp() {
     if (!autoResumeTimer) return;
     windowRef.clearTimeout(autoResumeTimer);
     autoResumeTimer = 0;
+  };
+
+  const clearStartPreludeTimer = () => {
+    if (!startPreludeTimer) return;
+    windowRef.clearTimeout(startPreludeTimer);
+    startPreludeTimer = 0;
   };
 
   const setTrack = (trackName, segmentIndex) => {
@@ -544,6 +551,7 @@ async function initIntroApp() {
     if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
     runtimeState.startScreenHidden = true;
     clearAutoResumeTimer();
+    clearStartPreludeTimer();
     setAudioPromptVisible(false);
     realGameState = realGameState || defaultGameState;
     windowRef.GameState = createIntroGameState(realGameState, runtimeState);
@@ -563,6 +571,12 @@ async function initIntroApp() {
     documentRef.body.classList.remove('intro-ready-to-begin');
     safeInvoke('refreshLoreProgressUi', () => hooks.refreshLoreProgressUi({ forceHidden: true }));
     setTrack('main', 0);
+    startPreludeTimer = windowRef.setTimeout(() => {
+      startPreludeTimer = 0;
+      if (runtimeState.destroyed || runtimeState.currentTrackName !== 'main' || runtimeState.currentSegmentIndex !== 0) return;
+      safeInvoke('setActiveSubtitleIndex', () => hooks.setActiveSubtitleIndex?.(1));
+      scheduleUiRecovery('intro-prelude-main-1');
+    }, 4300);
     scheduleUiRecovery('intro-ready:' + reason);
   };
 
@@ -576,8 +590,10 @@ async function initIntroApp() {
   };
 
   const waitForStartScreenTransitionPoint = async () => {
+    const transitionPointSec = 23.58;
     const startSegment = INTRO_TRACKS.start?.[0] || null;
-    const durationMs = Math.max(0, getSegmentExpectedDurationMs(startSegment)) + 160;
+    const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
+    const durationMs = Math.max(0, Math.round((transitionPointSec - startSec) * 1000)) + 120;
     const started = await waitFor(
       () => runtimeState.startSegmentStarted || runtimeState.destroyed,
       { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
@@ -590,12 +606,17 @@ async function initIntroApp() {
   };
 
   const waitForStartScreenDeadline = async () => {
-    const shouldTransition = await waitForStartScreenTransitionPoint();
-    if (!shouldTransition || runtimeState.destroyed) return false;
-    await wait(2200);
+    const startSegment = INTRO_TRACKS.start?.[0] || null;
+    const durationMs = Math.max(0, getSegmentExpectedDurationMs(startSegment)) + 1800;
+    const started = await waitFor(
+      () => runtimeState.startSegmentStarted || runtimeState.destroyed,
+      { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
+    ).catch(() => false);
+    if (!started || runtimeState.destroyed) return false;
+    await wait(durationMs);
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
-      && runtimeState.currentSegmentIndex === 0;
+      && runtimeState.currentSegmentIndex === 0
   };
 
   const resumeNarrationIfNeeded = () => {
@@ -798,6 +819,7 @@ async function initIntroApp() {
   windowRef.addEventListener('beforeunload', () => {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
     clearAutoResumeTimer();
+    clearStartPreludeTimer();
     narration.stop();
     syncNarrationActiveFlag(false);
     clearPresentation();
@@ -857,19 +879,17 @@ async function initIntroApp() {
   }
   const startSettled = await Promise.race([
     startPromise.then(() => true),
-    wait(900).then(() => false)
+    wait(7600).then(() => false)
   ]);
   if (!startSettled && !runtimeState.destroyed) {
-    console.warn('[Intro] stopping lingering start segment after UI transition');
+    console.warn('[Intro] stopping lingering start segment after merged prelude');
     narration.stop();
     await Promise.race([startPromise.then(() => true), wait(250).then(() => false)]);
   }
   if (runtimeState.destroyed) return;
 
-  await speakSegment('main', 0);
-  if (runtimeState.destroyed) return;
-  await speakSegment('main', 1);
-  if (runtimeState.destroyed) return;
+  setTrack('main', 2);
+  scheduleUiRecovery('intro-main-2-ready');
 
   await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
   hooks.openArchiveSettings();
