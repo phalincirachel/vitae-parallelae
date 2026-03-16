@@ -1133,6 +1133,9 @@ async function initIntroApp() {
       if (fallbackChoice === 'blaettern' || fallbackChoice === 'flat') {
         runtimeState.layoutChosen = true;
         resolveAction('choose-layout', fallbackChoice);
+      } else {
+        runtimeState.layoutChosen = true;
+        resolveAction('choose-layout', 'blaettern');
       }
     }
     const choice = await actionPromise;
@@ -1317,4 +1320,8 @@ async function initIntroApp() {
 
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
+  if (typeof window !== 'undefined' && window.location) {
+    try { window.sessionStorage.setItem('introWebBypass', '1'); } catch (_) {}
+    window.location.href = './index.html';
+  }
 });
