@@ -203,6 +203,7 @@ async function initIntroApp() {
   const documentRef = windowRef.document;
   const storageRef = windowRef.localStorage;
   const refs = getRefs(documentRef);
+  const prefersManualStart = !!((windowRef.matchMedia && windowRef.matchMedia('(pointer: coarse)').matches) || Number(windowRef.navigator?.maxTouchPoints || 0) > 0);
   const hooks = await waitFor(() => windowRef.GameboyIntroHooks, { label: 'intro hooks' });
   hooks.disableBaseChapterFlow?.();
   hooks.stopMainAudio?.();
@@ -724,7 +725,7 @@ async function initIntroApp() {
   setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   syncAudioIcons(false);
   void narration.prepare?.();
-  setAudioPromptVisible(false);
+  setAudioPromptVisible(prefersManualStart);
 
   const startPromise = (async () => {
     await waitForStartImageReady(refs.startImage, 4000);

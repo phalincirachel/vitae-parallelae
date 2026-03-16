@@ -62,6 +62,7 @@ export function createIntroNarrationAdapter(options = {}) {
   let currentSession = null;
   let monitorTimer = null;
   let silentTimer = null;
+  let hardStopTimer = null;
   let readyPromise = null
   let gestureCleanup = null
   let gestureRetryHandler = null;
@@ -74,6 +75,10 @@ export function createIntroNarrationAdapter(options = {}) {
     if (silentTimer) {
       windowRef.clearTimeout(silentTimer);
       silentTimer = null;
+    }
+    if (hardStopTimer) {
+      windowRef.clearTimeout(hardStopTimer);
+      hardStopTimer = null;
     }
   }
 
@@ -200,6 +205,20 @@ export function createIntroNarrationAdapter(options = {}) {
     if (currentSession !== session || !session.paused) return session.resumeFromSec || fallback;
     session.resumeFromSec = Math.max(session.segment.audioStartSec || 0, fallback);
     return session.resumeFromSec;
+  }
+
+  function scheduleHardStop(session) {
+    const remainingMs = Math.max(0, Number(session.remainingHardStopMs) || 0);
+    if (remainingMs <= 0) {
+      settleSession(session, true, { emitEnd: true, cancelled: false });
+      return;
+    }
+    session.hardStopStartedAtMs = Date.now();
+    hardStopTimer = windowRef.setTimeout(() => {
+      if (currentSession !== session || session.settled || session.paused) return;
+      session.remainingHardStopMs = 0;
+      settleSession(session, true, { emitEnd: true, cancelled: false });
+    }, remainingMs);
   }
 
   function scheduleSilentCompletion(session) {
@@ -334,6 +353,7 @@ export function createIntroNarrationAdapter(options = {}) {
       }
       return false;
     }
+    scheduleHardStop(session);
     void monitorStreamingPlayback(session);
     return true;
   }
@@ -353,7 +373,11 @@ export function createIntroNarrationAdapter(options = {}) {
       blockedEmitted: false,
       resumeFromSec: hasFiniteAudioRange(segment) ? Number(segment.audioStartSec) : null,
       remainingHoldMs: Number.isFinite(segment.holdDurationMs) ? Math.max(0, segment.holdDurationMs) : 0,
-      startedAtMs: 0
+      startedAtMs: 0,
+      remainingHardStopMs: hasFiniteAudioRange(segment)
+        ? Math.max(1600, Math.round((Number(segment.audioEndSec) - Number(segment.audioStartSec)) * 1000) + 1400)
+        : 0,
+      hardStopStartedAtMs: 0
     };
     currentSession = session;
 
