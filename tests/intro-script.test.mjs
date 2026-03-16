@@ -47,3 +47,9 @@ test('intro SoundCloud stream URL is configured', () => {
   assert.match(SC_URLS.INTRO_LITA_1, /2284299347/);
   assert.match(SC_URLS.INTRO_LITA_1, /secret_token=s-ayl0JnZXdSq/);
 });
+
+
+test('start block spans the first white-reader checkpoint', () => {
+  assert.ok(INTRO_TRACKS.start[0].audioEndSec >= INTRO_TRACKS.main[2].audioEndSec);
+  assert.ok(INTRO_TRACKS.start[0].audioStartSec <= INTRO_TRACKS.main[0].audioStartSec);
+});

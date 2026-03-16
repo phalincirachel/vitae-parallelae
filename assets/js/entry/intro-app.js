@@ -572,11 +572,16 @@ async function initIntroApp() {
     safeInvoke('refreshLoreProgressUi', () => hooks.refreshLoreProgressUi({ forceHidden: true }));
     setTrack('main', 0);
     startPreludeTimer = windowRef.setTimeout(() => {
-      startPreludeTimer = 0;
       if (runtimeState.destroyed || runtimeState.currentTrackName !== 'main' || runtimeState.currentSegmentIndex !== 0) return;
       safeInvoke('setActiveSubtitleIndex', () => hooks.setActiveSubtitleIndex?.(1));
       scheduleUiRecovery('intro-prelude-main-1');
-    }, 4300);
+      startPreludeTimer = windowRef.setTimeout(() => {
+        startPreludeTimer = 0;
+        if (runtimeState.destroyed || runtimeState.currentTrackName !== 'main') return;
+        safeInvoke('setActiveSubtitleIndex', () => hooks.setActiveSubtitleIndex?.(2));
+        scheduleUiRecovery('intro-prelude-main-2');
+      }, 3040);
+    }, 4280);
     scheduleUiRecovery('intro-ready:' + reason);
   };
 
@@ -856,6 +861,22 @@ async function initIntroApp() {
     windowRef.GameState = createIntroGameState(realGameState, runtimeState);
   });
 
+  const startLayoutActionPromise = (async () => {
+    const shouldTransition = await waitForStartScreenTransitionPoint();
+    if (!shouldTransition || runtimeState.destroyed) return false;
+    await wait(7320);
+    if (runtimeState.destroyed) return false;
+    await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
+    if (runtimeState.destroyed) return false;
+    hooks.openArchiveSettings();
+    hooks.forceControlsVisible?.();
+    await wait(60);
+    return waitForAction('choose-layout', {
+      targets: INTRO_LAYOUT_STEP_TARGETS,
+      selectors: ['[data-loading-tutorial="layout-group"]']
+    });
+  })();
+
   const startFlowResult = await Promise.race([
     startPromise.then(() => 'ended'),
     waitForStartScreenTransitionPoint().then((shouldTransition) => {
@@ -877,29 +898,26 @@ async function initIntroApp() {
   if (!runtimeState.startScreenHidden) {
     transitionOutOfStartScreen(startFlowResult);
   }
+  const startSegment = INTRO_TRACKS.start?.[0] || null;
+  const transitionPointSec = 23.58;
+  const remainingStartBlockMs = (() => {
+    if (!Number.isFinite(startSegment?.audioEndSec)) return 22000;
+    return Math.max(1200, Math.round((Number(startSegment.audioEndSec) - transitionPointSec) * 1000) + 2200);
+  })();
   const startSettled = await Promise.race([
     startPromise.then(() => true),
-    wait(7600).then(() => false)
+    wait(remainingStartBlockMs).then(() => false)
   ]);
   if (!startSettled && !runtimeState.destroyed) {
-    console.warn('[Intro] stopping lingering start segment after merged prelude');
+    console.warn('[Intro] stopping lingering start segment after first checkpoint block');
     narration.stop();
     await Promise.race([startPromise.then(() => true), wait(250).then(() => false)]);
   }
   if (runtimeState.destroyed) return;
 
-  setTrack('main', 2);
-  scheduleUiRecovery('intro-main-2-ready');
-
-  await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
-  hooks.openArchiveSettings();
-  hooks.forceControlsVisible?.();
-  await wait(60);
-  await speakCheckpointSegment('main', 2, 'choose-layout', {
-    targets: INTRO_LAYOUT_STEP_TARGETS,
-    selectors: ['[data-loading-tutorial="layout-group"]']
-  });
+  const layoutChoice = await startLayoutActionPromise;
   if (runtimeState.destroyed) return;
+  if (layoutChoice === false) return;
 
   hooks.openArchiveContentTab('kapitel');
   hooks.forceControlsVisible?.();

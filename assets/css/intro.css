@@ -4,6 +4,10 @@ body {
   min-height: 100%;
 }
 
+body.intro-page {
+  overflow: hidden;
+}
+
 body.intro-page #sceneDimmerOverlay {
   transition: opacity 0.35s ease, background-color 0.35s ease;
 }
@@ -11,6 +15,14 @@ body.intro-page #sceneDimmerOverlay {
 body.intro-page #subtitleContainer {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+  overflow-y: auto;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-width: none;
+}
+
+body.intro-page #subtitleContainer::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 body.intro-page.scene-dimmer-light-mode #subtitleContainer {
