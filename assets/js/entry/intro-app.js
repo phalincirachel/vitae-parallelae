@@ -266,6 +266,7 @@ async function initIntroApp() {
     startSegmentStarted: false,
     startScreenHidden: false,
     pendingActions: new Map(),
+    startRequested: false,
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -851,6 +852,23 @@ async function initIntroApp() {
     void redirectToGame(false);
   });
 
+  let resolveStartRequest = null;
+  const startRequestPromise = new Promise((resolve) => {
+    resolveStartRequest = resolve;
+  });
+
+  const requestIntroStart = () => {
+    if (runtimeState.destroyed || runtimeState.startScreenHidden) return false;
+    if (!runtimeState.startRequested) {
+      runtimeState.startRequested = true;
+      resolveStartRequest?.(true);
+      resolveStartRequest = null;
+    }
+    narration.acknowledgeGesture?.();
+    keepStartPromptAvailable();
+    return true;
+  };
+
   const handleIntroAudioPromptActivation = (event) => {
     const isKeyboardEvent = event?.type === 'keydown';
     const key = isKeyboardEvent ? event.key : '';
@@ -859,7 +877,7 @@ async function initIntroApp() {
     clearAutoResumeTimer();
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
-    narration.acknowledgeGesture?.();
+    requestIntroStart();
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -924,20 +942,19 @@ async function initIntroApp() {
 
   documentRef.querySelectorAll('.reader-radio-option[data-layout], input[name="readerSentenceLayout"]').forEach((element) => {
     element.addEventListener('click', (event) => {
-      if (runtimeState.waitingAction !== 'choose-layout') return;
       const target = event.target instanceof Element ? event.target : null;
       const option = target?.closest?.('.reader-radio-option[data-layout]') || null;
       const value = option?.dataset?.layout || target?.value;
       if (value !== 'blaettern' && value !== 'flat') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
       hooks.applySentenceLayout(value);
       runtimeState.layoutChosen = true;
       if (runtimeState.waitingAction === 'choose-layout') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
         resolveAction('choose-layout', value);
         return;
       }
-      rememberAllowedAction('choose-layout', event, value);
+      rememberAction('choose-layout', value);
     }, true);
   });
 
@@ -964,7 +981,9 @@ async function initIntroApp() {
 
   const startPromise = (async () => {
     await waitForStartImageReady(refs.startImage, 4000);
-    await wait(40);
+    await startRequestPromise;
+    if (runtimeState.destroyed) return;
+    await wait(20);
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
     setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
