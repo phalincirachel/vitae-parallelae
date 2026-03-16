@@ -489,9 +489,10 @@ async function initIntroApp() {
     applyFocus(config);
     setGate({
       includeAudio: config.includeAudio !== false,
-      targets: config.targets || [],
+      targets: [...(config.targets || []), ...(config.selectors || [])],
       keys: config.keys || [],
-      allowCanvas: config.allowCanvas === true
+      allowCanvas: config.allowCanvas === true,
+      allowAll: config.allowAll === true
     });
     return new Promise((resolve) => {
       runtimeState.waitResolver = resolve;
@@ -512,7 +513,7 @@ async function initIntroApp() {
     applyFocus(config);
     setGate({
       includeAudio: config.includeAudio !== false,
-      targets: config.targets || [],
+      targets: [...(config.targets || []), ...(config.selectors || [])],
       keys: config.keys || [],
       allowCanvas: config.allowCanvas === true,
       allowAll: config.allowAll === true
@@ -541,7 +542,7 @@ async function initIntroApp() {
     runtimeState.waitingAction = actionId;
     setGate({
       includeAudio: config.includeAudio !== false,
-      targets: config.targets || [],
+      targets: [...(config.targets || []), ...(config.selectors || [])],
       keys: config.keys || [],
       allowCanvas: config.allowCanvas === true,
       allowAll: config.allowAll === true
@@ -600,7 +601,7 @@ async function initIntroApp() {
         clearPresentation();
         setGate({
           includeAudio: uiConfig.includeAudio !== false,
-          targets: uiConfig.targets || [],
+          targets: [...(uiConfig.targets || []), ...(uiConfig.selectors || [])],
           keys: uiConfig.keys || [],
           allowCanvas: uiConfig.allowCanvas === true,
           allowAll: uiConfig.allowAll === true
@@ -610,7 +611,7 @@ async function initIntroApp() {
       applyFocus(uiConfig);
       setGate({
         includeAudio: uiConfig.includeAudio !== false,
-        targets: uiConfig.targets || [],
+        targets: [...(uiConfig.targets || []), ...(uiConfig.selectors || [])],
         keys: uiConfig.keys || [],
         allowCanvas: uiConfig.allowCanvas === true,
         allowAll: uiConfig.allowAll === true
@@ -743,6 +744,16 @@ async function initIntroApp() {
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
       && runtimeState.currentSegmentIndex === 0
+  };
+
+  const waitForNarrationTime = async (targetSec, label = 'intro narration time') => {
+    const target = Number(targetSec);
+    if (!Number.isFinite(target)) return false;
+    await waitFor(
+      () => runtimeState.destroyed || (typeof narration.getCurrentTime === 'function' && narration.getCurrentTime() >= (target - 0.06)),
+      { timeoutMs: 60000, intervalMs: 60, label }
+    ).catch(() => false);
+    return !runtimeState.destroyed;
   };
 
   const resumeNarrationIfNeeded = () => {
@@ -1003,17 +1014,25 @@ async function initIntroApp() {
   const startLayoutActionPromise = (async () => {
     const shouldTransition = await waitForStartScreenTransitionPoint();
     if (!shouldTransition || runtimeState.destroyed) return false;
-    await wait(7320);
+    await wait(7200);
     if (runtimeState.destroyed) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
     hooks.openArchiveSettings();
     hooks.forceControlsVisible?.();
-    await wait(60);
-    return waitForAction('choose-layout', {
-      targets: INTRO_LAYOUT_STEP_TARGETS,
-      selectors: ['[data-loading-tutorial="layout-group"]']
+    hooks.refreshLayout?.('intro-layout-open');
+    const actionPromise = waitForAction('choose-layout', {
+      targets: [...INTRO_LAYOUT_STEP_TARGETS, '[data-loading-tutorial="layout-group"]', '.reader-settings-panel', '.reader-settings-panel *'],
+      selectors: ['[data-loading-tutorial="layout-group"]'],
+      allowAll: true
     });
+    const audioPromise = waitForNarrationTime(41.72, 'intro layout sentence end');
+    const [choice] = await Promise.all([actionPromise, audioPromise]);
+    if (!runtimeState.destroyed && (narration.isPlaying() || narration.isPaused())) {
+      narration.stop();
+      await wait(80);
+    }
+    return choice;
   })();
 
   const startFlowResult = await Promise.race([
@@ -1037,23 +1056,6 @@ async function initIntroApp() {
   if (!runtimeState.startScreenHidden) {
     transitionOutOfStartScreen(startFlowResult);
   }
-  const startSegment = INTRO_TRACKS.start?.[0] || null;
-  const transitionPointSec = 23.58;
-  const remainingStartBlockMs = (() => {
-    if (!Number.isFinite(startSegment?.audioEndSec)) return 22000;
-    return Math.max(1200, Math.round((Number(startSegment.audioEndSec) - transitionPointSec) * 1000) + 2200);
-  })();
-  const startSettled = await Promise.race([
-    startPromise.then(() => true),
-    wait(remainingStartBlockMs).then(() => false)
-  ]);
-  if (!startSettled && !runtimeState.destroyed) {
-    console.warn('[Intro] stopping lingering start segment after first checkpoint block');
-    narration.stop();
-    await Promise.race([startPromise.then(() => true), wait(250).then(() => false)]);
-  }
-  if (runtimeState.destroyed) return;
-
   const layoutChoice = await startLayoutActionPromise;
   if (runtimeState.destroyed) return;
   if (layoutChoice === false) return;

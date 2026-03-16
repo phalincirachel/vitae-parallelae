@@ -30,7 +30,7 @@ export const START_SCREEN_TRACK = Object.freeze([
     'start-0',
     'Willkommen in der sch\u00f6nsten Stadt der Welt. Heidelberg. Ich bin Ihre Fremdenf\u00fchrerin, Lita Elford. F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartphone auf und w\u00e4hlen Sie sich ins Zickzack-Netz ein. Vielen Dank. Sp\u00fcren Sie mich? Hier bin ich. Um Ihren Aufenthalt optimal zu gestalten, w\u00e4hlen Sie nun bitte, ob Sie lieber Bl\u00e4ttern wie in einem Buch, oder Scrollen wie in einer Schriftrolle.',
     1.2,
-    41.36
+    41.82
   )
 ]);
 
@@ -41,7 +41,7 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     'main-2',
     'Um Ihren Aufenthalt optimal zu gestalten, w\u00e4hlen Sie nun bitte, ob Sie lieber Bl\u00e4ttern wie in einem Buch, oder Scrollen wie in einer Schriftrolle.',
     30.9,
-    41.36
+    41.72
   ),
   freezeSegment(
     'main-3',
