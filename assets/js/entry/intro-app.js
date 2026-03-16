@@ -8,6 +8,7 @@ import {
 import { createIntroNarrationAdapter } from '../intro/intro-narration-adapter.js';
 import { createInteractiveFocusOverlay } from '../shared/ui/interactive-focus-overlay.js';
 import { createInteractionGate } from '../shared/ui/interaction-gate.js';
+import defaultGameState from '../shared/state/game-state.js';
 
 const TRANSIENT_STORAGE_KEYS = Object.freeze([
   'gameboy_reading_mode',
@@ -211,9 +212,13 @@ async function initIntroApp() {
     label: 'intro scene runtime',
     timeoutMs: 45000
   });
-  const realGameStatePromise = waitFor(() => (windowRef.GameState && windowRef.GameState.state ? windowRef.GameState : null), {
-    label: 'GameState init'
-  });
+  const realGameStatePromise = (async () => {
+    const stateApi = defaultGameState;
+    if (stateApi && typeof stateApi.init === 'function') {
+      await stateApi.init();
+    }
+    return stateApi;
+  })();
 
   const storageSnapshot = captureStorage(storageRef, TRANSIENT_STORAGE_KEYS);
   const narration = createIntroNarrationAdapter();
@@ -911,10 +916,6 @@ async function initIntroApp() {
   scheduleUiRecovery('intro-finish');
 }
 
-void initIntroApp();
-
-
-
-
-
-
+void initIntroApp().catch((error) => {
+  console.error('[Intro] init failed', error);
+});
