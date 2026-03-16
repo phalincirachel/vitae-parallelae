@@ -1012,8 +1012,6 @@ async function initIntroApp() {
     safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
     runtimeState.layoutChosen = true;
     if (runtimeState.waitingAction === 'choose-layout') {
-      event.preventDefault();
-      event.stopImmediatePropagation();
       resolveAction('choose-layout', value);
       return;
     }
@@ -1067,7 +1065,8 @@ async function initIntroApp() {
 
   const startLayoutActionPromise = (async () => {
     const shouldTransition = await waitForStartScreenTransitionPoint();
-    if (!shouldTransition || runtimeState.destroyed) return false;
+    if (runtimeState.destroyed) return false;
+    if (!shouldTransition && !runtimeState.startScreenHidden) return false;
     await wait(7200);
     if (runtimeState.destroyed) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
