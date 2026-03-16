@@ -177,18 +177,24 @@ export function createIntroNarrationAdapter(options = {}) {
     return !!(player.widget && player._isReady);
   }
 
-  async function verifyTransportStart() {
+  async function verifyTransportStart(targetStart = null) {
     const helper = windowRef.GameboyPlaybackHelpers?.verifyPlaybackStarted;
     if (!player || typeof helper !== 'function') return true;
+    const normalizedTarget = Number.isFinite(targetStart) ? Number(targetStart) : null;
     try {
       return !!(await helper({
         player,
         retries: 5,
         delayMs: 260,
-        requireAdvance: false
+        requireAdvance: true,
+        advanceThreshold: 0.05,
+        initialPosition: normalizedTarget,
+        hasRecentProgress: () => false
       }));
     } catch (_) {
-      return !player.paused;
+      const currentPos = Number.isFinite(player.currentTime) ? Number(player.currentTime) : normalizedTarget;
+      if (!Number.isFinite(normalizedTarget)) return !player.paused;
+      return !player.paused && Number.isFinite(currentPos) && currentPos >= (normalizedTarget + 0.05);
     }
   }
 
@@ -293,7 +299,7 @@ export function createIntroNarrationAdapter(options = {}) {
             tolerance: 0.45,
             readyTimeoutMs: 1200
           });
-          const started = await verifyTransportStart();
+          const started = await verifyTransportStart(targetStart);
           finish(started);
         } catch (_) {
           finish(false);
@@ -313,7 +319,7 @@ export function createIntroNarrationAdapter(options = {}) {
   }
 
   async function ensureTransportStarted(session, targetStart) {
-    const started = await verifyTransportStart();
+    const started = await verifyTransportStart(targetStart);
     if (started) return true;
     if (currentSession !== session || session.settled || session.paused) return false;
     return waitForGestureResume(session, targetStart);
