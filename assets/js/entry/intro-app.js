@@ -204,7 +204,6 @@ async function initIntroApp() {
   const documentRef = windowRef.document;
   const storageRef = windowRef.localStorage;
   const refs = getRefs(documentRef);
-  const prefersManualStart = !!((windowRef.matchMedia && windowRef.matchMedia('(pointer: coarse)').matches) || Number(windowRef.navigator?.maxTouchPoints || 0) > 0);
   const hooks = await waitFor(() => windowRef.GameboyIntroHooks, { label: 'intro hooks' });
   hooks.disableBaseChapterFlow?.();
   hooks.stopMainAudio?.();
@@ -225,6 +224,15 @@ async function initIntroApp() {
   const focusOverlay = createInteractiveFocusOverlay({ document: documentRef });
   const interactionGate = createInteractionGate({ document: documentRef });
   const syncAudioIcons = createAudioIconSync(refs);
+  const safeInvoke = (label, callback) => {
+    if (typeof callback !== 'function') return undefined;
+    try {
+      return callback();
+    } catch (error) {
+      console.error(`[Intro] ${label} failed`, error);
+      return undefined;
+    }
+  };
 
   const setAudioPromptVisible = (visible) => {
     const prompt = refs.introAudioPrompt;
@@ -255,6 +263,8 @@ async function initIntroApp() {
     autoPausedForVisibility: false,
     finalButtonVisible: false,
     layoutChosen: false,
+    startSegmentStarted: false,
+    startScreenHidden: false,
     pendingActions: new Map(),
     currentTrackEntries: {
       start: buildTrackEntries('start'),
@@ -391,6 +401,12 @@ async function initIntroApp() {
     hooks.refreshLayout?.('track:' + trackName + ':' + segmentIndex);
   };
 
+  const keepStartPromptAvailable = () => {
+    if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
+    if (narration.isPlaying()) return;
+    setAudioPromptVisible(true);
+  };
+
   const rememberAction = (actionId, payload = true) => {
     if (!actionId) return false;
     runtimeState.pendingActions.set(actionId, payload);
@@ -524,6 +540,55 @@ async function initIntroApp() {
     return !runtimeState.destroyed;
   };
 
+  const transitionOutOfStartScreen = (reason = 'complete') => {
+    if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
+    runtimeState.startScreenHidden = true;
+    clearAutoResumeTimer();
+    setAudioPromptVisible(false);
+    realGameState = realGameState || defaultGameState;
+    windowRef.GameState = createIntroGameState(realGameState, runtimeState);
+    safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout('flat'));
+    safeInvoke('stopMainAudio', () => hooks.stopMainAudio());
+    safeInvoke('disableAmbientDecor', () => hooks.disableAmbientDecor?.());
+    safeInvoke('forceControlsVisible', () => hooks.forceControlsVisible?.());
+    safeInvoke('closeArchive', () => hooks.closeArchive());
+    safeInvoke('setDimmerMode', () => hooks.setDimmerMode('white-freeze'));
+    if (refs.audioPlayerUI) refs.audioPlayerUI.style.display = 'flex';
+    safeInvoke('forceSceneRender-prewarm', () => hooks.forceSceneRender?.('intro-ready-prewarm:' + reason));
+    safeInvoke('hideLoadingScreenSafely', () => hooks.hideLoadingScreenSafely('intro-ready:' + reason));
+    safeInvoke('setReadingMode', () => hooks.setReadingMode(true, 'intro-init'));
+    safeInvoke('refreshLayout', () => hooks.refreshLayout?.('intro-init:' + reason));
+    safeInvoke('forceSceneRender', () => hooks.forceSceneRender?.('intro-init:' + reason));
+    refs.startScreen?.classList?.add?.('is-hidden');
+    documentRef.body.classList.remove('intro-ready-to-begin');
+    safeInvoke('refreshLoreProgressUi', () => hooks.refreshLoreProgressUi({ forceHidden: true }));
+    setTrack('main', 0);
+    scheduleUiRecovery('intro-ready:' + reason);
+  };
+
+  const getSegmentExpectedDurationMs = (segment) => {
+    if (!segment) return 0;
+    if (Number.isFinite(segment.audioStartSec) && Number.isFinite(segment.audioEndSec)) {
+      return Math.max(0, Math.round((Number(segment.audioEndSec) - Number(segment.audioStartSec)) * 1000));
+    }
+    if (Number.isFinite(segment.holdDurationMs)) return Math.max(0, Math.trunc(segment.holdDurationMs));
+    return 0;
+  };
+
+  const waitForStartScreenDeadline = async () => {
+    const startSegment = INTRO_TRACKS.start?.[0] || null;
+    const durationMs = Math.max(0, getSegmentExpectedDurationMs(startSegment)) + 3200;
+    const started = await waitFor(
+      () => runtimeState.startSegmentStarted || runtimeState.destroyed,
+      { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
+    ).catch(() => false);
+    if (!started || runtimeState.destroyed) return false;
+    await wait(durationMs);
+    return !runtimeState.destroyed && !runtimeState.startScreenHidden
+      && runtimeState.currentTrackName === 'start'
+      && runtimeState.currentSegmentIndex === 0;
+  };
+
   const resumeNarrationIfNeeded = () => {
     if (!runtimeState.autoPausedForVisibility || runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
@@ -549,6 +614,9 @@ async function initIntroApp() {
   });
 
   narration.onSegmentStart(() => {
+    if (runtimeState.currentTrackName === 'start' && runtimeState.currentSegmentIndex === 0) {
+      runtimeState.startSegmentStarted = true;
+    }
     clearAutoResumeTimer();
     setAudioPromptVisible(false);
     runtimeState.autoPausedForVisibility = false;
@@ -598,13 +666,16 @@ async function initIntroApp() {
       syncNarrationActiveFlag(false);
       return;
     }
+    keepStartPromptAvailable();
     scheduleUiRecovery('visibility');
   });
 
   windowRef.addEventListener('focus', () => {
+    keepStartPromptAvailable();
     scheduleAutoResume('focus');
   });
   windowRef.addEventListener('pageshow', () => {
+    keepStartPromptAvailable();
     scheduleAutoResume('pageshow');
   });
   windowRef.addEventListener('resize', () => scheduleUiRecovery('resize'));
@@ -629,8 +700,7 @@ async function initIntroApp() {
     clearAutoResumeTimer();
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
-    const started = narration.acknowledgeGesture?.();
-    if (started) setAudioPromptVisible(false);
+    narration.acknowledgeGesture?.();
     event.preventDefault();
     event.stopImmediatePropagation();
   };
@@ -730,7 +800,7 @@ async function initIntroApp() {
   setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   syncAudioIcons(false);
   void narration.prepare?.();
-  setAudioPromptVisible(prefersManualStart);
+  setAudioPromptVisible(true);
 
   const startPromise = (async () => {
     await waitForStartImageReady(refs.startImage, 4000);
@@ -740,29 +810,32 @@ async function initIntroApp() {
     setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   })();
 
-  await startPromise;
+  void realGameStatePromise.then((resolvedState) => {
+    if (runtimeState.destroyed) return;
+    realGameState = resolvedState || defaultGameState;
+    windowRef.GameState = createIntroGameState(realGameState, runtimeState);
+  }).catch((error) => {
+    console.error('[Intro] realGameState init failed', error);
+    realGameState = defaultGameState;
+    safeInvoke('ensureStateShape', () => realGameState?._ensureStateShape?.());
+    windowRef.GameState = createIntroGameState(realGameState, runtimeState);
+  });
+
+  const startFlowResult = await Promise.race([
+    startPromise.then(() => 'ended'),
+    waitForStartScreenDeadline().then((shouldForce) => {
+      if (!shouldForce) return 'idle';
+      console.warn('[Intro] forcing start screen transition after deadline');
+      narration.stop();
+      return 'forced';
+    })
+  ]);
+  if (startFlowResult === 'idle') {
+    await startPromise;
+  }
   if (runtimeState.destroyed) return;
 
-  realGameState = await realGameStatePromise;
-  windowRef.GameState = createIntroGameState(realGameState, runtimeState);
-
-  hooks.applySentenceLayout('flat');
-  hooks.stopMainAudio();
-  hooks.disableAmbientDecor?.();
-  hooks.forceControlsVisible?.();
-  hooks.closeArchive();
-  hooks.setDimmerMode('white-freeze');
-  refs.audioPlayerUI.style.display = 'flex';
-  hooks.forceSceneRender?.('intro-ready-prewarm');
-  hooks.hideLoadingScreenSafely('intro-ready');
-  hooks.setReadingMode(true, 'intro-init');
-  hooks.refreshLayout?.('intro-init');
-  hooks.forceSceneRender?.('intro-init');
-  refs.startScreen?.classList?.add?.('is-hidden');
-  documentRef.body.classList.remove('intro-ready-to-begin');
-  hooks.refreshLoreProgressUi({ forceHidden: true });
-  setTrack('main', 0);
-  scheduleUiRecovery('intro-ready');
+  transitionOutOfStartScreen(startFlowResult);
 
   await speakSegment('main', 0);
   if (runtimeState.destroyed) return;
