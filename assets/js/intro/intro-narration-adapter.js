@@ -555,7 +555,12 @@ export function createIntroNarrationAdapter(options = {}) {
     onSegmentStart,
     onSegmentEnd,
     onAutoplayBlocked,
-    prepare
+    prepare,
+    getCurrentTime() {
+      if (Number.isFinite(player?.currentTime)) return Number(player.currentTime);
+      if (currentSession && Number.isFinite(currentSession.resumeFromSec)) return Number(currentSession.resumeFromSec);
+      return 0;
+    }
   };
 }
 

@@ -532,6 +532,126 @@ async function initIntroApp() {
     return actionResult;
   };
 
+  const hasFiniteAudioRange = (segment) => Number.isFinite(segment?.audioStartSec)
+    && Number.isFinite(segment?.audioEndSec)
+    && Number(segment.audioEndSec) > Number(segment.audioStartSec);
+
+  const beginBufferedActionWait = (actionId, config = {}) => {
+    runtimeState.waitingAction = actionId;
+    setGate({
+      includeAudio: config.includeAudio !== false,
+      targets: config.targets || [],
+      keys: config.keys || [],
+      allowCanvas: config.allowCanvas === true,
+      allowAll: config.allowAll === true
+    });
+    return new Promise((resolve) => {
+      runtimeState.waitResolver = resolve;
+      if (runtimeState.pendingActions.has(actionId)) {
+        const buffered = consumePendingAction(actionId);
+        windowRef.setTimeout(() => resolveAction(actionId, buffered), 0);
+      }
+    });
+  };
+
+  const buildContinuousAudioSegment = (trackName, startIndex, endIndex, leadInSec = 0.18) => {
+    const track = INTRO_TRACKS[trackName] || [];
+    const audioSegments = [];
+    for (let index = startIndex; index <= endIndex; index += 1) {
+      const segment = track[index];
+      if (hasFiniteAudioRange(segment)) audioSegments.push(segment);
+    }
+    if (!audioSegments.length) return null;
+    return {
+      id: String(trackName) + '-' + String(startIndex) + '-' + String(endIndex) + '-block',
+      text: track.slice(startIndex, endIndex + 1).map((segment) => segment?.text || '').join(' '),
+      audioStartSec: Math.max(0, Number(audioSegments[0].audioStartSec) - Math.max(0, Number(leadInSec) || 0)),
+      audioEndSec: Number(audioSegments[audioSegments.length - 1].audioEndSec),
+      holdDurationMs: 0
+    };
+  };
+
+  const playContinuousRange = async (trackName, startIndex, endIndex, options = {}) => {
+    if (runtimeState.destroyed) return false;
+    const blockSegment = buildContinuousAudioSegment(trackName, startIndex, endIndex, options.leadInSec);
+    if (!blockSegment) return false;
+
+    const trackEntries = runtimeState.currentTrackEntries[trackName] || [];
+    const uiByIndex = options.uiByIndex || {};
+    let activeIndex = -1;
+    let trackerTimer = 0;
+    let trackerActive = true;
+
+    const applyIndexState = (index) => {
+      if (runtimeState.destroyed || index === activeIndex) return;
+      activeIndex = index;
+      safeInvoke('setActiveSubtitleIndex', () => hooks.setActiveSubtitleIndex?.(index));
+      const uiConfig = uiByIndex[index] || null;
+      if (!uiConfig) {
+        clearPresentation();
+        setGate({ includeAudio: true });
+        return;
+      }
+      if (typeof uiConfig.onEnter === 'function') {
+        safeInvoke('range-enter:' + trackName + ':' + index, uiConfig.onEnter);
+      }
+      if (uiConfig.clear === true) {
+        clearPresentation();
+        setGate({
+          includeAudio: uiConfig.includeAudio !== false,
+          targets: uiConfig.targets || [],
+          keys: uiConfig.keys || [],
+          allowCanvas: uiConfig.allowCanvas === true,
+          allowAll: uiConfig.allowAll === true
+        });
+        return;
+      }
+      applyFocus(uiConfig);
+      setGate({
+        includeAudio: uiConfig.includeAudio !== false,
+        targets: uiConfig.targets || [],
+        keys: uiConfig.keys || [],
+        allowCanvas: uiConfig.allowCanvas === true,
+        allowAll: uiConfig.allowAll === true
+      });
+    };
+
+    const updateActiveIndexFromPlayback = () => {
+      if (!trackerActive || runtimeState.destroyed) return;
+      const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
+      if (Number.isFinite(currentTime)) {
+        let nextIndex = startIndex;
+        for (let index = startIndex + 1; index <= endIndex; index += 1) {
+          const cueTime = Number.isFinite(trackEntries[index]?.time) ? Number(trackEntries[index].time) : NaN;
+          if (!Number.isFinite(cueTime) || (currentTime + 0.04) < cueTime) break;
+          nextIndex = index;
+        }
+        applyIndexState(nextIndex);
+      }
+      trackerTimer = windowRef.setTimeout(updateActiveIndexFromPlayback, narration.isPlaying() || narration.isPaused() ? 90 : 140);
+    };
+
+    setTrack(trackName, startIndex);
+    runtimeState.lastReplaySegment = blockSegment;
+    applyIndexState(startIndex);
+    updateActiveIndexFromPlayback();
+    const result = await narration.play(blockSegment, { trackName, startIndex, endIndex, range: true });
+    trackerActive = false;
+    if (trackerTimer) windowRef.clearTimeout(trackerTimer);
+    applyIndexState(endIndex);
+    if (!runtimeState.waitingAction) clearPresentation();
+    syncNarrationActiveFlag(false);
+    syncAudioIcons(false);
+    return result;
+  };
+
+  const playCheckpointRange = async (trackName, startIndex, endIndex, actionId, options = {}) => {
+    if (runtimeState.destroyed) return false;
+    const actionPromise = beginBufferedActionWait(actionId, options.initialGate || {});
+    const playbackPromise = playContinuousRange(trackName, startIndex, endIndex, options);
+    const [, actionResult] = await Promise.all([playbackPromise, actionPromise]);
+    return actionResult;
+  };
   const replayCurrentSegment = async () => {
     if (!runtimeState.lastReplaySegment || runtimeState.destroyed) return;
     syncNarrationActiveFlag(false);
@@ -923,39 +1043,39 @@ async function initIntroApp() {
   hooks.forceControlsVisible?.();
   await wait(40);
   hooks.closeArchive();
-  await speakSegment('main', 3, {
-    targets: ['#bookBtn'],
-    selectors: ['#bookBtn']
-  });
-  if (runtimeState.destroyed) return;
-  await speakCheckpointSegment('main', 4, 'open-book', {
-    targets: ['#bookBtn'],
-    selectors: ['#bookBtn']
+  await playCheckpointRange('main', 3, 4, 'open-book', {
+    uiByIndex: {
+      3: { clear: true },
+      4: {
+        targets: ['#bookBtn'],
+        selectors: ['#bookBtn']
+      }
+    }
   });
   if (runtimeState.destroyed) return;
   hooks.forceControlsVisible?.();
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
-  await speakSegment('main', 6, { selectors: ['.archive-tab[data-tab="lore"]'] });
-  if (runtimeState.destroyed) return;
-  await speakSegment('main', 7);
-  if (runtimeState.destroyed) return;
-  await speakSegment('main', 8);
-  if (runtimeState.destroyed) return;
-
-  hooks.closeArchive();
-  clearPresentation();
-  hooks.refreshLayout?.('main-9-clear');
-  scheduleUiRecovery('main-9-clear');
-  await wait(120);
-  clearPresentation();
-  focusOverlay.clear();
-  await speakSegment('main', 9, { selectors: [] });
-  if (runtimeState.destroyed) return;
-  await speakCheckpointSegment('main', 10, 'dimmer-dark', {
-    targets: ['#sceneDimmerToggleBtn'],
-    selectors: ['#sceneDimmerToggleBtn']
+  await playCheckpointRange('main', 6, 10, 'dimmer-dark', {
+    uiByIndex: {
+      6: { selectors: ['.archive-tab[data-tab="lore"]'] },
+      7: { clear: true },
+      8: { clear: true },
+      9: {
+        clear: true,
+        onEnter: () => {
+          hooks.closeArchive();
+          hooks.refreshLayout?.('main-9-clear');
+          hooks.forceSceneRender?.('main-9-clear');
+          hooks.forceControlsVisible?.();
+        }
+      },
+      10: {
+        targets: ['#sceneDimmerToggleBtn'],
+        selectors: ['#sceneDimmerToggleBtn']
+      }
+    }
   });
   if (runtimeState.destroyed) return;
 
@@ -989,15 +1109,18 @@ async function initIntroApp() {
   await wait(80);
 
   hooks.refreshLoreProgressUi({ forceHidden: true });
-  await speakSegment('main', 13, { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS });
-  if (runtimeState.destroyed) return;
-  await speakSegment('main', 14, { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS });
-  if (runtimeState.destroyed) return;
-  await speakCheckpointSegment('main', 15, 'collect-orb', {
-    targets: [],
-    keys: MOVE_KEYS,
-    allowCanvas: true,
-    rectProvider: () => hooks.getOrbHighlightRect()
+  await playCheckpointRange('main', 13, 15, 'collect-orb', {
+    initialGate: { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS },
+    uiByIndex: {
+      13: { clear: true, allowCanvas: true, keys: MOVE_KEYS },
+      14: { clear: true, allowCanvas: true, keys: MOVE_KEYS },
+      15: {
+        targets: [],
+        keys: MOVE_KEYS,
+        allowCanvas: true,
+        rectProvider: () => hooks.getOrbHighlightRect()
+      }
+    }
   });
   if (runtimeState.destroyed) return;
 
@@ -1005,11 +1128,14 @@ async function initIntroApp() {
   hooks.setReadingMode(true, 'intro-souvenir');
   hooks.setDimmerMode('reading-clear');
   hooks.showBackToChapter(true);
-  await speakSegment('souvenir', 0);
-  if (runtimeState.destroyed) return;
-  await speakCheckpointSegment('souvenir', 1, 'back-to-chapter', {
-    targets: ['#backToChapterBtn'],
-    rectProvider: () => createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 })
+  await playCheckpointRange('souvenir', 0, 1, 'back-to-chapter', {
+    uiByIndex: {
+      0: { clear: true },
+      1: {
+        targets: ['#backToChapterBtn'],
+        rectProvider: () => createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 })
+      }
+    }
   });
   if (runtimeState.destroyed) return;
 
@@ -1026,22 +1152,26 @@ async function initIntroApp() {
   await wait(80);
   clearPresentation();
 
-  await speakSegment('main', 16, { selectors: [] });
-  if (runtimeState.destroyed) return;
-  await speakCheckpointSegment('main', 17, 'open-lore-hud', {
-    targets: ['#loreProgressHud'],
-    rectProvider: () => createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 })
+  await playCheckpointRange('main', 16, 17, 'open-lore-hud', {
+    uiByIndex: {
+      16: { clear: true },
+      17: {
+        targets: ['#loreProgressHud'],
+        rectProvider: () => createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 })
+      }
+    }
   });
   if (runtimeState.destroyed) return;
 
   hooks.openArchiveLore();
   hooks.forceControlsVisible?.();
   await wait(60);
-  await speakSegment('main', 18);
-  if (runtimeState.destroyed) return;
-
-  hooks.closeArchive();
-  await speakSegment('main', 19);
+  await playContinuousRange('main', 18, 19, {
+    uiByIndex: {
+      18: { clear: true },
+      19: { clear: true }
+    }
+  });
   if (runtimeState.destroyed) return;
 
   runtimeState.finalButtonVisible = true;
