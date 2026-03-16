@@ -264,6 +264,7 @@ async function initIntroApp() {
     finalButtonVisible: false,
     layoutChosen: false,
     startSegmentStarted: false,
+    startSegmentStartedAtMs: 0,
     startScreenHidden: false,
     pendingActions: new Map(),
     startRequested: false,
@@ -413,6 +414,31 @@ async function initIntroApp() {
     if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
     if (narration.isPlaying()) return;
     setAudioPromptVisible(true);
+  };
+
+  const normalizeLayoutChoice = (value) => {
+    if (typeof value !== 'string') return '';
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return '';
+    if (normalized === 'feed' || normalized === 'scroll' || normalized === 'schriftrolle') return 'flat';
+    if (normalized === 'blattern') return 'blaettern';
+    return normalized;
+  };
+
+  const getLayoutChoiceFromTarget = (eventTarget) => {
+    const elementTarget = eventTarget instanceof Element
+      ? eventTarget
+      : (eventTarget && eventTarget.parentElement instanceof Element ? eventTarget.parentElement : null);
+    if (!elementTarget) return '';
+    const option = elementTarget.closest?.('.reader-radio-option[data-layout]') || null;
+    if (option?.dataset?.layout) {
+      return normalizeLayoutChoice(option.dataset.layout);
+    }
+    const input = elementTarget.closest?.('input[name="readerSentenceLayout"]') || null;
+    if (input?.value) {
+      return normalizeLayoutChoice(input.value);
+    }
+    return '';
   };
 
   const rememberAction = (actionId, payload = true) => {
@@ -720,13 +746,25 @@ async function initIntroApp() {
     const transitionPointSec = 23.58;
     const startSegment = INTRO_TRACKS.start?.[0] || null;
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
-    const durationMs = Math.max(0, Math.round((transitionPointSec - startSec) * 1000)) + 120;
+    const fallbackElapsedMs = Math.max(0, Math.round((transitionPointSec - startSec) * 1000)) + 180;
     const started = await waitFor(
       () => runtimeState.startSegmentStarted || runtimeState.destroyed,
       { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
     ).catch(() => false);
     if (!started || runtimeState.destroyed) return false;
-    await wait(durationMs);
+    await waitFor(
+      () => {
+        if (runtimeState.destroyed) return true;
+        const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
+        if (Number.isFinite(currentTime) && currentTime >= (transitionPointSec - 0.05)) return true;
+        if (runtimeState.startSegmentStartedAtMs > 0
+          && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackElapsedMs) {
+          return true;
+        }
+        return false;
+      },
+      { timeoutMs: 45000, intervalMs: 60, label: 'intro start transition point' }
+    ).catch(() => false);
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
       && runtimeState.currentSegmentIndex === 0;
@@ -746,12 +784,28 @@ async function initIntroApp() {
       && runtimeState.currentSegmentIndex === 0
   };
 
-  const waitForNarrationTime = async (targetSec, label = 'intro narration time') => {
+  const waitForNarrationTime = async (targetSec, label = 'intro narration time', options = {}) => {
     const target = Number(targetSec);
     if (!Number.isFinite(target)) return false;
+    const timeoutMs = Number.isFinite(options.timeoutMs)
+      ? Math.max(1000, Math.round(Number(options.timeoutMs)))
+      : 60000;
+    const fallbackSinceStartMs = Number.isFinite(options.fallbackSinceStartMs)
+      ? Math.max(0, Math.round(Number(options.fallbackSinceStartMs)))
+      : 0;
     await waitFor(
-      () => runtimeState.destroyed || (typeof narration.getCurrentTime === 'function' && narration.getCurrentTime() >= (target - 0.06)),
-      { timeoutMs: 60000, intervalMs: 60, label }
+      () => {
+        if (runtimeState.destroyed) return true;
+        const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
+        if (Number.isFinite(currentTime) && currentTime >= (target - 0.06)) return true;
+        if (fallbackSinceStartMs > 0
+          && runtimeState.startSegmentStartedAtMs > 0
+          && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackSinceStartMs) {
+          return true;
+        }
+        return false;
+      },
+      { timeoutMs, intervalMs: 60, label }
     ).catch(() => false);
     return !runtimeState.destroyed;
   };
@@ -783,6 +837,7 @@ async function initIntroApp() {
   narration.onSegmentStart(() => {
     if (runtimeState.currentTrackName === 'start' && runtimeState.currentSegmentIndex === 0) {
       runtimeState.startSegmentStarted = true;
+      if (!runtimeState.startSegmentStartedAtMs) runtimeState.startSegmentStartedAtMs = Date.now();
     }
     clearAutoResumeTimer();
     setAudioPromptVisible(false);
@@ -951,23 +1006,22 @@ async function initIntroApp() {
     rememberAllowedAction('open-lore-hud', event, true);
   });
 
-  documentRef.querySelectorAll('.reader-radio-option[data-layout], input[name="readerSentenceLayout"]').forEach((element) => {
-    element.addEventListener('click', (event) => {
-      const target = event.target instanceof Element ? event.target : null;
-      const option = target?.closest?.('.reader-radio-option[data-layout]') || null;
-      const value = option?.dataset?.layout || target?.value;
-      if (value !== 'blaettern' && value !== 'flat') return;
-      hooks.applySentenceLayout(value);
-      runtimeState.layoutChosen = true;
-      if (runtimeState.waitingAction === 'choose-layout') {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        resolveAction('choose-layout', value);
-        return;
-      }
-      rememberAction('choose-layout', value);
-    }, true);
-  });
+  const handleLayoutChoiceEvent = (event) => {
+    const value = getLayoutChoiceFromTarget(event.target);
+    if (value !== 'blaettern' && value !== 'flat') return;
+    safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
+    runtimeState.layoutChosen = true;
+    if (runtimeState.waitingAction === 'choose-layout') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      resolveAction('choose-layout', value);
+      return;
+    }
+    rememberAction('choose-layout', value);
+  };
+
+  documentRef.addEventListener('click', handleLayoutChoiceEvent, true);
+  documentRef.addEventListener('change', handleLayoutChoiceEvent, true);
 
   windowRef.addEventListener('beforeunload', () => {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
@@ -1026,7 +1080,14 @@ async function initIntroApp() {
       selectors: ['[data-loading-tutorial="layout-group"]'],
       allowAll: true
     });
-    const audioPromise = waitForNarrationTime(41.72, 'intro layout sentence end');
+    const startSegment = INTRO_TRACKS.start?.[0] || null;
+    const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
+    const layoutSentenceEndSec = 41.72;
+    const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
+    const audioPromise = waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
+      fallbackSinceStartMs,
+      timeoutMs: 50000
+    });
     const [choice] = await Promise.all([actionPromise, audioPromise]);
     if (!runtimeState.destroyed && (narration.isPlaying() || narration.isPaused())) {
       narration.stop();
