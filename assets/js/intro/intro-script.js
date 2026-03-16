@@ -29,31 +29,31 @@ export const START_SCREEN_TRACK = Object.freeze([
   freezeSegment(
     'start-0',
     'Willkommen in der sch\u00f6nsten Stadt der Welt, Heydelberg. Ich bin Ihre Fremdenf\u00fchrerin Lita Helford. F\u00fcr eine optimale Erfahrung schalten Sie nun bitte Ihren Smartbone auf und w\u00e4hlen Sie sich ins ZIGZAG Netz ein. Vielen Dank.',
-    1,
-    23.25
+    1.5,
+    23.58
   )
 ]);
 
 export const MAIN_INTRO_TRACK = Object.freeze([
-  freezeSegment('main-0', 'Sp\u00fcren Sie mich?', 23.25, 26.1),
-  freezeSegment('main-1', 'Hier bin ich.', 26.1, 31),
+  freezeSegment('main-0', 'Sp\u00fcren Sie mich?', 25.78, 26.72),
+  freezeSegment('main-1', 'Hier bin ich.', 27.86, 28.52),
   freezeSegment(
     'main-2',
     'Um Ihren Aufenthalt optimal zu gestalten, w\u00e4hlen Sie nun bitte, ob Sie lieber Bl\u00e4ttern wie in einem Buch, oder Scrollen wie in einer Schriftrolle.',
-    31,
-    44
+    30.9,
+    41.36
   ),
   freezeSegment(
     'main-3',
     'Keine Sorge, sie k\u00f6nnen jederzeit wechseln. Ihnen stehen alle M\u00f6glichkeiten offen.',
-    44,
-    52
+    43.98,
+    49.74
   ),
   freezeSegment(
     'main-4',
     'Wenn Sie auf das Buch klicken, gelangen Sie zum Inhaltsverzeichnis.',
-    52,
-    58.7
+    51.54,
+    56.02
   ),
   freezeSegment(
     'main-5',
@@ -62,64 +62,64 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     null,
     { holdDurationMs: 1500 }
   ),
-  freezeSegment('main-6', 'Und Ihre Souveniers sind hier.', 58.7, 62),
-  freezeSegment('main-7', 'Was Souveniers sind? Jeder Pilger liebt doch Souveniers, nicht?', 62, 69),
-  freezeSegment('main-8', 'Sehen Sie, sie haben zwei M\u00f6glichkeiten, diese Stadt zu erfahren.', 69, 73.4),
-  freezeSegment('main-9', 'Erste M\u00f6glichkeit: Sie lesen einfach nur.', 73.4, 77),
+  freezeSegment('main-6', 'Und Ihre Souveniers sind hier.', 57.64, 60.34),
+  freezeSegment('main-7', 'Was Souveniers sind? Jeder Pilger liebt doch Souveniers, nicht?', 61.64, 67.54),
+  freezeSegment('main-8', 'Sehen Sie, sie haben zwei M\u00f6glichkeiten, diese Stadt zu erfahren.', 68.9, 72.4),
+  freezeSegment('main-9', 'Erste M\u00f6glichkeit: Sie lesen einfach nur.', 73.22, 75.46),
   freezeSegment(
     'main-10',
     'Sie k\u00f6nnen nat\u00fcrlich auch im Dunkeln lesen, wenn Sie m\u00f6gen. Hierzu bet\u00e4tigen Sie einfach den Lichtschalter',
-    77,
-    85
+    76.84,
+    83.38
   ),
   freezeSegment(
     'main-11',
     'Wenn Sie nun nocheinmal darauf klicken, sehen Sie pl\u00f6tzlich, wie die Stadt dahinter auftaucht.',
-    85,
-    93
+    84.6,
+    90.6
   ),
   freezeSegment(
     'main-12',
     'Wenn Sie dies nun dazu reizt, selbst einmal die Stadt zu erkunden, die vorgegebenen Pfade zu verlassen, dann klicken Sie doch einmal auf das Erkunden-Symbol.',
-    93,
-    106
+    93.32,
+    105.12
   ),
   freezeSegment(
     'main-13',
     'Nun k\u00f6nnen Sie sich frei bewegen und die Stadt erkunden. Sie k\u00f6nnen jederzeit durch Blick auf die Brille zur\u00fcck in den Lesemodus gelangen',
-    106,
-    120
+    106.68,
+    117.78
   ),
   freezeSegment(
     'main-14',
     'In diesem Erkundungs-Modus k\u00f6nnen Sie nun auch Souveniers einsammeln. Es sind die gelben Lichter, die Sie \u00fcberall in der Stadt finden.',
-    120,
-    128
+    120.23,
+    128.61
   ),
-  freezeSegment('main-15', 'Sammeln Sie beispielsweise einmal dieses gelbe Licht ein, indem Sie darauf klicken', 128, 135),
+  freezeSegment('main-15', 'Sammeln Sie beispielsweise einmal dieses gelbe Licht ein, indem Sie darauf klicken', 129.509, 133.91),
   freezeSegment(
     'main-16',
     'Rechts oben wird Ihnen angezeigt, wie viele Souveniers Sie in diesem Kapitel schon gefunden haben. Wer alle Souveniers eines Kapitels findet, bekommt eine zus\u00e4tzliche Belohnung.',
-    156,
-    171
+    156.61,
+    168.13
   ),
-  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 171, 177),
-  freezeSegment('main-18', 'Nun sind Sie bereit f\u00fcr Ihre Tour.', 177, 180.8),
-  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa\u00df.', 180.8, 184.8)
+  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 168.13, 174.13),
+  freezeSegment('main-18', 'Nun sind Sie bereit f\u00fcr Ihre Tour.', 177.25, 179.19),
+  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa\u00df.', 180.03, 183.43)
 ]);
 
 export const SOUVENIR_DEMO_TRACK = Object.freeze([
   freezeSegment(
     'souvenir-0',
     'In den Souveniers liegen Kleinode versteckt. Hier k\u00f6nnen Sie etwas \u00fcber Geschichte der Stadt oder \u00fcber die Werke ihrer Bewohner erfahren.',
-    135,
-    147
+    135.41,
+    145.29
   ),
   freezeSegment(
     'souvenir-1',
     'Wenn Sie sie fertig gelesen haben, kehrt es automatisch zum Kapitel zur\u00fcck. Oder Sie klick auf \u201eZur\u00fcck zum Kapitel\u201c.',
-    147,
-    156
+    146.25,
+    155.45
   )
 ]);
 

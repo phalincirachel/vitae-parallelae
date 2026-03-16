@@ -575,15 +575,24 @@ async function initIntroApp() {
     return 0;
   };
 
-  const waitForStartScreenDeadline = async () => {
+  const waitForStartScreenTransitionPoint = async () => {
     const startSegment = INTRO_TRACKS.start?.[0] || null;
-    const durationMs = Math.max(0, getSegmentExpectedDurationMs(startSegment)) + 3200;
+    const durationMs = Math.max(0, getSegmentExpectedDurationMs(startSegment)) + 160;
     const started = await waitFor(
       () => runtimeState.startSegmentStarted || runtimeState.destroyed,
       { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
     ).catch(() => false);
     if (!started || runtimeState.destroyed) return false;
     await wait(durationMs);
+    return !runtimeState.destroyed && !runtimeState.startScreenHidden
+      && runtimeState.currentTrackName === 'start'
+      && runtimeState.currentSegmentIndex === 0;
+  };
+
+  const waitForStartScreenDeadline = async () => {
+    const shouldTransition = await waitForStartScreenTransitionPoint();
+    if (!shouldTransition || runtimeState.destroyed) return false;
+    await wait(2200);
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
       && runtimeState.currentSegmentIndex === 0;
@@ -827,19 +836,35 @@ async function initIntroApp() {
 
   const startFlowResult = await Promise.race([
     startPromise.then(() => 'ended'),
+    waitForStartScreenTransitionPoint().then((shouldTransition) => {
+      if (!shouldTransition) return 'transition-idle';
+      transitionOutOfStartScreen('timed');
+      return 'transitioned';
+    }),
     waitForStartScreenDeadline().then((shouldForce) => {
-      if (!shouldForce) return 'idle';
+      if (!shouldForce) return 'hard-idle';
       console.warn('[Intro] forcing start screen transition after deadline');
       narration.stop();
+      transitionOutOfStartScreen('forced');
       return 'forced';
     })
   ]);
-  if (startFlowResult === 'idle') {
-    await startPromise;
+  if (startFlowResult === 'ended') {
+    transitionOutOfStartScreen('ended');
+  }
+  if (!runtimeState.startScreenHidden) {
+    transitionOutOfStartScreen(startFlowResult);
+  }
+  const startSettled = await Promise.race([
+    startPromise.then(() => true),
+    wait(900).then(() => false)
+  ]);
+  if (!startSettled && !runtimeState.destroyed) {
+    console.warn('[Intro] stopping lingering start segment after UI transition');
+    narration.stop();
+    await Promise.race([startPromise.then(() => true), wait(250).then(() => false)]);
   }
   if (runtimeState.destroyed) return;
-
-  transitionOutOfStartScreen(startFlowResult);
 
   await speakSegment('main', 0);
   if (runtimeState.destroyed) return;
