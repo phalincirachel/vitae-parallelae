@@ -1113,36 +1113,21 @@ async function initIntroApp() {
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
     const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
-    const choiceGracePromise = new Promise((resolve) => {
-      if (runtimeState.layoutChosen) {
-        windowRef.setTimeout(() => resolve('choice-grace'), 1500);
-      } else {
-        layoutChoiceConfirmedResolver = () => {
-          windowRef.setTimeout(() => resolve('choice-grace'), 1500);
-        };
-      }
-    });
     const narrationTimePromise = waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
       fallbackSinceStartMs,
       timeoutMs: 50000
     }).then(() => 'narration-time');
-    await Promise.race([narrationTimePromise, choiceGracePromise]);
-    if (runtimeState.waitingAction === 'choose-layout') {
-      const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
-      const fallbackChoice = normalizeLayoutChoice(checkedInput?.value || '');
-      if (fallbackChoice === 'blaettern' || fallbackChoice === 'flat') {
-        runtimeState.layoutChosen = true;
-        resolveAction('choose-layout', fallbackChoice);
-      } else {
-        runtimeState.layoutChosen = true;
-        resolveAction('choose-layout', 'blaettern');
+    
+    // Wait strictly for the audio to reach the end of the sentence (41.72s)
+    await narrationTimePromise;
+    
+    if (!runtimeState.layoutChosen) {
+      if (narration.isPlaying()) {
+         try { narration.stop() } catch(_) {}
       }
     }
+    
     const choice = await actionPromise;
-    if (!runtimeState.destroyed && (narration.isPlaying() || narration.isPaused())) {
-      narration.stop();
-      await wait(80);
-    }
     return choice;
   })();
 
@@ -1320,8 +1305,4 @@ async function initIntroApp() {
 
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
-  if (typeof window !== 'undefined' && window.location) {
-    try { window.sessionStorage.setItem('introWebBypass', '1'); } catch (_) {}
-    window.location.href = './index.html';
-  }
 });
