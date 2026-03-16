@@ -1049,7 +1049,9 @@ async function initIntroApp() {
     await wait(20);
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
     if (runtimeState.destroyed) return;
-    setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
+    if (!runtimeState.startScreenHidden && !runtimeState.waitingAction) {
+      setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
+    }
   })();
 
   void realGameStatePromise.then((resolvedState) => {
@@ -1083,11 +1085,19 @@ async function initIntroApp() {
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
     const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
-    const audioPromise = waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
+    await waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
       fallbackSinceStartMs,
       timeoutMs: 50000
     });
-    const [choice] = await Promise.all([actionPromise, audioPromise]);
+    if (runtimeState.waitingAction === 'choose-layout') {
+      const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
+      const fallbackChoice = normalizeLayoutChoice(checkedInput?.value || '');
+      if (fallbackChoice === 'blaettern' || fallbackChoice === 'flat') {
+        runtimeState.layoutChosen = true;
+        resolveAction('choose-layout', fallbackChoice);
+      }
+    }
+    const choice = await actionPromise;
     if (!runtimeState.destroyed && (narration.isPlaying() || narration.isPaused())) {
       narration.stop();
       await wait(80);
