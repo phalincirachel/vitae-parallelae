@@ -1008,9 +1008,9 @@ async function initIntroApp() {
 
   let layoutChoiceConfirmedResolver = null;
 
-  const handleLayoutChoiceEvent = (event) => {
-    const value = getLayoutChoiceFromTarget(event.target);
+  const triggerLayoutChoice = (value, source) => {
     if (value !== 'blaettern' && value !== 'flat') return;
+    console.log('[Intro] layout choice:', value, 'via', source);
     safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
     runtimeState.layoutChosen = true;
     if (typeof layoutChoiceConfirmedResolver === 'function') {
@@ -1025,8 +1025,27 @@ async function initIntroApp() {
     rememberAction('choose-layout', value);
   };
 
+  const handleLayoutChoiceEvent = (event) => {
+    const value = getLayoutChoiceFromTarget(event.target);
+    triggerLayoutChoice(value, event.type);
+  };
+
   documentRef.addEventListener('click', handleLayoutChoiceEvent, true);
   documentRef.addEventListener('change', handleLayoutChoiceEvent, true);
+
+  const layoutOptionLabels = documentRef.querySelectorAll('.reader-radio-option[data-layout]');
+  layoutOptionLabels.forEach((label) => {
+    const handleDirectTouch = (event) => {
+      const layout = label.dataset?.layout;
+      const value = normalizeLayoutChoice(layout || '');
+      if (!value) return;
+      const input = label.querySelector('input[name="readerSentenceLayout"]');
+      if (input && !input.checked) input.checked = true;
+      triggerLayoutChoice(value, 'direct-touch:' + event.type);
+    };
+    label.addEventListener('pointerup', handleDirectTouch, { passive: true });
+    label.addEventListener('touchend', handleDirectTouch, { passive: true });
+  });
 
   windowRef.addEventListener('beforeunload', () => {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
@@ -1088,6 +1107,25 @@ async function initIntroApp() {
       selectors: ['[data-loading-tutorial="layout-group"]'],
       allowAll: true
     });
+    let layoutPollTimer = 0;
+    const pollRadioState = () => {
+      if (runtimeState.destroyed || runtimeState.waitingAction !== 'choose-layout') return;
+      const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
+      if (!checkedInput) { layoutPollTimer = windowRef.setTimeout(pollRadioState, 500); return; }
+      const radioParent = checkedInput.closest?.('.reader-radio-option[data-layout]');
+      if (!radioParent) { layoutPollTimer = windowRef.setTimeout(pollRadioState, 500); return; }
+      const defaultChecked = checkedInput.defaultChecked;
+      if (!defaultChecked || runtimeState.layoutChosen) {
+        const value = normalizeLayoutChoice(checkedInput.value || '');
+        if (value === 'blaettern' || value === 'flat') {
+          console.log('[Intro] layout choice detected by poll:', value);
+          triggerLayoutChoice(value, 'poll');
+          return;
+        }
+      }
+      layoutPollTimer = windowRef.setTimeout(pollRadioState, 500);
+    };
+    layoutPollTimer = windowRef.setTimeout(pollRadioState, 800);
     const startSegment = INTRO_TRACKS.start?.[0] || null;
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
@@ -1106,6 +1144,7 @@ async function initIntroApp() {
       timeoutMs: 50000
     }).then(() => 'narration-time');
     await Promise.race([narrationTimePromise, choiceGracePromise]);
+    if (layoutPollTimer) { windowRef.clearTimeout(layoutPollTimer); layoutPollTimer = 0; }
     if (runtimeState.waitingAction === 'choose-layout') {
       const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
       const fallbackChoice = normalizeLayoutChoice(checkedInput?.value || '');
