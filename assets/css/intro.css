@@ -137,6 +137,27 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   outline: none;
 }
 
+.intro-audio-prompt[data-state='loading'] {
+  cursor: progress;
+}
+
+.intro-audio-prompt[data-state='loading']::after {
+  content: '';
+  width: 13px;
+  height: 13px;
+  margin-left: 10px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 248, 233, 0.92);
+  border-right-color: transparent;
+  animation: intro-start-spin 0.78s linear infinite;
+}
+
+@keyframes intro-start-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .intro-start-skip {
   margin-top: auto;
   margin-bottom: clamp(18px, 5vh, 40px);
@@ -196,15 +217,22 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
 }
 
 body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked {
-  border-color: rgba(255, 255, 255, 0.45);
+  border-color: rgba(255, 255, 255, 0.45) !important;
+  background: transparent !important;
+}
+
+body.intro-page.scene-dimmer-light-mode.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked {
+  border-color: rgba(0, 0, 0, 0.40) !important;
 }
 
 body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked::after {
-  opacity: 0;
+  content: none !important;
+  display: none !important;
+  opacity: 0 !important;
 }
 
 body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked + span {
-  color: inherit;
+  color: inherit !important;
 }
 
 body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-hidden,

@@ -93,7 +93,8 @@ function getRefs(documentRef) {
     startScreen: documentRef.getElementById('introStartScreen'),
     startImage: documentRef.getElementById('introStartImage'),
     startSkipBtn: documentRef.getElementById('startSkipBtn'),
-    introAudioPrompt: documentRef.getElementById('introAudioPrompt')
+    introAudioPrompt: documentRef.getElementById('introAudioPrompt'),
+    closeArchiveBtn: documentRef.getElementById('closeArchiveBtn')
   };
 }
 
@@ -245,6 +246,9 @@ async function initIntroApp() {
     }
     prompt.classList.remove('is-visible');
     prompt.disabled = true;
+    prompt.setAttribute('data-state', 'hidden');
+    prompt.removeAttribute('aria-busy');
+    documentRef.body.classList.remove('intro-start-loading');
     windowRef.setTimeout(() => {
       if (!prompt.classList.contains('is-visible')) prompt.hidden = true;
     }, 220);
@@ -254,6 +258,12 @@ async function initIntroApp() {
     transitionOverlay?.classList?.remove?.('active');
     const subtitleInfoOverlay = documentRef.getElementById('subtitleInfoOverlay');
     subtitleInfoOverlay?.classList?.remove?.('visible');
+  };
+  const hideBackToChapterPromptImmediate = () => {
+    refs.backToChapterBtn?.blur?.();
+    refs.backToChapterBtn?.classList?.remove?.('visible');
+    refs.backToChapterBtn?.style?.removeProperty?.('--back-btn-top');
+    hooks.showBackToChapter?.(false);
   };
   const runtimeState = {
     currentTrackName: 'main',
@@ -275,6 +285,7 @@ async function initIntroApp() {
     startScreenHidden: false,
     pendingActions: new Map(),
     startRequested: false,
+    startPromptState: 'idle',
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -286,6 +297,25 @@ async function initIntroApp() {
   let uiRecoveryFrame = 0;
   let autoResumeTimer = 0;
   let startPreludeTimer = 0;
+  const startPromptDefaultLabel = String(refs.introAudioPrompt?.textContent || '').trim() || 'Fuehrung beginnen';
+  const START_PROMPT_LABELS = Object.freeze({
+    idle: startPromptDefaultLabel,
+    loading: 'Laedt Audio...',
+    play: 'Fortsetzen',
+    pause: 'Pause'
+  });
+  const setStartPromptState = (nextState = 'idle') => {
+    const prompt = refs.introAudioPrompt;
+    if (!prompt) return;
+    runtimeState.startPromptState = nextState;
+    const label = START_PROMPT_LABELS[nextState] || startPromptDefaultLabel;
+    prompt.textContent = label;
+    prompt.setAttribute('aria-label', label);
+    prompt.setAttribute('data-state', nextState);
+    const isLoading = nextState === 'loading' && !runtimeState.startScreenHidden;
+    prompt.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+    documentRef.body.classList.toggle('intro-start-loading', isLoading);
+  };
 
   const normalizeUiConfig = (config = {}) => ({
     includeAudio: config.includeAudio !== false,
@@ -532,6 +562,7 @@ async function initIntroApp() {
     syncNarrationActiveFlag(false);
     clearPresentation();
     documentRef.body.classList.remove('intro-layout-choice-pending');
+    documentRef.body.classList.remove('intro-start-loading');
     if (runtimeState.waitResolver) {
       const resolver = runtimeState.waitResolver;
       runtimeState.waitResolver = null;
@@ -742,6 +773,7 @@ async function initIntroApp() {
     runtimeState.startScreenHidden = true;
     clearAutoResumeTimer();
     clearStartPreludeTimer();
+    setStartPromptState('idle');
     setAudioPromptVisible(false);
     realGameState = realGameState || defaultGameState;
     windowRef.GameState = createIntroGameState(realGameState, runtimeState);
@@ -882,6 +914,7 @@ async function initIntroApp() {
     clearAutoResumeTimer();
     if (!runtimeState.startScreenHidden) {
       setAudioPromptVisible(true);
+      setStartPromptState('play');
       return;
     }
     hooks.forceControlsVisible?.();
@@ -894,14 +927,24 @@ async function initIntroApp() {
       if (!runtimeState.startSegmentStartedAtMs) runtimeState.startSegmentStartedAtMs = Date.now();
     }
     clearAutoResumeTimer();
-    setAudioPromptVisible(false);
+    if (!runtimeState.startScreenHidden) {
+      setAudioPromptVisible(true);
+      setStartPromptState('pause');
+    } else {
+      setAudioPromptVisible(false);
+    }
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(true);
     syncNarrationActiveFlag(true);
   });
   narration.onSegmentEnd(() => {
     clearAutoResumeTimer();
-    setAudioPromptVisible(false);
+    if (!runtimeState.startScreenHidden) {
+      setAudioPromptVisible(true);
+      setStartPromptState('play');
+    } else {
+      setAudioPromptVisible(false);
+    }
     runtimeState.autoPausedForVisibility = false;
     syncAudioIcons(false);
     syncNarrationActiveFlag(false);
@@ -985,6 +1028,7 @@ async function initIntroApp() {
       resolveStartRequest = null;
     }
     narration.acknowledgeGesture?.();
+    setStartPromptState('loading');
     keepStartPromptAvailable();
     return true;
   };
@@ -997,6 +1041,38 @@ async function initIntroApp() {
     clearAutoResumeTimer();
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
+    if (!runtimeState.startRequested) {
+      requestIntroStart();
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (isNarrationAwaitingGesture()) {
+      narration.acknowledgeGesture?.();
+      setStartPromptState('loading');
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (narration.isPlaying()) {
+      narration.pause();
+      syncNarrationActiveFlag(false);
+      syncAudioIcons(false);
+      setStartPromptState('play');
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (narration.isPaused()) {
+      narration.resume();
+      narration.acknowledgeGesture?.();
+      syncNarrationActiveFlag(true);
+      syncAudioIcons(true);
+      setStartPromptState('pause');
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     requestIntroStart();
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -1027,8 +1103,7 @@ async function initIntroApp() {
     if (runtimeState.waitingAction === 'back-to-chapter') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      refs.backToChapterBtn?.blur?.();
-      hooks.showBackToChapter?.(false);
+      hideBackToChapterPromptImmediate();
       clearPresentation();
       resolveOrRememberAction('back-to-chapter', true);
       return;
@@ -1085,6 +1160,7 @@ async function initIntroApp() {
     if (value !== 'blaettern' && value !== 'flat') return;
     if (runtimeState.layoutChosen && !source.includes('poll')) return;
     documentRef.body.classList.remove('intro-layout-choice-pending');
+    documentRef.body.classList.remove('intro-start-loading');
     console.log('[Intro] layout choice:', value, 'via', source);
     safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
     runtimeState.layoutChosen = true;
@@ -1127,6 +1203,12 @@ async function initIntroApp() {
     label.addEventListener('touchend', handleDirectTouch, { passive: true });
   });
 
+  refs.closeArchiveBtn?.addEventListener('click', () => {
+    if (runtimeState.waitingAction !== 'choose-layout') return;
+    const fallbackLayout = readCheckedLayoutChoice() || 'flat';
+    triggerLayoutChoice(fallbackLayout, 'manual-close');
+  }, true);
+
   windowRef.addEventListener('beforeunload', () => {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
     clearAutoResumeTimer();
@@ -1138,6 +1220,7 @@ async function initIntroApp() {
     syncNarrationActiveFlag(false);
     clearPresentation();
     documentRef.body.classList.remove('intro-layout-choice-pending');
+    documentRef.body.classList.remove('intro-start-loading');
   });
 
   refs.skipBackBtn.disabled = true;
@@ -1151,10 +1234,15 @@ async function initIntroApp() {
   syncAudioIcons(false);
   void narration.prepare?.();
   setAudioPromptVisible(true);
+  setStartPromptState('idle');
+
+  const startImageReadyPromise = waitForStartImageReady(refs.startImage, 4000).catch(() => false);
 
   const startPromise = (async () => {
-    await waitForStartImageReady(refs.startImage, 4000);
     await startRequestPromise;
+    if (runtimeState.destroyed) return;
+    setStartPromptState('loading');
+    await Promise.race([startImageReadyPromise, wait(720)]);
     if (runtimeState.destroyed) return;
     await wait(20);
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
@@ -1179,7 +1267,6 @@ async function initIntroApp() {
     const shouldTransition = await waitForStartScreenTransitionPoint();
     if (runtimeState.destroyed) return false;
     if (!shouldTransition && !runtimeState.startScreenHidden) return false;
-    await wait(7200);
     if (runtimeState.destroyed) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
@@ -1268,14 +1355,48 @@ async function initIntroApp() {
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
+  const loreTabHighlightFallbackMs = (() => {
+    const segment = INTRO_TRACKS.main?.[6] || null;
+    if (Number.isFinite(segment?.audioStartSec) && Number.isFinite(segment?.audioEndSec)) {
+      return Math.max(1800, Math.round((Number(segment.audioEndSec) - Number(segment.audioStartSec)) * 1000) + 260);
+    }
+    return 3000;
+  })();
+  let loreTabHighlightFallbackTimer = 0;
+  const clearLoreTabHighlightFallback = () => {
+    if (!loreTabHighlightFallbackTimer) return;
+    windowRef.clearTimeout(loreTabHighlightFallbackTimer);
+    loreTabHighlightFallbackTimer = 0;
+  };
+
   await playCheckpointRange('main', 6, 10, 'dimmer-dark', {
     uiByIndex: {
-      6: { selectors: ['.archive-tab[data-tab="lore"]'] },
-      7: { clear: true },
-      8: { clear: true },
+      6: {
+        selectors: ['.archive-tab[data-tab="lore"]'],
+        onEnter: () => {
+          clearLoreTabHighlightFallback();
+          loreTabHighlightFallbackTimer = windowRef.setTimeout(() => {
+            loreTabHighlightFallbackTimer = 0;
+            if (runtimeState.destroyed) return;
+            if (runtimeState.currentTrackName !== 'main') return;
+            if (runtimeState.currentSegmentIndex > 6) return;
+            clearPresentation();
+            setGate({ includeAudio: true });
+          }, loreTabHighlightFallbackMs);
+        }
+      },
+      7: {
+        clear: true,
+        onEnter: () => clearLoreTabHighlightFallback()
+      },
+      8: {
+        clear: true,
+        onEnter: () => clearLoreTabHighlightFallback()
+      },
       9: {
         clear: true,
         onEnter: () => {
+          clearLoreTabHighlightFallback();
           hooks.closeArchive();
           hooks.refreshLayout?.('main-9-clear');
           hooks.forceSceneRender?.('main-9-clear');
@@ -1288,6 +1409,7 @@ async function initIntroApp() {
       }
     }
   });
+  clearLoreTabHighlightFallback();
   if (runtimeState.destroyed) return;
 
   if (!(await ensureSceneReadyForReveal())) return;
@@ -1351,13 +1473,13 @@ async function initIntroApp() {
       0: { clear: true },
       1: {
         targets: ['#backToChapterBtn'],
-        rectProvider: () => (runtimeState.waitingAction === 'back-to-chapter' ? createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
+        rectProvider: () => ((runtimeState.waitingAction === 'back-to-chapter' && runtimeState.currentTrackName === 'souvenir') ? createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
       }
     }
   });
   if (runtimeState.destroyed) return;
 
-  hooks.showBackToChapter(false);
+  hideBackToChapterPromptImmediate();
   clearPresentation();
   hooks.setReadingMode(true, 'intro-return');
   hooks.setDimmerMode('reading-clear');
@@ -1372,7 +1494,10 @@ async function initIntroApp() {
 
   await playCheckpointRange('main', 16, 17, 'open-lore-hud', {
     uiByIndex: {
-      16: { clear: true },
+      16: {
+        clear: true,
+        onEnter: () => hideBackToChapterPromptImmediate()
+      },
       17: {
         targets: ['#loreProgressHud'],
         rectProvider: () => createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 })
@@ -1412,3 +1537,9 @@ async function initIntroApp() {
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
 });
+
+
+
+
+
+
