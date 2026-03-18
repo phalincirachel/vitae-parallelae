@@ -17,12 +17,14 @@ export function createInteractiveFocusOverlay(options = {}) {
   const masks = ['top', 'right', 'bottom', 'left'].map((key) => {
     const mask = documentRef.createElement('div');
     mask.className = `intro-focus-mask intro-focus-mask--${key}`;
+    mask.style.pointerEvents = 'none';
     root.appendChild(mask);
     return mask;
   });
 
   const ring = documentRef.createElement('div');
   ring.className = 'intro-focus-ring';
+  ring.style.pointerEvents = 'none';
   root.appendChild(ring);
   documentRef.body.appendChild(root);
 

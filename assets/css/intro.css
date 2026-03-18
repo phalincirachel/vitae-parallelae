@@ -157,12 +157,18 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   pointer-events: none;
 }
 
+.intro-focus-overlay,
+.intro-focus-overlay * {
+  pointer-events: none !important;
+}
+
 .intro-focus-mask {
   display: none !important;
 }
 
 .intro-focus-ring {
   position: fixed;
+  pointer-events: none !important;
   border-radius: 18px;
   border: 2px solid rgba(255, 214, 88, 0.98);
   box-shadow:
@@ -196,7 +202,8 @@ body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-
 }
 
 body.intro-page #archiveModal {
-  z-index: 3000;
+  z-index: 5200;
+  pointer-events: auto;
 }
 
 body.intro-page #loreProgressHud.is-visible {

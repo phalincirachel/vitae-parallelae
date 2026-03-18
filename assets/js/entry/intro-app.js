@@ -1147,8 +1147,7 @@ async function initIntroApp() {
     hooks.forceControlsVisible?.();
     hooks.refreshLayout?.('intro-layout-open');
     const actionPromise = waitForAction('choose-layout', {
-      targets: [...INTRO_LAYOUT_STEP_TARGETS, '[data-loading-tutorial="layout-group"]', '.reader-settings-panel', '.reader-settings-panel *'],
-      selectors: ['[data-loading-tutorial="layout-group"]'],
+      targets: [...INTRO_LAYOUT_STEP_TARGETS, '.reader-settings-panel', '.reader-settings-panel *'],
       allowAll: true
     });
     const startSegment = INTRO_TRACKS.start?.[0] || null;
