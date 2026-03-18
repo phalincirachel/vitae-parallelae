@@ -2,7 +2,7 @@ import { SC_URLS } from '../shared/audio/soundcloud-urls.js';
 
 const DEFAULT_SOURCE_URL = SC_URLS.INTRO_LITA_1;
 const MONITOR_INTERVAL_MS = 120;
-const END_TOLERANCE_SEC = 0.2;
+const END_TOLERANCE_SEC = 0.03;
 const GESTURE_EVENTS = Object.freeze(['pointerdown', 'touchstart', 'touchend', 'click', 'keydown']);
 
 function wait(ms) {

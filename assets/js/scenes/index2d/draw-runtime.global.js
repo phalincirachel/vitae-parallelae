@@ -35,6 +35,9 @@
     const getNearbyLights = typeof options.getNearbyLights === 'function' ? options.getNearbyLights : () => [];
     const setNearbyLights = typeof options.setNearbyLights === 'function' ? options.setNearbyLights : () => {};
     const getActiveLightSourceId = typeof options.getActiveLightSourceId === 'function' ? options.getActiveLightSourceId : () => null;
+    const shouldRenderYellowLight = typeof options.shouldRenderYellowLight === 'function'
+      ? options.shouldRenderYellowLight
+      : () => true;
     const getIsLoreMode = typeof options.getIsLoreMode === 'function' ? options.getIsLoreMode : () => false;
     const getIsReadingMode = typeof options.getIsReadingMode === 'function' ? options.getIsReadingMode : () => false;
     const getSpriteReady = typeof options.getSpriteReady === 'function' ? options.getSpriteReady : () => false;
@@ -351,6 +354,7 @@
       ctx.restore();
 
       for (const light of yellowLights) {
+        if (!shouldRenderYellowLight(light)) continue;
         light.draw(ctx);
         if (getActiveLightSourceId() === light.id && getIsLoreMode()) {
           const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);

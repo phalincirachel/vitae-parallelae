@@ -1313,6 +1313,7 @@ async function initIntroApp() {
   await wait(80);
 
   hooks.refreshLoreProgressUi({ forceHidden: true });
+  hooks.setIntroOrbState?.({ revealEnabled: false, collectEnabled: false, targetLightId: null });
   await playCheckpointRange('main', 13, 15, 'collect-orb', {
     initialGate: { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS },
     uiByIndex: {
@@ -1322,11 +1323,17 @@ async function initIntroApp() {
         targets: [],
         keys: MOVE_KEYS,
         allowCanvas: true,
+        onEnter: () => {
+          hooks.setIntroOrbState?.({ revealEnabled: true, collectEnabled: true, targetLightId: 'auto' });
+          hooks.refreshLayout?.('intro-orb-armed');
+          hooks.forceSceneRender?.('intro-orb-armed');
+        },
         rectProvider: () => hooks.getOrbHighlightRect()
       }
     }
   });
   if (runtimeState.destroyed) return;
+  hooks.setIntroOrbState?.({ collectEnabled: false });
 
   setTrack('souvenir', 0);
   hooks.setReadingMode(true, 'intro-souvenir');
@@ -1367,6 +1374,7 @@ async function initIntroApp() {
   });
   if (runtimeState.destroyed) return;
 
+  clearPresentation();
   hooks.openArchiveLore();
   hooks.forceControlsVisible?.();
   await wait(60);
@@ -1377,6 +1385,10 @@ async function initIntroApp() {
     }
   });
   if (runtimeState.destroyed) return;
+  hooks.closeArchive();
+  clearPotentialBlockingOverlays();
+  clearPresentation();
+  await wait(40);
 
   runtimeState.finalButtonVisible = true;
   documentRef.body.classList.add('intro-ready-to-begin');

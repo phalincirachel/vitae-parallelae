@@ -799,6 +799,12 @@
         let mainAudioState = { time: 0, wasPlaying: false, tracks: [] };
         let activeLoreId = null;
         let activeLightSourceId = null;
+        const introOrbState = {
+            revealEnabled: false,
+            collectEnabled: false,
+            targetLightId: null,
+            resolvedTargetLightId: null
+        };
         let isLoreMode = false;
         let isMenuTriggeredLore = false;
         let loreResumeTimeout = null;
@@ -824,6 +830,96 @@
             resumeTimes: {}
         };
 
+        function pickNearestIntroOrbTargetId() {
+            if (!Array.isArray(yellowLights) || yellowLights.length === 0) return null;
+            const sceneName = (typeof SCENE_NAME !== 'undefined' && SCENE_NAME) ? SCENE_NAME : 'index';
+            const px = Number(player && player.x);
+            const py = Number(player && player.y);
+            const playerReady = Number.isFinite(px) && Number.isFinite(py);
+            let bestId = null;
+            let bestDist = Infinity;
+
+            for (const light of yellowLights) {
+                if (!light) continue;
+                const lightId = Math.trunc(Number(light.id));
+                if (!Number.isFinite(lightId) || lightId <= 0) continue;
+                const alreadyCollected = window.GameState && typeof window.GameState.isLightCollected === 'function'
+                    ? window.GameState.isLightCollected(sceneName, lightId)
+                    : (LoreSystem.state.collectedLights[sceneName] && LoreSystem.state.collectedLights[sceneName].includes(lightId));
+                if (alreadyCollected) continue;
+                if (!playerReady) return lightId;
+                const dx = Number(light.x) - px;
+                const dy = Number(light.y) - py;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    bestId = lightId;
+                }
+            }
+            return bestId;
+        }
+
+        function getIntroOrbTargetId() {
+            const raw = introOrbState.targetLightId;
+            if (raw === 'auto') {
+                if (Number.isFinite(introOrbState.resolvedTargetLightId)) {
+                    return Math.trunc(Number(introOrbState.resolvedTargetLightId));
+                }
+                const picked = pickNearestIntroOrbTargetId();
+                introOrbState.resolvedTargetLightId = Number.isFinite(picked) ? Math.trunc(Number(picked)) : null;
+                return introOrbState.resolvedTargetLightId;
+            }
+            const numeric = Math.trunc(Number(raw));
+            if (Number.isFinite(numeric) && numeric > 0) {
+                introOrbState.resolvedTargetLightId = numeric;
+                return numeric;
+            }
+            return null;
+        }
+
+        function setIntroOrbState(nextState = {}) {
+            if (!nextState || typeof nextState !== 'object') {
+                return { ...introOrbState };
+            }
+            if (Object.prototype.hasOwnProperty.call(nextState, 'revealEnabled')) {
+                introOrbState.revealEnabled = !!nextState.revealEnabled;
+            }
+            if (Object.prototype.hasOwnProperty.call(nextState, 'collectEnabled')) {
+                introOrbState.collectEnabled = !!nextState.collectEnabled;
+            }
+            if (Object.prototype.hasOwnProperty.call(nextState, 'targetLightId')) {
+                const incoming = nextState.targetLightId;
+                if (incoming === 'auto') {
+                    introOrbState.targetLightId = 'auto';
+                } else if (incoming === null || incoming === undefined || incoming === false || incoming === '') {
+                    introOrbState.targetLightId = null;
+                } else {
+                    const parsed = Math.trunc(Number(incoming));
+                    introOrbState.targetLightId = (Number.isFinite(parsed) && parsed > 0) ? parsed : null;
+                }
+                introOrbState.resolvedTargetLightId = null;
+            }
+            if (!introOrbState.revealEnabled) {
+                introOrbState.collectEnabled = false;
+            }
+            return { ...introOrbState };
+        }
+
+        function shouldRenderIntroYellowLight(light) {
+            if (!introOrbState.revealEnabled || !light) return false;
+            const lightId = Math.trunc(Number(light.id));
+            if (!Number.isFinite(lightId) || lightId <= 0) return false;
+            const sceneName = (typeof SCENE_NAME !== 'undefined' && SCENE_NAME) ? SCENE_NAME : 'index';
+            const alreadyCollected = window.GameState && typeof window.GameState.isLightCollected === 'function'
+                ? window.GameState.isLightCollected(sceneName, lightId)
+                : (LoreSystem.state.collectedLights[sceneName] && LoreSystem.state.collectedLights[sceneName].includes(lightId));
+            if (alreadyCollected) return false;
+            const targetId = getIntroOrbTargetId();
+            if (Number.isFinite(targetId) && targetId > 0) {
+                return lightId === targetId;
+            }
+            return false;
+        }
         const sharedUiRuntimeReady = (async function initSharedUiRuntime() {
             try {
                 const runtimeControllersModule = await import('./assets/js/shared/ui/runtime-controllers.js');
@@ -2741,6 +2837,7 @@
                 getNearbyLights: () => nearbyLights,
                 setNearbyLights: (value) => { nearbyLights = value; },
                 getActiveLightSourceId: () => activeLightSourceId,
+                shouldRenderYellowLight: (light) => shouldRenderIntroYellowLight(light),
                 getIsLoreMode: () => isLoreMode,
                 getIsReadingMode: () => isReadingMode,
                 getSpriteReady: () => spriteReady,
@@ -6601,10 +6698,12 @@
 
         window.transitionToNextChapter = async function () {
             const overlay = document.getElementById('transitionOverlay');
-            if (overlay) overlay.classList.add('active');
-
             const nextTarget = LEVEL.nextChapterTarget;
-            if (!nextTarget) return; // Kein Folgekapitel fÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¼r dieses Level
+            if (!nextTarget) {
+                if (overlay) overlay.classList.remove('active');
+                return;
+            }
+            if (overlay) overlay.classList.add('active');
 
             await waitForContentSwitchIdle('transition:next-chapter');
             await saveCurrentContentState({ reason: 'transition:next-chapter' });
@@ -7255,6 +7354,18 @@
         function updateLoreSystem() {
             // Grace Period: 3 Sekunden keine Trigger nach Start
             if (!gameReady || yellowLights.length === 0 || (Date.now() - GAME_START_TIME < 3000)) return;
+            if (!introOrbState.collectEnabled) {
+                activeLightSourceId = null;
+                lastShimmerLightId = null;
+                return;
+            }
+
+            const targetLightId = getIntroOrbTargetId();
+            if (!Number.isFinite(targetLightId) || targetLightId <= 0) {
+                activeLightSourceId = null;
+                lastShimmerLightId = null;
+                return;
+            }
 
             const refW = spriteReady ? SPRITE.frameWidth * SPRITE.scale : 16;
             const refH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
@@ -7273,6 +7384,9 @@
             let minDist = Infinity;
 
             yellowLights.forEach(light => {
+                if (!light || !shouldRenderIntroYellowLight(light)) return;
+                const lightId = Math.trunc(Number(light.id));
+                if (!Number.isFinite(lightId) || lightId !== targetLightId) return;
                 // Finde den nÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¤chsten Punkt auf der Bounding Box zum Licht
                 const closestX = Math.max(pLeft, Math.min(light.x, pRight));
                 const closestY = Math.max(pTop, Math.min(light.y, pBottom));
@@ -7283,7 +7397,7 @@
 
                 if (dist < minDist) {
                     minDist = dist;
-                    nearestId = light.id;
+                    nearestId = lightId;
                 }
             });
 
@@ -7308,12 +7422,13 @@
             } else if (!nearestId || minDist > EXIT_DIST) {
                 // Reset, wenn man den Einflussbereich verlassen hat
                 lastShimmerLightId = null;
+                if (!isLoreMode) activeLightSourceId = null;
             }
 
             // START LORE - Dynamic Sequential Unlock
             if (nearestId && minDist < TRIGGER_DIST && !isLoreMode) {
                 // Safety Check: Ignore if Player or Light is at (0,0) (Spawn Glitch)
-                const light = yellowLights.find(l => l.id === nearestId);
+                const light = yellowLights.find((l) => l && Math.trunc(Number(l.id)) === nearestId && shouldRenderIntroYellowLight(l));
                 if ((player.x === 0 && player.y === 0) || (light && light.x === 0 && light.y === 0)) {
                     return;
                 }
@@ -8139,10 +8254,28 @@
                 if (!button) return;
                 button.classList.remove('visible');
             },
+            setIntroOrbState(nextState) {
+                return setIntroOrbState(nextState || {});
+            },
+            getIntroOrbState() {
+                return {
+                    revealEnabled: !!introOrbState.revealEnabled,
+                    collectEnabled: !!introOrbState.collectEnabled,
+                    targetLightId: introOrbState.targetLightId,
+                    effectiveTargetLightId: getIntroOrbTargetId()
+                };
+            },
             getOrbHighlightRect() {
                 if (!gameCanvas) return null;
+                const targetId = getIntroOrbTargetId();
                 const visibleLight = Array.isArray(yellowLights)
-                    ? yellowLights.find((light) => light && !(window.GameState && typeof window.GameState.isLightCollected === 'function' && window.GameState.isLightCollected(SCENE_NAME, light.id)))
+                    ? yellowLights.find((light) => {
+                        if (!light || !shouldRenderIntroYellowLight(light)) return false;
+                        const lightId = Math.trunc(Number(light.id));
+                        if (!Number.isFinite(lightId)) return false;
+                        if (Number.isFinite(targetId) && targetId > 0) return lightId === targetId;
+                        return true;
+                    })
                     : null;
                 if (!visibleLight) return null;
                 const canvasRect = gameCanvas.getBoundingClientRect();

@@ -70,19 +70,19 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     'main-10',
     'Sie k\u00f6nnen nat\u00fcrlich auch im Dunkeln lesen, wenn Sie m\u00f6gen. Hierzu bet\u00e4tigen Sie einfach den Lichtschalter',
     76.84,
-    83.38
+    83.84
   ),
   freezeSegment(
     'main-11',
     'Wenn Sie nun nocheinmal darauf klicken, sehen Sie pl\u00f6tzlich, wie die Stadt dahinter auftaucht.',
     84.6,
-    90.6
+    91.05
   ),
   freezeSegment(
     'main-12',
     'Wenn Sie dies nun dazu reizt, selbst einmal die Stadt zu erkunden, die vorgegebenen Pfade zu verlassen, dann klicken Sie doch einmal auf das Erkunden-Symbol.',
     93.32,
-    105.12
+    105.65
   ),
   freezeSegment(
     'main-13',
@@ -103,9 +103,9 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     156.61,
     168.13
   ),
-  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 168.13, 174.13),
+  freezeSegment('main-17', 'Klicken Sie oben auf die Anzeige und Sie gelangen direkt zu ihrer Souvenier-Box.', 168.13, 174.65),
   freezeSegment('main-18', 'Nun sind Sie bereit f\u00fcr Ihre Tour.', 177.25, 179.19),
-  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa\u00df.', 180.03, 183.43)
+  freezeSegment('main-19', 'Um zu beginnen, klicken Sie auf den Button. Viel Spa\u00df.', 180.03, 184.1)
 ]);
 
 export const SOUVENIR_DEMO_TRACK = Object.freeze([
@@ -119,7 +119,7 @@ export const SOUVENIR_DEMO_TRACK = Object.freeze([
     'souvenir-1',
     'Wenn Sie sie fertig gelesen haben, kehrt es automatisch zum Kapitel zur\u00fcck. Oder Sie klick auf \u201eZur\u00fcck zum Kapitel\u201c.',
     146.25,
-    155.45
+    156.08
   )
 ]);
 
