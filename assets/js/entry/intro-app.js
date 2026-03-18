@@ -249,6 +249,12 @@ async function initIntroApp() {
       if (!prompt.classList.contains('is-visible')) prompt.hidden = true;
     }, 220);
   };
+  const clearPotentialBlockingOverlays = () => {
+    const transitionOverlay = documentRef.getElementById('transitionOverlay');
+    transitionOverlay?.classList?.remove?.('active');
+    const subtitleInfoOverlay = documentRef.getElementById('subtitleInfoOverlay');
+    subtitleInfoOverlay?.classList?.remove?.('visible');
+  };
   const runtimeState = {
     currentTrackName: 'main',
     currentSegmentIndex: 0,
@@ -263,6 +269,7 @@ async function initIntroApp() {
     autoPausedForVisibility: false,
     finalButtonVisible: false,
     layoutChosen: false,
+    layoutChoiceTouched: false,
     startSegmentStarted: false,
     startSegmentStartedAtMs: 0,
     startScreenHidden: false,
@@ -359,6 +366,7 @@ async function initIntroApp() {
 
   const refreshInteractiveState = (reason = 'refresh') => {
     if (runtimeState.destroyed) return;
+    clearPotentialBlockingOverlays();
     hooks.refreshLayout?.('intro-app:' + reason);
     hooks.forceSceneRender?.('intro-app:' + reason);
     hooks.forceControlsVisible?.();
@@ -377,6 +385,15 @@ async function initIntroApp() {
       clearDynamicFocus();
       focusOverlay.clear();
     }
+  };
+
+  const scheduleUiRecovery = (reason = 'refresh') => {
+    if (runtimeState.destroyed) return;
+    if (uiRecoveryFrame) windowRef.cancelAnimationFrame(uiRecoveryFrame);
+    uiRecoveryFrame = windowRef.requestAnimationFrame(() => {
+      uiRecoveryFrame = 0;
+      refreshInteractiveState(reason);
+    });
   };
 
   const createFocusRect = (element, options = {}) => {
@@ -426,6 +443,21 @@ async function initIntroApp() {
     if (normalized === 'feed' || normalized === 'scroll' || normalized === 'schriftrolle') return 'flat';
     if (normalized === 'blattern') return 'blaettern';
     return normalized;
+  };
+
+  const readCheckedLayoutChoice = () => {
+    const checkedInput = documentRef.querySelector('input[name="readerSentenceLayout"]:checked');
+    return normalizeLayoutChoice(checkedInput?.value || '');
+  };
+
+  const markLayoutChoiceTouch = (eventTarget) => {
+    const elementTarget = eventTarget instanceof Element
+      ? eventTarget
+      : (eventTarget && eventTarget.parentElement instanceof Element ? eventTarget.parentElement : null);
+    if (!elementTarget) return;
+    if (elementTarget.closest?.('.reader-radio-option[data-layout]')) {
+      runtimeState.layoutChoiceTouched = true;
+    }
   };
 
   const getLayoutChoiceFromTarget = (eventTarget) => {
@@ -1064,6 +1096,7 @@ async function initIntroApp() {
   };
 
   const handleLayoutChoiceEvent = (event) => {
+    markLayoutChoiceTouch(event.target);
     const value = getLayoutChoiceFromTarget(event.target);
     triggerLayoutChoice(value, event.type);
   };
@@ -1074,6 +1107,7 @@ async function initIntroApp() {
   const layoutOptionLabels = documentRef.querySelectorAll('.reader-radio-option[data-layout]');
   layoutOptionLabels.forEach((label) => {
     const handleDirectTouch = (event) => {
+      markLayoutChoiceTouch(label);
       const layout = label.dataset?.layout;
       const value = normalizeLayoutChoice(layout || '');
       if (!value) return;
@@ -1144,8 +1178,11 @@ async function initIntroApp() {
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
     hooks.openArchiveSettings();
+    clearPotentialBlockingOverlays();
     hooks.forceControlsVisible?.();
     hooks.refreshLayout?.('intro-layout-open');
+    runtimeState.layoutChoiceTouched = false;
+    const initialLayoutChoice = readCheckedLayoutChoice();
     const actionPromise = waitForAction('choose-layout', {
       targets: [...INTRO_LAYOUT_STEP_TARGETS, '.reader-settings-panel', '.reader-settings-panel *'],
       allowAll: true
@@ -1168,6 +1205,14 @@ async function initIntroApp() {
       },
       { timeoutMs: 3200, intervalMs: 60, label: 'intro layout segment completion' }
     ).catch(() => false);
+
+    if (!runtimeState.layoutChosen) {
+      const checkedLayoutChoice = readCheckedLayoutChoice();
+      const layoutChanged = checkedLayoutChoice && checkedLayoutChoice !== initialLayoutChoice;
+      if ((runtimeState.layoutChoiceTouched || layoutChanged) && checkedLayoutChoice) {
+        triggerLayoutChoice(checkedLayoutChoice, layoutChanged ? 'poll:checked-change' : 'poll:layout-touch');
+      }
+    }
 
     const choice = await actionPromise;
     return choice;
@@ -1200,6 +1245,7 @@ async function initIntroApp() {
   hooks.openArchiveContentTab('kapitel');
   hooks.forceControlsVisible?.();
   await wait(40);
+  clearPotentialBlockingOverlays();
   hooks.closeArchive();
   await playCheckpointRange('main', 3, 4, 'open-book', {
     uiByIndex: {
