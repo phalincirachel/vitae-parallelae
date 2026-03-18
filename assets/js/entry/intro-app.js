@@ -294,6 +294,9 @@ async function initIntroApp() {
     windowRef.__GAMEBOY_INTRO_NARRATION_ACTIVE__ = !!isActive;
   };
 
+  const isNarrationAwaitingGesture = () => typeof narration.isAwaitingGesture === 'function'
+    && narration.isAwaitingGesture();
+
   syncNarrationActiveFlag(false);
 
   const clearDynamicFocus = () => {
@@ -472,6 +475,12 @@ async function initIntroApp() {
     }
     resolver(payload);
     return true;
+  };
+
+  const resolveOrRememberAction = (actionId, payload = true) => {
+    if (!actionId) return false;
+    if (resolveAction(actionId, payload)) return true;
+    return rememberAction(actionId, payload);
   };
 
   runtimeState.onOrbCollected = () => {
@@ -798,9 +807,16 @@ async function initIntroApp() {
         if (runtimeState.destroyed) return true;
         const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
         if (Number.isFinite(currentTime) && currentTime >= (target - 0.06)) return true;
+        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
         if (fallbackSinceStartMs > 0
           && runtimeState.startSegmentStartedAtMs > 0
+          && !narrationPaused
+          && !isNarrationAwaitingGesture()
           && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackSinceStartMs) {
+          return true;
+        }
+        const narrationPlaying = typeof narration.isPlaying === 'function' && narration.isPlaying();
+        if (!narrationPlaying && !narrationPaused && !isNarrationAwaitingGesture()) {
           return true;
         }
         return false;
@@ -831,7 +847,12 @@ async function initIntroApp() {
 
   narration.onAutoplayBlocked?.(() => {
     clearAutoResumeTimer();
-    setAudioPromptVisible(true);
+    if (!runtimeState.startScreenHidden) {
+      setAudioPromptVisible(true);
+      return;
+    }
+    hooks.forceControlsVisible?.();
+    scheduleUiRecovery('autoplay-blocked');
   });
 
   narration.onSegmentStart(() => {
@@ -952,6 +973,16 @@ async function initIntroApp() {
     refs.introAudioPrompt?.addEventListener(eventName, handleIntroAudioPromptActivation, true);
   });
 
+  const narrationGestureBridgeEvents = ['pointerdown', 'touchstart', 'touchend', 'click', 'keydown'];
+  const bridgeNarrationGesture = () => {
+    if (runtimeState.destroyed) return;
+    if (!isNarrationAwaitingGesture()) return;
+    narration.acknowledgeGesture?.();
+  };
+  narrationGestureBridgeEvents.forEach((eventName) => {
+    windowRef.addEventListener(eventName, bridgeNarrationGesture, true);
+  });
+
   refs.nextChapterBtn?.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -963,7 +994,7 @@ async function initIntroApp() {
     if (runtimeState.waitingAction === 'back-to-chapter') {
       event.preventDefault();
       event.stopImmediatePropagation();
-      resolveAction('back-to-chapter', true);
+      resolveOrRememberAction('back-to-chapter', true);
       return;
     }
     rememberAllowedAction('back-to-chapter', event, true);
@@ -973,18 +1004,22 @@ async function initIntroApp() {
     event.preventDefault();
     event.stopImmediatePropagation();
     hooks.setDimmerMode('reading-clear');
-    resolveAction('dimmer-light', true);
+    resolveOrRememberAction('dimmer-light', true);
   }, true);
 
   refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction === 'dimmer-dark') {
-      windowRef.setTimeout(() => resolveAction('dimmer-dark', true), 0);
+      windowRef.setTimeout(() => {
+        resolveOrRememberAction('dimmer-dark', true);
+      }, 0);
     }
   });
 
   refs.bookBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-book') {
-      windowRef.setTimeout(() => resolveAction('open-book', true), 0);
+      windowRef.setTimeout(() => {
+        resolveOrRememberAction('open-book', true);
+      }, 0);
       return;
     }
     rememberAllowedAction('open-book', event, true);
@@ -992,7 +1027,9 @@ async function initIntroApp() {
 
   refs.readingModeBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction === 'enter-explore') {
-      windowRef.setTimeout(() => resolveAction('enter-explore', true), 0);
+      windowRef.setTimeout(() => {
+        resolveOrRememberAction('enter-explore', true);
+      }, 0);
       return;
     }
     rememberAction('enter-explore', true);
@@ -1000,7 +1037,9 @@ async function initIntroApp() {
 
   refs.loreProgressHud?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-lore-hud') {
-      windowRef.setTimeout(() => resolveAction('open-lore-hud', true), 0);
+      windowRef.setTimeout(() => {
+        resolveOrRememberAction('open-lore-hud', true);
+      }, 0);
       return;
     }
     rememberAllowedAction('open-lore-hud', event, true);
@@ -1018,7 +1057,7 @@ async function initIntroApp() {
       resolver(value);
     }
     if (runtimeState.waitingAction === 'choose-layout') {
-      resolveAction('choose-layout', value);
+      resolveOrRememberAction('choose-layout', value);
       return;
     }
     rememberAction('choose-layout', value);
@@ -1053,6 +1092,9 @@ async function initIntroApp() {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
     clearAutoResumeTimer();
     clearStartPreludeTimer();
+    narrationGestureBridgeEvents.forEach((eventName) => {
+      windowRef.removeEventListener(eventName, bridgeNarrationGesture, true);
+    });
     narration.stop();
     syncNarrationActiveFlag(false);
     clearPresentation();
@@ -1113,20 +1155,21 @@ async function initIntroApp() {
     const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
     const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
-    const narrationTimePromise = waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
+    await waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
       fallbackSinceStartMs,
       timeoutMs: 50000
-    }).then(() => 'narration-time');
-    
-    // Wait strictly for the audio to reach the end of the sentence (41.72s)
-    await narrationTimePromise;
-    
-    if (!runtimeState.layoutChosen) {
-      if (narration.isPlaying()) {
-         try { narration.stop() } catch(_) {}
-      }
-    }
-    
+    });
+
+    await waitFor(
+      () => {
+        if (runtimeState.destroyed) return true;
+        const narrationPlaying = typeof narration.isPlaying === 'function' && narration.isPlaying();
+        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
+        return !narrationPlaying && !narrationPaused && !isNarrationAwaitingGesture();
+      },
+      { timeoutMs: 3200, intervalMs: 60, label: 'intro layout segment completion' }
+    ).catch(() => false);
+
     const choice = await actionPromise;
     return choice;
   })();
@@ -1141,7 +1184,6 @@ async function initIntroApp() {
     waitForStartScreenDeadline().then((shouldForce) => {
       if (!shouldForce) return 'hard-idle';
       console.warn('[Intro] forcing start screen transition after deadline');
-      narration.stop();
       transitionOutOfStartScreen('forced');
       return 'forced';
     })

@@ -32,9 +32,7 @@ async function resolveStartupTarget() {
 
     const intro = save && typeof save === 'object' ? save.intro : null;
     const introCompleted = !!(intro && intro.completed === true && Number(intro.version) === Number(INTRO_VERSION));
-    // BYPASS INTRO AS REQUESTED BY USER
-    return INTRO_ROUTE.gameFile;
-    // return introCompleted ? INTRO_ROUTE.gameFile : INTRO_ROUTE.introFile;
+    return introCompleted ? INTRO_ROUTE.gameFile : INTRO_ROUTE.introFile;
 }
 
 async function createWindow() {

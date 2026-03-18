@@ -26,8 +26,6 @@
                 const save = raw ? JSON.parse(raw) : null;
                 const intro = save && typeof save === 'object' ? save.intro : null;
                 const introCompleted = !!(intro && intro.completed === true && Number(intro.version) === INTRO_VERSION);
-                // BYPASS INTRO AS REQUESTED BY USER
-                return;
                 if (!forceIntro && introCompleted) return;
 
                 const target = new URL(INTRO_ROUTE, window.location.href);
