@@ -73,6 +73,26 @@
             height: 100%;
             object-fit: cover;
             object-position: center center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity .34s ease;
+        }
+
+        #introStartScreen.is-image-ready #introStartImage {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        #introStartScreen.is-preloading::before {
+            background: #050507;
+            background-image: none;
+        }
+
+        #introStartScreen.is-preloading #introAudioPrompt,
+        #introStartScreen.is-preloading #startSkipBtn {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
 
         #loading-screen {
@@ -8038,12 +8058,12 @@
 
     </script>
 
-    <div id="introStartScreen" class="intro-start-screen">
-        <img id="introStartImage" src="assets/intro/start.png" alt="" aria-hidden="true" decoding="sync" fetchpriority="high">
+    <div id="introStartScreen" class="intro-start-screen is-preloading">
+        <img id="introStartImage" src="assets/intro/start.png" alt="" aria-hidden="true" decoding="async" fetchpriority="high">
         <div class="intro-start-panel">
             <div class="intro-start-copy">Ihre F&uuml;hrung beginnt in K&uuml;rze</div>
-            <button id="introAudioPrompt" class="intro-audio-prompt intro-audio-start is-visible" type="button">F&uuml;hrung beginnen</button>
-            <button id="startSkipBtn" class="intro-start-skip" type="button">Einf&uuml;hrung &uuml;berspringen</button>
+            <button id="introAudioPrompt" class="intro-audio-prompt intro-audio-start" type="button" hidden aria-hidden="true">F&uuml;hrung beginnen</button>
+            <button id="startSkipBtn" class="intro-start-skip" type="button" hidden aria-hidden="true">Einf&uuml;hrung &uuml;berspringen</button>
         </div>
     </div>
 
@@ -8297,17 +8317,3 @@
 </body>
 
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-

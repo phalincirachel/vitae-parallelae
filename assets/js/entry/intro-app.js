@@ -241,18 +241,28 @@ async function initIntroApp() {
     if (visible) {
       prompt.hidden = false;
       prompt.disabled = false;
+      prompt.setAttribute('aria-hidden', 'false');
       windowRef.requestAnimationFrame(() => prompt.classList.add('is-visible'));
       return;
     }
     prompt.classList.remove('is-visible');
     prompt.disabled = true;
     prompt.setAttribute('data-state', 'hidden');
+    prompt.setAttribute('aria-hidden', 'true');
     prompt.removeAttribute('aria-busy');
     documentRef.body.classList.remove('intro-start-loading');
     windowRef.setTimeout(() => {
       if (!prompt.classList.contains('is-visible')) prompt.hidden = true;
     }, 220);
   };
+  const setStartSkipVisible = (visible) => {
+    const button = refs.startSkipBtn;
+    if (!button) return;
+    button.hidden = !visible;
+    button.disabled = !visible;
+    button.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  };
+
   const clearPotentialBlockingOverlays = () => {
     const transitionOverlay = documentRef.getElementById('transitionOverlay');
     transitionOverlay?.classList?.remove?.('active');
@@ -286,6 +296,9 @@ async function initIntroApp() {
     pendingActions: new Map(),
     startRequested: false,
     startPromptState: 'idle',
+    startUiReady: false,
+    startImageReady: false,
+    lastPromptActivationAt: 0,
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -315,6 +328,22 @@ async function initIntroApp() {
     const isLoading = nextState === 'loading' && !runtimeState.startScreenHidden;
     prompt.setAttribute('aria-busy', isLoading ? 'true' : 'false');
     documentRef.body.classList.toggle('intro-start-loading', isLoading);
+  };
+
+  const revealStartUiWhenReady = () => {
+    if (runtimeState.destroyed || runtimeState.startScreenHidden || runtimeState.startUiReady) return;
+    runtimeState.startUiReady = true;
+    refs.startScreen?.classList?.remove?.('is-preloading');
+    refs.startScreen?.classList?.add?.('is-ready');
+    setStartSkipVisible(true);
+    setAudioPromptVisible(true);
+    setStartPromptState('idle');
+  };
+
+  const markStartImageReady = () => {
+    if (runtimeState.destroyed || runtimeState.startImageReady) return;
+    runtimeState.startImageReady = true;
+    refs.startScreen?.classList?.add?.('is-image-ready');
   };
 
   const normalizeUiConfig = (config = {}) => ({
@@ -461,7 +490,7 @@ async function initIntroApp() {
   };
 
   const keepStartPromptAvailable = () => {
-    if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
+    if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
     if (narration.isPlaying()) return;
     setAudioPromptVisible(true);
   };
@@ -771,6 +800,9 @@ async function initIntroApp() {
   const transitionOutOfStartScreen = (reason = 'complete') => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden) return;
     runtimeState.startScreenHidden = true;
+    runtimeState.startUiReady = true;
+    refs.startScreen?.classList?.remove?.('is-preloading');
+    refs.startScreen?.classList?.add?.('is-ready');
     clearAutoResumeTimer();
     clearStartPreludeTimer();
     setStartPromptState('idle');
@@ -831,7 +863,10 @@ async function initIntroApp() {
         if (runtimeState.destroyed) return true;
         const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
         if (Number.isFinite(currentTime) && currentTime >= (transitionPointSec - 0.05)) return true;
+        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
         if (runtimeState.startSegmentStartedAtMs > 0
+          && !narrationPaused
+          && !isNarrationAwaitingGesture()
           && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackElapsedMs) {
           return true;
         }
@@ -852,10 +887,29 @@ async function initIntroApp() {
       { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
     ).catch(() => false);
     if (!started || runtimeState.destroyed) return false;
-    await wait(durationMs);
+    const deadlineStartAt = Date.now();
+    let pausedAt = 0;
+    let pausedTotalMs = 0;
+    await waitFor(
+      () => {
+        if (runtimeState.destroyed) return true;
+        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
+        const isPausedLike = narrationPaused || isNarrationAwaitingGesture();
+        if (isPausedLike) {
+          if (!pausedAt) pausedAt = Date.now();
+        } else if (pausedAt) {
+          pausedTotalMs += Math.max(0, Date.now() - pausedAt);
+          pausedAt = 0;
+        }
+        const activePausedMs = pausedAt ? Math.max(0, Date.now() - pausedAt) : 0;
+        const activeElapsedMs = Math.max(0, Date.now() - deadlineStartAt - pausedTotalMs - activePausedMs);
+        return activeElapsedMs >= durationMs;
+      },
+      { timeoutMs: 120000, intervalMs: 80, label: 'intro start deadline' }
+    ).catch(() => false);
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
-      && runtimeState.currentSegmentIndex === 0
+      && runtimeState.currentSegmentIndex === 0;
   };
 
   const waitForNarrationTime = async (targetSec, label = 'intro narration time', options = {}) => {
@@ -913,8 +967,10 @@ async function initIntroApp() {
   narration.onAutoplayBlocked?.(() => {
     clearAutoResumeTimer();
     if (!runtimeState.startScreenHidden) {
-      setAudioPromptVisible(true);
-      setStartPromptState('play');
+      if (runtimeState.startUiReady) {
+        setAudioPromptVisible(true);
+        setStartPromptState('play');
+      }
       return;
     }
     hooks.forceControlsVisible?.();
@@ -927,7 +983,7 @@ async function initIntroApp() {
       if (!runtimeState.startSegmentStartedAtMs) runtimeState.startSegmentStartedAtMs = Date.now();
     }
     clearAutoResumeTimer();
-    if (!runtimeState.startScreenHidden) {
+    if (!runtimeState.startScreenHidden && runtimeState.startUiReady) {
       setAudioPromptVisible(true);
       setStartPromptState('pause');
     } else {
@@ -939,7 +995,7 @@ async function initIntroApp() {
   });
   narration.onSegmentEnd(() => {
     clearAutoResumeTimer();
-    if (!runtimeState.startScreenHidden) {
+    if (!runtimeState.startScreenHidden && runtimeState.startUiReady) {
       setAudioPromptVisible(true);
       setStartPromptState('play');
     } else {
@@ -1021,7 +1077,7 @@ async function initIntroApp() {
   });
 
   const requestIntroStart = () => {
-    if (runtimeState.destroyed || runtimeState.startScreenHidden) return false;
+    if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return false;
     if (!runtimeState.startRequested) {
       runtimeState.startRequested = true;
       resolveStartRequest?.(true);
@@ -1034,9 +1090,21 @@ async function initIntroApp() {
   };
 
   const handleIntroAudioPromptActivation = (event) => {
-    const isKeyboardEvent = event?.type === 'keydown';
+    const eventType = event?.type || '';
+    const isKeyboardEvent = eventType === 'keydown';
     const key = isKeyboardEvent ? event.key : '';
+    if (eventType === 'pointerdown' && Number.isFinite(event?.button) && Number(event.button) !== 0) return;
     if (isKeyboardEvent && key !== 'Enter' && key !== ' ') return;
+    if (!isKeyboardEvent) {
+      const now = Date.now();
+      if ((now - runtimeState.lastPromptActivationAt) < 180) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      runtimeState.lastPromptActivationAt = now;
+    }
+    if (!runtimeState.startUiReady) return;
     if (refs.introAudioPrompt?.disabled) return;
     clearAutoResumeTimer();
     if (runtimeState.destroyed) return;
@@ -1078,7 +1146,10 @@ async function initIntroApp() {
     event.stopImmediatePropagation();
   };
 
-  ['pointerdown', 'touchend', 'click', 'keydown'].forEach((eventName) => {
+  const promptActivationEvents = windowRef.PointerEvent
+    ? ['pointerdown', 'keydown']
+    : ['touchend', 'click', 'keydown'];
+  promptActivationEvents.forEach((eventName) => {
     refs.introAudioPrompt?.addEventListener(eventName, handleIntroAudioPromptActivation, true);
   });
 
@@ -1232,17 +1303,45 @@ async function initIntroApp() {
   hooks.refreshLoreProgressUi({ forceHidden: true });
   setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   syncAudioIcons(false);
-  void narration.prepare?.();
-  setAudioPromptVisible(true);
+  refs.startScreen?.classList?.add?.('is-preloading');
+  refs.startScreen?.classList?.remove?.('is-ready');
+  refs.startScreen?.classList?.remove?.('is-image-ready');
+  setStartSkipVisible(false);
+  setAudioPromptVisible(false);
   setStartPromptState('idle');
 
-  const startImageReadyPromise = waitForStartImageReady(refs.startImage, 4000).catch(() => false);
+  const narrationPreparePromise = Promise.resolve(narration.prepare?.()).catch(() => false);
+  if (refs.startImage?.complete && Number(refs.startImage.naturalWidth) > 0) {
+    markStartImageReady();
+  } else {
+    refs.startImage?.addEventListener?.('load', markStartImageReady, { once: true });
+  }
+  const startImageReadyPromise = waitForStartImageReady(refs.startImage, 12000)
+    .then((imageReady) => {
+      if (imageReady) markStartImageReady();
+      return imageReady;
+    })
+    .catch(() => false);
+  const startUiReadyPromise = (async () => {
+    await wait(380);
+    await Promise.race([
+      Promise.all([
+        Promise.race([startImageReadyPromise, wait(2300)]),
+        Promise.race([narrationPreparePromise, wait(900)])
+      ]),
+      wait(3200)
+    ]);
+    if (runtimeState.destroyed || runtimeState.startScreenHidden) return false;
+    revealStartUiWhenReady();
+    return runtimeState.startImageReady;
+  })();
 
   const startPromise = (async () => {
+    await startUiReadyPromise;
     await startRequestPromise;
     if (runtimeState.destroyed) return;
     setStartPromptState('loading');
-    await Promise.race([startImageReadyPromise, wait(720)]);
+    await Promise.race([narrationPreparePromise, wait(500)]);
     if (runtimeState.destroyed) return;
     await wait(20);
     await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
@@ -1537,9 +1636,3 @@ async function initIntroApp() {
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
 });
-
-
-
-
-
-
