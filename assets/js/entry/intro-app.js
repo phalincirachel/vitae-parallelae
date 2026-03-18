@@ -531,6 +531,7 @@ async function initIntroApp() {
     narration.stop();
     syncNarrationActiveFlag(false);
     clearPresentation();
+    documentRef.body.classList.remove('intro-layout-choice-pending');
     if (runtimeState.waitResolver) {
       const resolver = runtimeState.waitResolver;
       runtimeState.waitResolver = null;
@@ -1026,6 +1027,9 @@ async function initIntroApp() {
     if (runtimeState.waitingAction === 'back-to-chapter') {
       event.preventDefault();
       event.stopImmediatePropagation();
+      refs.backToChapterBtn?.blur?.();
+      hooks.showBackToChapter?.(false);
+      clearPresentation();
       resolveOrRememberAction('back-to-chapter', true);
       return;
     }
@@ -1080,6 +1084,7 @@ async function initIntroApp() {
   const triggerLayoutChoice = (value, source) => {
     if (value !== 'blaettern' && value !== 'flat') return;
     if (runtimeState.layoutChosen && !source.includes('poll')) return;
+    documentRef.body.classList.remove('intro-layout-choice-pending');
     console.log('[Intro] layout choice:', value, 'via', source);
     safeInvoke('applySentenceLayout', () => hooks.applySentenceLayout(value));
     runtimeState.layoutChosen = true;
@@ -1132,6 +1137,7 @@ async function initIntroApp() {
     narration.stop();
     syncNarrationActiveFlag(false);
     clearPresentation();
+    documentRef.body.classList.remove('intro-layout-choice-pending');
   });
 
   refs.skipBackBtn.disabled = true;
@@ -1177,11 +1183,12 @@ async function initIntroApp() {
     if (runtimeState.destroyed) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
+    runtimeState.layoutChoiceTouched = false;
+    documentRef.body.classList.add('intro-layout-choice-pending');
     hooks.openArchiveSettings();
     clearPotentialBlockingOverlays();
     hooks.forceControlsVisible?.();
     hooks.refreshLayout?.('intro-layout-open');
-    runtimeState.layoutChoiceTouched = false;
     const initialLayoutChoice = readCheckedLayoutChoice();
     const actionPromise = waitForAction('choose-layout', {
       targets: [...INTRO_LAYOUT_STEP_TARGETS, '.reader-settings-panel', '.reader-settings-panel *'],
@@ -1344,7 +1351,7 @@ async function initIntroApp() {
       0: { clear: true },
       1: {
         targets: ['#backToChapterBtn'],
-        rectProvider: () => createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 })
+        rectProvider: () => (runtimeState.waitingAction === 'back-to-chapter' ? createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
       }
     }
   });

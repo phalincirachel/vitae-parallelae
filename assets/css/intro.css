@@ -195,6 +195,18 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   opacity: 0.5;
 }
 
+body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked {
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked::after {
+  opacity: 0;
+}
+
+body.intro-page.intro-layout-choice-pending .reader-settings-panel .reader-radio-option input[name='readerSentenceLayout']:checked + span {
+  color: inherit;
+}
+
 body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-hidden,
 body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-controls-visible {
   opacity: 1 !important;
