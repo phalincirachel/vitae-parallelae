@@ -37,6 +37,7 @@ class SCAudioAdapter {
         this._playIntent = false;
         this._scLastProgressAt = 0;
         this._pendingSeek = undefined;
+        this._scApiReadyPromise = null;
 
         // Event Listeners Storage
         this._listeners = {
@@ -59,6 +60,37 @@ class SCAudioAdapter {
 
     _trace() { }
 
+    _isScApiReady() {
+        return (typeof window !== 'undefined')
+            && !!window.SC
+            && !!window.SC.Widget
+            && !!window.SC.Widget.Events;
+    }
+
+    _waitForScApi(timeoutMs = 20000) {
+        if (this._isScApiReady()) return Promise.resolve(true);
+        if (this._scApiReadyPromise) return this._scApiReadyPromise;
+
+        this._scApiReadyPromise = new Promise((resolve) => {
+            const startedAt = Date.now();
+            const tick = () => {
+                if (this._isScApiReady()) {
+                    this._scApiReadyPromise = null;
+                    resolve(true);
+                    return;
+                }
+                if ((Date.now() - startedAt) >= Math.max(1000, Number(timeoutMs) || 0)) {
+                    this._scApiReadyPromise = null;
+                    resolve(false);
+                    return;
+                }
+                setTimeout(tick, 120);
+            };
+            tick();
+        });
+
+        return this._scApiReadyPromise;
+    }
     _bindHtml5Events() {
         const events = ['timeupdate', 'ended', 'play', 'pause', 'loadedmetadata', 'canplay'];
         events.forEach(ev => {
@@ -111,6 +143,7 @@ class SCAudioAdapter {
         // Prevents stale position carries across chapters/tracks.
         this._scCurrentTime = 0;
         this._pendingSeek = undefined;
+        this._scApiReadyPromise = null;
         this._scLastProgressAt = 0;
 
         // Detect Type
@@ -132,6 +165,7 @@ class SCAudioAdapter {
         this._playIntent = false;
         this._scCurrentTime = 0;
         this._pendingSeek = undefined;
+        this._scApiReadyPromise = null;
         this._scLastProgressAt = 0;
 
         // Pause Widget if active
@@ -156,6 +190,7 @@ class SCAudioAdapter {
         this._playIntent = false;
         this._scCurrentTime = 0;
         this._pendingSeek = undefined;
+        this._scApiReadyPromise = null;
         this._scLastProgressAt = 0;
 
         // Pause HTML5 if active
@@ -169,12 +204,15 @@ class SCAudioAdapter {
             const widgetOptions = '&auto_play=false&hide_related=true&show_comments=false&buying=false&sharing=false&download=false&show_artwork=false&visual=false&single_active=false';
             this.iframe.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}${widgetOptions}`;
 
-            this.iframe.onload = () => {
-                if (typeof SC === 'undefined') {
-                    console.error('[SCAudioAdapter] SC API not found!');
+            this.iframe.onload = async () => {
+                const scReady = await this._waitForScApi(25000);
+                if (!scReady) {
+                    console.error('[SCAudioAdapter] SC API not available (timeout).');
                     return;
                 }
-                this.widget = SC.Widget(this.iframe);
+                if (this.mode !== 'sc') return;
+                if (!this.iframe) return;
+                this.widget = window.SC.Widget(this.iframe);
                 this._bindWidgetEvents();
             };
         } else {
@@ -195,7 +233,7 @@ class SCAudioAdapter {
     }
 
     _bindWidgetEvents() {
-        this.widget.bind(SC.Widget.Events.READY, () => {
+        this.widget.bind(window.SC.Widget.Events.READY, () => {
             this._isReady = true;
             console.log('[SCAudioAdapter] SC Widget READY');
             this._trace('sc:event:ready');
@@ -207,7 +245,7 @@ class SCAudioAdapter {
             }
         });
 
-        this.widget.bind(SC.Widget.Events.PLAY, () => {
+        this.widget.bind(window.SC.Widget.Events.PLAY, () => {
             if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = false;
             this._playIntent = true;
@@ -218,7 +256,7 @@ class SCAudioAdapter {
             this._applyPendingSeek();
         });
 
-        this.widget.bind(SC.Widget.Events.PAUSE, () => {
+        this.widget.bind(window.SC.Widget.Events.PAUSE, () => {
             if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = true;
             this._playIntent = false;
@@ -226,7 +264,7 @@ class SCAudioAdapter {
             this._dispatch('pause');
         });
 
-        this.widget.bind(SC.Widget.Events.FINISH, () => {
+        this.widget.bind(window.SC.Widget.Events.FINISH, () => {
             if (this.mode !== 'sc' || !this._isReady) return;
             this._scPaused = true;
             this._playIntent = false;
@@ -234,19 +272,19 @@ class SCAudioAdapter {
             this._dispatch('ended');
         });
 
-        this.widget.bind(SC.Widget.Events.PLAY_PROGRESS, (data) => {
+        this.widget.bind(window.SC.Widget.Events.PLAY_PROGRESS, (data) => {
             if (this.mode !== 'sc' || !this._isReady) return;
             if (data && Number.isFinite(data.currentPosition)) {
                 this._scCurrentTime = data.currentPosition / 1000;
             }
-            // Do NOT set _scPaused here — late PLAY_PROGRESS events after PAUSE
+            // Do NOT set _scPaused here -- late PLAY_PROGRESS events after PAUSE
             // would overwrite the pause state. Only PLAY event controls _scPaused.
             this._scLastProgressAt = Date.now();
             this._dispatch('timeupdate');
         });
 
         // Error Handling
-        this.widget.bind(SC.Widget.Events.ERROR, (e) => {
+        this.widget.bind(window.SC.Widget.Events.ERROR, (e) => {
             console.error('[SCAudioAdapter] Widget Error:', e);
         });
     }
