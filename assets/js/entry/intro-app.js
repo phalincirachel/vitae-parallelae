@@ -250,9 +250,11 @@ async function initIntroApp() {
     const prompt = refs.introAudioPrompt;
     if (!prompt) return;
     if (visible) {
+      const canInteract = !!(runtimeState && (runtimeState.startRequested || runtimeState.narrationPrepared));
       prompt.hidden = false;
-      prompt.disabled = false;
+      prompt.disabled = !canInteract;
       prompt.setAttribute('aria-hidden', 'false');
+      prompt.setAttribute('aria-disabled', canInteract ? 'false' : 'true');
       windowRef.requestAnimationFrame(() => prompt.classList.add('is-visible'));
       return;
     }
@@ -311,6 +313,8 @@ async function initIntroApp() {
     startPromptState: 'idle',
     startUiReady: false,
     startImageReady: false,
+    narrationPrepared: false,
+    narrationPreparePending: false,
     lastPromptActivationAt: 0,
     currentTrackEntries: {
       start: buildTrackEntries('start'),
@@ -383,6 +387,13 @@ async function initIntroApp() {
     prompt.setAttribute('aria-busy', isLoading ? 'true' : 'false');
     documentRef.body.classList.toggle('intro-start-loading', isLoading);
   };
+  const syncStartPromptInteractivity = () => {
+    const prompt = refs.introAudioPrompt;
+    if (!prompt || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
+    const canInteract = runtimeState.startRequested || runtimeState.narrationPrepared;
+    prompt.disabled = !canInteract;
+    prompt.setAttribute('aria-disabled', canInteract ? 'false' : 'true');
+  };
 
   const revealStartUiWhenReady = () => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden || runtimeState.startUiReady) return;
@@ -391,7 +402,8 @@ async function initIntroApp() {
     refs.startScreen?.classList?.add?.('is-ready');
     setStartSkipVisible(true);
     setAudioPromptVisible(true);
-    setStartPromptState('idle');
+    setStartPromptState(runtimeState.narrationPrepared ? 'idle' : 'loading');
+    syncStartPromptInteractivity();
   };
 
   const markStartImageReady = () => {
@@ -420,19 +432,28 @@ async function initIntroApp() {
   const syncStartPromptState = (_reason = 'sync') => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
     setAudioPromptVisible(true);
+    if (!runtimeState.startRequested && !runtimeState.narrationPrepared) {
+      setStartPromptState('loading');
+      syncStartPromptInteractivity();
+      return;
+    }
     if (narration.isPlaying()) {
       setStartPromptState('pause');
+      syncStartPromptInteractivity();
       return;
     }
     if (narration.isPaused() || isNarrationAwaitingGesture()) {
       setStartPromptState('play');
+      syncStartPromptInteractivity();
       return;
     }
     if (runtimeState.startRequested && !runtimeState.startSegmentStarted) {
       setStartPromptState('loading');
+      syncStartPromptInteractivity();
       return;
     }
     setStartPromptState('idle');
+    syncStartPromptInteractivity();
   };
 
   syncNarrationActiveFlag(false);
@@ -953,7 +974,24 @@ async function initIntroApp() {
 
   const ensureSceneReadyForReveal = async () => {
     await readyPromise;
-    return !runtimeState.destroyed;
+    if (runtimeState.destroyed) return false;
+    try {
+      if (typeof hooks.ensureSceneReadyForReveal === 'function') {
+        const ensured = await hooks.ensureSceneReadyForReveal({ timeoutMs: 12000 });
+        if (ensured === false) return false;
+      }
+    } catch (error) {
+      console.warn('[Intro] ensureSceneReadyForReveal hook failed', error);
+    }
+    const mapReady = await waitFor(
+      () => runtimeState.destroyed || (typeof hooks.getGameReady === 'function' && hooks.getGameReady()),
+      { timeoutMs: 14000, intervalMs: 80, label: 'intro map ready for reveal' }
+    ).catch(() => false);
+    if (!mapReady || runtimeState.destroyed) return false;
+    hooks.refreshLayout?.('intro-reveal-ready');
+    hooks.forceSceneRender?.('intro-reveal-ready');
+    scheduleUiRecovery('intro-reveal-ready');
+    return true;
   };
 
   const transitionOutOfStartScreen = (reason = 'complete') => {
@@ -1223,6 +1261,10 @@ async function initIntroApp() {
 
   const requestIntroStart = () => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return false;
+    if (!runtimeState.narrationPrepared) {
+      syncStartPromptState('request-before-ready');
+      return false;
+    }
     if (!runtimeState.startRequested) {
       runtimeState.startRequested = true;
       resolveStartRequest?.(true);
@@ -1484,7 +1526,22 @@ async function initIntroApp() {
   setAudioPromptVisible(false);
   setStartPromptState('idle');
 
-  const narrationPreparePromise = Promise.resolve(narration.prepare?.()).catch(() => false);
+  runtimeState.narrationPreparePending = true;
+  const narrationPreparePromise = Promise.resolve(narration.prepare?.())
+    .then((ready) => {
+      runtimeState.narrationPrepared = !!ready;
+      return runtimeState.narrationPrepared;
+    })
+    .catch(() => {
+      runtimeState.narrationPrepared = false;
+      return false;
+    })
+    .finally(() => {
+      runtimeState.narrationPreparePending = false;
+      if (!runtimeState.destroyed && !runtimeState.startScreenHidden && runtimeState.startUiReady) {
+        syncStartPromptState('narration-prepare-settled');
+      }
+    });
   if (refs.startImage?.complete && Number(refs.startImage.naturalWidth) > 0) {
     markStartImageReady();
   } else {
@@ -1497,16 +1554,17 @@ async function initIntroApp() {
     })
     .catch(() => false);
   const startUiReadyPromise = (async () => {
-    await wait(380);
+    await wait(260);
     await Promise.race([
       Promise.all([
-        Promise.race([startImageReadyPromise, wait(2300)]),
-        Promise.race([narrationPreparePromise, wait(900)])
+        Promise.race([startImageReadyPromise, wait(8000)]),
+        Promise.race([narrationPreparePromise, wait(18000)])
       ]),
-      wait(3200)
+      wait(18000)
     ]);
     if (runtimeState.destroyed || runtimeState.startScreenHidden) return false;
     revealStartUiWhenReady();
+    syncStartPromptState('start-ui-revealed');
     return runtimeState.startImageReady;
   })();
 
@@ -1639,40 +1697,14 @@ async function initIntroApp() {
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
-  const loreTabHighlightFallbackMs = (() => {
-    const segment = INTRO_TRACKS.main?.[6] || null;
-    if (Number.isFinite(segment?.audioStartSec) && Number.isFinite(segment?.audioEndSec)) {
-      return Math.max(1800, Math.round((Number(segment.audioEndSec) - Number(segment.audioStartSec)) * 1000) + 260);
-    }
-    return 3000;
-  })();
-  let loreTabHighlightFallbackTimer = 0;
-  const clearLoreTabHighlightFallback = () => {
-    if (!loreTabHighlightFallbackTimer) return;
-    windowRef.clearTimeout(loreTabHighlightFallbackTimer);
-    loreTabHighlightFallbackTimer = 0;
-  };
-
-  await playCheckpointRange('main', 6, 10, 'dimmer-dark', {
+  await playContinuousRange('main', 6, 10, {
     uiByIndex: {
       6: {
-        selectors: ['.archive-tab[data-tab="lore"]'],
-        onEnter: () => {
-          clearLoreTabHighlightFallback();
-          loreTabHighlightFallbackTimer = windowRef.setTimeout(() => {
-            loreTabHighlightFallbackTimer = 0;
-            if (runtimeState.destroyed) return;
-            if (runtimeState.currentTrackName !== 'main') return;
-            if (runtimeState.currentSegmentIndex > 6) return;
-            clearPresentation();
-            setGate({ includeAudio: true });
-          }, loreTabHighlightFallbackMs);
-        }
+        selectors: ['.archive-tab[data-tab="lore"]']
       },
       7: {
         clear: true,
         onEnter: () => {
-          clearLoreTabHighlightFallback();
           clearPresentation();
           scheduleUiRecovery('main-7-clear-hard');
         }
@@ -1680,7 +1712,6 @@ async function initIntroApp() {
       8: {
         clear: true,
         onEnter: () => {
-          clearLoreTabHighlightFallback();
           clearPresentation();
           scheduleUiRecovery('main-8-clear-hard');
         }
@@ -1688,7 +1719,6 @@ async function initIntroApp() {
       9: {
         clear: true,
         onEnter: () => {
-          clearLoreTabHighlightFallback();
           hooks.closeArchive();
           hooks.refreshLayout?.('main-9-clear');
           hooks.forceSceneRender?.('main-9-clear');
@@ -1701,16 +1731,26 @@ async function initIntroApp() {
       }
     }
   });
-  clearLoreTabHighlightFallback();
   if (runtimeState.destroyed) return;
+  hooks.setDimmerMode('black-freeze');
+  hooks.setReadingMode(true, 'intro-auto-dimmer-dark', { syncDimmer: false, ignoreFrozen: true });
+  hooks.refreshLayout?.('intro-auto-dimmer-dark');
+  hooks.forceSceneRender?.('intro-auto-dimmer-dark');
+  scheduleUiRecovery('intro-auto-dimmer-dark');
 
   if (!(await ensureSceneReadyForReveal())) return;
 
-  await speakCheckpointSegment('main', 11, 'dimmer-light', {
+  await speakSegment('main', 11, {
     targets: ['#sceneDimmerToggleBtn'],
     selectors: ['#sceneDimmerToggleBtn']
   });
   if (runtimeState.destroyed) return;
+  hooks.setDimmerMode('reading-clear');
+  hooks.setReadingMode(true, 'intro-auto-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
+  hooks.refreshLayout?.('intro-auto-dimmer-light');
+  hooks.forceSceneRender?.('intro-auto-dimmer-light');
+  scheduleUiRecovery('intro-auto-dimmer-light');
+  clearPresentation();
 
   await speakCheckpointSegment('main', 12, 'enter-explore', {
     targets: ['#readingModeBtn'],

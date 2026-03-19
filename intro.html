@@ -780,6 +780,71 @@
             }
         }
 
+        async function ensureMapReadyForIntroReveal(options = {}) {
+            const timeoutMs = Math.max(5000, Number(options && options.timeoutMs) || 14000);
+            const startedAt = Date.now();
+
+            const hasRenderableBackground = () => {
+                const image = bgImage;
+                if (!gameReady || !image) return false;
+                const width = Number(image.naturalWidth || image.width || 0);
+                const height = Number(image.naturalHeight || image.height || 0);
+                return width > 0 && height > 0;
+            };
+
+            if (hasRenderableBackground()) return true;
+
+            requestEagerMapBootProcessing('intro-reveal');
+            const mapImg = ensureIndexMapBootImage();
+
+            const waitForBootImage = async () => {
+                if (mapImg.complete && Number(mapImg.naturalWidth || 0) > 0) return true;
+                if (eagerMapBootReadyPromise && typeof eagerMapBootReadyPromise.then === 'function') {
+                    try {
+                        await Promise.race([
+                            eagerMapBootReadyPromise,
+                            new Promise((resolve) => setTimeout(resolve, Math.max(1600, timeoutMs - (Date.now() - startedAt))))
+                        ]);
+                    } catch (_) { }
+                }
+                return mapImg.complete && Number(mapImg.naturalWidth || 0) > 0;
+            };
+
+            const mapLoaded = await waitForBootImage();
+            if (!hasRenderableBackground()) {
+                if (!mapLoaded) return false;
+                try {
+                    processMap(mapImg);
+                } catch (error) {
+                    console.warn('[IntroBoot] Map recovery process failed, using raw map image.', error);
+                    bgImage = mapImg;
+                    foregroundImage = null;
+                    gameReady = true;
+                    hideLoadingScreenSafely('intro-map-recovery-fallback');
+                    startGameLoop();
+                }
+            }
+
+            const deadline = Date.now() + Math.max(1500, timeoutMs - (Date.now() - startedAt));
+            while (Date.now() < deadline) {
+                if (hasRenderableBackground()) {
+                    scheduleViewportRecovery('intro-map-recovery');
+                    try { draw(); } catch (_) { }
+                    return true;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 90));
+            }
+
+            if (mapImg.complete && Number(mapImg.naturalWidth || 0) > 0) {
+                bgImage = mapImg;
+                gameReady = true;
+                scheduleViewportRecovery('intro-map-recovery-final');
+                try { draw(); } catch (_) { }
+                return true;
+            }
+            return hasRenderableBackground();
+        }
+
         function scheduleDeferredLoreTextPreload(delayMs = 900) {
             const start = () => { void preloadDeferredLoreTexts(); };
             if (typeof window.requestIdleCallback === 'function') {
@@ -8254,6 +8319,14 @@
         window.GameboyIntroHooks = {
             getGameReady() {
                 return !!gameReady;
+            },
+            async ensureSceneReadyForReveal(options) {
+                try {
+                    return await ensureMapReadyForIntroReveal(options || {});
+                } catch (error) {
+                    console.warn('[IntroBoot] ensureSceneReadyForReveal failed', error);
+                    return !!gameReady;
+                }
             },
             hideLoadingScreenSafely(reason) {
                 if (typeof hideLoadingScreenSafely === 'function') hideLoadingScreenSafely(reason || 'intro-ready');
