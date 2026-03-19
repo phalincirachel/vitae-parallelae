@@ -313,7 +313,7 @@ async function initIntroApp() {
   const startPromptDefaultLabel = String(refs.introAudioPrompt?.textContent || '').trim() || 'Fuehrung beginnen';
   const START_PROMPT_LABELS = Object.freeze({
     idle: startPromptDefaultLabel,
-    loading: 'Laedt Audio...',
+    loading: 'Lädt Audio...',
     play: 'Fortsetzen',
     pause: 'Pause'
   });
@@ -969,7 +969,13 @@ async function initIntroApp() {
     if (!runtimeState.startScreenHidden) {
       if (runtimeState.startUiReady) {
         setAudioPromptVisible(true);
-        setStartPromptState('play');
+        if (narration.isPlaying()) {
+          setStartPromptState('pause');
+        } else if (narration.isPaused() || isNarrationAwaitingGesture()) {
+          setStartPromptState('play');
+        } else {
+          setStartPromptState(runtimeState.startRequested ? 'loading' : 'idle');
+        }
       }
       return;
     }

@@ -196,14 +196,16 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   margin: 14px 0 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
   width: 100%;
+  min-height: 46px;
   padding: 12px 22px;
   border: 1px solid rgba(255, 248, 233, 0.72);
   border-radius: 999px;
   background: rgba(12, 14, 18, 0.58);
-  color: #fff8e8;
+  color: rgba(255, 248, 232, 0.98);
   font-family: 'Reader Grotesk', 'Segoe UI', sans-serif;
-  font-size: 14px;
-  letter-spacing: 0.06em;
+  font-size: clamp(13px, 1.8vw, 16px);
+  letter-spacing: 0.04em;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
   cursor: pointer;
 }
 
