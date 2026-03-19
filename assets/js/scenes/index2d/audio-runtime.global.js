@@ -130,7 +130,11 @@
 
     function isAudioTransportPaused() {
       const introFlowActive = root.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true;
+      const introUiPlaying = typeof root.__GAMEBOY_INTRO_UI_PLAYING__ === 'boolean'
+        ? root.__GAMEBOY_INTRO_UI_PLAYING__
+        : null;
       const introNarrationActive = root.__GAMEBOY_INTRO_NARRATION_ACTIVE__ === true;
+      if (introFlowActive && introUiPlaying !== null) return !introUiPlaying;
       if (introFlowActive && introNarrationActive) return false;
       if (!audioPlayer) return true;
       if (typeof audioPlayer.isTransportPaused === 'function') {
@@ -141,8 +145,13 @@
 
     function syncPlayPauseIcon() {
       const introFlowActive = root.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true;
+      const introUiPlaying = typeof root.__GAMEBOY_INTRO_UI_PLAYING__ === 'boolean'
+        ? root.__GAMEBOY_INTRO_UI_PLAYING__
+        : null;
       const introNarrationActive = root.__GAMEBOY_INTRO_NARRATION_ACTIVE__ === true;
-      const isPaused = introFlowActive && introNarrationActive ? false : isAudioTransportPaused();
+      const isPaused = introFlowActive
+        ? (introUiPlaying !== null ? !introUiPlaying : (introNarrationActive ? false : isAudioTransportPaused()))
+        : isAudioTransportPaused();
       if (iconPlay && iconPlay.style) {
         iconPlay.style.display = isPaused ? 'block' : 'none';
       }

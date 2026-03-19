@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 
 <head>
@@ -2387,7 +2387,7 @@
                 navCollisionPaddingY: NAV_COLLISION_PADDING_Y,
                 navMaxGoalSearchCells: NAV_MAX_GOAL_SEARCH_CELLS,
                 navMaxStartSearchCells: NAV_MAX_START_SEARCH_CELLS,
-                hasPointerEvent: IS_INTRO_SCENE ? false : !!window.PointerEvent,
+                hasPointerEvent: !!window.PointerEvent,
                 dragThresholdPx: GAME_CAMERA_DRAG_THRESHOLD_PX,
                 onTogglePal: () => { usePAL = !usePAL; updateFilterStyle(); },
                 onToggleHalftone: () => { useHalftone = !useHalftone; updateFilterStyle(); },
@@ -2689,13 +2689,27 @@
                     }
                 }
 
+                const createImageDataCompat = (ctx2d, pixels, width, height) => {
+                    try {
+                        return new ImageData(pixels, width, height);
+                    } catch (_) {
+                        const fallback = ctx2d.createImageData(width, height);
+                        fallback.data.set(pixels);
+                        return fallback;
+                    }
+                };
+
                 const bgCanvas = document.createElement('canvas');
                 bgCanvas.width = mapW; bgCanvas.height = mapH;
-                bgCanvas.getContext('2d').putImageData(new ImageData(bgData, mapW, mapH), 0, 0);
+                const bgCtx = bgCanvas.getContext('2d');
+                if (!bgCtx) throw new Error('bg canvas context unavailable');
+                bgCtx.putImageData(createImageDataCompat(bgCtx, bgData, mapW, mapH), 0, 0);
 
                 const fgCanvas = document.createElement('canvas');
                 fgCanvas.width = mapW; fgCanvas.height = mapH;
-                fgCanvas.getContext('2d').putImageData(new ImageData(fgData, mapW, mapH), 0, 0);
+                const fgCtx = fgCanvas.getContext('2d');
+                if (!fgCtx) throw new Error('fg canvas context unavailable');
+                fgCtx.putImageData(createImageDataCompat(fgCtx, fgData, mapW, mapH), 0, 0);
 
                 const finalizeMapReady = (readyReason = 'map-ready') => {
                     if (gameReady) return;

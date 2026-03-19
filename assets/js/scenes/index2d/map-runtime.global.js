@@ -94,15 +94,29 @@
       }
     }
 
+    const createImageDataCompat = (ctx2d, pixels, targetWidth, targetHeight) => {
+      try {
+        return new ImageData(pixels, targetWidth, targetHeight);
+      } catch (_) {
+        const fallback = ctx2d.createImageData(targetWidth, targetHeight);
+        fallback.data.set(pixels);
+        return fallback;
+      }
+    };
+
     const bgCanvas = documentObject.createElement('canvas');
     bgCanvas.width = width;
     bgCanvas.height = height;
-    bgCanvas.getContext('2d').putImageData(new ImageData(bgData, width, height), 0, 0);
+    const bgCtx = bgCanvas.getContext('2d');
+    if (!bgCtx) throw new Error('bg canvas context unavailable');
+    bgCtx.putImageData(createImageDataCompat(bgCtx, bgData, width, height), 0, 0);
 
     const fgCanvas = documentObject.createElement('canvas');
     fgCanvas.width = width;
     fgCanvas.height = height;
-    fgCanvas.getContext('2d').putImageData(new ImageData(fgData, width, height), 0, 0);
+    const fgCtx = fgCanvas.getContext('2d');
+    if (!fgCtx) throw new Error('fg canvas context unavailable');
+    fgCtx.putImageData(createImageDataCompat(fgCtx, fgData, width, height), 0, 0);
 
     return { bgCanvas, fgCanvas, bgData, fgData };
   }

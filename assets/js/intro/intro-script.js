@@ -53,7 +53,7 @@ export const MAIN_INTRO_TRACK = Object.freeze([
     'main-4',
     'Wenn Sie auf das Buch klicken, gelangen Sie zum Inhaltsverzeichnis.',
     51.54,
-    56.02
+    55.92
   ),
   freezeSegment(
     'main-5',
@@ -258,4 +258,3 @@ export default {
   getTrackEntries,
   getTrackText
 };
-

@@ -337,25 +337,30 @@ export function createIntroNarrationAdapter(options = {}) {
           finish(false);
           return;
         }
+
+        // iOS autoplay policy: issue play immediately inside the user-gesture handler.
+        try {
+          promoteWidgetIframe();
+          const immediatePlay = player?.play?.();
+          if (immediatePlay && typeof immediatePlay.catch === 'function') {
+            immediatePlay.catch(() => {});
+          }
+        } catch (_) {}
+
         try {
           const alreadyStarted = await verifyTransportStart(targetStart);
           if (alreadyStarted) {
             finish(true);
             return;
           }
-          promoteWidgetIframe();
-          await player.play();
-          const startedAfterPlay = await verifyTransportStart(targetStart);
-          if (startedAfterPlay) {
-            finish(true);
-            return;
+          if (Number.isFinite(targetStart) && typeof player?.seekAndConfirm === 'function') {
+            await player.seekAndConfirm(targetStart, {
+              maxAttempts: 2,
+              settleMs: 100,
+              tolerance: 0.45,
+              readyTimeoutMs: 1200
+            });
           }
-          await player.seekAndConfirm(targetStart, {
-            maxAttempts: 2,
-            settleMs: 100,
-            tolerance: 0.45,
-            readyTimeoutMs: 1200
-          });
           const started = await verifyTransportStart(targetStart);
           finish(started);
         } catch (_) {
@@ -526,13 +531,16 @@ export function createIntroNarrationAdapter(options = {}) {
       return true;
     }
     if (currentSession
-      && currentSession.awaitingGesture === true
       && hasFiniteAudioRange(currentSession.segment)
       && !currentSession.paused
-      && !currentSession.settled) {
+      && !currentSession.settled
+      && currentSession.started !== true) {
       try {
         promoteWidgetIframe();
-        player?.play?.();
+        const immediatePlay = player?.play?.();
+        if (immediatePlay && typeof immediatePlay.catch === 'function') {
+          immediatePlay.catch(() => {});
+        }
       } catch (_) {}
       return true;
     }
@@ -619,6 +627,3 @@ export function createIntroNarrationAdapter(options = {}) {
 }
 
 export default createIntroNarrationAdapter;
-
-
-

@@ -180,8 +180,11 @@ function createIntroGameState(realGameState, runtimeState) {
 
 function createAudioIconSync(refs) {
   return function syncIcons(isPlaying) {
-    if (refs.iconPlay) refs.iconPlay.style.display = isPlaying ? 'none' : 'block';
-    if (refs.iconPause) refs.iconPause.style.display = isPlaying ? 'block' : 'none';
+    const playing = !!isPlaying;
+    if (refs.iconPlay) refs.iconPlay.style.display = playing ? 'none' : 'block';
+    if (refs.iconPause) refs.iconPause.style.display = playing ? 'block' : 'none';
+    const root = (typeof window !== 'undefined') ? window : globalThis;
+    if (root) root.__GAMEBOY_INTRO_UI_PLAYING__ = playing;
   };
 }
 
@@ -319,6 +322,7 @@ async function initIntroApp() {
     narrationPrepared: false,
     narrationPreparePending: false,
     lastPromptActivationAt: 0,
+    lastPromptActivationType: '',
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -426,7 +430,9 @@ async function initIntroApp() {
   });
 
   const syncNarrationActiveFlag = (isActive) => {
-    windowRef.__GAMEBOY_INTRO_NARRATION_ACTIVE__ = !!isActive;
+    const active = !!isActive;
+    windowRef.__GAMEBOY_INTRO_NARRATION_ACTIVE__ = active;
+    windowRef.__GAMEBOY_INTRO_UI_PLAYING__ = active;
   };
 
   const isNarrationAwaitingGesture = () => typeof narration.isAwaitingGesture === 'function'
@@ -1185,6 +1191,8 @@ async function initIntroApp() {
 
   narration.onAutoplayBlocked?.(() => {
     clearAutoResumeTimer();
+    syncAudioIcons(false);
+    syncNarrationActiveFlag(false);
     if (!runtimeState.startScreenHidden) {
       syncStartPromptState('autoplay-blocked');
       return;
@@ -1320,12 +1328,18 @@ async function initIntroApp() {
     if (isKeyboardEvent && key !== 'Enter' && key !== ' ') return;
     if (!isKeyboardEvent) {
       const now = Date.now();
-      if ((now - runtimeState.lastPromptActivationAt) < 180) {
+      const lastType = String(runtimeState.lastPromptActivationType || '');
+      const deltaMs = now - runtimeState.lastPromptActivationAt;
+      const isSyntheticClickAfterTouch = eventType === 'click'
+        && (lastType === 'pointerdown' || lastType === 'touchstart' || lastType === 'touchend');
+      const minGapMs = isSyntheticClickAfterTouch ? 700 : 240;
+      if (deltaMs < minGapMs) {
         event.preventDefault();
         event.stopImmediatePropagation();
         return;
       }
       runtimeState.lastPromptActivationAt = now;
+      runtimeState.lastPromptActivationType = eventType;
     }
     if (!runtimeState.startUiReady) return;
     if (refs.introAudioPrompt?.disabled) return;
@@ -1370,7 +1384,7 @@ async function initIntroApp() {
   };
 
   const promptActivationEvents = windowRef.PointerEvent
-    ? ['pointerdown', 'touchend', 'click', 'keydown']
+    ? ['pointerdown', 'keydown']
     : ['touchend', 'click', 'keydown'];
   promptActivationEvents.forEach((eventName) => {
     refs.introAudioPrompt?.addEventListener(eventName, handleIntroAudioPromptActivation, true);
@@ -1484,7 +1498,7 @@ async function initIntroApp() {
       resolveOrRememberAction('enter-explore', true);
       return;
     }
-    rememberAction('enter-explore', true);
+    // Do not buffer this action outside its checkpoint to avoid unintended auto-advance.
   }, true);
 
   const onLoreHudPressStart = () => {
@@ -1509,7 +1523,7 @@ async function initIntroApp() {
 
   const triggerLayoutChoice = (value, source) => {
     if (value !== 'blaettern' && value !== 'flat') return;
-    if (runtimeState.layoutChosen && !source.includes('poll')) return;
+    if (runtimeState.layoutChosen) return;
     documentRef.body.classList.remove('intro-layout-choice-pending');
     documentRef.body.classList.remove('intro-start-loading');
     console.log('[Intro] layout choice:', value, 'via', source);
@@ -1524,23 +1538,26 @@ async function initIntroApp() {
       resolveOrRememberAction('choose-layout', value);
       return;
     }
-    rememberAction('choose-layout', value);
+    if (documentRef.body?.classList?.contains?.('intro-layout-choice-pending')) {
+      rememberAction('choose-layout', value);
+    }
   };
 
   const handleLayoutChoiceEvent = (event) => {
-    markLayoutChoiceTouch(event.target);
+    if (!event?.isTrusted) return;
     const value = getLayoutChoiceFromTarget(event.target);
+    if (!value) return;
+    markLayoutChoiceTouch(event.target);
     triggerLayoutChoice(value, event.type);
   };
 
   documentRef.addEventListener('click', handleLayoutChoiceEvent, true);
   documentRef.addEventListener('change', handleLayoutChoiceEvent, true);
-  documentRef.addEventListener('pointerup', handleLayoutChoiceEvent, true);
-  documentRef.addEventListener('touchend', handleLayoutChoiceEvent, true);
 
   const layoutOptionLabels = documentRef.querySelectorAll('.reader-radio-option[data-layout]');
   layoutOptionLabels.forEach((label) => {
     const handleDirectTouch = (event) => {
+      if (!event?.isTrusted) return;
       markLayoutChoiceTouch(label);
       const layout = label.dataset?.layout;
       const value = normalizeLayoutChoice(layout || '');
@@ -1549,11 +1566,7 @@ async function initIntroApp() {
       if (input && !input.checked) input.checked = true;
       triggerLayoutChoice(value, 'direct-touch:' + event.type);
     };
-    label.addEventListener('pointerdown', handleDirectTouch, { passive: true });
-    label.addEventListener('pointerup', handleDirectTouch, { passive: true });
-    label.addEventListener('mousedown', handleDirectTouch, { passive: true });
     label.addEventListener('click', handleDirectTouch, { passive: true });
-    label.addEventListener('touchstart', handleDirectTouch, { passive: true });
     label.addEventListener('touchend', handleDirectTouch, { passive: true });
   });
 
@@ -1692,7 +1705,6 @@ async function initIntroApp() {
     if (!archiveReady) {
       console.warn('[Intro] layout settings panel did not become visible reliably');
     }
-    const initialLayoutChoice = readCheckedLayoutChoice();
     const actionPromise = waitForAction('choose-layout', {
       targets: [...INTRO_LAYOUT_GATE_TARGETS]
     });
@@ -1711,13 +1723,6 @@ async function initIntroApp() {
       { timeoutMs: 3200, intervalMs: 60, label: 'intro layout segment completion' }
     ).catch(() => false);
 
-    if (!runtimeState.layoutChosen) {
-      const checkedLayoutChoice = readCheckedLayoutChoice();
-      const layoutChanged = checkedLayoutChoice && checkedLayoutChoice !== initialLayoutChoice;
-      if ((runtimeState.layoutChoiceTouched || layoutChanged) && checkedLayoutChoice) {
-        triggerLayoutChoice(checkedLayoutChoice, layoutChanged ? 'poll:checked-change' : 'poll:layout-touch');
-      }
-    }
 
     const choice = await actionPromise;
     return choice;
@@ -1764,7 +1769,7 @@ async function initIntroApp() {
   hooks.forceControlsVisible?.();
 
   await playContinuousRange('main', 5, 9, {
-    leadInSec: 0.45,
+    leadInSec: 0,
     uiByIndex: {
       5: {
         clear: true,
