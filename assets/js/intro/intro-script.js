@@ -58,10 +58,10 @@ export const MAIN_INTRO_TRACK = Object.freeze([
   freezeSegment(
     'main-5',
     'Hier k\u00f6nnen Sie Ihren Fortschritt speichern.',
-    56.08,
-    57.58
+    55.92,
+    58.08
   ),
-  freezeSegment('main-6', 'Und Ihre Souveniers sind hier.', 57.64, 60.34),
+  freezeSegment('main-6', 'Und Ihre Souveniers sind hier.', 58.08, 60.34),
   freezeSegment('main-7', 'Was Souveniers sind? Jeder Pilger liebt doch Souveniers, nicht?', 61.64, 67.54),
   freezeSegment('main-8', 'Sehen Sie, sie haben zwei M\u00f6glichkeiten, diese Stadt zu erfahren.', 68.9, 72.4),
   freezeSegment('main-9', 'Erste M\u00f6glichkeit: Sie lesen einfach nur.', 73.22, 75.46),

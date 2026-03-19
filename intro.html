@@ -2751,11 +2751,12 @@
                     console.log("Map Processed & Ready.");
                 };
 
-                const useRawIntroMapLayer = !!(IS_INTRO_SCENE && isIOSDevice);
-                if (useRawIntroMapLayer) {
-                    bgImage = img;
-                    foregroundImage = null;
-                    finalizeMapReady('map-ready-ios-raw');
+                const useCanvasIntroMapLayer = !!(IS_INTRO_SCENE && isIOSDevice);
+                if (useCanvasIntroMapLayer) {
+                    // iOS: keep processed pixels but avoid costly dataURL roundtrip.
+                    bgImage = bgCanvas;
+                    foregroundImage = fgCanvas;
+                    finalizeMapReady('map-ready-ios-canvas');
                 } else {
                     let bgLayerSettled = false;
                     let bgLayerFallbackTimer = 0;

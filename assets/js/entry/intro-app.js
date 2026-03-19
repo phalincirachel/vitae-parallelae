@@ -901,12 +901,14 @@ async function initIntroApp() {
     const trackEntries = runtimeState.currentTrackEntries[trackName] || [];
     const uiByIndex = options.uiByIndex || {};
     let activeIndex = -1;
+    let activeIndexSinceMs = 0;
     let trackerTimer = 0;
     let trackerActive = true;
 
     const applyIndexState = (index) => {
       if (runtimeState.destroyed || index === activeIndex) return;
       activeIndex = index;
+      activeIndexSinceMs = Date.now();
       safeInvoke('setActiveSubtitleIndex', () => hooks.setActiveSubtitleIndex?.(index));
       const uiConfig = uiByIndex[index] || null;
       if (!uiConfig) {
@@ -938,8 +940,17 @@ async function initIntroApp() {
       });
     };
 
-    const advanceIndexState = (nextIndex) => {
+    const advanceIndexState = (nextIndex, options = {}) => {
       if (!Number.isFinite(nextIndex) || runtimeState.destroyed) return;
+      const forceAdvance = options.force === true;
+      if (!forceAdvance && activeIndex >= startIndex && nextIndex > activeIndex) {
+        const currentUiConfig = uiByIndex[activeIndex] || null;
+        const minActiveMs = Number(currentUiConfig?.minActiveMs);
+        if (Number.isFinite(minActiveMs) && minActiveMs > 0) {
+          const elapsedMs = Math.max(0, Date.now() - activeIndexSinceMs);
+          if (elapsedMs < minActiveMs) return;
+        }
+      }
       if (activeIndex < 0 || nextIndex <= activeIndex) {
         applyIndexState(nextIndex);
         return;
@@ -972,7 +983,7 @@ async function initIntroApp() {
     const result = await playNarrationWithRecovery(blockSegment, { trackName, startIndex, endIndex, range: true }, { maxAttempts: 3 });
     trackerActive = false;
     if (trackerTimer) windowRef.clearTimeout(trackerTimer);
-    advanceIndexState(endIndex);
+    advanceIndexState(endIndex, { force: true });
     if (!runtimeState.waitingAction) clearPresentation();
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
@@ -1734,10 +1745,13 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
   hooks.forceControlsVisible?.();
 
-  await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
-  if (runtimeState.destroyed) return;
-  await playContinuousRange('main', 6, 9, {
+  await playContinuousRange('main', 5, 9, {
+    leadInSec: 0.45,
     uiByIndex: {
+      5: {
+        selectors: ['#btnSaveData'],
+        minActiveMs: 1400
+      },
       6: {
         selectors: ['.archive-tab[data-tab="lore"]'],
         allowAll: true
