@@ -460,6 +460,7 @@ async function initIntroApp() {
   };
 
   syncNarrationActiveFlag(false);
+  windowRef.__GAMEBOY_INTRO_FLOW_ACTIVE__ = true;
 
   const clearDynamicFocus = () => {
     if (typeof runtimeState.dynamicFocusCleanup === 'function') runtimeState.dynamicFocusCleanup();
@@ -741,6 +742,7 @@ async function initIntroApp() {
     windowRef.cancelAnimationFrame(uiRecoveryFrame);
     narration.stop();
     syncNarrationActiveFlag(false);
+    windowRef.__GAMEBOY_INTRO_FLOW_ACTIVE__ = false;
     clearPresentation();
     documentRef.body.classList.remove('intro-layout-choice-pending');
     documentRef.body.classList.remove('intro-start-loading');
@@ -1419,11 +1421,21 @@ async function initIntroApp() {
   refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: true });
   refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
+    hooks.setDimmerMode('reading-clear');
+    hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
+    hooks.refreshLayout?.('intro-manual-dimmer-light');
+    hooks.forceSceneRender?.('intro-manual-dimmer-light');
+    scheduleUiRecovery('intro-manual-dimmer-light');
     dismissHighlightForAction('dimmer-light');
     resolveOrRememberAction('dimmer-light', true);
   }, true);
   refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction !== 'dimmer-dark') return;
+    hooks.setDimmerMode('black-freeze');
+    hooks.setReadingMode(true, 'intro-manual-dimmer-dark', { syncDimmer: false, ignoreFrozen: true });
+    hooks.refreshLayout?.('intro-manual-dimmer-dark');
+    hooks.forceSceneRender?.('intro-manual-dimmer-dark');
+    scheduleUiRecovery('intro-manual-dimmer-dark');
     dismissHighlightForAction('dimmer-dark');
     resolveOrRememberAction('dimmer-dark', true);
   }, true);
@@ -1463,6 +1475,11 @@ async function initIntroApp() {
     if (runtimeState.waitingAction === 'enter-explore') {
       event.preventDefault();
       event.stopImmediatePropagation();
+      hooks.setDimmerMode('off');
+      hooks.setReadingMode(false, 'intro-manual-enter-explore', { syncDimmer: false, ignoreFrozen: true });
+      hooks.refreshLayout?.('intro-manual-enter-explore');
+      hooks.forceSceneRender?.('intro-manual-enter-explore');
+      scheduleUiRecovery('intro-manual-enter-explore');
       dismissHighlightForAction('enter-explore');
       resolveOrRememberAction('enter-explore', true);
       return;
@@ -1555,6 +1572,7 @@ async function initIntroApp() {
     });
     narration.stop();
     syncNarrationActiveFlag(false);
+    windowRef.__GAMEBOY_INTRO_FLOW_ACTIVE__ = false;
     clearPresentation();
     documentRef.body.classList.remove('intro-layout-choice-pending');
     documentRef.body.classList.remove('intro-start-loading');
@@ -1566,7 +1584,7 @@ async function initIntroApp() {
   refs.backToChapterBtn.classList.remove('visible');
   refs.nextChapterBtn.classList.remove('visible');
   refs.archiveModal?.classList?.remove?.('visible');
-  hooks.refreshLoreProgressUi({ forceHidden: true });
+  hooks.refreshLoreProgressUi({ forceVisible: true });
   setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
   syncAudioIcons(false);
   refs.startScreen?.classList?.add?.('is-preloading');
@@ -1749,7 +1767,7 @@ async function initIntroApp() {
     leadInSec: 0.45,
     uiByIndex: {
       5: {
-        selectors: ['#btnSaveData'],
+        clear: true,
         minActiveMs: 1400
       },
       6: {
@@ -1834,7 +1852,7 @@ async function initIntroApp() {
   }, 120);
   await wait(80);
 
-  hooks.refreshLoreProgressUi({ forceHidden: true });
+  hooks.refreshLoreProgressUi({ forceVisible: true });
   hooks.setIntroOrbState?.({ revealEnabled: false, collectEnabled: false, targetLightId: null });
   await playCheckpointRange('main', 13, 15, 'collect-orb', {
     initialGate: { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS },

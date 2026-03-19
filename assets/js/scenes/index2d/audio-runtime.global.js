@@ -129,6 +129,9 @@
     }
 
     function isAudioTransportPaused() {
+      const introFlowActive = root.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true;
+      const introNarrationActive = root.__GAMEBOY_INTRO_NARRATION_ACTIVE__ === true;
+      if (introFlowActive && introNarrationActive) return false;
       if (!audioPlayer) return true;
       if (typeof audioPlayer.isTransportPaused === 'function') {
         return !!audioPlayer.isTransportPaused();
@@ -137,7 +140,9 @@
     }
 
     function syncPlayPauseIcon() {
-      const isPaused = isAudioTransportPaused();
+      const introFlowActive = root.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true;
+      const introNarrationActive = root.__GAMEBOY_INTRO_NARRATION_ACTIVE__ === true;
+      const isPaused = introFlowActive && introNarrationActive ? false : isAudioTransportPaused();
       if (iconPlay && iconPlay.style) {
         iconPlay.style.display = isPaused ? 'block' : 'none';
       }

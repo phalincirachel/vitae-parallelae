@@ -1198,6 +1198,7 @@
                             rebind: true,
                             onClick: async () => {
                                 console.log("Loading Chapter 1...");
+                                if (window.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true) return;
                                 if (LEVEL.contentKey !== 'kapitel1') {
                                     await waitForContentSwitchIdle('chapter-menu:to-1');
                                     await saveCurrentContentState({ reason: 'chapter-menu:to-1' });
@@ -1224,6 +1225,7 @@
                             rebind: true,
                             onClick: async () => {
                                 console.log("Loading Chapter 1b...");
+                                if (window.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true) return;
                                 await waitForContentSwitchIdle('chapter-menu:to-1b');
                                 await saveCurrentContentState({ reason: 'chapter-menu:to-1b' });
                                 markChapterAutoplayIntent('liminal_library', 'manual', 'chapter-menu');
@@ -1236,6 +1238,7 @@
                             rebind: true,
                             onClick: async () => {
                                 console.log("Loading Chapter 1c...");
+                                if (window.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true) return;
                                 if (LEVEL.contentKey === 'kapitel1c') {
                                     const archiveModal = document.getElementById('archiveModal');
                                     if (archiveModal) archiveModal.classList.remove('visible');
@@ -5739,6 +5742,12 @@
 
             const distance = Math.abs(targetY - startY);
             const isReadingScroll = container === subtitleContainer && isReadingMode;
+
+            if (isReadingScroll && window.__GAMEBOY_INTRO_FLOW_ACTIVE__ === true) {
+                // Intro: avoid smooth animation jitter/scrollbar flashes on every timestamp step.
+                container.scrollTop = targetY;
+                return;
+            }
 
             // Skip if already very close (within 5px)
             if (distance < 5) return;
