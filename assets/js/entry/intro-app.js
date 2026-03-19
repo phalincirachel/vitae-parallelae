@@ -299,6 +299,8 @@ async function initIntroApp() {
     currentGateConfig: null,
     autoPausedForVisibility: false,
     finalButtonVisible: false,
+    backToChapterDismissed: false,
+    loreHudDismissed: false,
     layoutChosen: false,
     layoutChoiceTouched: false,
     startSegmentStarted: false,
@@ -407,6 +409,20 @@ async function initIntroApp() {
   const clearDynamicFocus = () => {
     if (typeof runtimeState.dynamicFocusCleanup === 'function') runtimeState.dynamicFocusCleanup();
     runtimeState.dynamicFocusCleanup = null;
+  };
+
+  const dismissBackToChapterHighlight = () => {
+    runtimeState.backToChapterDismissed = true;
+    clearDynamicFocus();
+    focusOverlay.clear();
+    runtimeState.currentFocusConfig = null;
+  };
+
+  const dismissLoreHudHighlight = () => {
+    runtimeState.loreHudDismissed = true;
+    clearDynamicFocus();
+    focusOverlay.clear();
+    runtimeState.currentFocusConfig = null;
   };
 
   const clearPresentation = () => {
@@ -824,6 +840,18 @@ async function initIntroApp() {
       });
     };
 
+    const advanceIndexState = (nextIndex) => {
+      if (!Number.isFinite(nextIndex) || runtimeState.destroyed) return;
+      if (activeIndex < 0 || nextIndex <= activeIndex) {
+        applyIndexState(nextIndex);
+        return;
+      }
+      const fromIndex = Math.max(startIndex, activeIndex + 1);
+      for (let index = fromIndex; index <= nextIndex; index += 1) {
+        applyIndexState(index);
+      }
+    };
+
     const updateActiveIndexFromPlayback = () => {
       if (!trackerActive || runtimeState.destroyed) return;
       const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
@@ -834,19 +862,19 @@ async function initIntroApp() {
           if (!Number.isFinite(cueTime) || (currentTime + 0.04) < cueTime) break;
           nextIndex = index;
         }
-        applyIndexState(nextIndex);
+        advanceIndexState(nextIndex);
       }
       trackerTimer = windowRef.setTimeout(updateActiveIndexFromPlayback, narration.isPlaying() || narration.isPaused() ? 90 : 140);
     };
 
     setTrack(trackName, startIndex);
     runtimeState.lastReplaySegment = blockSegment;
-    applyIndexState(startIndex);
+    advanceIndexState(startIndex);
     updateActiveIndexFromPlayback();
     const result = await playNarrationWithRecovery(blockSegment, { trackName, startIndex, endIndex, range: true }, { maxAttempts: 3 });
     trackerActive = false;
     if (trackerTimer) windowRef.clearTimeout(trackerTimer);
-    applyIndexState(endIndex);
+    advanceIndexState(endIndex);
     if (!runtimeState.waitingAction) clearPresentation();
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
@@ -1233,10 +1261,19 @@ async function initIntroApp() {
     void redirectToGame(true);
   }, true);
 
+  const onBackToChapterPressStart = () => {
+    if (runtimeState.waitingAction !== 'back-to-chapter') return;
+    dismissBackToChapterHighlight();
+  };
+
+  refs.backToChapterBtn?.addEventListener('pointerdown', onBackToChapterPressStart, true);
+  refs.backToChapterBtn?.addEventListener('touchstart', onBackToChapterPressStart, { capture: true, passive: true });
+
   refs.backToChapterBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'back-to-chapter') {
       event.preventDefault();
       event.stopImmediatePropagation();
+      dismissBackToChapterHighlight();
       hideBackToChapterPromptImmediate();
       clearPresentation();
       resolveOrRememberAction('back-to-chapter', true);
@@ -1280,8 +1317,17 @@ async function initIntroApp() {
     rememberAction('enter-explore', true);
   });
 
+  const onLoreHudPressStart = () => {
+    if (runtimeState.waitingAction !== 'open-lore-hud') return;
+    dismissLoreHudHighlight();
+  };
+
+  refs.loreProgressHud?.addEventListener('pointerdown', onLoreHudPressStart, true);
+  refs.loreProgressHud?.addEventListener('touchstart', onLoreHudPressStart, { capture: true, passive: true });
+
   refs.loreProgressHud?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-lore-hud') {
+      dismissLoreHudHighlight();
       windowRef.setTimeout(() => {
         resolveOrRememberAction('open-lore-hud', true);
       }, 0);
@@ -1654,13 +1700,14 @@ async function initIntroApp() {
   setTrack('souvenir', 0);
   hooks.setReadingMode(true, 'intro-souvenir');
   hooks.setDimmerMode('reading-clear');
+  runtimeState.backToChapterDismissed = false;
   hooks.showBackToChapter(true);
   await playCheckpointRange('souvenir', 0, 1, 'back-to-chapter', {
     uiByIndex: {
       0: { clear: true },
       1: {
         targets: ['#backToChapterBtn'],
-        rectProvider: () => ((runtimeState.waitingAction === 'back-to-chapter' && runtimeState.currentTrackName === 'souvenir') ? createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
+        rectProvider: () => ((runtimeState.waitingAction === 'back-to-chapter' && runtimeState.currentTrackName === 'souvenir' && !runtimeState.backToChapterDismissed) ? createFocusRect(refs.backToChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
       }
     }
   });
@@ -1679,6 +1726,7 @@ async function initIntroApp() {
   await wait(80);
   clearPresentation();
 
+  runtimeState.loreHudDismissed = false;
   await playCheckpointRange('main', 16, 17, 'open-lore-hud', {
     uiByIndex: {
       16: {
@@ -1691,7 +1739,7 @@ async function initIntroApp() {
       },
       17: {
         targets: ['#loreProgressHud'],
-        rectProvider: () => createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 })
+        rectProvider: () => ((runtimeState.waitingAction === 'open-lore-hud' && runtimeState.currentTrackName === 'main' && !runtimeState.loreHudDismissed) ? createFocusRect(refs.loreProgressHud, { paddingX: 8, paddingY: 6, inset: 4 }) : null)
       }
     }
   });
@@ -1721,6 +1769,11 @@ async function initIntroApp() {
   applyFocus({
     rectProvider: () => refs.nextChapterBtn?.getBoundingClientRect?.() || null
   });
+  windowRef.setTimeout(() => {
+    if (runtimeState.destroyed || !runtimeState.finalButtonVisible) return;
+    if (runtimeState.waitingAction) return;
+    applyFocus({ selectors: ['#nextChapterBtn'] });
+  }, 820);
   setGate({ includeAudio: true, targets: ['#nextChapterBtn'] });
   scheduleUiRecovery('intro-finish');
 }

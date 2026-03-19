@@ -181,20 +181,60 @@ export function createIntroNarrationAdapter(options = {}) {
     const helper = windowRef.GameboyPlaybackHelpers?.verifyPlaybackStarted;
     if (!player || typeof helper !== 'function') return true;
     const normalizedTarget = Number.isFinite(targetStart) ? Number(targetStart) : null;
+    const isTransportLive = async () => {
+      const transportPaused = (typeof player.isTransportPaused === 'function')
+        ? player.isTransportPaused()
+        : !!player.paused;
+      if (transportPaused) return false;
+      const hasRecent = (typeof player.hasRecentProgress === 'function')
+        ? player.hasRecentProgress(2600)
+        : false;
+      if (hasRecent) return true;
+      let currentPos = Number.isFinite(player.currentTime) ? Number(player.currentTime) : normalizedTarget;
+      if (typeof player.getAccurateCurrentTime === 'function') {
+        try {
+          const accuratePos = await player.getAccurateCurrentTime(700);
+          if (Number.isFinite(accuratePos)) currentPos = Number(accuratePos);
+        } catch (_) {}
+      }
+      if (!Number.isFinite(normalizedTarget)) {
+        return Number.isFinite(currentPos) && currentPos >= 0.02;
+      }
+      return Number.isFinite(currentPos) && currentPos >= (normalizedTarget + 0.02);
+    };
     try {
-      return !!(await helper({
+      const started = !!(await helper({
         player,
         retries: 5,
-        delayMs: 260,
+        delayMs: 320,
         requireAdvance: true,
-        advanceThreshold: 0.05,
+        advanceThreshold: 0.04,
         initialPosition: normalizedTarget,
-        hasRecentProgress: () => false
+        play: async () => {
+          const transportPaused = (typeof player.isTransportPaused === 'function')
+            ? player.isTransportPaused()
+            : !!player.paused;
+          const hasRecent = (typeof player.hasRecentProgress === 'function')
+            ? player.hasRecentProgress(2200)
+            : false;
+          if (transportPaused || !hasRecent) {
+            await player.play();
+          }
+        },
+        hasRecentProgress: () => (typeof player.hasRecentProgress === 'function'
+          ? player.hasRecentProgress(2600)
+          : false),
+        isTransportPaused: () => (typeof player.isTransportPaused === 'function'
+          ? player.isTransportPaused()
+          : !!player.paused),
+        isProbablyPlaying: () => (typeof player.isProbablyPlaying === 'function'
+          ? player.isProbablyPlaying()
+          : !player.paused)
       }));
+      if (started) return true;
+      return isTransportLive();
     } catch (_) {
-      const currentPos = Number.isFinite(player.currentTime) ? Number(player.currentTime) : normalizedTarget;
-      if (!Number.isFinite(normalizedTarget)) return !player.paused;
-      return !player.paused && Number.isFinite(currentPos) && currentPos >= (normalizedTarget + 0.05);
+      return isTransportLive();
     }
   }
 
@@ -291,8 +331,18 @@ export function createIntroNarrationAdapter(options = {}) {
           return;
         }
         try {
+          const alreadyStarted = await verifyTransportStart(targetStart);
+          if (alreadyStarted) {
+            finish(true);
+            return;
+          }
           promoteWidgetIframe();
           await player.play();
+          const startedAfterPlay = await verifyTransportStart(targetStart);
+          if (startedAfterPlay) {
+            finish(true);
+            return;
+          }
           await player.seekAndConfirm(targetStart, {
             maxAttempts: 2,
             settleMs: 100,
@@ -321,6 +371,10 @@ export function createIntroNarrationAdapter(options = {}) {
   async function ensureTransportStarted(session, targetStart) {
     const started = await verifyTransportStart(targetStart);
     if (started) return true;
+    if (currentSession !== session || session.settled || session.paused) return false;
+    await wait(220);
+    const startedAfterDelay = await verifyTransportStart(targetStart);
+    if (startedAfterDelay) return true;
     if (currentSession !== session || session.settled || session.paused) return false;
     return waitForGestureResume(session, targetStart);
   }
@@ -464,21 +518,14 @@ export function createIntroNarrationAdapter(options = {}) {
       void gestureRetryHandler();
       return true;
     }
-    if (currentSession && hasFiniteAudioRange(currentSession.segment) && !currentSession.paused && !currentSession.settled) {
-      const targetStart = Number.isFinite(currentSession.resumeFromSec)
-        ? Number(currentSession.resumeFromSec)
-        : Number(currentSession.segment.audioStartSec);
+    if (currentSession
+      && currentSession.awaitingGesture === true
+      && hasFiniteAudioRange(currentSession.segment)
+      && !currentSession.paused
+      && !currentSession.settled) {
       try {
         promoteWidgetIframe();
         player?.play?.();
-      } catch (_) {}
-      try {
-        void player?.seekAndConfirm?.(targetStart, {
-          maxAttempts: 2,
-          settleMs: 100,
-          tolerance: 0.45,
-          readyTimeoutMs: 1200
-        });
       } catch (_) {}
       return true;
     }

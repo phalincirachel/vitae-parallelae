@@ -284,6 +284,22 @@ body.intro-page #audioPlayerUI.blaettern-layout-active #audioControls.blaettern-
   pointer-events: auto !important;
 }
 
+body.intro-page #audioPlayerUI.reading-mode #subtitleContainer {
+  scrollbar-width: none !important;
+  scrollbar-color: transparent transparent !important;
+}
+
+body.intro-page #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+}
+
+body.intro-page #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-track,
+body.intro-page #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar-thumb {
+  background: transparent !important;
+  border: none !important;
+}
+
 body.intro-page #archiveModal {
   z-index: 5200;
   pointer-events: auto;

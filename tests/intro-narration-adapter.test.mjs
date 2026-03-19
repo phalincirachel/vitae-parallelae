@@ -52,6 +52,18 @@ class MockAudioAdapter {
     return Promise.resolve(this.currentTime);
   }
 
+  isTransportPaused() {
+    return !this._timer;
+  }
+
+  hasRecentProgress() {
+    return !!this._timer;
+  }
+
+  isProbablyPlaying() {
+    return !!this._timer;
+  }
+
   play() {
     if (this._timer) clearInterval(this._timer);
     this._timer = setInterval(() => {
@@ -148,4 +160,43 @@ test('intro narration adapter supports silent hold segments for text without ded
 
   assert.equal(result, true);
   assert.ok(elapsed >= 90, `silent hold resolved too early: ${elapsed}ms`);
+});
+
+test('intro narration adapter treats transport progress as started in verify helper path', async () => {
+  MockAudioAdapter.instances.length = 0;
+  const previousHelpers = globalThis.GameboyPlaybackHelpers;
+  const attempts = [];
+
+  globalThis.GameboyPlaybackHelpers = {
+    verifyPlaybackStarted: async (options = {}) => {
+      const transportPaused = !!options.isTransportPaused?.();
+      const hasRecentProgress = !!options.hasRecentProgress?.();
+      attempts.push({ transportPaused, hasRecentProgress });
+      return !transportPaused && hasRecentProgress;
+    }
+  };
+
+  try {
+    const adapter = createIntroNarrationAdapter({
+      AudioAdapter: MockAudioAdapter,
+      sourceUrl: 'https://example.com/intro'
+    });
+
+    const result = await adapter.play({
+      id: 'seg-4',
+      text: 'Transport Verify',
+      audioStartSec: 8,
+      audioEndSec: 8.24
+    });
+
+    assert.equal(result, true);
+    assert.ok(attempts.length >= 1);
+    assert.ok(attempts.some((attempt) => attempt.hasRecentProgress === true));
+  } finally {
+    if (previousHelpers === undefined) {
+      delete globalThis.GameboyPlaybackHelpers;
+    } else {
+      globalThis.GameboyPlaybackHelpers = previousHelpers;
+    }
+  }
 });

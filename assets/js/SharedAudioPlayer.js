@@ -887,8 +887,8 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
                 div.classList.add('subtitle-current');
             } else {
                 const dist = Math.abs(i - centerIndex);
-                if (dist >= 4) div.classList.add('fade-far');
-                else if (dist >= 2) div.classList.add('fade-mid');
+                if (dist >= 2) div.classList.add('fade-far');
+                else if (dist >= 1) div.classList.add('fade-mid');
             }
             this._renderSubtitleTrackContent(div, this.subtitleTracks[i]);
             this.container.appendChild(div);
