@@ -313,7 +313,7 @@ async function initIntroApp() {
   const startPromptDefaultLabel = String(refs.introAudioPrompt?.textContent || '').trim() || 'Fuehrung beginnen';
   const START_PROMPT_LABELS = Object.freeze({
     idle: startPromptDefaultLabel,
-    loading: 'Lädt Audio...',
+    loading: 'L\u00e4dt Audio...',
     play: 'Fortsetzen',
     pause: 'Pause'
   });
@@ -631,6 +631,22 @@ async function initIntroApp() {
     });
   };
 
+  const playNarrationWithRecovery = async (segment, meta = {}, options = {}) => {
+    const maxAttempts = Number.isFinite(options.maxAttempts)
+      ? Math.max(1, Math.trunc(Number(options.maxAttempts)))
+      : 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      if (runtimeState.destroyed) return false;
+      const result = await narration.play(segment, meta);
+      if (runtimeState.destroyed) return false;
+      if (result !== false) return result;
+      if (attempt >= maxAttempts) return result;
+      narration.acknowledgeGesture?.();
+      await wait(120);
+    }
+    return false;
+  };
+
   const speakSegment = async (trackName, segmentIndex, config = {}) => {
     if (runtimeState.destroyed) return false;
     const track = INTRO_TRACKS[trackName] || [];
@@ -646,7 +662,7 @@ async function initIntroApp() {
       allowCanvas: config.allowCanvas === true,
       allowAll: config.allowAll === true
     });
-    const result = await narration.play(segment, { trackName, segmentIndex });
+    const result = await playNarrationWithRecovery(segment, { trackName, segmentIndex }, { maxAttempts: 3 });
     if (!runtimeState.waitingAction) clearPresentation();
     syncNarrationActiveFlag(false);
     syncAudioIcons(false);
@@ -765,7 +781,7 @@ async function initIntroApp() {
     runtimeState.lastReplaySegment = blockSegment;
     applyIndexState(startIndex);
     updateActiveIndexFromPlayback();
-    const result = await narration.play(blockSegment, { trackName, startIndex, endIndex, range: true });
+    const result = await playNarrationWithRecovery(blockSegment, { trackName, startIndex, endIndex, range: true }, { maxAttempts: 3 });
     trackerActive = false;
     if (trackerTimer) windowRef.clearTimeout(trackerTimer);
     applyIndexState(endIndex);
