@@ -291,6 +291,8 @@ async function initIntroApp() {
   const runtimeState = {
     currentTrackName: 'main',
     currentSegmentIndex: 0,
+    renderedTrackName: null,
+    renderedTrackEntries: null,
     waitingAction: null,
     waitResolver: null,
     demoOrbCollected: false,
@@ -303,6 +305,7 @@ async function initIntroApp() {
     finalButtonVisible: false,
     backToChapterDismissed: false,
     loreHudDismissed: false,
+    loreHudArchivePreviewed: false,
     layoutChosen: false,
     layoutChoiceTouched: false,
     startSegmentStarted: false,
@@ -484,6 +487,16 @@ async function initIntroApp() {
     clearCurrentFocusVisual();
   };
 
+  const openLoreHudArchivePreview = () => {
+    if (runtimeState.loreHudArchivePreviewed) return;
+    runtimeState.loreHudArchivePreviewed = true;
+    safeInvoke('openArchiveLore:preview', () => hooks.openArchiveLore());
+    safeInvoke('forceControlsVisible:preview', () => hooks.forceControlsVisible?.());
+    safeInvoke('refreshLayout:preview', () => hooks.refreshLayout?.('intro-open-lore-preview'));
+    safeInvoke('forceSceneRender:preview', () => hooks.forceSceneRender?.('intro-open-lore-preview'));
+    scheduleUiRecovery('intro-open-lore-preview');
+  };
+
   const clearPresentation = () => {
     runtimeState.currentFocusConfig = null;
     runtimeState.currentGateConfig = null;
@@ -618,8 +631,19 @@ async function initIntroApp() {
   const setTrack = (trackName, segmentIndex) => {
     runtimeState.currentTrackName = trackName;
     runtimeState.currentSegmentIndex = segmentIndex;
-    hooks.setSubtitleTracks(runtimeState.currentTrackEntries[trackName], segmentIndex);
-    hooks.refreshLayout?.('track:' + trackName + ':' + segmentIndex);
+    const trackEntries = runtimeState.currentTrackEntries[trackName] || [];
+    const safeIndex = Math.max(0, Math.min(Number.isFinite(Number(segmentIndex)) ? Math.trunc(Number(segmentIndex)) : 0, Math.max(0, trackEntries.length - 1)));
+    const shouldReloadTrack = runtimeState.renderedTrackName !== trackName || runtimeState.renderedTrackEntries !== trackEntries;
+
+    if (shouldReloadTrack || typeof hooks.setActiveSubtitleIndex !== 'function') {
+      hooks.setSubtitleTracks(trackEntries, safeIndex);
+      runtimeState.renderedTrackName = trackName;
+      runtimeState.renderedTrackEntries = trackEntries;
+      hooks.refreshLayout?.('track:' + trackName + ':' + safeIndex);
+      return;
+    }
+
+    hooks.setActiveSubtitleIndex(safeIndex);
   };
 
   const keepStartPromptAvailable = () => {
@@ -1448,6 +1472,7 @@ async function initIntroApp() {
       event.preventDefault();
       event.stopImmediatePropagation();
       dismissLoreHudHighlight();
+      openLoreHudArchivePreview();
       resolveOrRememberAction('open-lore-hud', true);
       return;
     }
@@ -1711,8 +1736,7 @@ async function initIntroApp() {
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
-  await playCheckpointRange('main', 6, 10, 'dimmer-dark', {
-    initialGate: { includeAudio: true, allowAll: true },
+  await playContinuousRange('main', 6, 9, {
     uiByIndex: {
       6: {
         selectors: ['.archive-tab[data-tab="lore"]'],
@@ -1743,13 +1767,15 @@ async function initIntroApp() {
           hooks.forceSceneRender?.('main-9-clear');
           hooks.forceControlsVisible?.();
         }
-      },
-      10: {
-        targets: ['#sceneDimmerToggleBtn'],
-        selectors: ['#sceneDimmerToggleBtn'],
-        allowAll: true
       }
     }
+  });
+  if (runtimeState.destroyed) return;
+
+  await speakCheckpointSegment('main', 10, 'dimmer-dark', {
+    targets: ['#sceneDimmerToggleBtn'],
+    selectors: ['#sceneDimmerToggleBtn'],
+    allowAll: true
   });
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('black-freeze');
@@ -1847,6 +1873,7 @@ async function initIntroApp() {
   clearPresentation();
 
   runtimeState.loreHudDismissed = false;
+  runtimeState.loreHudArchivePreviewed = false;
   await playCheckpointRange('main', 16, 17, 'open-lore-hud', {
     uiByIndex: {
       16: {
@@ -1866,7 +1893,9 @@ async function initIntroApp() {
   if (runtimeState.destroyed) return;
 
   clearPresentation();
-  hooks.openArchiveLore();
+  if (!runtimeState.loreHudArchivePreviewed) {
+    hooks.openArchiveLore();
+  }
   hooks.forceControlsVisible?.();
   await wait(60);
   await playContinuousRange('main', 18, 19, {
