@@ -1,4 +1,4 @@
-﻿export function createInteractionGate(options = {}) {
+export function createInteractionGate(options = {}) {
   const documentRef = options.document || globalThis.document || null;
   if (!documentRef) {
     return {
@@ -61,8 +61,16 @@
     });
   }
 
-  function isAllowedEventTarget(target) {
+  function isAllowedEventTarget(target, event = null) {
     if (state.allowAll) return true;
+    if (event && typeof event.composedPath === 'function') {
+      const path = event.composedPath();
+      if (Array.isArray(path)) {
+        for (const node of path) {
+          if (node instanceof Element && isAllowedElement(node)) return true;
+        }
+      }
+    }
     if (!target) return false;
     if (target instanceof Element && isAllowedElement(target)) return true;
     let current = target;
@@ -75,7 +83,7 @@
 
   function handlePointerLikeEvent(event) {
     if (state.allowAll) return;
-    if (isAllowedEventTarget(event.target)) return;
+    if (isAllowedEventTarget(event.target, event)) return;
     event.preventDefault?.();
     event.stopImmediatePropagation?.();
   }

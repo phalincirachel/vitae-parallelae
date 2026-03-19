@@ -28,6 +28,17 @@ const INTRO_LAYOUT_STEP_TARGETS = Object.freeze([
   '#readerFontSizeRange',
   '#readerFontSizeNumber'
 ]);
+const INTRO_LAYOUT_GATE_TARGETS = Object.freeze([
+  ...INTRO_LAYOUT_STEP_TARGETS,
+  '.reader-settings-panel',
+  '.reader-settings-panel *',
+  '#archiveModal',
+  '#archiveModal .archive-card',
+  '#archiveModal .archive-card *',
+  '#archivePrimarySettingsBtn',
+  '#archivePrimaryInhaltBtn',
+  '#closeArchiveBtn'
+]);
 
 function wait(ms) {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms));
@@ -310,6 +321,16 @@ async function initIntroApp() {
   let uiRecoveryFrame = 0;
   let autoResumeTimer = 0;
   let startPreludeTimer = 0;
+  const visualViewportRef = windowRef.visualViewport || null;
+  const updateIntroViewportHeight = () => {
+    const fallbackHeight = Number(windowRef.innerHeight) || 0;
+    const viewportHeight = Number(visualViewportRef?.height) || fallbackHeight;
+    const safeHeight = Math.max(320, Math.round(viewportHeight || fallbackHeight || 0));
+    if (safeHeight > 0) {
+      documentRef.documentElement?.style?.setProperty?.('--intro-viewport-height', String(safeHeight) + 'px');
+    }
+  };
+  updateIntroViewportHeight();
   const startPromptDefaultLabel = String(refs.introAudioPrompt?.textContent || '').trim() || 'Fuehrung beginnen';
   const START_PROMPT_LABELS = Object.freeze({
     idle: startPromptDefaultLabel,
@@ -362,6 +383,24 @@ async function initIntroApp() {
 
   const isNarrationAwaitingGesture = () => typeof narration.isAwaitingGesture === 'function'
     && narration.isAwaitingGesture();
+
+  const syncStartPromptState = (_reason = 'sync') => {
+    if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
+    setAudioPromptVisible(true);
+    if (narration.isPlaying()) {
+      setStartPromptState('pause');
+      return;
+    }
+    if (narration.isPaused() || isNarrationAwaitingGesture()) {
+      setStartPromptState('play');
+      return;
+    }
+    if (runtimeState.startRequested && !runtimeState.startSegmentStarted) {
+      setStartPromptState('loading');
+      return;
+    }
+    setStartPromptState('idle');
+  };
 
   syncNarrationActiveFlag(false);
 
@@ -491,8 +530,7 @@ async function initIntroApp() {
 
   const keepStartPromptAvailable = () => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
-    if (narration.isPlaying()) return;
-    setAudioPromptVisible(true);
+    syncStartPromptState('keep-available');
   };
 
   const normalizeLayoutChoice = (value) => {
@@ -631,6 +669,30 @@ async function initIntroApp() {
     });
   };
 
+  const isLayoutChoicePanelVisible = () => {
+    const archiveVisible = refs.archiveModal?.classList?.contains?.('visible');
+    if (!archiveVisible) return false;
+    const settingsPanel = documentRef.querySelector('.archive-tab-content[data-tab="einstellungen"]');
+    return !!settingsPanel?.classList?.contains?.('active');
+  };
+
+  const ensureLayoutChoicePanelVisible = async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      safeInvoke('openArchiveSettings', () => hooks.openArchiveSettings());
+      refs.archiveModal?.classList?.add?.('visible');
+      if (!isLayoutChoicePanelVisible()) {
+        documentRef.getElementById('archivePrimarySettingsBtn')?.click?.();
+      }
+      clearPotentialBlockingOverlays();
+      hooks.forceControlsVisible?.();
+      hooks.refreshLayout?.('intro-layout-open:' + attempt);
+      hooks.forceSceneRender?.('intro-layout-open:' + attempt);
+      scheduleUiRecovery('intro-layout-open:' + attempt);
+      if (isLayoutChoicePanelVisible()) return true;
+      await wait(90 + (attempt * 70));
+    }
+    return isLayoutChoicePanelVisible();
+  };
   const playNarrationWithRecovery = async (segment, meta = {}, options = {}) => {
     const maxAttempts = Number.isFinite(options.maxAttempts)
       ? Math.max(1, Math.trunc(Number(options.maxAttempts)))
@@ -866,12 +928,9 @@ async function initIntroApp() {
 
   const waitForStartScreenTransitionPoint = async () => {
     const transitionPointSec = 23.58;
-    const startSegment = INTRO_TRACKS.start?.[0] || null;
-    const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
-    const fallbackElapsedMs = Math.max(0, Math.round((transitionPointSec - startSec) * 1000)) + 180;
     const started = await waitFor(
       () => runtimeState.startSegmentStarted || runtimeState.destroyed,
-      { timeoutMs: 45000, intervalMs: 50, label: 'intro start segment start' }
+      { timeoutMs: 180000, intervalMs: 50, label: 'intro start segment start' }
     ).catch(() => false);
     if (!started || runtimeState.destroyed) return false;
     await waitFor(
@@ -879,16 +938,14 @@ async function initIntroApp() {
         if (runtimeState.destroyed) return true;
         const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
         if (Number.isFinite(currentTime) && currentTime >= (transitionPointSec - 0.05)) return true;
+        const narrationPlaying = typeof narration.isPlaying === 'function' && narration.isPlaying();
         const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
-        if (runtimeState.startSegmentStartedAtMs > 0
+        return runtimeState.startSegmentStarted
+          && !narrationPlaying
           && !narrationPaused
-          && !isNarrationAwaitingGesture()
-          && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackElapsedMs) {
-          return true;
-        }
-        return false;
+          && !isNarrationAwaitingGesture();
       },
-      { timeoutMs: 45000, intervalMs: 60, label: 'intro start transition point' }
+      { timeoutMs: 180000, intervalMs: 60, label: 'intro start transition point' }
     ).catch(() => false);
     return !runtimeState.destroyed && !runtimeState.startScreenHidden
       && runtimeState.currentTrackName === 'start'
@@ -934,27 +991,17 @@ async function initIntroApp() {
     const timeoutMs = Number.isFinite(options.timeoutMs)
       ? Math.max(1000, Math.round(Number(options.timeoutMs)))
       : 60000;
-    const fallbackSinceStartMs = Number.isFinite(options.fallbackSinceStartMs)
-      ? Math.max(0, Math.round(Number(options.fallbackSinceStartMs)))
-      : 0;
     await waitFor(
       () => {
         if (runtimeState.destroyed) return true;
         const currentTime = typeof narration.getCurrentTime === 'function' ? narration.getCurrentTime() : NaN;
         if (Number.isFinite(currentTime) && currentTime >= (target - 0.06)) return true;
-        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
-        if (fallbackSinceStartMs > 0
-          && runtimeState.startSegmentStartedAtMs > 0
-          && !narrationPaused
-          && !isNarrationAwaitingGesture()
-          && (Date.now() - runtimeState.startSegmentStartedAtMs) >= fallbackSinceStartMs) {
-          return true;
-        }
         const narrationPlaying = typeof narration.isPlaying === 'function' && narration.isPlaying();
-        if (!narrationPlaying && !narrationPaused && !isNarrationAwaitingGesture()) {
-          return true;
-        }
-        return false;
+        const narrationPaused = typeof narration.isPaused === 'function' && narration.isPaused();
+        return runtimeState.startSegmentStarted
+          && !narrationPlaying
+          && !narrationPaused
+          && !isNarrationAwaitingGesture();
       },
       { timeoutMs, intervalMs: 60, label }
     ).catch(() => false);
@@ -983,16 +1030,7 @@ async function initIntroApp() {
   narration.onAutoplayBlocked?.(() => {
     clearAutoResumeTimer();
     if (!runtimeState.startScreenHidden) {
-      if (runtimeState.startUiReady) {
-        setAudioPromptVisible(true);
-        if (narration.isPlaying()) {
-          setStartPromptState('pause');
-        } else if (narration.isPaused() || isNarrationAwaitingGesture()) {
-          setStartPromptState('play');
-        } else {
-          setStartPromptState(runtimeState.startRequested ? 'loading' : 'idle');
-        }
-      }
+      syncStartPromptState('autoplay-blocked');
       return;
     }
     hooks.forceControlsVisible?.();
@@ -1006,8 +1044,7 @@ async function initIntroApp() {
     }
     clearAutoResumeTimer();
     if (!runtimeState.startScreenHidden && runtimeState.startUiReady) {
-      setAudioPromptVisible(true);
-      setStartPromptState('pause');
+      syncStartPromptState('segment-start');
     } else {
       setAudioPromptVisible(false);
     }
@@ -1018,14 +1055,13 @@ async function initIntroApp() {
   narration.onSegmentEnd(() => {
     clearAutoResumeTimer();
     if (!runtimeState.startScreenHidden && runtimeState.startUiReady) {
-      setAudioPromptVisible(true);
-      setStartPromptState('play');
+      syncStartPromptState('segment-end');
     } else {
       setAudioPromptVisible(false);
     }
     runtimeState.autoPausedForVisibility = false;
-    syncAudioIcons(false);
-    syncNarrationActiveFlag(false);
+    syncAudioIcons(narration.isPlaying());
+    syncNarrationActiveFlag(narration.isPlaying());
     scheduleUiRecovery('segment-end');
   });
 
@@ -1079,8 +1115,14 @@ async function initIntroApp() {
     keepStartPromptAvailable();
     scheduleAutoResume('pageshow');
   });
-  windowRef.addEventListener('resize', () => scheduleUiRecovery('resize'));
-  windowRef.addEventListener('orientationchange', () => scheduleUiRecovery('orientationchange'));
+  const handleViewportChange = (reason) => {
+    updateIntroViewportHeight();
+    scheduleUiRecovery(reason);
+  };
+  windowRef.addEventListener('resize', () => handleViewportChange('resize'));
+  windowRef.addEventListener('orientationchange', () => handleViewportChange('orientationchange'));
+  visualViewportRef?.addEventListener?.('resize', () => handleViewportChange('visualViewport-resize'));
+  visualViewportRef?.addEventListener?.('scroll', () => handleViewportChange('visualViewport-scroll'));
 
   [refs.skipBackBtn, refs.skipForwardBtn].forEach((button) => {
     button?.addEventListener('click', (event) => {
@@ -1106,8 +1148,7 @@ async function initIntroApp() {
       resolveStartRequest = null;
     }
     narration.acknowledgeGesture?.();
-    setStartPromptState('loading');
-    keepStartPromptAvailable();
+    syncStartPromptState('request-start');
     return true;
   };
 
@@ -1139,7 +1180,7 @@ async function initIntroApp() {
     }
     if (isNarrationAwaitingGesture()) {
       narration.acknowledgeGesture?.();
-      setStartPromptState('loading');
+      syncStartPromptState('awaiting-gesture');
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -1148,7 +1189,7 @@ async function initIntroApp() {
       narration.pause();
       syncNarrationActiveFlag(false);
       syncAudioIcons(false);
-      setStartPromptState('play');
+      syncStartPromptState('prompt-pause');
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -1158,7 +1199,7 @@ async function initIntroApp() {
       narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
       syncAudioIcons(true);
-      setStartPromptState('pause');
+      syncStartPromptState('prompt-resume');
       event.preventDefault();
       event.stopImmediatePropagation();
       return;
@@ -1277,6 +1318,8 @@ async function initIntroApp() {
 
   documentRef.addEventListener('click', handleLayoutChoiceEvent, true);
   documentRef.addEventListener('change', handleLayoutChoiceEvent, true);
+  documentRef.addEventListener('pointerup', handleLayoutChoiceEvent, true);
+  documentRef.addEventListener('touchend', handleLayoutChoiceEvent, true);
 
   const layoutOptionLabels = documentRef.querySelectorAll('.reader-radio-option[data-layout]');
   layoutOptionLabels.forEach((label) => {
@@ -1293,6 +1336,7 @@ async function initIntroApp() {
     label.addEventListener('pointerup', handleDirectTouch, { passive: true });
     label.addEventListener('mousedown', handleDirectTouch, { passive: true });
     label.addEventListener('click', handleDirectTouch, { passive: true });
+    label.addEventListener('touchstart', handleDirectTouch, { passive: true });
     label.addEventListener('touchend', handleDirectTouch, { passive: true });
   });
 
@@ -1361,16 +1405,26 @@ async function initIntroApp() {
   const startPromise = (async () => {
     await startUiReadyPromise;
     await startRequestPromise;
-    if (runtimeState.destroyed) return;
-    setStartPromptState('loading');
+    if (runtimeState.destroyed) return false;
+    syncStartPromptState('start-requested');
     await Promise.race([narrationPreparePromise, wait(500)]);
-    if (runtimeState.destroyed) return;
+    if (runtimeState.destroyed) return false;
     await wait(20);
-    await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
-    if (runtimeState.destroyed) return;
+    let startResult = false;
+    while (!runtimeState.destroyed && !runtimeState.startScreenHidden && startResult === false) {
+      startResult = await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
+      if (startResult === false) {
+        narration.acknowledgeGesture?.();
+        syncStartPromptState('start-retry');
+        await wait(180);
+      }
+    }
+    if (runtimeState.destroyed) return false;
     if (!runtimeState.startScreenHidden && !runtimeState.waitingAction) {
       setGate({ includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });
+      syncStartPromptState('start-segment-ended');
     }
+    return startResult;
   })();
 
   void realGameStatePromise.then((resolvedState) => {
@@ -1388,26 +1442,28 @@ async function initIntroApp() {
     const shouldTransition = await waitForStartScreenTransitionPoint();
     if (runtimeState.destroyed) return false;
     if (!shouldTransition && !runtimeState.startScreenHidden) return false;
-    if (runtimeState.destroyed) return false;
+    if (!runtimeState.startScreenHidden) {
+      transitionOutOfStartScreen('layout-ready');
+    }
+    await waitFor(
+      () => runtimeState.startScreenHidden || runtimeState.destroyed,
+      { timeoutMs: 15000, intervalMs: 60, label: 'intro start screen hidden' }
+    ).catch(() => false);
+    if (runtimeState.destroyed || !runtimeState.startScreenHidden) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
     runtimeState.layoutChoiceTouched = false;
     documentRef.body.classList.add('intro-layout-choice-pending');
-    hooks.openArchiveSettings();
-    clearPotentialBlockingOverlays();
-    hooks.forceControlsVisible?.();
-    hooks.refreshLayout?.('intro-layout-open');
+    const archiveReady = await ensureLayoutChoicePanelVisible();
+    if (!archiveReady) {
+      console.warn('[Intro] layout settings panel did not become visible reliably');
+    }
     const initialLayoutChoice = readCheckedLayoutChoice();
     const actionPromise = waitForAction('choose-layout', {
-      targets: [...INTRO_LAYOUT_STEP_TARGETS, '.reader-settings-panel', '.reader-settings-panel *'],
-      allowAll: true
+      targets: [...INTRO_LAYOUT_GATE_TARGETS]
     });
-    const startSegment = INTRO_TRACKS.start?.[0] || null;
-    const startSec = Number.isFinite(startSegment?.audioStartSec) ? Number(startSegment.audioStartSec) : 0;
     const layoutSentenceEndSec = 41.72;
-    const fallbackSinceStartMs = Math.max(0, Math.round((layoutSentenceEndSec - startSec) * 1000)) + 900;
     await waitForNarrationTime(layoutSentenceEndSec, 'intro layout sentence end', {
-      fallbackSinceStartMs,
       timeoutMs: 50000
     });
 
@@ -1434,25 +1490,24 @@ async function initIntroApp() {
   })();
 
   const startFlowResult = await Promise.race([
-    startPromise.then(() => 'ended'),
+    startPromise.then((startResult) => (startResult === false ? 'start-failed' : 'ended')),
     waitForStartScreenTransitionPoint().then((shouldTransition) => {
       if (!shouldTransition) return 'transition-idle';
       transitionOutOfStartScreen('timed');
       return 'transitioned';
-    }),
-    waitForStartScreenDeadline().then((shouldForce) => {
-      if (!shouldForce) return 'hard-idle';
-      console.warn('[Intro] forcing start screen transition after deadline');
-      transitionOutOfStartScreen('forced');
-      return 'forced';
     })
   ]);
   if (startFlowResult === 'ended') {
     transitionOutOfStartScreen('ended');
+  } else if (startFlowResult === 'start-failed' && !runtimeState.startScreenHidden) {
+    syncStartPromptState('start-failed');
   }
   if (!runtimeState.startScreenHidden) {
-    transitionOutOfStartScreen(startFlowResult);
+    const shouldTransition = await waitForStartScreenTransitionPoint();
+    if (shouldTransition) transitionOutOfStartScreen('timed-late');
   }
+  if (!runtimeState.startScreenHidden) return;
+
   const layoutChoice = await startLayoutActionPromise;
   if (runtimeState.destroyed) return;
   if (layoutChoice === false) return;

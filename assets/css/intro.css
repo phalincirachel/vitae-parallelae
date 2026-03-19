@@ -43,6 +43,9 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   background-color: #050507;
   overflow: hidden;
   isolation: isolate;
+  height: var(--intro-viewport-height, 100dvh);
+  min-height: var(--intro-viewport-height, 100vh);
+  max-height: var(--intro-viewport-height, 100dvh);
   transition: opacity 0.45s ease, visibility 0.45s ease;
 }
 
@@ -97,17 +100,19 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   position: relative;
   z-index: 2;
   width: min(92vw, 760px);
-  min-height: min(70vh, 640px);
+  min-height: min(var(--intro-viewport-height, 100dvh), 640px);
+  max-height: var(--intro-viewport-height, 100dvh);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
-  padding: clamp(22px, 4vw, 40px);
+  padding: calc(clamp(22px, 4vw, 40px) + env(safe-area-inset-top)) clamp(22px, 4vw, 40px) calc(clamp(22px, 4vw, 40px) + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .intro-start-copy {
   margin-top: auto;
-  margin-bottom: clamp(52px, 18vh, 190px);
+  margin-bottom: clamp(28px, 12vh, 150px);
   color: #fff8e8;
   font-family: 'Reader Renaissance', 'Palatino Linotype', serif;
   font-size: clamp(30px, 4.6vw, 56px);
@@ -304,12 +309,13 @@ body.intro-page.intro-ready-to-begin #nextChapterBtn.visible {
 @media (max-width: 768px) {
   .intro-start-panel {
     width: 100vw;
-    min-height: 100vh;
-    padding: 18px 18px 24px;
+    min-height: var(--intro-viewport-height, 100dvh);
+    max-height: var(--intro-viewport-height, 100dvh);
+    padding: calc(14px + env(safe-area-inset-top)) 18px calc(18px + env(safe-area-inset-bottom));
   }
 
   .intro-start-copy {
-    margin-bottom: 20vh;
+    margin-bottom: clamp(18px, 8vh, 58px);
     font-size: clamp(28px, 9vw, 42px);
   }
 
@@ -334,7 +340,7 @@ body.intro-page #gameWrapper {
   position: fixed;
   inset: 0;
   width: 100vw;
-  height: 100vh;
+  height: var(--intro-viewport-height, 100dvh);
   box-shadow: none;
 }
 
