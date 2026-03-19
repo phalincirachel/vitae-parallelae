@@ -1452,6 +1452,9 @@ async function initIntroApp() {
     if (runtimeState.destroyed || !runtimeState.startScreenHidden) return false;
     await waitFor(() => hooks.isArchiveReady && hooks.isArchiveReady(), { label: 'archive runtime' });
     if (runtimeState.destroyed) return false;
+    const layoutPromptOpenSec = 30.9;
+    await waitForNarrationTime(layoutPromptOpenSec, 'intro layout prompt open', { timeoutMs: 50000 });
+    if (runtimeState.destroyed) return false;
     runtimeState.layoutChoiceTouched = false;
     documentRef.body.classList.add('intro-layout-choice-pending');
     const archiveReady = await ensureLayoutChoicePanelVisible();
@@ -1563,11 +1566,19 @@ async function initIntroApp() {
       },
       7: {
         clear: true,
-        onEnter: () => clearLoreTabHighlightFallback()
+        onEnter: () => {
+          clearLoreTabHighlightFallback();
+          clearPresentation();
+          scheduleUiRecovery('main-7-clear-hard');
+        }
       },
       8: {
         clear: true,
-        onEnter: () => clearLoreTabHighlightFallback()
+        onEnter: () => {
+          clearLoreTabHighlightFallback();
+          clearPresentation();
+          scheduleUiRecovery('main-8-clear-hard');
+        }
       },
       9: {
         clear: true,
@@ -1672,7 +1683,11 @@ async function initIntroApp() {
     uiByIndex: {
       16: {
         clear: true,
-        onEnter: () => hideBackToChapterPromptImmediate()
+        onEnter: () => {
+          hideBackToChapterPromptImmediate();
+          clearPresentation();
+          scheduleUiRecovery('main-16-clear-hard');
+        }
       },
       17: {
         targets: ['#loreProgressHud'],
