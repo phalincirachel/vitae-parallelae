@@ -365,3 +365,27 @@ body.intro-page #crtOverlay {
   width: 100%;
   height: 100%;
 }
+
+.intro-orb-direction-pointer {
+  position: fixed;
+  left: var(--intro-orb-pointer-left, -9999px);
+  top: var(--intro-orb-pointer-top, -9999px);
+  width: 0;
+  height: 0;
+  pointer-events: none !important;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 12px solid rgba(255, 214, 88, 0.98);
+  transform: translate(-50%, -50%) rotate(var(--intro-orb-pointer-angle, 0deg));
+  transform-origin: 50% 58%;
+  filter: drop-shadow(0 0 1px rgba(255, 244, 193, 0.95)) drop-shadow(0 0 10px rgba(255, 214, 88, 0.74));
+  opacity: 0;
+  visibility: hidden;
+  z-index: 5650;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.intro-orb-direction-pointer.is-visible {
+  opacity: 1;
+  visibility: visible;
+}

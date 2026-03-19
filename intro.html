@@ -941,6 +941,90 @@
             }
             return false;
         }
+
+        function getIntroOrbRenderTarget() {
+            if (!gameCanvas) return null;
+            const targetId = getIntroOrbTargetId();
+            const visibleLight = Array.isArray(yellowLights)
+                ? yellowLights.find((light) => {
+                    if (!light || !shouldRenderIntroYellowLight(light)) return false;
+                    const lightId = Math.trunc(Number(light.id));
+                    if (!Number.isFinite(lightId)) return false;
+                    if (Number.isFinite(targetId) && targetId > 0) return lightId === targetId;
+                    return true;
+                })
+                : null;
+            if (!visibleLight) return null;
+
+            const canvasRect = gameCanvas.getBoundingClientRect();
+            const scaleX = canvasRect.width / Math.max(1, Number(gameCanvas.width) || 1);
+            const scaleY = canvasRect.height / Math.max(1, Number(gameCanvas.height) || 1);
+            const canvasX = (visibleLight.x - camX) * cameraZoom;
+            const canvasY = (visibleLight.y - camY) * cameraZoom;
+            const size = 28 * cameraZoom;
+            const centerX = canvasRect.left + (canvasX * scaleX);
+            const centerY = canvasRect.top + (canvasY * scaleY);
+            const rect = {
+                left: canvasRect.left + ((canvasX - size) * scaleX),
+                top: canvasRect.top + ((canvasY - size) * scaleY),
+                width: (size * 2) * scaleX,
+                height: (size * 2) * scaleY
+            };
+
+            return {
+                light: visibleLight,
+                canvasRect,
+                rect,
+                centerX,
+                centerY
+            };
+        }
+
+        function getIntroOrbFocusHint() {
+            const target = getIntroOrbRenderTarget();
+            if (!target) return null;
+
+            const edgePadding = 18;
+            const visibilityPadding = 8;
+            const rect = target.rect;
+            const canvasRect = target.canvasRect;
+            const rectRight = rect.left + rect.width;
+            const rectBottom = rect.top + rect.height;
+            const isFullyVisible =
+                rect.left >= (canvasRect.left + visibilityPadding)
+                && rectRight <= (canvasRect.right - visibilityPadding)
+                && rect.top >= (canvasRect.top + visibilityPadding)
+                && rectBottom <= (canvasRect.bottom - visibilityPadding);
+
+            if (isFullyVisible) {
+                return {
+                    mode: 'onscreen',
+                    rect
+                };
+            }
+
+            const pointerLeft = Math.max(
+                canvasRect.left + edgePadding,
+                Math.min(canvasRect.right - edgePadding, target.centerX)
+            );
+            const pointerTop = Math.max(
+                canvasRect.top + edgePadding,
+                Math.min(canvasRect.bottom - edgePadding, target.centerY)
+            );
+            const canvasCenterX = canvasRect.left + (canvasRect.width / 2);
+            const canvasCenterY = canvasRect.top + (canvasRect.height / 2);
+            const angleDeg = (Math.atan2(target.centerY - canvasCenterY, target.centerX - canvasCenterX) * (180 / Math.PI)) + 90;
+
+            return {
+                mode: 'offscreen',
+                pointer: {
+                    left: pointerLeft,
+                    top: pointerTop,
+                    angleDeg
+                }
+            };
+        }
+
         const sharedUiRuntimeReady = (async function initSharedUiRuntime() {
             try {
                 const runtimeControllersModule = await import('./assets/js/shared/ui/runtime-controllers.js');
@@ -7045,6 +7129,36 @@
         // 7. Modus-Wechsel mit robuster Animation
         let modeSwitchLockUntil = 0;
 
+        const isIOSWebKitMaskQuirkDevice = (() => {
+            const nav = window.navigator || {};
+            const ua = String(nav.userAgent || '');
+            const platform = String(nav.platform || '');
+            const touchPoints = Number(nav.maxTouchPoints || 0);
+            return /iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+        })();
+
+        function resetSubtitleMaskForGameMode() {
+            if (!subtitleContainer) return;
+            subtitleContainer.classList.remove('no-top-fade');
+            subtitleContainer.style.setProperty('-webkit-mask-image', 'none');
+            subtitleContainer.style.setProperty('mask-image', 'none');
+            subtitleContainer.style.setProperty('-webkit-mask-size', 'auto');
+            subtitleContainer.style.setProperty('mask-size', 'auto');
+            if (!isIOSWebKitMaskQuirkDevice) return;
+            subtitleContainer.style.setProperty('transform', 'translateZ(0)');
+            requestAnimationFrame(() => {
+                subtitleContainer.style.removeProperty('transform');
+            });
+        }
+
+        function restoreSubtitleMaskForReadingMode() {
+            if (!subtitleContainer) return;
+            subtitleContainer.style.removeProperty('-webkit-mask-image');
+            subtitleContainer.style.removeProperty('mask-image');
+            subtitleContainer.style.removeProperty('-webkit-mask-size');
+            subtitleContainer.style.removeProperty('mask-size');
+        }
+
         function syncModeToggleButton() {
             if (!modeToggleBtn) return;
             const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
@@ -7069,6 +7183,7 @@
             }
 
             if (normalized) {
+                restoreSubtitleMaskForReadingMode();
                 syncAutoWalkToIndex();
                 uiContainer.classList.add('reading-mode');
                 hideNextChapterPrompt('reading-mode-on');
@@ -7083,6 +7198,7 @@
                     endLoreMode();
                 }
                 uiContainer.classList.remove('reading-mode');
+                resetSubtitleMaskForGameMode();
                 scheduleBackgroundBrightnessCheck(120);
             }
 
@@ -8286,31 +8402,13 @@
                     effectiveTargetLightId: getIntroOrbTargetId()
                 };
             },
+            getOrbFocusHint() {
+                return getIntroOrbFocusHint();
+            },
             getOrbHighlightRect() {
-                if (!gameCanvas) return null;
-                const targetId = getIntroOrbTargetId();
-                const visibleLight = Array.isArray(yellowLights)
-                    ? yellowLights.find((light) => {
-                        if (!light || !shouldRenderIntroYellowLight(light)) return false;
-                        const lightId = Math.trunc(Number(light.id));
-                        if (!Number.isFinite(lightId)) return false;
-                        if (Number.isFinite(targetId) && targetId > 0) return lightId === targetId;
-                        return true;
-                    })
-                    : null;
-                if (!visibleLight) return null;
-                const canvasRect = gameCanvas.getBoundingClientRect();
-                const scaleX = canvasRect.width / Math.max(1, Number(gameCanvas.width) || 1);
-                const scaleY = canvasRect.height / Math.max(1, Number(gameCanvas.height) || 1);
-                const canvasX = (visibleLight.x - camX) * cameraZoom;
-                const canvasY = (visibleLight.y - camY) * cameraZoom;
-                const size = 28 * cameraZoom;
-                return {
-                    left: canvasRect.left + ((canvasX - size) * scaleX),
-                    top: canvasRect.top + ((canvasY - size) * scaleY),
-                    width: (size * 2) * scaleX,
-                    height: (size * 2) * scaleY
-                };
+                const hint = getIntroOrbFocusHint();
+                if (!hint || hint.mode !== 'onscreen') return null;
+                return hint.rect || null;
             }
         };
     </script>

@@ -587,6 +587,14 @@ body.scene-dimmer-light-mode #loreProgressText {
     scrollbar-color: rgba(255, 255, 255, 0.4) transparent;
 }
 
+/* iOS/WebKit can keep a stale top mask raster after leaving reading mode. */
+#audioPlayerUI:not(.reading-mode) #subtitleContainer {
+    -webkit-mask-image: none !important;
+    mask-image: none !important;
+    -webkit-mask-size: auto !important;
+    mask-size: auto !important;
+}
+
 /* Webkit Scrollbar Styling */
 #audioPlayerUI.reading-mode #subtitleContainer::-webkit-scrollbar {
     width: 6px !important;

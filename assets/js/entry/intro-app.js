@@ -319,6 +319,37 @@ async function initIntroApp() {
     }
   };
 
+  const orbDirectionPointer = (() => {
+    if (!documentRef?.body) return null;
+    const existing = documentRef.querySelector('.intro-orb-direction-pointer');
+    if (existing) return existing;
+    const element = documentRef.createElement('div');
+    element.className = 'intro-orb-direction-pointer';
+    element.setAttribute('aria-hidden', 'true');
+    documentRef.body.appendChild(element);
+    return element;
+  })();
+
+  const hideOrbDirectionPointer = () => {
+    if (!orbDirectionPointer) return;
+    orbDirectionPointer.classList.remove('is-visible');
+  };
+
+  const showOrbDirectionPointer = (pointer = {}) => {
+    if (!orbDirectionPointer) return;
+    const left = Number(pointer.left);
+    const top = Number(pointer.top);
+    const angleDeg = Number(pointer.angleDeg);
+    if (!Number.isFinite(left) || !Number.isFinite(top) || !Number.isFinite(angleDeg)) {
+      hideOrbDirectionPointer();
+      return;
+    }
+    orbDirectionPointer.style.setProperty('--intro-orb-pointer-left', String(Math.round(left)) + 'px');
+    orbDirectionPointer.style.setProperty('--intro-orb-pointer-top', String(Math.round(top)) + 'px');
+    orbDirectionPointer.style.setProperty('--intro-orb-pointer-angle', String(angleDeg.toFixed(2)) + 'deg');
+    orbDirectionPointer.classList.add('is-visible');
+  };
+
   let realGameState = null;
   let uiRecoveryFrame = 0;
   let autoResumeTimer = 0;
@@ -409,20 +440,27 @@ async function initIntroApp() {
   const clearDynamicFocus = () => {
     if (typeof runtimeState.dynamicFocusCleanup === 'function') runtimeState.dynamicFocusCleanup();
     runtimeState.dynamicFocusCleanup = null;
+    hideOrbDirectionPointer();
+  };
+  const clearCurrentFocusVisual = () => {
+    clearDynamicFocus();
+    focusOverlay.clear();
+    runtimeState.currentFocusConfig = null;
+  };
+  const dismissHighlightForAction = (actionId) => {
+    if (!actionId || runtimeState.waitingAction !== actionId) return false;
+    clearCurrentFocusVisual();
+    return true;
   };
 
   const dismissBackToChapterHighlight = () => {
     runtimeState.backToChapterDismissed = true;
-    clearDynamicFocus();
-    focusOverlay.clear();
-    runtimeState.currentFocusConfig = null;
+    clearCurrentFocusVisual();
   };
 
   const dismissLoreHudHighlight = () => {
     runtimeState.loreHudDismissed = true;
-    clearDynamicFocus();
-    focusOverlay.clear();
-    runtimeState.currentFocusConfig = null;
+    clearCurrentFocusVisual();
   };
 
   const clearPresentation = () => {
@@ -525,6 +563,20 @@ async function initIntroApp() {
     };
   };
 
+
+  const resolveOrbFocusRect = () => {
+    const hint = safeInvoke('getOrbFocusHint', () => hooks.getOrbFocusHint?.()) || null;
+    if (hint && hint.mode === 'offscreen' && hint.pointer) {
+      showOrbDirectionPointer(hint.pointer);
+      return null;
+    }
+    hideOrbDirectionPointer();
+    if (hint && hint.mode === 'onscreen' && hint.rect) {
+      return hint.rect;
+    }
+    return safeInvoke('getOrbHighlightRect', () => hooks.getOrbHighlightRect?.()) || null;
+  };
+
   const clearAutoResumeTimer = () => {
     if (!autoResumeTimer) return;
     windowRef.clearTimeout(autoResumeTimer);
@@ -612,9 +664,7 @@ async function initIntroApp() {
     const resolver = runtimeState.waitResolver;
     runtimeState.waitingAction = null;
     runtimeState.waitResolver = null;
-    clearDynamicFocus();
-    focusOverlay.clear();
-    runtimeState.currentFocusConfig = null;
+    clearCurrentFocusVisual();
     if (!narration.isPlaying() && !narration.isPaused()) {
       clearPresentation();
     }
@@ -629,9 +679,7 @@ async function initIntroApp() {
   };
 
   runtimeState.onOrbCollected = () => {
-    clearDynamicFocus();
-    focusOverlay.clear();
-    runtimeState.currentFocusConfig = null;
+    clearCurrentFocusVisual();
     hooks.renderArchive();
     hooks.refreshLoreProgressUi({ forceHidden: !runtimeState.finalButtonVisible });
     resolveAction('collect-orb', { loreId: INTRO_DEMO_LORE_ID });
@@ -1281,41 +1329,58 @@ async function initIntroApp() {
     }
     rememberAllowedAction('back-to-chapter', event, true);
   }, true);
+  const onDimmerPressStart = () => {
+    if (runtimeState.waitingAction !== 'dimmer-dark' && runtimeState.waitingAction !== 'dimmer-light') return;
+    clearCurrentFocusVisual();
+  };
+  refs.sceneDimmerToggleBtn?.addEventListener('pointerdown', onDimmerPressStart, true);
+  refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: true });
   refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    dismissHighlightForAction('dimmer-light');
     hooks.setDimmerMode('reading-clear');
     resolveOrRememberAction('dimmer-light', true);
   }, true);
-
-  refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
+  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'dimmer-dark') {
-      windowRef.setTimeout(() => {
-        resolveOrRememberAction('dimmer-dark', true);
-      }, 0);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissHighlightForAction('dimmer-dark');
+      resolveOrRememberAction('dimmer-dark', true);
     }
-  });
-
+  }, true);
+  const onBookPressStart = () => {
+    dismissHighlightForAction('open-book');
+  };
+  refs.bookBtn?.addEventListener('pointerdown', onBookPressStart, true);
+  refs.bookBtn?.addEventListener('touchstart', onBookPressStart, { capture: true, passive: true });
   refs.bookBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-book') {
-      windowRef.setTimeout(() => {
-        resolveOrRememberAction('open-book', true);
-      }, 0);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissHighlightForAction('open-book');
+      resolveOrRememberAction('open-book', true);
       return;
     }
     rememberAllowedAction('open-book', event, true);
-  });
-
-  refs.readingModeBtn?.addEventListener('click', () => {
+  }, true);
+  const onReadingModePressStart = () => {
+    dismissHighlightForAction('enter-explore');
+  };
+  refs.readingModeBtn?.addEventListener('pointerdown', onReadingModePressStart, true);
+  refs.readingModeBtn?.addEventListener('touchstart', onReadingModePressStart, { capture: true, passive: true });
+  refs.readingModeBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'enter-explore') {
-      windowRef.setTimeout(() => {
-        resolveOrRememberAction('enter-explore', true);
-      }, 0);
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      dismissHighlightForAction('enter-explore');
+      resolveOrRememberAction('enter-explore', true);
       return;
     }
     rememberAction('enter-explore', true);
-  });
+  }, true);
 
   const onLoreHudPressStart = () => {
     if (runtimeState.waitingAction !== 'open-lore-hud') return;
@@ -1327,14 +1392,14 @@ async function initIntroApp() {
 
   refs.loreProgressHud?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-lore-hud') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
       dismissLoreHudHighlight();
-      windowRef.setTimeout(() => {
-        resolveOrRememberAction('open-lore-hud', true);
-      }, 0);
+      resolveOrRememberAction('open-lore-hud', true);
       return;
     }
     rememberAllowedAction('open-lore-hud', event, true);
-  });
+  }, true);
 
   const triggerLayoutChoice = (value, source) => {
     if (value !== 'blaettern' && value !== 'flat') return;
@@ -1690,7 +1755,7 @@ async function initIntroApp() {
           hooks.refreshLayout?.('intro-orb-armed');
           hooks.forceSceneRender?.('intro-orb-armed');
         },
-        rectProvider: () => hooks.getOrbHighlightRect()
+        rectProvider: () => resolveOrbFocusRect()
       }
     }
   });

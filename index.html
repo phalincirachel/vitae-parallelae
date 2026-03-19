@@ -6813,6 +6813,36 @@
         // 7. Modus-Wechsel mit robuster Animation
         let modeSwitchLockUntil = 0;
 
+        const isIOSWebKitMaskQuirkDevice = (() => {
+            const nav = window.navigator || {};
+            const ua = String(nav.userAgent || '');
+            const platform = String(nav.platform || '');
+            const touchPoints = Number(nav.maxTouchPoints || 0);
+            return /iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+        })();
+
+        function resetSubtitleMaskForGameMode() {
+            if (!subtitleContainer) return;
+            subtitleContainer.classList.remove('no-top-fade');
+            subtitleContainer.style.setProperty('-webkit-mask-image', 'none');
+            subtitleContainer.style.setProperty('mask-image', 'none');
+            subtitleContainer.style.setProperty('-webkit-mask-size', 'auto');
+            subtitleContainer.style.setProperty('mask-size', 'auto');
+            if (!isIOSWebKitMaskQuirkDevice) return;
+            subtitleContainer.style.setProperty('transform', 'translateZ(0)');
+            requestAnimationFrame(() => {
+                subtitleContainer.style.removeProperty('transform');
+            });
+        }
+
+        function restoreSubtitleMaskForReadingMode() {
+            if (!subtitleContainer) return;
+            subtitleContainer.style.removeProperty('-webkit-mask-image');
+            subtitleContainer.style.removeProperty('mask-image');
+            subtitleContainer.style.removeProperty('-webkit-mask-size');
+            subtitleContainer.style.removeProperty('mask-size');
+        }
+
         function syncModeToggleButton() {
             if (!modeToggleBtn) return;
             const nextModeLabel = isReadingMode ? 'Spielmodus aktivieren' : 'Lesemodus aktivieren';
@@ -6835,6 +6865,7 @@
             localStorage.setItem('gameboy_reading_mode', normalized ? 'true' : 'false');
 
             if (normalized) {
+                restoreSubtitleMaskForReadingMode();
                 syncAutoWalkToIndex();
                 uiContainer.classList.add('reading-mode');
                 hideNextChapterPrompt('reading-mode-on');
@@ -6849,6 +6880,7 @@
                     endLoreMode();
                 }
                 uiContainer.classList.remove('reading-mode');
+                resetSubtitleMaskForGameMode();
                 scheduleBackgroundBrightnessCheck(120);
             }
 

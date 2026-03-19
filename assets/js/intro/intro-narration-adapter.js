@@ -181,15 +181,13 @@ export function createIntroNarrationAdapter(options = {}) {
     const helper = windowRef.GameboyPlaybackHelpers?.verifyPlaybackStarted;
     if (!player || typeof helper !== 'function') return true;
     const normalizedTarget = Number.isFinite(targetStart) ? Number(targetStart) : null;
-    const isTransportLive = async () => {
-      const transportPaused = (typeof player.isTransportPaused === 'function')
-        ? player.isTransportPaused()
-        : !!player.paused;
-      if (transportPaused) return false;
-      const hasRecent = (typeof player.hasRecentProgress === 'function')
-        ? player.hasRecentProgress(2600)
-        : false;
-      if (hasRecent) return true;
+
+    const hasFreshProgress = (maxAgeMs = 2600) => {
+      if (typeof player.hasRecentProgress !== 'function') return false;
+      return !!player.hasRecentProgress(Math.max(800, Number(maxAgeMs) || 0));
+    };
+
+    const readTransportPosition = async () => {
       let currentPos = Number.isFinite(player.currentTime) ? Number(player.currentTime) : normalizedTarget;
       if (typeof player.getAccurateCurrentTime === 'function') {
         try {
@@ -197,11 +195,25 @@ export function createIntroNarrationAdapter(options = {}) {
           if (Number.isFinite(accuratePos)) currentPos = Number(accuratePos);
         } catch (_) {}
       }
-      if (!Number.isFinite(normalizedTarget)) {
-        return Number.isFinite(currentPos) && currentPos >= 0.02;
-      }
-      return Number.isFinite(currentPos) && currentPos >= (normalizedTarget + 0.02);
+      return Number.isFinite(currentPos) ? Number(currentPos) : null;
     };
+
+    const isTransportLive = async () => {
+      const transportPaused = (typeof player.isTransportPaused === 'function')
+        ? player.isTransportPaused()
+        : !!player.paused;
+      if (transportPaused) return false;
+      if (hasFreshProgress(2600)) return true;
+
+      const baseline = await readTransportPosition();
+      if (!Number.isFinite(baseline)) return false;
+      await wait(210);
+      const nextPos = await readTransportPosition();
+      if (!Number.isFinite(nextPos)) return false;
+
+      return (Number(nextPos) - Number(baseline)) >= 0.03;
+    };
+
     try {
       const started = !!(await helper({
         player,
@@ -214,16 +226,11 @@ export function createIntroNarrationAdapter(options = {}) {
           const transportPaused = (typeof player.isTransportPaused === 'function')
             ? player.isTransportPaused()
             : !!player.paused;
-          const hasRecent = (typeof player.hasRecentProgress === 'function')
-            ? player.hasRecentProgress(2200)
-            : false;
-          if (transportPaused || !hasRecent) {
+          if (transportPaused || !hasFreshProgress(2200)) {
             await player.play();
           }
         },
-        hasRecentProgress: () => (typeof player.hasRecentProgress === 'function'
-          ? player.hasRecentProgress(2600)
-          : false),
+        hasRecentProgress: () => hasFreshProgress(2600),
         isTransportPaused: () => (typeof player.isTransportPaused === 'function'
           ? player.isTransportPaused()
           : !!player.paused),
