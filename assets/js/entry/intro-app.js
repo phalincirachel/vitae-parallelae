@@ -397,7 +397,7 @@ async function initIntroApp() {
   const syncStartPromptInteractivity = () => {
     const prompt = refs.introAudioPrompt;
     if (!prompt || runtimeState.startScreenHidden || !runtimeState.startUiReady) return;
-    const canInteract = runtimeState.startRequested || runtimeState.narrationPrepared;
+    const canInteract = true;
     prompt.disabled = !canInteract;
     prompt.setAttribute('aria-disabled', canInteract ? 'false' : 'true');
   };
@@ -1306,16 +1306,21 @@ async function initIntroApp() {
 
   const requestIntroStart = () => {
     if (runtimeState.destroyed || runtimeState.startScreenHidden || !runtimeState.startUiReady) return false;
-    if (!runtimeState.narrationPrepared) {
-      syncStartPromptState('request-before-ready');
-      return false;
-    }
     if (!runtimeState.startRequested) {
       runtimeState.startRequested = true;
       resolveStartRequest?.(true);
       resolveStartRequest = null;
     }
+    narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
+    if (!runtimeState.narrationPrepared) {
+      void Promise.resolve(narration.prepare?.()).then((ready) => {
+        runtimeState.narrationPrepared = runtimeState.narrationPrepared || !!ready;
+        if (!runtimeState.destroyed && !runtimeState.startScreenHidden && runtimeState.startUiReady) {
+          syncStartPromptState('request-before-ready');
+        }
+      }).catch(() => {});
+    }
     syncStartPromptState('request-start');
     return true;
   };
@@ -1425,7 +1430,7 @@ async function initIntroApp() {
       resolveOrRememberAction('back-to-chapter', true);
       return;
     }
-    rememberAllowedAction('back-to-chapter', event, true);
+    // Do not buffer: this checkpoint must be completed while it is active.
   }, true);
   const onDimmerPressStart = () => {
     if (runtimeState.waitingAction !== 'dimmer-dark' && runtimeState.waitingAction !== 'dimmer-light') return;
@@ -1433,8 +1438,10 @@ async function initIntroApp() {
   };
   refs.sceneDimmerToggleBtn?.addEventListener('pointerdown', onDimmerPressStart, true);
   refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: true });
-  refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
+  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
     hooks.setDimmerMode('reading-clear');
     hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
     hooks.refreshLayout?.('intro-manual-dimmer-light');
@@ -1443,8 +1450,10 @@ async function initIntroApp() {
     dismissHighlightForAction('dimmer-light');
     resolveOrRememberAction('dimmer-light', true);
   }, true);
-  refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
+  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction !== 'dimmer-dark') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
     hooks.setDimmerMode('black-freeze');
     hooks.setReadingMode(true, 'intro-manual-dimmer-dark', { syncDimmer: false, ignoreFrozen: true });
     hooks.refreshLayout?.('intro-manual-dimmer-dark');
@@ -1453,20 +1462,6 @@ async function initIntroApp() {
     dismissHighlightForAction('dimmer-dark');
     resolveOrRememberAction('dimmer-dark', true);
   }, true);
-  const resolveDimmerActionFromAnyClick = (event) => {
-    const actionId = runtimeState.waitingAction;
-    if (actionId !== 'dimmer-dark' && actionId !== 'dimmer-light') return;
-    if (event?.type === 'keydown') {
-      const key = event.key;
-      if (key !== 'Enter' && key !== ' ') return;
-    }
-    dismissHighlightForAction(actionId);
-    resolveOrRememberAction(actionId, true);
-  };
-  documentRef.addEventListener('pointerup', resolveDimmerActionFromAnyClick, true);
-  documentRef.addEventListener('touchend', resolveDimmerActionFromAnyClick, true);
-  documentRef.addEventListener('click', resolveDimmerActionFromAnyClick, true);
-  documentRef.addEventListener('keydown', resolveDimmerActionFromAnyClick, true);
   const onBookPressStart = () => {
     dismissHighlightForAction('open-book');
   };
@@ -1478,7 +1473,7 @@ async function initIntroApp() {
       resolveOrRememberAction('open-book', true);
       return;
     }
-    rememberAllowedAction('open-book', event, true);
+    // Do not buffer: this checkpoint must be completed while it is active.
   }, true);
   const onReadingModePressStart = () => {
     dismissHighlightForAction('enter-explore');
@@ -1518,7 +1513,7 @@ async function initIntroApp() {
       resolveOrRememberAction('open-lore-hud', true);
       return;
     }
-    rememberAllowedAction('open-lore-hud', event, true);
+    // Do not buffer: this checkpoint must be completed while it is active.
   }, true);
 
   const triggerLayoutChoice = (value, source) => {
@@ -1637,11 +1632,8 @@ async function initIntroApp() {
   const startUiReadyPromise = (async () => {
     await wait(260);
     await Promise.race([
-      Promise.all([
-        Promise.race([startImageReadyPromise, wait(8000)]),
-        Promise.race([narrationPreparePromise, wait(18000)])
-      ]),
-      wait(18000)
+      Promise.race([startImageReadyPromise, wait(8000)]),
+      wait(9000)
     ]);
     if (runtimeState.destroyed || runtimeState.startScreenHidden) return false;
     revealStartUiWhenReady();

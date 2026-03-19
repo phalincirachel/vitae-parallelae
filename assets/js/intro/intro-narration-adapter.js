@@ -522,7 +522,32 @@ export function createIntroNarrationAdapter(options = {}) {
   function toggle() {
     if (isPlaying()) return pause();
     if (isPaused()) return resume();
-    return false;
+    return primeFromGesture();
+  }
+  function primeFromGesture() {
+    if (!player) return false;
+    try {
+      promoteWidgetIframe();
+      const prevVolume = Number.isFinite(Number(player.volume)) ? Number(player.volume) : volume;
+      try {
+        player.volume = 0;
+      } catch (_) {}
+
+      try {
+        const immediatePlay = player.play?.();
+        if (immediatePlay && typeof immediatePlay.catch === 'function') {
+          immediatePlay.catch(() => {});
+        }
+      } catch (_) {}
+
+      windowRef.setTimeout(() => {
+        try { player.pause?.(); } catch (_) {}
+        try { player.volume = prevVolume; } catch (_) {}
+      }, 80);
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   function acknowledgeGesture() {
@@ -545,7 +570,7 @@ export function createIntroNarrationAdapter(options = {}) {
       return true;
     }
     if (isPaused()) return resume();
-    return false;
+    return primeFromGesture();
   }
 
   function setVolume(nextVolume) {
@@ -607,6 +632,7 @@ export function createIntroNarrationAdapter(options = {}) {
     stop,
     toggle,
     acknowledgeGesture,
+    primeFromGesture,
     setVolume,
     isPlaying,
     isAwaitingGesture,
