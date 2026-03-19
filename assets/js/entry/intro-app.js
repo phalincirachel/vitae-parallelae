@@ -491,13 +491,18 @@ async function initIntroApp() {
     clearDynamicFocus();
     if (typeof rectProvider !== 'function') return;
     let frameId = 0;
+    let disposed = false;
     const tick = () => {
-      if (runtimeState.destroyed) return;
+      if (disposed || runtimeState.destroyed) return;
       focusOverlay.highlightRect(rectProvider());
+      if (disposed || runtimeState.destroyed) return;
       frameId = windowRef.requestAnimationFrame(tick);
     };
     tick();
-    runtimeState.dynamicFocusCleanup = () => windowRef.cancelAnimationFrame(frameId);
+    runtimeState.dynamicFocusCleanup = () => {
+      disposed = true;
+      if (frameId) windowRef.cancelAnimationFrame(frameId);
+    };
   };
 
   const applyFocus = (config = {}) => {
@@ -1358,8 +1363,6 @@ async function initIntroApp() {
   refs.bookBtn?.addEventListener('touchstart', onBookPressStart, { capture: true, passive: true });
   refs.bookBtn?.addEventListener('click', (event) => {
     if (runtimeState.waitingAction === 'open-book') {
-      event.preventDefault();
-      event.stopImmediatePropagation();
       dismissHighlightForAction('open-book');
       resolveOrRememberAction('open-book', true);
       return;
