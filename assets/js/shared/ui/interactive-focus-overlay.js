@@ -30,7 +30,7 @@ export function createInteractiveFocusOverlay(options = {}) {
 
   function hide() {
     root.dataset.active = 'false';
-    ring.style.opacity = '0';
+    ring.style.cssText = 'opacity:0;visibility:hidden;display:none;';
     masks.forEach((mask) => {
       mask.style.opacity = '0';
     });
@@ -117,7 +117,7 @@ export function createInteractiveFocusOverlay(options = {}) {
     masks[1].style.cssText = `left:${frame.right}px;top:${frame.top}px;width:${Math.max(0, viewportWidth - frame.right)}px;height:${frame.height}px;opacity:1;`;
     masks[2].style.cssText = `left:0;top:${frame.bottom}px;width:${viewportWidth}px;height:${Math.max(0, viewportHeight - frame.bottom)}px;opacity:1;`;
     masks[3].style.cssText = `left:0;top:${frame.top}px;width:${frame.left}px;height:${frame.height}px;opacity:1;`;
-    ring.style.cssText = `left:${frame.left}px;top:${frame.top}px;width:${frame.width}px;height:${frame.height}px;opacity:1;`;
+    ring.style.cssText = `left:${frame.left}px;top:${frame.top}px;width:${frame.width}px;height:${frame.height}px;opacity:1;visibility:visible;display:block;`;
     return frame;
   }
 

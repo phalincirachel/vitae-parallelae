@@ -1291,7 +1291,7 @@ async function initIntroApp() {
   };
 
   const promptActivationEvents = windowRef.PointerEvent
-    ? ['pointerdown', 'keydown']
+    ? ['pointerdown', 'touchend', 'click', 'keydown']
     : ['touchend', 'click', 'keydown'];
   promptActivationEvents.forEach((eventName) => {
     refs.introAudioPrompt?.addEventListener(eventName, handleIntroAudioPromptActivation, true);
@@ -1340,21 +1340,15 @@ async function initIntroApp() {
   };
   refs.sceneDimmerToggleBtn?.addEventListener('pointerdown', onDimmerPressStart, true);
   refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: true });
-  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
+  refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
     if (runtimeState.waitingAction !== 'dimmer-light') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
     dismissHighlightForAction('dimmer-light');
-    hooks.setDimmerMode('reading-clear');
     resolveOrRememberAction('dimmer-light', true);
   }, true);
-  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
-    if (runtimeState.waitingAction === 'dimmer-dark') {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      dismissHighlightForAction('dimmer-dark');
-      resolveOrRememberAction('dimmer-dark', true);
-    }
+  refs.sceneDimmerToggleBtn?.addEventListener('click', () => {
+    if (runtimeState.waitingAction !== 'dimmer-dark') return;
+    dismissHighlightForAction('dimmer-dark');
+    resolveOrRememberAction('dimmer-dark', true);
   }, true);
   const onBookPressStart = () => {
     dismissHighlightForAction('open-book');
@@ -1521,9 +1515,6 @@ async function initIntroApp() {
     await startRequestPromise;
     if (runtimeState.destroyed) return false;
     syncStartPromptState('start-requested');
-    await Promise.race([narrationPreparePromise, wait(500)]);
-    if (runtimeState.destroyed) return false;
-    await wait(20);
     let startResult = false;
     while (!runtimeState.destroyed && !runtimeState.startScreenHidden && startResult === false) {
       startResult = await speakSegment('start', 0, { includeAudio: false, targets: [refs.startSkipBtn, refs.introAudioPrompt] });

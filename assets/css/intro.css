@@ -119,11 +119,14 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
   line-height: 1.04;
   text-align: center;
   text-shadow: 0 8px 26px rgba(0, 0, 0, 0.42);
-  transition: margin-bottom 0.25s ease, opacity 0.25s ease;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.25s ease;
 }
 
 .intro-start-screen.is-preloading .intro-start-copy {
-  margin-bottom: 0;
+  opacity: 0;
+  visibility: hidden;
 }
 
 

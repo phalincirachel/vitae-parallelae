@@ -112,7 +112,7 @@
 
         #introStartScreen .intro-start-copy {
             margin-top: auto;
-            margin-bottom: 0;
+            margin-bottom: clamp(28px, 12vh, 150px);
             color: #fff8e8;
             font-family: 'Reader Renaissance', 'Palatino Linotype', serif;
             font-size: clamp(30px, 4.6vw, 56px);
@@ -120,11 +120,18 @@
             text-align: center;
             text-shadow: 0 8px 26px rgba(0, 0, 0, 0.42);
             opacity: 1;
+            visibility: visible;
+            transition: opacity 0.25s ease;
+        }
+
+        #introStartScreen.is-preloading .intro-start-copy {
+            opacity: 0;
+            visibility: hidden;
         }
 
         #introStartScreen.is-ready .intro-start-copy {
-            margin-bottom: clamp(28px, 12vh, 150px);
-            transition: margin-bottom 0.25s ease, opacity 0.25s ease;
+            opacity: 1;
+            visibility: visible;
         }
 
         #loading-screen {
@@ -593,9 +600,12 @@
         gameWrapper.classList.add('effect-pal');
         gameWrapper.classList.add('effect-crt');
         const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-        const AUDIO_PROFILE = isIOSDevice
-            ? { ambient: 0.012, footsteps: 0.014 }
-            : { ambient: 0.02, footsteps: 0.024 };
+        const INTRO_DISABLE_BACKGROUND_AUDIO = true;
+        const AUDIO_PROFILE = INTRO_DISABLE_BACKGROUND_AUDIO
+            ? { ambient: 0, footsteps: 0 }
+            : (isIOSDevice
+                ? { ambient: 0.012, footsteps: 0.014 }
+                : { ambient: 0.02, footsteps: 0.024 });
         if (isIOSDevice) {
             // SVG PAL filter is expensive on iOS WebKit and causes visible stutter.
             gameWrapper.classList.remove('effect-pal');
@@ -1488,12 +1498,36 @@
         // ============================================
         // AUDIO SYSTEM
         // ============================================
-        const footstepSound = new SCAudioAdapter();
-        footstepSound.src = getSCUrl('assets/footsteps.mp3');
-        footstepSound.volume = AUDIO_PROFILE.footsteps;
-        // Index uses its own lifecycle handler below; avoid double pause/resume races.
-        if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
-            window.AudioVisibilityManager.unregister(footstepSound);
+        function createNoopSceneAudio() {
+            return {
+                paused: true,
+                volume: 0,
+                src: '',
+                currentTime: 0,
+                audioNode: null,
+                play() {
+                    this.paused = false;
+                    return Promise.resolve();
+                },
+                pause() {
+                    this.paused = true;
+                },
+                addEventListener() { },
+                removeEventListener() { },
+                isProbablyPlaying() {
+                    return !this.paused;
+                }
+            };
+        }
+
+        const footstepSound = INTRO_DISABLE_BACKGROUND_AUDIO ? createNoopSceneAudio() : new SCAudioAdapter();
+        if (!INTRO_DISABLE_BACKGROUND_AUDIO) {
+            footstepSound.src = getSCUrl('assets/footsteps.mp3');
+            footstepSound.volume = AUDIO_PROFILE.footsteps;
+            // Index uses its own lifecycle handler below; avoid double pause/resume races.
+            if (window.AudioVisibilityManager && typeof window.AudioVisibilityManager.unregister === 'function') {
+                window.AudioVisibilityManager.unregister(footstepSound);
+            }
         }
 
         const SHIMMER_BASE_VOLUME = 0.4;
@@ -5457,6 +5491,7 @@
                 shimmerSound,
                 AudioAdapter: window.SCAudioAdapter,
                 visibilityManager: window.AudioVisibilityManager,
+                createAmbientAudio: () => (INTRO_DISABLE_BACKGROUND_AUDIO ? createNoopSceneAudio() : null),
                 audioProfile: AUDIO_PROFILE,
                 ambientUrl: 'assets/intro/silence.wav',
                 shimmerBaseVolume: SHIMMER_BASE_VOLUME,
