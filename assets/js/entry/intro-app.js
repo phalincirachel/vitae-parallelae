@@ -1392,6 +1392,20 @@ async function initIntroApp() {
     dismissHighlightForAction('dimmer-dark');
     resolveOrRememberAction('dimmer-dark', true);
   }, true);
+  const resolveDimmerActionFromAnyClick = (event) => {
+    const actionId = runtimeState.waitingAction;
+    if (actionId !== 'dimmer-dark' && actionId !== 'dimmer-light') return;
+    if (event?.type === 'keydown') {
+      const key = event.key;
+      if (key !== 'Enter' && key !== ' ') return;
+    }
+    dismissHighlightForAction(actionId);
+    resolveOrRememberAction(actionId, true);
+  };
+  documentRef.addEventListener('pointerup', resolveDimmerActionFromAnyClick, true);
+  documentRef.addEventListener('touchend', resolveDimmerActionFromAnyClick, true);
+  documentRef.addEventListener('click', resolveDimmerActionFromAnyClick, true);
+  documentRef.addEventListener('keydown', resolveDimmerActionFromAnyClick, true);
   const onBookPressStart = () => {
     dismissHighlightForAction('open-book');
   };
@@ -1697,13 +1711,16 @@ async function initIntroApp() {
 
   await speakSegment('main', 5, { selectors: ['#btnSaveData'] });
   if (runtimeState.destroyed) return;
-  await playContinuousRange('main', 6, 10, {
+  await playCheckpointRange('main', 6, 10, 'dimmer-dark', {
+    initialGate: { includeAudio: true, allowAll: true },
     uiByIndex: {
       6: {
-        selectors: ['.archive-tab[data-tab="lore"]']
+        selectors: ['.archive-tab[data-tab="lore"]'],
+        allowAll: true
       },
       7: {
         clear: true,
+        allowAll: true,
         onEnter: () => {
           clearPresentation();
           scheduleUiRecovery('main-7-clear-hard');
@@ -1711,6 +1728,7 @@ async function initIntroApp() {
       },
       8: {
         clear: true,
+        allowAll: true,
         onEnter: () => {
           clearPresentation();
           scheduleUiRecovery('main-8-clear-hard');
@@ -1718,6 +1736,7 @@ async function initIntroApp() {
       },
       9: {
         clear: true,
+        allowAll: true,
         onEnter: () => {
           hooks.closeArchive();
           hooks.refreshLayout?.('main-9-clear');
@@ -1727,7 +1746,8 @@ async function initIntroApp() {
       },
       10: {
         targets: ['#sceneDimmerToggleBtn'],
-        selectors: ['#sceneDimmerToggleBtn']
+        selectors: ['#sceneDimmerToggleBtn'],
+        allowAll: true
       }
     }
   });
@@ -1740,9 +1760,10 @@ async function initIntroApp() {
 
   if (!(await ensureSceneReadyForReveal())) return;
 
-  await speakSegment('main', 11, {
+  await speakCheckpointSegment('main', 11, 'dimmer-light', {
     targets: ['#sceneDimmerToggleBtn'],
-    selectors: ['#sceneDimmerToggleBtn']
+    selectors: ['#sceneDimmerToggleBtn'],
+    allowAll: true
   });
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('reading-clear');

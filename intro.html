@@ -2694,21 +2694,14 @@
                 fgCanvas.width = mapW; fgCanvas.height = mapH;
                 fgCanvas.getContext('2d').putImageData(new ImageData(fgData, mapW, mapH), 0, 0);
 
-                bgImage = new Image();
-                foregroundImage = new Image();
-
-                bgImage.onload = () => {
+                const finalizeMapReady = (readyReason = 'map-ready') => {
+                    if (gameReady) return;
                     gameReady = true;
                     if (document.getElementById('processingInfo')) document.getElementById('processingInfo').style.display = 'none';
                     if (document.getElementById('dropZone')) document.getElementById('dropZone').classList.add('hidden');
-                    // Hide Loading Screen
-                    hideLoadingScreenSafely('map-ready');
+                    hideLoadingScreenSafely(readyReason);
 
                     if (spawnPixel) {
-                        // FIX: Blue pixel marks FOOT position, not sprite top
-                        // Robust: use the same spriteH logic as checkCollisionAt
-
-                        // 1. Update scale for spawn depth (initial guess)
                         if (mapH > 0) {
                             const yNorm = Math.max(0, Math.min(1, spawnPixel.y / mapH));
                             const depthFactor = 0.5 + (0.8 * yNorm);
@@ -2717,8 +2710,8 @@
 
                         const spriteH = spriteReady ? SPRITE.frameHeight * SPRITE.scale : 20;
 
-                        player.x = spawnPixel.x - 8; // Center horizontally
-                        player.y = spawnPixel.y - spriteH - FOOT_OFFSET_Y; // Feet at spawnPixel.y
+                        player.x = spawnPixel.x - 8;
+                        player.y = spawnPixel.y - spriteH - FOOT_OFFSET_Y;
 
                         console.log(`Spawn: Blue(${spawnPixel.x},${spawnPixel.y}) -> Feet at Y=${spawnPixel.y}, SpriteH=${spriteH.toFixed(1)}, Player.y=${player.y.toFixed(1)}`);
                     } else {
@@ -2726,7 +2719,6 @@
                         player.y = mapH / 2;
                     }
 
-                    // Center Camera
                     cameraZoomTarget = getCameraZoomClamped(cameraZoomTarget);
                     cameraZoom = cameraZoomTarget;
                     cameraPanOffsetX = 0;
@@ -2734,7 +2726,6 @@
                     camX = targetCamX = getCameraFollowTargetX();
                     camY = targetCamY = getCameraFollowTargetY();
 
-                    // Init Extras
                     if (IS_INTRO_SCENE) {
                         particles.length = 0;
                         nearbyLights.length = 0;
@@ -2750,24 +2741,80 @@
                     }
                     generateNavGrid();
 
-                    // Start Audio (aux tracks are gated to avoid SC widget pause races)
                     if (typeof ambientAudio !== 'undefined') {
                         syncAuxScPlayback('game-ready');
                     }
 
                     startGameLoop();
-                    void triggerPostMapBootTasks('map-ready');
-                    flushDeferredReadingRenderUntilReady('map-ready');
+                    void triggerPostMapBootTasks(readyReason);
+                    flushDeferredReadingRenderUntilReady(readyReason);
                     console.log("Map Processed & Ready.");
                 };
-                bgImage.onerror = (e) => {
-                    console.error("Processed background image failed to load", e);
-                };
-                foregroundImage.onerror = (e) => {
-                    console.error("Processed foreground image failed to load", e);
-                };
-                bgImage.src = bgCanvas.toDataURL();
-                foregroundImage.src = fgCanvas.toDataURL();
+
+                const useRawIntroMapLayer = !!(IS_INTRO_SCENE && isIOSDevice);
+                if (useRawIntroMapLayer) {
+                    bgImage = img;
+                    foregroundImage = null;
+                    finalizeMapReady('map-ready-ios-raw');
+                } else {
+                    let bgLayerSettled = false;
+                    let bgLayerFallbackTimer = 0;
+                    const settleBackgroundLayer = (reason = 'map-ready') => {
+                        if (bgLayerSettled) return;
+                        bgLayerSettled = true;
+                        if (bgLayerFallbackTimer) {
+                            window.clearTimeout(bgLayerFallbackTimer);
+                            bgLayerFallbackTimer = 0;
+                        }
+                        finalizeMapReady(reason);
+                    };
+
+                    const nextBgImage = new Image();
+                    const nextForegroundImage = new Image();
+                    bgImage = nextBgImage;
+                    foregroundImage = null;
+
+                    nextBgImage.onload = () => {
+                        settleBackgroundLayer('map-ready');
+                    };
+                    nextBgImage.onerror = (e) => {
+                        console.error("Processed background image failed to load", e);
+                        bgImage = img;
+                        foregroundImage = null;
+                        settleBackgroundLayer('map-ready-bg-fallback');
+                    };
+                    nextForegroundImage.onload = () => {
+                        foregroundImage = nextForegroundImage;
+                    };
+                    nextForegroundImage.onerror = (e) => {
+                        console.error("Processed foreground image failed to load", e);
+                        foregroundImage = null;
+                    };
+
+                    bgLayerFallbackTimer = window.setTimeout(() => {
+                        if (bgLayerSettled) return;
+                        console.warn('[Map] Processed background timeout. Falling back to raw map image.');
+                        bgImage = img;
+                        foregroundImage = null;
+                        settleBackgroundLayer('map-ready-timeout-fallback');
+                    }, 4200);
+
+                    try {
+                        nextBgImage.src = bgCanvas.toDataURL('image/png');
+                    } catch (error) {
+                        console.warn('[Map] Could not serialize processed background. Using raw fallback.', error);
+                        bgImage = img;
+                        foregroundImage = null;
+                        settleBackgroundLayer('map-ready-serialize-fallback');
+                    }
+
+                    try {
+                        nextForegroundImage.src = fgCanvas.toDataURL('image/png');
+                    } catch (error) {
+                        console.warn('[Map] Could not serialize processed foreground. Continuing without foreground layer.', error);
+                        foregroundImage = null;
+                    }
+                }
 
 
             } catch (e) {

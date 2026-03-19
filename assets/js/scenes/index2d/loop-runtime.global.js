@@ -36,9 +36,15 @@
       if (dt > 0.1) dt = 0.1;
       if (dt > 0.1) dt = 0.1;
 
-      update(dt);
-      updateLoreSystem();
-      draw();
+      try {
+        update(dt);
+        updateLoreSystem();
+        draw();
+      } catch (error) {
+        if (globalObject.console && typeof globalObject.console.warn === 'function') {
+          globalObject.console.warn('[IndexLoop] Frame failed, keeping loop alive', error);
+        }
+      }
       requestFrame(gameLoop);
       return dt;
     }

@@ -67,6 +67,25 @@
       return nearbyLights;
     }
 
+    function isDrawableImageAsset(imageLike) {
+      if (!imageLike) return false;
+      const width = Number(imageLike.naturalWidth || imageLike.videoWidth || imageLike.width || 0);
+      const height = Number(imageLike.naturalHeight || imageLike.videoHeight || imageLike.height || 0);
+      if (width <= 0 || height <= 0) return false;
+      if (typeof imageLike.complete === 'boolean') return imageLike.complete;
+      return true;
+    }
+
+    function drawImageSafe(targetCtx, imageLike, x, y) {
+      if (!targetCtx || !isDrawableImageAsset(imageLike)) return false;
+      try {
+        targetCtx.drawImage(imageLike, x, y);
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
     function checkForeground(px, py) {
       const sprite = getSprite();
       const spriteW = getSpriteReady() ? sprite.frameWidth * sprite.scale : 16;
@@ -346,7 +365,7 @@
       ctx.setTransform(cameraZoom, 0, 0, cameraZoom, shakeX - (camX * cameraZoom), shakeY - (camY * cameraZoom));
 
       const bgImage = getBgImage();
-      if (bgImage) ctx.drawImage(bgImage, 0, 0);
+      drawImageSafe(ctx, bgImage, 0, 0);
 
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
@@ -500,8 +519,8 @@
       ctx.restore();
 
       const foregroundImage = getForegroundImage();
-      if (foregroundImage) ctx.drawImage(foregroundImage, 0, 0);
-      if (foregroundImage && getSpriteReady()) {
+      const foregroundDrawn = drawImageSafe(ctx, foregroundImage, 0, 0);
+      if (foregroundDrawn && getSpriteReady()) {
         const coords = getPlayerDrawCoords(player.x, player.y, player.dir, player.frame);
         const px = coords.x;
         const py = coords.y;
@@ -521,7 +540,11 @@
         const maskCtx = state.playerMaskCtx;
         maskCtx.globalCompositeOperation = 'source-over';
         maskCtx.clearRect(0, 0, maskW, maskH);
-        maskCtx.drawImage(foregroundImage, px - 2, py - 2, dw + 4, dh + 4, 0, 0, dw + 4, dh + 4);
+        try {
+          maskCtx.drawImage(foregroundImage, px - 2, py - 2, dw + 4, dh + 4, 0, 0, dw + 4, dh + 4);
+        } catch (_) {
+          maskCtx.clearRect(0, 0, maskW, maskH);
+        }
         maskCtx.globalCompositeOperation = 'source-in';
         const graySprite = createGraySpriteCanvas();
         if (graySprite) {
