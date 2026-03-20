@@ -332,6 +332,14 @@ async function initIntroApp() {
     }
   };
 
+  const isIOSLikeDevice = (() => {
+    const nav = windowRef.navigator || {};
+    const ua = String(nav.userAgent || '');
+    const platform = String(nav.platform || '');
+    const touchPoints = Number(nav.maxTouchPoints || 0);
+    return /iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+  })();
+
   const orbDirectionPointer = (() => {
     if (!documentRef?.body) return null;
     const existing = documentRef.querySelector('.intro-orb-direction-pointer');
@@ -653,6 +661,26 @@ async function initIntroApp() {
     }
 
     hooks.setActiveSubtitleIndex(safeIndex);
+  };
+
+  const syncSubtitleIndexFromNarrationTime = (reason = 'sync') => {
+    if (runtimeState.destroyed) return;
+    const trackEntries = runtimeState.currentTrackEntries?.[runtimeState.currentTrackName] || [];
+    if (!Array.isArray(trackEntries) || trackEntries.length === 0) return;
+    const currentTime = typeof narration.getCurrentTime === 'function' ? Number(narration.getCurrentTime()) : NaN;
+    if (!Number.isFinite(currentTime)) return;
+
+    let nextIndex = 0;
+    for (let index = 1; index < trackEntries.length; index += 1) {
+      const cueTime = Number(trackEntries[index]?.time);
+      if (!Number.isFinite(cueTime) || (currentTime + 0.04) < cueTime) break;
+      nextIndex = index;
+    }
+
+    if (nextIndex === runtimeState.currentSegmentIndex) return;
+    runtimeState.currentSegmentIndex = nextIndex;
+    safeInvoke('setActiveSubtitleIndex:sync:' + reason, () => hooks.setActiveSubtitleIndex?.(nextIndex));
+    scheduleUiRecovery('subtitle-sync:' + reason);
   };
 
   const keepStartPromptAvailable = () => {
@@ -1177,6 +1205,7 @@ async function initIntroApp() {
     runtimeState.autoPausedForVisibility = false;
     if (!narration.isPaused()) return;
     narration.resume();
+    narration.acknowledgeGesture?.();
     syncAudioIcons(true);
     syncNarrationActiveFlag(true);
   };
@@ -1186,8 +1215,12 @@ async function initIntroApp() {
     clearAutoResumeTimer();
     autoResumeTimer = windowRef.setTimeout(() => {
       autoResumeTimer = 0;
+      syncSubtitleIndexFromNarrationTime(reason + '-pre');
       scheduleUiRecovery(reason);
       resumeNarrationIfNeeded();
+      windowRef.setTimeout(() => {
+        syncSubtitleIndexFromNarrationTime(reason + '-post');
+      }, 120);
     }, 90);
   };
 
@@ -1255,6 +1288,7 @@ async function initIntroApp() {
       syncAudioIcons(true);
       return;
     }
+    if (isIOSLikeDevice) narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
     void replayCurrentSegment();
   }, true);
@@ -1272,15 +1306,18 @@ async function initIntroApp() {
       return;
     }
     keepStartPromptAvailable();
+    syncSubtitleIndexFromNarrationTime('visibility');
     scheduleUiRecovery('visibility');
   });
 
   windowRef.addEventListener('focus', () => {
     keepStartPromptAvailable();
+    syncSubtitleIndexFromNarrationTime('focus');
     scheduleAutoResume('focus');
   });
   windowRef.addEventListener('pageshow', () => {
     keepStartPromptAvailable();
+    syncSubtitleIndexFromNarrationTime('pageshow');
     scheduleAutoResume('pageshow');
   });
   const handleViewportChange = (reason) => {
@@ -1315,6 +1352,7 @@ async function initIntroApp() {
       resolveStartRequest?.(true);
       resolveStartRequest = null;
     }
+    if (isIOSLikeDevice) narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
     if (!runtimeState.narrationPrepared) {
       void Promise.resolve(narration.prepare?.()).then((ready) => {
@@ -1442,7 +1480,7 @@ async function initIntroApp() {
     event?.preventDefault?.();
     event?.stopImmediatePropagation?.();
     if (actionId === 'dimmer-light') {
-      hooks.setDimmerMode('reading-clear');
+      hooks.setDimmerMode('reading-half');
       hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
       hooks.refreshLayout?.('intro-manual-dimmer-light');
       hooks.forceSceneRender?.('intro-manual-dimmer-light');
@@ -1834,7 +1872,7 @@ async function initIntroApp() {
     allowAll: true
   });
   if (runtimeState.destroyed) return;
-  hooks.setDimmerMode('reading-clear');
+  hooks.setDimmerMode('reading-half');
   hooks.setReadingMode(true, 'intro-auto-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
   hooks.refreshLayout?.('intro-auto-dimmer-light');
   hooks.forceSceneRender?.('intro-auto-dimmer-light');
@@ -1970,14 +2008,11 @@ async function initIntroApp() {
   hooks.showNextButton('Reise beginnen');
   hooks.refreshLayout?.('intro-finish');
   hooks.forceSceneRender?.('intro-finish');
-  applyFocus({
-    rectProvider: () => refs.nextChapterBtn?.getBoundingClientRect?.() || null
-  });
-  windowRef.setTimeout(() => {
+  windowRef.requestAnimationFrame(() => {
     if (runtimeState.destroyed || !runtimeState.finalButtonVisible) return;
     if (runtimeState.waitingAction) return;
     applyFocus({ selectors: ['#nextChapterBtn'] });
-  }, 820);
+  });
   setGate({ includeAudio: true, targets: ['#nextChapterBtn'] });
   scheduleUiRecovery('intro-finish');
 }
@@ -1985,4 +2020,3 @@ async function initIntroApp() {
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
 });
-

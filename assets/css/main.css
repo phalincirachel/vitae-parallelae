@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Heidelberg RPG - Main Stylesheet
  * Extracted from index.html during refactoring
  */
@@ -298,7 +298,7 @@ body {
     filter: url(#pal-filter) url(#glitch-filter) contrast(1.0) brightness(1.15) saturate(0.85);
 }
 
-/* CRT OVERLAY - Vignette only (Scanlines removed due to MoirÃ©) */
+/* CRT OVERLAY - Vignette only (Scanlines removed due to Moiré) */
 #crtOverlay {
     position: absolute;
     top: 0;
@@ -1239,7 +1239,7 @@ body.scene-dimmer-light-mode #bookBtn img {
     position: fixed;
     top: var(--next-btn-top, calc(100vh - 190px));
     left: 50%;
-    transform: translateX(-50%) translateY(12px) scale(0.985);
+    transform: translate3d(-50%, 12px, 0) scale(0.985);
     padding: 12px 30px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.4);
@@ -1260,17 +1260,19 @@ body.scene-dimmer-light-mode #bookBtn img {
     z-index: 2000;
     text-transform: uppercase;
     will-change: opacity, transform, top;
+    contain: paint;
+    backface-visibility: hidden;
 }
 
 #nextChapterBtn:hover {
     background: rgba(255, 255, 255, 0.2);
-    transform: translateX(-50%) translateY(0) scale(1.04);
+    transform: translate3d(-50%, 0, 0) scale(1.04);
 }
 
 #nextChapterBtn.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translate3d(-50%, 0, 0) scale(1);
 }
 
 body.scene-dimmer-light-mode #nextChapterBtn {
@@ -1344,6 +1346,8 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
     z-index: 2000;
     text-transform: uppercase;
     will-change: opacity, transform, top;
+    contain: paint;
+    backface-visibility: hidden;
 }
 
 #backToChapterBtn:hover {
@@ -1354,7 +1358,7 @@ body.scene-dimmer-light-mode #nextChapterBtn:hover {
 #backToChapterBtn.visible {
     opacity: 1;
     pointer-events: auto;
-    transform: translateX(-50%) translateY(0) scale(1);
+    transform: translate3d(-50%, 0, 0) scale(1);
 }
 
 body.scene-dimmer-light-mode #backToChapterBtn {
@@ -2099,7 +2103,7 @@ input[type="range"] {
     height: 20px;
 }
 
-/* Track â€“ WebKit (Chrome, Safari, Edge) */
+/* Track – WebKit (Chrome, Safari, Edge) */
 input[type="range"]::-webkit-slider-runnable-track {
     height: 4px;
     border-radius: 2px;
@@ -2107,7 +2111,7 @@ input[type="range"]::-webkit-slider-runnable-track {
     border: none;
 }
 
-/* Track â€“ Firefox */
+/* Track – Firefox */
 input[type="range"]::-moz-range-track {
     height: 4px;
     border-radius: 2px;
@@ -2115,7 +2119,7 @@ input[type="range"]::-moz-range-track {
     border: none;
 }
 
-/* Filled progress â€“ Firefox (disabled â€“ plain white track only) */
+/* Filled progress – Firefox (disabled – plain white track only) */
 /*
 input[type="range"]::-moz-range-progress {
     height: 4px;
@@ -2124,7 +2128,7 @@ input[type="range"]::-moz-range-progress {
 }
 */
 
-/* Thumb â€“ WebKit */
+/* Thumb – WebKit */
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 14px;
@@ -2142,7 +2146,7 @@ input[type="range"]::-webkit-slider-thumb:hover {
     box-shadow: 0 0 10px rgba(200, 180, 120, 0.50);
 }
 
-/* Thumb â€“ Firefox */
+/* Thumb – Firefox */
 input[type="range"]::-moz-range-thumb {
     width: 14px;
     height: 14px;
@@ -2789,5 +2793,3 @@ body.scene-dimmer-light-mode .bookmark-btn.saved {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
-
-

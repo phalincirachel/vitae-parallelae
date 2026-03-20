@@ -349,10 +349,29 @@ export function createIntroNarrationAdapter(options = {}) {
     clearGestureRetry();
     return new Promise((resolve) => {
       const listenerOptions = { capture: true, passive: true };
+      let passivePollTimer = 0;
+      let settled = false;
       const finish = (started) => {
+        if (settled) return;
+        settled = true;
         clearGestureRetry();
         resolve(!!started);
       };
+
+      const tryPassiveVerify = async () => {
+        if (settled) return;
+        if (currentSession !== session || session.settled || session.paused) {
+          finish(false);
+          return;
+        }
+        try {
+          const started = await verifyTransportStart(targetStart);
+          if (started) {
+            finish(true);
+          }
+        } catch (_) {}
+      };
+
       const handler = async () => {
         clearGestureRetry();
         if (currentSession !== session || session.settled || session.paused) {
@@ -389,8 +408,13 @@ export function createIntroNarrationAdapter(options = {}) {
           finish(false);
         }
       };
+
       gestureRetryHandler = handler;
       gestureCleanup = () => {
+        if (passivePollTimer) {
+          windowRef.clearInterval(passivePollTimer);
+          passivePollTimer = 0;
+        }
         GESTURE_EVENTS.forEach((eventName) => {
           documentRef.removeEventListener(eventName, handler, listenerOptions);
         });
@@ -398,6 +422,16 @@ export function createIntroNarrationAdapter(options = {}) {
       GESTURE_EVENTS.forEach((eventName) => {
         documentRef.addEventListener(eventName, handler, listenerOptions);
       });
+
+      // Some iOS/WebKit runs start transport slightly delayed without a second gesture event.
+      // Keep a lightweight fallback poll so UI state doesn't stay stuck on "play".
+      passivePollTimer = windowRef.setInterval(() => {
+        void tryPassiveVerify();
+      }, 320);
+      windowRef.setTimeout(() => {
+        void tryPassiveVerify();
+      }, 120);
+
       emitBlocked(session);
     });
   }
