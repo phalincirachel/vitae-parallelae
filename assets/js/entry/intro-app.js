@@ -1311,7 +1311,6 @@ async function initIntroApp() {
       resolveStartRequest?.(true);
       resolveStartRequest = null;
     }
-    narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
     if (!runtimeState.narrationPrepared) {
       void Promise.resolve(narration.prepare?.()).then((ready) => {
@@ -1432,35 +1431,40 @@ async function initIntroApp() {
     }
     // Do not buffer: this checkpoint must be completed while it is active.
   }, true);
-  const onDimmerPressStart = () => {
+  const resolveDimmerTutorialAction = (actionId, event = null) => {
+    if (runtimeState.waitingAction !== actionId) return false;
+    event?.preventDefault?.();
+    event?.stopImmediatePropagation?.();
+    if (actionId === 'dimmer-light') {
+      hooks.setDimmerMode('reading-clear');
+      hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
+      hooks.refreshLayout?.('intro-manual-dimmer-light');
+      hooks.forceSceneRender?.('intro-manual-dimmer-light');
+      scheduleUiRecovery('intro-manual-dimmer-light');
+    } else if (actionId === 'dimmer-dark') {
+      hooks.setDimmerMode('black-freeze');
+      hooks.setReadingMode(true, 'intro-manual-dimmer-dark', { syncDimmer: false, ignoreFrozen: true });
+      hooks.refreshLayout?.('intro-manual-dimmer-dark');
+      hooks.forceSceneRender?.('intro-manual-dimmer-dark');
+      scheduleUiRecovery('intro-manual-dimmer-dark');
+    } else {
+      return false;
+    }
+    dismissHighlightForAction(actionId);
+    resolveOrRememberAction(actionId, true);
+    return true;
+  };
+
+  const onDimmerPressStart = (event) => {
     if (runtimeState.waitingAction !== 'dimmer-dark' && runtimeState.waitingAction !== 'dimmer-light') return;
     clearCurrentFocusVisual();
+    resolveDimmerTutorialAction(runtimeState.waitingAction, event);
   };
   refs.sceneDimmerToggleBtn?.addEventListener('pointerdown', onDimmerPressStart, true);
-  refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: true });
+  refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: false });
   refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
-    if (runtimeState.waitingAction !== 'dimmer-light') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    hooks.setDimmerMode('reading-clear');
-    hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
-    hooks.refreshLayout?.('intro-manual-dimmer-light');
-    hooks.forceSceneRender?.('intro-manual-dimmer-light');
-    scheduleUiRecovery('intro-manual-dimmer-light');
-    dismissHighlightForAction('dimmer-light');
-    resolveOrRememberAction('dimmer-light', true);
-  }, true);
-  refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
-    if (runtimeState.waitingAction !== 'dimmer-dark') return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    hooks.setDimmerMode('black-freeze');
-    hooks.setReadingMode(true, 'intro-manual-dimmer-dark', { syncDimmer: false, ignoreFrozen: true });
-    hooks.refreshLayout?.('intro-manual-dimmer-dark');
-    hooks.forceSceneRender?.('intro-manual-dimmer-dark');
-    scheduleUiRecovery('intro-manual-dimmer-dark');
-    dismissHighlightForAction('dimmer-dark');
-    resolveOrRememberAction('dimmer-dark', true);
+    if (resolveDimmerTutorialAction('dimmer-light', event)) return;
+    resolveDimmerTutorialAction('dimmer-dark', event);
   }, true);
   const onBookPressStart = () => {
     dismissHighlightForAction('open-book');

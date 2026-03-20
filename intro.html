@@ -599,7 +599,13 @@
         console.log("Applying Visual Fixes..."); // DEBUG
         gameWrapper.classList.add('effect-pal');
         gameWrapper.classList.add('effect-crt');
-        const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isIOSDevice = (() => {
+            const nav = navigator || {};
+            const ua = String(nav.userAgent || '');
+            const platform = String(nav.platform || '');
+            const touchPoints = Number(nav.maxTouchPoints || 0);
+            return /iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+        })();
         const INTRO_DISABLE_BACKGROUND_AUDIO = true;
         const AUDIO_PROFILE = INTRO_DISABLE_BACKGROUND_AUDIO
             ? { ambient: 0, footsteps: 0 }
@@ -2569,7 +2575,10 @@
                         // GELB = Lore Trigger (#FFFF00)
                         else if (r > 250 && g > 250 && b < 10) {
                             const id = yellowLights.length + 1;
-                            yellowLights.push(new YellowLight(x, y, id));
+                            const light = (typeof YellowLight === 'function')
+                                ? new YellowLight(x, y, id)
+                                : { x, y, id, collected: false, pulse: 0, draw() {} };
+                            yellowLights.push(light);
                         }
                         // BLAU = Spawn Punkt (#0000FF)
                         else if (r < 50 && g < 50 && b > 200) {
@@ -2768,9 +2777,9 @@
                     console.log("Map Processed & Ready.");
                 };
 
-                const useCanvasIntroMapLayer = !!(IS_INTRO_SCENE && isIOSDevice);
+                const useCanvasIntroMapLayer = !!IS_INTRO_SCENE;
                 if (useCanvasIntroMapLayer) {
-                    // iOS: keep processed pixels but avoid costly dataURL roundtrip.
+                    // Intro: keep processed pixels in canvases and avoid costly dataURL roundtrip.
                     bgImage = bgCanvas;
                     foregroundImage = fgCanvas;
                     finalizeMapReady('map-ready-ios-canvas');

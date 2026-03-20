@@ -66,6 +66,8 @@ export function createIntroNarrationAdapter(options = {}) {
   let readyPromise = null
   let gestureCleanup = null
   let gestureRetryHandler = null;
+  let primeGestureTimer = null;
+  let primeRestoreVolume = null;
 
   function clearTimers() {
     if (monitorTimer) {
@@ -86,6 +88,26 @@ export function createIntroNarrationAdapter(options = {}) {
     if (typeof gestureCleanup === 'function') gestureCleanup();
     gestureCleanup = null;
     gestureRetryHandler = null;
+  }
+
+  function clearPrimeGesture(options = {}) {
+    const shouldPause = options.pause === true;
+    const shouldRestoreVolume = options.restoreVolume !== false;
+    if (primeGestureTimer) {
+      windowRef.clearTimeout(primeGestureTimer);
+      primeGestureTimer = null;
+    }
+    if (shouldPause) {
+      try {
+        player?.pause?.();
+      } catch (_) {}
+    }
+    if (shouldRestoreVolume && primeRestoreVolume !== null && primeRestoreVolume !== undefined) {
+      try {
+        player.volume = primeRestoreVolume;
+      } catch (_) {}
+      primeRestoreVolume = null;
+    }
   }
 
   function promoteWidgetIframe() {
@@ -433,6 +455,7 @@ export function createIntroNarrationAdapter(options = {}) {
   }
 
   async function play(segmentOrText, optionsForPlay = {}) {
+    clearPrimeGesture({ restoreVolume: true, pause: false });
     stop();
     const segment = normalizeSegment(segmentOrText, optionsForPlay);
     currentText = segment.text;
@@ -510,6 +533,7 @@ export function createIntroNarrationAdapter(options = {}) {
     currentSession = null;
     clearTimers();
     clearGestureRetry();
+    clearPrimeGesture({ restoreVolume: true, pause: false });
     try {
       player?.pause?.();
     } catch (_) {}
@@ -527,8 +551,10 @@ export function createIntroNarrationAdapter(options = {}) {
   function primeFromGesture() {
     if (!player) return false;
     try {
+      clearPrimeGesture({ restoreVolume: true, pause: false });
       promoteWidgetIframe();
       const prevVolume = Number.isFinite(Number(player.volume)) ? Number(player.volume) : volume;
+      primeRestoreVolume = prevVolume;
       try {
         player.volume = 0;
       } catch (_) {}
@@ -540,9 +566,22 @@ export function createIntroNarrationAdapter(options = {}) {
         }
       } catch (_) {}
 
-      windowRef.setTimeout(() => {
-        try { player.pause?.(); } catch (_) {}
-        try { player.volume = prevVolume; } catch (_) {}
+      primeGestureTimer = windowRef.setTimeout(() => {
+        primeGestureTimer = null;
+        const hasActiveSession = !!currentSession
+          && !currentSession.settled
+          && currentSession.paused !== true;
+        if (!hasActiveSession) {
+          try { player.pause?.(); } catch (_) {}
+        }
+        try {
+          if (primeRestoreVolume !== null && primeRestoreVolume !== undefined) {
+            player.volume = primeRestoreVolume;
+          } else {
+            player.volume = prevVolume;
+          }
+        } catch (_) {}
+        primeRestoreVolume = null;
       }, 80);
       return true;
     } catch (_) {
