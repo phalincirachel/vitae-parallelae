@@ -2777,7 +2777,7 @@
                     console.log("Map Processed & Ready.");
                 };
 
-                const useCanvasIntroMapLayer = !!IS_INTRO_SCENE;
+                const useCanvasIntroMapLayer = !!IS_INTRO_SCENE && !isIOSDevice;
                 if (useCanvasIntroMapLayer) {
                     // Intro: keep processed pixels in canvases and avoid costly dataURL roundtrip.
                     bgImage = bgCanvas;
@@ -2818,21 +2818,29 @@
                         foregroundImage = null;
                     };
 
+                    const bgLayerTimeoutMs = (IS_INTRO_SCENE && isIOSDevice) ? 12000 : 4200;
                     bgLayerFallbackTimer = window.setTimeout(() => {
                         if (bgLayerSettled) return;
                         console.warn('[Map] Processed background timeout. Falling back to raw map image.');
                         bgImage = img;
                         foregroundImage = null;
                         settleBackgroundLayer('map-ready-timeout-fallback');
-                    }, 4200);
+                    }, bgLayerTimeoutMs);
 
                     try {
                         nextBgImage.src = bgCanvas.toDataURL('image/png');
                     } catch (error) {
-                        console.warn('[Map] Could not serialize processed background. Using raw fallback.', error);
-                        bgImage = img;
-                        foregroundImage = null;
-                        settleBackgroundLayer('map-ready-serialize-fallback');
+                        if (IS_INTRO_SCENE && isIOSDevice) {
+                            console.warn('[Map] Could not serialize processed background on iOS intro. Using processed canvas fallback.', error);
+                            bgImage = bgCanvas;
+                            foregroundImage = fgCanvas;
+                            settleBackgroundLayer('map-ready-ios-canvas-fallback');
+                        } else {
+                            console.warn('[Map] Could not serialize processed background. Using raw fallback.', error);
+                            bgImage = img;
+                            foregroundImage = null;
+                            settleBackgroundLayer('map-ready-serialize-fallback');
+                        }
                     }
 
                     try {

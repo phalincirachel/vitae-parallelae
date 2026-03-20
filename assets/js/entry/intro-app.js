@@ -1273,6 +1273,7 @@ async function initIntroApp() {
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
     if (typeof narration.isAwaitingGesture === 'function' && narration.isAwaitingGesture()) {
+      if (isIOSLikeDevice) narration.primeFromGesture?.();
       narration.acknowledgeGesture?.();
       return;
     }
@@ -1400,6 +1401,7 @@ async function initIntroApp() {
       return;
     }
     if (isNarrationAwaitingGesture()) {
+      if (isIOSLikeDevice) narration.primeFromGesture?.();
       narration.acknowledgeGesture?.();
       syncStartPromptState('awaiting-gesture');
       event.preventDefault();
