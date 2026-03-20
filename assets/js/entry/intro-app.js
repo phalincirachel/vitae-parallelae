@@ -325,6 +325,7 @@ async function initIntroApp() {
     lastPromptActivationType: '',
     lastDimmerActionAt: 0,
     lastDimmerActionId: '',
+    suppressDimmerClickUntil: 0,
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -1473,12 +1474,15 @@ async function initIntroApp() {
     }
     // Do not buffer: this checkpoint must be completed while it is active.
   }, true);
+  const consumeDimmerEvent = (event) => {
+    event?.preventDefault?.();
+    event?.stopImmediatePropagation?.();
+  };
   const resolveDimmerTutorialAction = (actionId, event = null) => {
     if (runtimeState.waitingAction !== actionId) return false;
     const now = Date.now();
     if ((now - Number(runtimeState.lastDimmerActionAt || 0)) < 420) return false;
-    event?.preventDefault?.();
-    event?.stopImmediatePropagation?.();
+    consumeDimmerEvent(event);
     if (actionId === 'dimmer-light') {
       hooks.setDimmerMode('reading-half');
       hooks.setReadingMode(true, 'intro-manual-dimmer-light', { syncDimmer: false, ignoreFrozen: true });
@@ -1504,13 +1508,34 @@ async function initIntroApp() {
   const onDimmerPressStart = (event) => {
     if (runtimeState.waitingAction !== 'dimmer-dark' && runtimeState.waitingAction !== 'dimmer-light') return;
     clearCurrentFocusVisual();
-    resolveDimmerTutorialAction(runtimeState.waitingAction, event);
+    if (resolveDimmerTutorialAction(runtimeState.waitingAction, event)) {
+      // Touch/pointer input is typically followed by a synthetic click.
+      // Keep that click from advancing the global dimmer cycle one extra step.
+      runtimeState.suppressDimmerClickUntil = Date.now() + 760;
+    }
   };
   refs.sceneDimmerToggleBtn?.addEventListener('pointerdown', onDimmerPressStart, true);
   refs.sceneDimmerToggleBtn?.addEventListener('touchstart', onDimmerPressStart, { capture: true, passive: false });
   refs.sceneDimmerToggleBtn?.addEventListener('click', (event) => {
-    if (resolveDimmerTutorialAction('dimmer-light', event)) return;
-    resolveDimmerTutorialAction('dimmer-dark', event);
+    const now = Date.now();
+    if (now < Number(runtimeState.suppressDimmerClickUntil || 0)) {
+      consumeDimmerEvent(event);
+      return;
+    }
+    const waitingAction = runtimeState.waitingAction;
+    if (waitingAction === 'dimmer-dark' || waitingAction === 'dimmer-light') {
+      clearCurrentFocusVisual();
+      const resolved = resolveDimmerTutorialAction(waitingAction, event);
+      if (resolved) {
+        runtimeState.suppressDimmerClickUntil = now + 760;
+      } else {
+        consumeDimmerEvent(event);
+      }
+      return;
+    }
+    if ((now - Number(runtimeState.lastDimmerActionAt || 0)) < 760) {
+      consumeDimmerEvent(event);
+    }
   }, true);
   const onBookPressStart = () => {
     dismissHighlightForAction('open-book');
@@ -1925,7 +1950,7 @@ async function initIntroApp() {
 
   setTrack('souvenir', 0);
   hooks.setReadingMode(true, 'intro-souvenir');
-  hooks.setDimmerMode('reading-clear');
+  hooks.setDimmerMode('reading-half');
   runtimeState.backToChapterDismissed = false;
   hooks.showBackToChapter(true);
   const backToChapterActionPromise = beginBufferedActionWait('back-to-chapter', {});
@@ -1955,7 +1980,7 @@ async function initIntroApp() {
   hideBackToChapterPromptImmediate();
   clearPresentation();
   hooks.setReadingMode(true, 'intro-return');
-  hooks.setDimmerMode('reading-clear');
+  hooks.setDimmerMode('reading-half');
   setTrack('main', 16);
   hooks.renderArchive();
   hooks.refreshLoreProgressUi({ forceVisible: true });
@@ -2011,7 +2036,9 @@ async function initIntroApp() {
   windowRef.requestAnimationFrame(() => {
     if (runtimeState.destroyed || !runtimeState.finalButtonVisible) return;
     if (runtimeState.waitingAction) return;
-    applyFocus({ selectors: ['#nextChapterBtn'] });
+    applyFocus({
+      rectProvider: () => (runtimeState.finalButtonVisible ? createFocusRect(refs.nextChapterBtn, { paddingX: 10, paddingY: 8, inset: 6 }) : null)
+    });
   });
   setGate({ includeAudio: true, targets: ['#nextChapterBtn'] });
   scheduleUiRecovery('intro-finish');
