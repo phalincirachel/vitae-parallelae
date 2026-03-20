@@ -323,6 +323,8 @@ async function initIntroApp() {
     narrationPreparePending: false,
     lastPromptActivationAt: 0,
     lastPromptActivationType: '',
+    lastDimmerActionAt: 0,
+    lastDimmerActionId: '',
     currentTrackEntries: {
       start: buildTrackEntries('start'),
       main: buildTrackEntries('main'),
@@ -1248,10 +1250,12 @@ async function initIntroApp() {
     }
     if (narration.isPaused()) {
       narration.resume();
+      narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
       syncAudioIcons(true);
       return;
     }
+    narration.acknowledgeGesture?.();
     void replayCurrentSegment();
   }, true);
 
@@ -1433,6 +1437,8 @@ async function initIntroApp() {
   }, true);
   const resolveDimmerTutorialAction = (actionId, event = null) => {
     if (runtimeState.waitingAction !== actionId) return false;
+    const now = Date.now();
+    if ((now - Number(runtimeState.lastDimmerActionAt || 0)) < 420) return false;
     event?.preventDefault?.();
     event?.stopImmediatePropagation?.();
     if (actionId === 'dimmer-light') {
@@ -1451,6 +1457,8 @@ async function initIntroApp() {
       return false;
     }
     dismissHighlightForAction(actionId);
+    runtimeState.lastDimmerActionAt = now;
+    runtimeState.lastDimmerActionId = actionId;
     resolveOrRememberAction(actionId, true);
     return true;
   };
@@ -1495,6 +1503,7 @@ async function initIntroApp() {
       scheduleUiRecovery('intro-manual-enter-explore');
       dismissHighlightForAction('enter-explore');
       resolveOrRememberAction('enter-explore', true);
+      setGate({ includeAudio: true, allowCanvas: true, keys: MOVE_KEYS, targets: ['#sceneDimmerToggleBtn', '#readingModeBtn'] });
       return;
     }
     // Do not buffer this action outside its checkpoint to avoid unintended auto-advance.
@@ -1881,7 +1890,8 @@ async function initIntroApp() {
   hooks.setDimmerMode('reading-clear');
   runtimeState.backToChapterDismissed = false;
   hooks.showBackToChapter(true);
-  await playCheckpointRange('souvenir', 0, 1, 'back-to-chapter', {
+  const backToChapterActionPromise = beginBufferedActionWait('back-to-chapter', {});
+  const backToChapterPlaybackPromise = playContinuousRange('souvenir', 0, 1, {
     uiByIndex: {
       0: { clear: true },
       1: {
@@ -1890,6 +1900,18 @@ async function initIntroApp() {
       }
     }
   });
+  await backToChapterPlaybackPromise;
+  if (runtimeState.destroyed) return;
+  if (runtimeState.waitingAction === 'back-to-chapter') {
+    await wait(5000);
+    if (!runtimeState.destroyed && runtimeState.waitingAction === 'back-to-chapter') {
+      dismissBackToChapterHighlight();
+      hideBackToChapterPromptImmediate();
+      clearPresentation();
+      resolveOrRememberAction('back-to-chapter', true);
+    }
+  }
+  await backToChapterActionPromise;
   if (runtimeState.destroyed) return;
 
   hideBackToChapterPromptImmediate();
@@ -1963,3 +1985,4 @@ async function initIntroApp() {
 void initIntroApp().catch((error) => {
   console.error('[Intro] init failed', error);
 });
+

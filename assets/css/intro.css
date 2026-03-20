@@ -34,25 +34,9 @@ body.intro-page:not(.scene-dimmer-light-mode) #subtitleContainer {
 }
 
 body.intro-page #audioPlayerUI:not(.reading-mode) #subtitleContainer {
-  position: relative;
   overflow-y: hidden !important;
 }
 
-body.intro-page #audioPlayerUI:not(.reading-mode) #subtitleContainer::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: clamp(24px, 8vh, 58px);
-  pointer-events: none;
-  z-index: 2;
-  background: linear-gradient(to bottom, rgba(12, 12, 16, 0.96) 0%, rgba(12, 12, 16, 0) 100%);
-}
-
-body.intro-page.scene-dimmer-light-mode #audioPlayerUI:not(.reading-mode) #subtitleContainer::before {
-  background: linear-gradient(to bottom, rgba(255, 255, 255, 0.98) 0%, rgba(255, 255, 255, 0) 100%);
-}
 .intro-start-screen {
   position: fixed;
   inset: 0;

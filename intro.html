@@ -6679,9 +6679,9 @@
 
             // B) Game Mode: Nur kleines Fenster rendern (3 Zeilen)
             syncReadingTopFadeMask(-1);
-            subtitleContainer.innerHTML = '';
 
             if (subtitleTracks.length === 0) {
+                subtitleContainer.innerHTML = '';
                 const div = document.createElement('div');
                 div.className = 'subtitle-line subtitle-current';
                 div.innerText = 'Warte auf Audio/Text...';
@@ -6689,26 +6689,49 @@
                 return;
             }
 
-            // Fixe 3 Zeilen im Spielmodus
-            const startIdx = Math.max(0, centerIndex - 1);
-            const endIdx = Math.min(subtitleTracks.length - 1, centerIndex + 1);
+            const normalizedCenter = Number.isFinite(centerIndex) ? centerIndex : 0;
+            const safeCenterIndex = Math.max(0, Math.min(subtitleTracks.length - 1, normalizedCenter));
+            const startIdx = Math.max(0, safeCenterIndex - 1);
+            const endIdx = Math.min(subtitleTracks.length - 1, safeCenterIndex + 1);
+            const visibleCount = Math.max(0, endIdx - startIdx + 1);
+            const renderVersion = Number(window.subtitleVersion || 0);
 
-            for (let i = startIdx; i <= endIdx; i++) {
-                const div = document.createElement('div');
-                div.className = 'subtitle-line';
+            let lineNodes = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'));
+            const needsRebuild = lineNodes.length !== visibleCount;
+            if (needsRebuild) {
+                subtitleContainer.innerHTML = '';
+                const fragment = document.createDocumentFragment();
+                for (let slot = 0; slot < visibleCount; slot += 1) {
+                    const div = document.createElement('div');
+                    div.className = 'subtitle-line';
+                    fragment.appendChild(div);
+                }
+                subtitleContainer.appendChild(fragment);
+                lineNodes = Array.from(subtitleContainer.querySelectorAll('.subtitle-line'));
+            }
 
-                const distance = Math.abs(i - centerIndex);
+            for (let slot = 0; slot < lineNodes.length; slot += 1) {
+                const targetIndex = startIdx + slot;
+                const div = lineNodes[slot];
+                const previousIndex = Number(div.dataset.index);
+                const previousVersion = Number(div.dataset.renderVersion);
 
-                if (i === centerIndex) {
-                    div.classList.add('subtitle-current');
-                } else {
-                    // Verblassen
-                    if (distance >= 5) div.classList.add('fade-far');
-                    else if (distance >= 3) div.classList.add('fade-mid');
+                if (previousIndex !== targetIndex || previousVersion !== renderVersion) {
+                    div.innerHTML = '';
+                    renderSubtitleTrackContent(div, subtitleTracks[targetIndex]);
+                    div.dataset.index = String(targetIndex);
+                    div.dataset.renderVersion = String(renderVersion);
                 }
 
-                renderSubtitleTrackContent(div, subtitleTracks[i]);
-                subtitleContainer.appendChild(div);
+                div.className = 'subtitle-line';
+                const distance = Math.abs(targetIndex - safeCenterIndex);
+                if (targetIndex === safeCenterIndex) {
+                    div.classList.add('subtitle-current');
+                } else if (distance >= 2) {
+                    div.classList.add('fade-far');
+                } else {
+                    div.classList.add('fade-mid');
+                }
             }
 
             positionNextChapterPrompt();
@@ -7351,10 +7374,11 @@
         function resetSubtitleMaskForGameMode() {
             if (!subtitleContainer) return;
             subtitleContainer.classList.remove('no-top-fade');
-            subtitleContainer.style.setProperty('-webkit-mask-image', 'none');
-            subtitleContainer.style.setProperty('mask-image', 'none');
-            subtitleContainer.style.setProperty('-webkit-mask-size', 'auto');
-            subtitleContainer.style.setProperty('mask-size', 'auto');
+            const gameModeMask = 'linear-gradient(to bottom, transparent 0px, rgba(0, 0, 0, 0.38) 34px, black 62px, black 100%)';
+            subtitleContainer.style.setProperty('-webkit-mask-image', gameModeMask, 'important');
+            subtitleContainer.style.setProperty('mask-image', gameModeMask, 'important');
+            subtitleContainer.style.setProperty('-webkit-mask-size', '100% 100%', 'important');
+            subtitleContainer.style.setProperty('mask-size', '100% 100%', 'important');
             if (!isIOSWebKitMaskQuirkDevice) return;
             subtitleContainer.style.setProperty('transform', 'translateZ(0)');
             requestAnimationFrame(() => {
