@@ -582,6 +582,7 @@ body.scene-dimmer-light-mode #loreProgressText {
     max-height: 70vh;
     background: transparent !important;
     overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
     pointer-events: auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.4) transparent;

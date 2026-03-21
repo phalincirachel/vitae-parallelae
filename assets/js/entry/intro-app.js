@@ -583,6 +583,8 @@ async function initIntroApp() {
       const gateConfig = runtimeState.currentGateConfig;
       runtimeState.currentGateConfig = null;
       setGate(gateConfig);
+    } else if (runtimeState.startScreenHidden && refs.audioPlayerUI?.style.display !== 'none') {
+      setGate({ includeAudio: true });
     } else {
       interactionGate.clear();
     }
@@ -1284,6 +1286,7 @@ async function initIntroApp() {
       return;
     }
     if (narration.isPaused()) {
+      if (isIOSLikeDevice) narration.primeFromGesture?.();
       narration.resume();
       narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
@@ -1418,6 +1421,7 @@ async function initIntroApp() {
       return;
     }
     if (narration.isPaused()) {
+      if (isIOSLikeDevice) narration.primeFromGesture?.();
       narration.resume();
       narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
@@ -1881,8 +1885,10 @@ async function initIntroApp() {
 
   await speakCheckpointSegment('main', 10, 'dimmer-dark', {
     targets: ['#sceneDimmerToggleBtn'],
-    selectors: ['#sceneDimmerToggleBtn'],
-    allowAll: true
+    allowAll: true,
+    rectProvider: () => ((runtimeState.waitingAction === 'dimmer-dark' && runtimeState.currentTrackName === 'main')
+      ? createFocusRect(refs.sceneDimmerToggleBtn, { paddingX: 8, paddingY: 6, inset: 4 })
+      : null)
   });
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('black-freeze');
@@ -1895,8 +1901,10 @@ async function initIntroApp() {
 
   await speakCheckpointSegment('main', 11, 'dimmer-light', {
     targets: ['#sceneDimmerToggleBtn'],
-    selectors: ['#sceneDimmerToggleBtn'],
-    allowAll: true
+    allowAll: true,
+    rectProvider: () => ((runtimeState.waitingAction === 'dimmer-light' && runtimeState.currentTrackName === 'main')
+      ? createFocusRect(refs.sceneDimmerToggleBtn, { paddingX: 8, paddingY: 6, inset: 4 })
+      : null)
   });
   if (runtimeState.destroyed) return;
   hooks.setDimmerMode('reading-half');
@@ -1930,18 +1938,22 @@ async function initIntroApp() {
   hooks.refreshLoreProgressUi({ forceVisible: true });
   hooks.setIntroOrbState?.({ revealEnabled: false, collectEnabled: false, targetLightId: null });
   await playCheckpointRange('main', 13, 15, 'collect-orb', {
-    initialGate: { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS },
+    initialGate: { includeAudio: true, allowCanvas: true, keys: MOVE_KEYS, targets: ['#readingModeBtn'] },
     uiByIndex: {
-      13: { clear: true, allowCanvas: true, keys: MOVE_KEYS },
-      14: { clear: true, allowCanvas: true, keys: MOVE_KEYS },
+      13: { clear: true, allowCanvas: true, keys: MOVE_KEYS, targets: ['#readingModeBtn'] },
+      14: { clear: true, allowCanvas: true, keys: MOVE_KEYS, targets: ['#readingModeBtn'] },
       15: {
         targets: [],
         keys: MOVE_KEYS,
         allowCanvas: true,
         onEnter: () => {
+          // Keep interaction freedom before this point, but force game mode for the orb task.
+          hooks.setDimmerMode('off');
+          hooks.setReadingMode(false, 'intro-orb-force-game-mode', { syncDimmer: false, ignoreFrozen: true });
           hooks.setIntroOrbState?.({ revealEnabled: true, collectEnabled: true, targetLightId: 'auto' });
           hooks.refreshLayout?.('intro-orb-armed');
           hooks.forceSceneRender?.('intro-orb-armed');
+          scheduleUiRecovery('intro-orb-armed');
         },
         rectProvider: () => resolveOrbFocusRect()
       }
