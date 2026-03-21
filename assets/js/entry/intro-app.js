@@ -332,13 +332,13 @@ async function initIntroApp() {
       souvenir: buildTrackEntries('souvenir')
     }
   };
-
-  const isIOSLikeDevice = (() => {
+  const isTouchGestureDevice = (() => {
     const nav = windowRef.navigator || {};
-    const ua = String(nav.userAgent || '');
-    const platform = String(nav.platform || '');
     const touchPoints = Number(nav.maxTouchPoints || 0);
-    return /iPhone|iPad|iPod/i.test(ua) || (platform === 'MacIntel' && touchPoints > 1);
+    const coarsePointer = typeof windowRef.matchMedia === 'function'
+      ? !!windowRef.matchMedia('(pointer: coarse)').matches
+      : false;
+    return touchPoints > 0 || coarsePointer;
   })();
 
   const orbDirectionPointer = (() => {
@@ -1275,7 +1275,7 @@ async function initIntroApp() {
     if (runtimeState.destroyed) return;
     runtimeState.autoPausedForVisibility = false;
     if (typeof narration.isAwaitingGesture === 'function' && narration.isAwaitingGesture()) {
-      if (isIOSLikeDevice) narration.primeFromGesture?.();
+      if (isTouchGestureDevice) narration.primeFromGesture?.();
       narration.acknowledgeGesture?.();
       return;
     }
@@ -1286,14 +1286,14 @@ async function initIntroApp() {
       return;
     }
     if (narration.isPaused()) {
-      if (isIOSLikeDevice) narration.primeFromGesture?.();
+      if (isTouchGestureDevice) narration.primeFromGesture?.();
       narration.resume();
       narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
       syncAudioIcons(true);
       return;
     }
-    if (isIOSLikeDevice) narration.primeFromGesture?.();
+    if (isTouchGestureDevice) narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
     void replayCurrentSegment();
   }, true);
@@ -1357,7 +1357,7 @@ async function initIntroApp() {
       resolveStartRequest?.(true);
       resolveStartRequest = null;
     }
-    if (isIOSLikeDevice) narration.primeFromGesture?.();
+    if (isTouchGestureDevice) narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
     if (!runtimeState.narrationPrepared) {
       void Promise.resolve(narration.prepare?.()).then((ready) => {
@@ -1404,7 +1404,7 @@ async function initIntroApp() {
       return;
     }
     if (isNarrationAwaitingGesture()) {
-      if (isIOSLikeDevice) narration.primeFromGesture?.();
+      if (isTouchGestureDevice) narration.primeFromGesture?.();
       narration.acknowledgeGesture?.();
       syncStartPromptState('awaiting-gesture');
       event.preventDefault();
@@ -1421,7 +1421,7 @@ async function initIntroApp() {
       return;
     }
     if (narration.isPaused()) {
-      if (isIOSLikeDevice) narration.primeFromGesture?.();
+      if (isTouchGestureDevice) narration.primeFromGesture?.();
       narration.resume();
       narration.acknowledgeGesture?.();
       syncNarrationActiveFlag(true);
@@ -1447,6 +1447,7 @@ async function initIntroApp() {
   const bridgeNarrationGesture = () => {
     if (runtimeState.destroyed) return;
     if (!isNarrationAwaitingGesture()) return;
+    if (isTouchGestureDevice) narration.primeFromGesture?.();
     narration.acknowledgeGesture?.();
   };
   narrationGestureBridgeEvents.forEach((eventName) => {
