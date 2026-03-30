@@ -531,10 +531,12 @@
         resetGameCanvasGestureState();
         return;
       }
-      gameCanvasGesture.mode = 'drag';
+      gameCanvasGesture.mode = 'pending';
       gameCanvasGesture.primaryPointerId = pointerInfo.pointerId;
       gameCanvasGesture.dragStartCanvasX = pointerInfo.canvasX;
       gameCanvasGesture.dragStartCanvasY = pointerInfo.canvasY;
+      gameCanvasGesture.dragStartClientX = pointerInfo.clientX;
+      gameCanvasGesture.dragStartClientY = pointerInfo.clientY;
       gameCanvasGesture.dragBaseOffsetX = getCameraPanOffsetX();
       gameCanvasGesture.dragBaseOffsetY = getCameraPanOffsetY();
       gameCanvasGesture.dragMoved = false;
@@ -665,16 +667,25 @@
             if (gameCanvasGesture.pointers.size >= 2) updateGameCanvasPinchGesture();
             return;
           }
-          if (gameCanvasGesture.mode !== 'drag') return;
+          if (gameCanvasGesture.mode !== 'drag' && gameCanvasGesture.mode !== 'pending') return;
           if (event.pointerId !== gameCanvasGesture.primaryPointerId) return;
 
           const deltaX = pointer.canvasX - gameCanvasGesture.dragStartCanvasX;
           const deltaY = pointer.canvasY - gameCanvasGesture.dragStartCanvasY;
-          if (!gameCanvasGesture.dragMoved && Math.hypot(deltaX, deltaY) >= dragThresholdPx) {
+          const deltaClientX = pointer.clientX - (Number.isFinite(gameCanvasGesture.dragStartClientX)
+            ? gameCanvasGesture.dragStartClientX
+            : pointer.clientX);
+          const deltaClientY = pointer.clientY - (Number.isFinite(gameCanvasGesture.dragStartClientY)
+            ? gameCanvasGesture.dragStartClientY
+            : pointer.clientY);
+
+          if (gameCanvasGesture.mode === 'pending' && Math.hypot(deltaClientX, deltaClientY) >= dragThresholdPx) {
+            gameCanvasGesture.mode = 'drag';
             gameCanvasGesture.dragMoved = true;
             gameCanvasGesture.suppressTap = true;
           }
-          if (!gameCanvasGesture.dragMoved) return;
+
+          if (gameCanvasGesture.mode !== 'drag' || !gameCanvasGesture.dragMoved) return;
           setGameCameraPanFromDrag(deltaX, deltaY, gameCanvasGesture.dragBaseOffsetX, gameCanvasGesture.dragBaseOffsetY);
         });
 
@@ -696,7 +707,8 @@
 
           gameCanvasGesture.pointers.delete(event.pointerId);
 
-          if (!cancelled && hadSinglePointer && gestureMode === 'drag' && wasPrimary && !wasDragGesture && !suppressTap) {
+          const canTreatAsTap = gestureMode === 'pending' || (gestureMode === 'drag' && !wasDragGesture);
+          if (!cancelled && hadSinglePointer && wasPrimary && canTreatAsTap && !suppressTap) {
             handleClickMove(pointer.clientX, pointer.clientY);
           }
 

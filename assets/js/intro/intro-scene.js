@@ -1,4 +1,4 @@
-﻿const FRONT_SPRITE_DATA = Object.freeze([
+const FRONT_SPRITE_DATA = Object.freeze([
   Object.freeze({ left: 38, width: 141, footX: 106, footY: 267 }),
   Object.freeze({ left: 201, width: 138, footX: 273, footY: 265 }),
   Object.freeze({ left: 361, width: 140, footX: 436, footY: 270 }),
@@ -164,6 +164,8 @@ export async function createIntroScene(options = {}) {
     primaryPointerId: null,
     dragStartCanvasX: 0,
     dragStartCanvasY: 0,
+    dragStartClientX: 0,
+    dragStartClientY: 0,
     dragBaseOffsetX: 0,
     dragBaseOffsetY: 0,
     dragMoved: false,
@@ -319,6 +321,8 @@ export async function createIntroScene(options = {}) {
     gameCanvasGesture.primaryPointerId = null;
     gameCanvasGesture.dragStartCanvasX = 0;
     gameCanvasGesture.dragStartCanvasY = 0;
+    gameCanvasGesture.dragStartClientX = 0;
+    gameCanvasGesture.dragStartClientY = 0;
     gameCanvasGesture.dragBaseOffsetX = 0;
     gameCanvasGesture.dragBaseOffsetY = 0;
     gameCanvasGesture.dragMoved = false;

@@ -176,3 +176,212 @@ test('index navigation runtime finds nearby free point when current foot cell is
   assert.notDeepEqual(freePoint, { x: 4, y: 4 });
   assert.equal(runtime.isFootSolid(freePoint.x, freePoint.y, 1, 1), false);
 });
+
+test('index navigation runtime keeps click-to-move without camera pan for sub-threshold pointer jitter', () => {
+  const canvas = createEventTarget({
+    tagName: 'CANVAS',
+    setPointerCapture() {},
+    releasePointerCapture() {}
+  });
+
+  const gesture = {
+    pointers: new Map(),
+    mode: 'idle',
+    primaryPointerId: null,
+    dragStartCanvasX: 0,
+    dragStartCanvasY: 0,
+    dragBaseOffsetX: 0,
+    dragBaseOffsetY: 0,
+    dragMoved: false,
+    pinchActive: false,
+    pinchStartDistance: 0,
+    pinchStartZoom: 1,
+    suppressTap: false
+  };
+
+  const resetGesture = () => {
+    gesture.pointers.clear();
+    gesture.mode = 'idle';
+    gesture.primaryPointerId = null;
+    gesture.dragMoved = false;
+    gesture.suppressTap = false;
+    gesture.dragStartClientX = 0;
+    gesture.dragStartClientY = 0;
+  };
+
+  let clickWalkPath = [];
+  let clickWalkGoal = null;
+  let panCalls = 0;
+  const collisionData = createCollisionData(128, 128);
+
+  navigationRuntime.init({
+    canvas,
+    keys: {},
+    player: { x: 0, y: 0 },
+    gameCanvasGesture: gesture,
+    hasPointerEvent: true,
+    dragThresholdPx: 10,
+    getGameReady: () => true,
+    getIsReadingMode: () => false,
+    getMapW: () => 128,
+    getMapH: () => 128,
+    getCollisionData: () => collisionData,
+    getCurrentSpriteSize: () => ({ w: 16, h: 20 }),
+    getMoveTarget: () => null,
+    setMoveTarget: () => {},
+    getClickWalkPath: () => clickWalkPath,
+    setClickWalkPath: (value) => { clickWalkPath = value; },
+    getClickWalkGoal: () => clickWalkGoal,
+    setClickWalkGoal: (value) => { clickWalkGoal = value; },
+    getCanvasPointFromClient: (clientX, clientY) => ({
+      canvasX: clientX * 4,
+      canvasY: clientY * 4
+    }),
+    screenPointToWorld: (clientX, clientY) => ({
+      worldX: clientX,
+      worldY: clientY,
+      canvasX: clientX * 4,
+      canvasY: clientY * 4
+    }),
+    setGameCameraPanFromDrag: () => { panCalls += 1; },
+    getCameraZoom: () => 1,
+    getCameraZoomClamped: (value) => value,
+    setCameraZoomTarget: () => {},
+    getCameraPanOffsetX: () => 0,
+    getCameraPanOffsetY: () => 0,
+    resetGameCanvasGestureState: resetGesture
+  });
+
+  canvas.emit('pointerdown', {
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    target: canvas,
+    clientX: 100,
+    clientY: 100,
+    preventDefault() {}
+  });
+
+  canvas.emit('pointermove', {
+    pointerId: 1,
+    clientX: 103,
+    clientY: 100,
+    preventDefault() {}
+  });
+
+  canvas.emit('pointerup', {
+    pointerId: 1,
+    clientX: 103,
+    clientY: 100
+  });
+
+  assert.equal(panCalls, 0);
+  assert.deepEqual(clickWalkGoal, { x: 103, y: 100 });
+  assert.equal(clickWalkPath.length, 1);
+  assert.deepEqual(clickWalkPath[0], { x: 103, y: 100 });
+  assert.equal(gesture.mode, 'idle');
+});
+
+test('index navigation runtime starts camera pan only after threshold and suppresses tap move', () => {
+  const canvas = createEventTarget({
+    tagName: 'CANVAS',
+    setPointerCapture() {},
+    releasePointerCapture() {}
+  });
+
+  const gesture = {
+    pointers: new Map(),
+    mode: 'idle',
+    primaryPointerId: null,
+    dragStartCanvasX: 0,
+    dragStartCanvasY: 0,
+    dragBaseOffsetX: 0,
+    dragBaseOffsetY: 0,
+    dragMoved: false,
+    pinchActive: false,
+    pinchStartDistance: 0,
+    pinchStartZoom: 1,
+    suppressTap: false
+  };
+
+  const resetGesture = () => {
+    gesture.pointers.clear();
+    gesture.mode = 'idle';
+    gesture.primaryPointerId = null;
+    gesture.dragMoved = false;
+    gesture.suppressTap = false;
+    gesture.dragStartClientX = 0;
+    gesture.dragStartClientY = 0;
+  };
+
+  let clickWalkPath = [];
+  let clickWalkGoal = null;
+  let panCalls = 0;
+  const collisionData = createCollisionData(128, 128);
+
+  navigationRuntime.init({
+    canvas,
+    keys: {},
+    player: { x: 0, y: 0 },
+    gameCanvasGesture: gesture,
+    hasPointerEvent: true,
+    dragThresholdPx: 10,
+    getGameReady: () => true,
+    getIsReadingMode: () => false,
+    getMapW: () => 128,
+    getMapH: () => 128,
+    getCollisionData: () => collisionData,
+    getCurrentSpriteSize: () => ({ w: 16, h: 20 }),
+    getMoveTarget: () => null,
+    setMoveTarget: () => {},
+    getClickWalkPath: () => clickWalkPath,
+    setClickWalkPath: (value) => { clickWalkPath = value; },
+    getClickWalkGoal: () => clickWalkGoal,
+    setClickWalkGoal: (value) => { clickWalkGoal = value; },
+    getCanvasPointFromClient: (clientX, clientY) => ({
+      canvasX: clientX * 4,
+      canvasY: clientY * 4
+    }),
+    screenPointToWorld: (clientX, clientY) => ({
+      worldX: clientX,
+      worldY: clientY,
+      canvasX: clientX * 4,
+      canvasY: clientY * 4
+    }),
+    setGameCameraPanFromDrag: () => { panCalls += 1; },
+    getCameraZoom: () => 1,
+    getCameraZoomClamped: (value) => value,
+    setCameraZoomTarget: () => {},
+    getCameraPanOffsetX: () => 0,
+    getCameraPanOffsetY: () => 0,
+    resetGameCanvasGestureState: resetGesture
+  });
+
+  canvas.emit('pointerdown', {
+    pointerId: 1,
+    pointerType: 'mouse',
+    button: 0,
+    target: canvas,
+    clientX: 100,
+    clientY: 100,
+    preventDefault() {}
+  });
+
+  canvas.emit('pointermove', {
+    pointerId: 1,
+    clientX: 116,
+    clientY: 100,
+    preventDefault() {}
+  });
+
+  canvas.emit('pointerup', {
+    pointerId: 1,
+    clientX: 116,
+    clientY: 100
+  });
+
+  assert.ok(panCalls > 0);
+  assert.equal(clickWalkGoal, null);
+  assert.deepEqual(clickWalkPath, []);
+  assert.equal(gesture.mode, 'idle');
+});
