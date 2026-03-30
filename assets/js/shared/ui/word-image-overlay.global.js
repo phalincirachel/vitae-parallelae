@@ -5,6 +5,23 @@
   const OVERLAY_ROOT_CLASS = 'word-image-overlay-root';
   const OVERLAY_LAYER_CLASS = 'word-image-overlay-layer';
   const OVERLAY_IMAGE_CLASS = 'word-image-overlay-image';
+  const PASS_THROUGH_EVENT_TYPES = Object.freeze([
+    'pointerdown',
+    'pointermove',
+    'pointerup',
+    'pointercancel',
+    'mousedown',
+    'mousemove',
+    'mouseup',
+    'click',
+    'dblclick',
+    'auxclick',
+    'contextmenu',
+    'touchstart',
+    'touchmove',
+    'touchend',
+    'touchcancel'
+  ]);
 
   const DEFAULT_MAX_CONCURRENT_MOBILE = 1;
   const DEFAULT_MAX_CONCURRENT_DESKTOP = 2;
@@ -239,6 +256,230 @@
     }));
   }
 
+  function setOverlayElementNonInteractive(element, isRoot = false) {
+    if (!element) return;
+    if (typeof element.setAttribute === 'function') {
+      element.setAttribute('aria-hidden', 'true');
+      if (isRoot) element.setAttribute('role', 'presentation');
+    }
+    if (element.style) {
+      element.style.pointerEvents = 'none';
+      element.style.touchAction = 'none';
+      element.style.userSelect = 'none';
+      element.style.webkitUserSelect = 'none';
+      element.style.webkitTouchCallout = 'none';
+      element.style.webkitTapHighlightColor = 'transparent';
+    }
+    if (isRoot) {
+      try {
+        element.tabIndex = -1;
+      } catch (_) {
+        // ignore readonly targets
+      }
+      try {
+        element.inert = true;
+      } catch (_) {
+        // inert is not universally writable
+      }
+    }
+  }
+
+  function isWithinOverlay(rootEl, target) {
+    if (!rootEl || !target) return false;
+    if (target === rootEl) return true;
+    if (typeof rootEl.contains === 'function') {
+      try {
+        return !!rootEl.contains(target);
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  function resolveEventClientPoint(event) {
+    const directX = toFiniteNumber(event && event.clientX, NaN);
+    const directY = toFiniteNumber(event && event.clientY, NaN);
+    if (Number.isFinite(directX) && Number.isFinite(directY)) {
+      return { clientX: directX, clientY: directY };
+    }
+
+    const changedTouch = event && event.changedTouches && event.changedTouches[0];
+    const touch = changedTouch || (event && event.touches && event.touches[0]) || null;
+    const touchX = toFiniteNumber(touch && touch.clientX, NaN);
+    const touchY = toFiniteNumber(touch && touch.clientY, NaN);
+    return { clientX: touchX, clientY: touchY };
+  }
+
+  function resolveUnderlyingTargetAtPoint(documentObject, rootEl, clientX, clientY) {
+    if (!documentObject || typeof documentObject.elementFromPoint !== 'function') return null;
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return null;
+
+    const style = rootEl && rootEl.style ? rootEl.style : null;
+    const previousVisibility = style ? style.visibility : '';
+    const previousPointerEvents = style ? style.pointerEvents : '';
+    if (style) {
+      style.visibility = 'hidden';
+      style.pointerEvents = 'none';
+    }
+
+    let target = null;
+    try {
+      target = documentObject.elementFromPoint(clientX, clientY);
+    } catch (_) {
+      target = null;
+    }
+
+    if (style) {
+      style.visibility = previousVisibility;
+      style.pointerEvents = previousPointerEvents || 'none';
+    }
+
+    if (!target || target === rootEl || isWithinOverlay(rootEl, target)) return null;
+    return target;
+  }
+
+  function createMouseEventInit(sourceEvent, point) {
+    return {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX: Number.isFinite(point.clientX) ? point.clientX : 0,
+      clientY: Number.isFinite(point.clientY) ? point.clientY : 0,
+      screenX: toFiniteNumber(sourceEvent && sourceEvent.screenX, 0),
+      screenY: toFiniteNumber(sourceEvent && sourceEvent.screenY, 0),
+      button: toFiniteNumber(sourceEvent && sourceEvent.button, 0),
+      buttons: toFiniteNumber(sourceEvent && sourceEvent.buttons, 1),
+      detail: toFiniteNumber(sourceEvent && sourceEvent.detail, 1),
+      ctrlKey: !!(sourceEvent && sourceEvent.ctrlKey),
+      shiftKey: !!(sourceEvent && sourceEvent.shiftKey),
+      altKey: !!(sourceEvent && sourceEvent.altKey),
+      metaKey: !!(sourceEvent && sourceEvent.metaKey)
+    };
+  }
+
+  function createPointerEventInit(sourceEvent, point, forcedType = '') {
+    const mouseInit = createMouseEventInit(sourceEvent, point);
+    return Object.assign(mouseInit, {
+      pointerId: Math.max(1, Math.floor(toFiniteNumber(sourceEvent && sourceEvent.pointerId, 1))),
+      pointerType: forcedType || (typeof sourceEvent?.pointerType === 'string' ? sourceEvent.pointerType : 'mouse'),
+      isPrimary: sourceEvent && typeof sourceEvent.isPrimary === 'boolean' ? sourceEvent.isPrimary : true,
+      pressure: clamp(toFiniteNumber(sourceEvent && sourceEvent.pressure, 0.5), 0, 1),
+      width: Math.max(1, toFiniteNumber(sourceEvent && sourceEvent.width, 1)),
+      height: Math.max(1, toFiniteNumber(sourceEvent && sourceEvent.height, 1)),
+      tiltX: clamp(toFiniteNumber(sourceEvent && sourceEvent.tiltX, 0), -90, 90),
+      tiltY: clamp(toFiniteNumber(sourceEvent && sourceEvent.tiltY, 0), -90, 90),
+      twist: clamp(toFiniteNumber(sourceEvent && sourceEvent.twist, 0), 0, 359)
+    });
+  }
+
+  function dispatchRetargetedEvent(target, sourceEvent, point, windowObject) {
+    if (!target) return false;
+    const sourceType = String(sourceEvent && sourceEvent.type || '').toLowerCase();
+    const PointerCtor = windowObject && windowObject.PointerEvent ? windowObject.PointerEvent : null;
+    const MouseCtor = windowObject && windowObject.MouseEvent ? windowObject.MouseEvent : null;
+
+    const dispatch = (eventObject) => {
+      if (!eventObject) return false;
+      if (typeof target.dispatchEvent === 'function') {
+        try {
+          return target.dispatchEvent(eventObject);
+        } catch (_) {
+          return false;
+        }
+      }
+      return false;
+    };
+
+    if (sourceType.startsWith('pointer') && PointerCtor) {
+      return dispatch(new PointerCtor(sourceType, createPointerEventInit(sourceEvent, point)));
+    }
+
+    if (sourceType === 'touchstart' || sourceType === 'touchmove' || sourceType === 'touchend' || sourceType === 'touchcancel') {
+      if (PointerCtor) {
+        const mappedType = sourceType === 'touchstart'
+          ? 'pointerdown'
+          : sourceType === 'touchmove'
+            ? 'pointermove'
+            : sourceType === 'touchend'
+              ? 'pointerup'
+              : 'pointercancel';
+        return dispatch(new PointerCtor(mappedType, createPointerEventInit(sourceEvent, point, 'touch')));
+      }
+      if (MouseCtor) {
+        const mappedType = sourceType === 'touchstart'
+          ? 'mousedown'
+          : sourceType === 'touchmove'
+            ? 'mousemove'
+            : 'mouseup';
+        const ok = dispatch(new MouseCtor(mappedType, createMouseEventInit(sourceEvent, point)));
+        if (ok && sourceType === 'touchend') {
+          dispatch(new MouseCtor('click', createMouseEventInit(sourceEvent, point)));
+        }
+        return ok;
+      }
+    }
+
+    const isMouseLike = sourceType === 'click'
+      || sourceType === 'dblclick'
+      || sourceType === 'auxclick'
+      || sourceType === 'contextmenu'
+      || sourceType === 'mousedown'
+      || sourceType === 'mousemove'
+      || sourceType === 'mouseup';
+
+    if (isMouseLike && MouseCtor) {
+      return dispatch(new MouseCtor(sourceType, createMouseEventInit(sourceEvent, point)));
+    }
+
+    if (sourceType === 'click' && typeof target.click === 'function') {
+      try {
+        target.click();
+        return true;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    return false;
+  }
+
+  function handleBlockedOverlayEvent(event, documentObject, windowObject, rootEl) {
+    if (!event || !rootEl) return false;
+    if (!isWithinOverlay(rootEl, event.target)) return false;
+
+    if (typeof event.preventDefault === 'function') event.preventDefault();
+    if (typeof event.stopImmediatePropagation === 'function') event.stopImmediatePropagation();
+    else if (typeof event.stopPropagation === 'function') event.stopPropagation();
+
+    const point = resolveEventClientPoint(event);
+    const target = resolveUnderlyingTargetAtPoint(documentObject, rootEl, point.clientX, point.clientY);
+    if (!target) return true;
+    dispatchRetargetedEvent(target, event, point, windowObject);
+    return true;
+  }
+
+  function installOverlayPassthroughGuard(documentObject, windowObject, rootEl) {
+    if (!documentObject || typeof documentObject.addEventListener !== 'function' || !rootEl) {
+      return () => {};
+    }
+
+    const handler = (event) => {
+      handleBlockedOverlayEvent(event, documentObject, windowObject, rootEl);
+    };
+
+    for (const type of PASS_THROUGH_EVENT_TYPES) {
+      documentObject.addEventListener(type, handler, true);
+    }
+
+    return () => {
+      if (typeof documentObject.removeEventListener !== 'function') return;
+      for (const type of PASS_THROUGH_EVENT_TYPES) {
+        documentObject.removeEventListener(type, handler, true);
+      }
+    };
+  }
+
   function buildTimelineEntries(cues, context = {}) {
     const normalizedCues = normalizeCueDefinitions(cues);
     const tracks = Array.isArray(context.tracks) ? context.tracks : [];
@@ -313,12 +554,15 @@
     const existing = documentObject.getElementById
       ? documentObject.getElementById(OVERLAY_ROOT_ID)
       : null;
-    if (existing) return existing;
+    if (existing) {
+      setOverlayElementNonInteractive(existing, true);
+      return existing;
+    }
 
     const rootEl = documentObject.createElement('div');
     rootEl.id = OVERLAY_ROOT_ID;
     rootEl.className = OVERLAY_ROOT_CLASS;
-    rootEl.setAttribute('aria-hidden', 'true');
+    setOverlayElementNonInteractive(rootEl, true);
     rootEl.style.display = 'none';
 
     const host = documentObject.body || documentObject.documentElement || null;
@@ -358,6 +602,7 @@
       lastPreloadAt: 0,
       lastTimeSec: 0,
       overlayRoot: null,
+      overlayPassthroughCleanup: null,
       destroyed: false,
       downlinkMbps: estimateNetworkDownlinkMbps(windowObject),
       maxConcurrent: Math.max(
@@ -396,6 +641,8 @@
     function ensureLayer(entry, record) {
       const existing = state.layerByCueId.get(entry.id);
       if (existing) {
+        setOverlayElementNonInteractive(existing.layer, false);
+        setOverlayElementNonInteractive(existing.img, false);
         if (record && record.resolvedUrl && existing.img.src !== record.resolvedUrl) {
           existing.img.src = record.resolvedUrl;
         }
@@ -408,13 +655,14 @@
 
       const layerEl = documentObject.createElement('div');
       layerEl.className = OVERLAY_LAYER_CLASS;
+      setOverlayElementNonInteractive(layerEl, false);
       layerEl.style.opacity = '0';
       layerEl.style.display = 'none';
 
       const imageEl = documentObject.createElement('img');
       imageEl.className = OVERLAY_IMAGE_CLASS;
       imageEl.alt = '';
-      imageEl.setAttribute('aria-hidden', 'true');
+      setOverlayElementNonInteractive(imageEl, false);
       imageEl.draggable = false;
       imageEl.decoding = 'async';
       if (record && record.resolvedUrl) imageEl.src = record.resolvedUrl;
@@ -660,6 +908,14 @@
       if (state.destroyed) return;
       state.destroyed = true;
       state.queue.length = 0;
+      if (typeof state.overlayPassthroughCleanup === 'function') {
+        try {
+          state.overlayPassthroughCleanup();
+        } catch (_) {
+          // ignore cleanup issues
+        }
+      }
+      state.overlayPassthroughCleanup = null;
       for (const record of state.imageRecords.values()) {
         record.queued = false;
       }
@@ -686,6 +942,7 @@
     }
 
     state.overlayRoot = ensureOverlayRoot(documentObject);
+    state.overlayPassthroughCleanup = installOverlayPassthroughGuard(documentObject, windowObject, state.overlayRoot);
 
     return Object.freeze({
       setCueDefinitions,
@@ -711,7 +968,9 @@
       buildTimelineEntries,
       resolveEnvelopeAtTime,
       resolveActiveWeights,
-      estimateLeadSeconds
+      estimateLeadSeconds,
+      setOverlayElementNonInteractive,
+      handleBlockedOverlayEvent
     })
   });
 });

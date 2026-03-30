@@ -6,6 +6,107 @@ await import('../assets/js/shared/ui/word-image-overlay.global.js');
 const overlayApi = globalThis.GameboyWordImageOverlay;
 const overlayTestApi = overlayApi && overlayApi.__test;
 
+function createEventTarget(initial = {}) {
+  const listeners = new Map();
+  return Object.assign(initial, {
+    addEventListener(type, handler) {
+      const bucket = listeners.get(type) || [];
+      bucket.push(handler);
+      listeners.set(type, bucket);
+    },
+    removeEventListener(type, handler) {
+      const bucket = listeners.get(type) || [];
+      listeners.set(type, bucket.filter((entry) => entry !== handler));
+    },
+    emit(type, event = {}) {
+      event.type = type;
+      for (const handler of listeners.get(type) || []) {
+        handler(event);
+      }
+    },
+    dispatchEvent(event = {}) {
+      const type = String(event.type || '');
+      if (!type) return true;
+      for (const handler of listeners.get(type) || []) {
+        handler(event);
+      }
+      return true;
+    }
+  });
+}
+
+function createElement(tagName = 'div') {
+  return createEventTarget({
+    tagName: String(tagName).toUpperCase(),
+    style: {},
+    children: [],
+    parentNode: null,
+    attributes: new Map(),
+    id: '',
+    setAttribute(name, value) {
+      this.attributes.set(name, String(value));
+    },
+    getAttribute(name) {
+      return this.attributes.get(name);
+    },
+    appendChild(child) {
+      if (!child) return child;
+      child.parentNode = this;
+      this.children.push(child);
+      return child;
+    },
+    removeChild(child) {
+      const index = this.children.indexOf(child);
+      if (index >= 0) {
+        this.children.splice(index, 1);
+        child.parentNode = null;
+      }
+      return child;
+    },
+    contains(target) {
+      if (!target) return false;
+      if (target === this) return true;
+      return this.children.some((child) => typeof child.contains === 'function' && child.contains(target));
+    },
+    clickCount: 0,
+    click() {
+      this.clickCount += 1;
+    }
+  });
+}
+
+function findById(node, id) {
+  if (!node || !id) return null;
+  if (node.id === id) return node;
+  for (const child of node.children || []) {
+    const found = findById(child, id);
+    if (found) return found;
+  }
+  return null;
+}
+
+function createDocument(options = {}) {
+  const body = createElement('body');
+  const documentObject = createEventTarget({
+    body,
+    documentElement: body,
+    hidden: false,
+    createElement(tagName) {
+      return createElement(tagName);
+    },
+    getElementById(id) {
+      return findById(body, id);
+    },
+    elementFromPoint(x, y) {
+      if (typeof options.elementFromPoint === 'function') {
+        return options.elementFromPoint(x, y);
+      }
+      return null;
+    }
+  });
+  return { documentObject, body };
+}
+
 test('word image overlay api is available', () => {
   assert.ok(overlayApi);
   assert.equal(typeof overlayApi.initController, 'function');
@@ -126,4 +227,95 @@ test('buildTimelineEntries clamps early cue timings when there is no 3s pre-roll
   assert.equal(entries[0].fadeInDuration, 0);
   assert.ok(entries[0].holdDuration > 0);
   assert.ok(entries[0].holdDuration <= 0.6);
+});
+
+test('overlay passthrough guard reroutes blocked pointer events to underlying targets', () => {
+  class FakePointerEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      Object.assign(this, init);
+    }
+  }
+
+  class FakeMouseEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      Object.assign(this, init);
+    }
+  }
+
+  const forwarded = [];
+  const underlyingTarget = createElement('button');
+  underlyingTarget.dispatchEvent = (event) => {
+    forwarded.push(event);
+    return true;
+  };
+
+  let overlayRootRef = null;
+  const { documentObject } = createDocument({
+    elementFromPoint() {
+      if (overlayRootRef && overlayRootRef.style.visibility === 'hidden') {
+        return underlyingTarget;
+      }
+      return overlayRootRef;
+    }
+  });
+
+  const controller = overlayApi.initController({
+    document: documentObject,
+    window: { PointerEvent: FakePointerEvent, MouseEvent: FakeMouseEvent },
+    cues: []
+  });
+
+  overlayRootRef = documentObject.getElementById('wordImageOverlayRoot');
+  assert.ok(overlayRootRef);
+  assert.equal(overlayRootRef.style.pointerEvents, 'none');
+  assert.equal(overlayRootRef.style.touchAction, 'none');
+  assert.equal(overlayRootRef.getAttribute('role'), 'presentation');
+
+  let prevented = false;
+  let stopped = false;
+  documentObject.emit('pointerdown', {
+    target: overlayRootRef,
+    clientX: 140,
+    clientY: 90,
+    pointerId: 2,
+    pointerType: 'touch',
+    button: 0,
+    buttons: 1,
+    preventDefault() {
+      prevented = true;
+    },
+    stopPropagation() {
+      stopped = true;
+    },
+    stopImmediatePropagation() {
+      stopped = true;
+    }
+  });
+
+  assert.equal(prevented, true);
+  assert.equal(stopped, true);
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0].type, 'pointerdown');
+  assert.equal(forwarded[0].clientX, 140);
+  assert.equal(forwarded[0].clientY, 90);
+
+  documentObject.emit('click', {
+    target: overlayRootRef,
+    clientX: 144,
+    clientY: 96,
+    button: 0,
+    buttons: 1,
+    preventDefault() {},
+    stopPropagation() {},
+    stopImmediatePropagation() {}
+  });
+
+  assert.equal(forwarded.length, 2);
+  assert.equal(forwarded[1].type, 'click');
+  assert.equal(forwarded[1].clientX, 144);
+  assert.equal(forwarded[1].clientY, 96);
+
+  controller.destroy();
 });
