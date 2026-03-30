@@ -37,7 +37,7 @@ test('buildTimelineEntries resolves index test-balloon cues for marktplatz/kapit
     assert.ok(entry.holdStart <= entry.holdEnd);
     assert.ok(entry.holdEnd <= entry.end);
     assert.ok(entry.holdDuration > 0);
-    assert.ok(entry.holdDuration <= 1);
+    assert.ok(entry.holdDuration <= 3);
   }
 });
 
@@ -97,7 +97,7 @@ test('resolveImageUrlCandidates expands Google Drive links with fallback URLs', 
   assert.ok(candidates.includes('https://drive.google.com/thumbnail?id=1oMDq1s3AA74V2VF3W3guQRm0C6TFgDHs&sz=w4096'));
 });
 
-test('buildTimelineEntries clamps early cue timings when there is no 1s pre-roll available', () => {
+test('buildTimelineEntries clamps early cue timings when there is no 3s pre-roll available', () => {
   const cues = [
     {
       id: 'edge-start',

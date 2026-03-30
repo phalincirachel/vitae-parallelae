@@ -1,4 +1,4 @@
-﻿(function bootstrapWordImageOverlay(root, factory) {
+(function bootstrapWordImageOverlay(root, factory) {
   root.GameboyWordImageOverlay = factory(root);
 })(typeof globalThis !== 'undefined' ? globalThis : this, function createWordImageOverlayApi(globalObject) {
   const OVERLAY_ROOT_ID = 'wordImageOverlayRoot';
@@ -10,6 +10,9 @@
   const DEFAULT_MAX_CONCURRENT_DESKTOP = 2;
   const DEFAULT_ESTIMATED_SIZE_BYTES = 4 * 1024 * 1024;
   const PRELOAD_THROTTLE_MS = 220;
+  const DEFAULT_FADE_IN_SECONDS = 3;
+  const DEFAULT_HOLD_SECONDS = 3;
+  const DEFAULT_FADE_OUT_SECONDS = 3;
 
   const DEFAULT_TEST_CUES = Object.freeze([
     Object.freeze({
@@ -268,14 +271,14 @@
       if (!Number.isFinite(maxPlayableTime) || maxPlayableTime < 0) maxPlayableTime = lineEnd + 2;
       anchor = clamp(anchor, 0, maxPlayableTime);
 
-      const fadeInDuration = clamp(Math.min(1, anchor), 0, 1);
-      let holdDuration = 1;
+      const fadeInDuration = clamp(Math.min(DEFAULT_FADE_IN_SECONDS, anchor), 0, DEFAULT_FADE_IN_SECONDS);
+      let holdDuration = DEFAULT_HOLD_SECONDS;
       if (anchor + holdDuration > maxPlayableTime) {
         holdDuration = Math.max(0, maxPlayableTime - anchor);
       }
       const holdStart = anchor;
       const holdEnd = holdStart + holdDuration;
-      const fadeOutDuration = clamp(Math.min(1, Math.max(0, maxPlayableTime - holdEnd)), 0, 1);
+      const fadeOutDuration = clamp(Math.min(DEFAULT_FADE_OUT_SECONDS, Math.max(0, maxPlayableTime - holdEnd)), 0, DEFAULT_FADE_OUT_SECONDS);
       const start = holdStart - fadeInDuration;
       const end = holdEnd + fadeOutDuration;
       if (end <= start + 0.01) continue;
