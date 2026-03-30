@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="de">
 
 <head>
@@ -29,6 +29,7 @@
     <script src="assets/js/scenes/liminal3d/animation-runtime.global.js"></script>
     <script src="assets/js/scenes/liminal3d/game-start-runtime.global.js"></script>
     <script src="assets/js/shared/ui/reader-settings-controller.global.js"></script>
+    <script src="assets/js/shared/ui/word-image-overlay.global.js"></script>
     <script src="assets/js/LoadingTutorialCatalog.js"></script>
     <script src="assets/js/LoadingTutorialOverlay.js"></script>
 
@@ -39,6 +40,7 @@
     <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="assets/css/main.css">
     <link rel="stylesheet" href="assets/css/liminal.css">
+    <link rel="stylesheet" href="assets/css/word-image-overlay.css">
     <style>
         html,
         body {
@@ -647,6 +649,12 @@
                     });
                 let contentSwitchInProgress = false;
                 let contentSwitchToken = 0;
+                const wordImageOverlayApi = window.GameboyWordImageOverlay || null;
+                const wordImageOverlayCueDefinitions = (wordImageOverlayApi && typeof wordImageOverlayApi.getDefaultCueDefinitions === 'function')
+                    ? wordImageOverlayApi.getDefaultCueDefinitions()
+                    : [];
+                let wordImageOverlayController = null;
+                let activeSubtitleContentRef = LIMINAL_SCENE.subtitleFile || 'assets/kapitel1b.txt';
                 const mainChapterAutoplayIntent = window.ChapterAutoplayIntent
                     ? window.ChapterAutoplayIntent.consume(MAIN_CONTENT_KEY, { defaultPolicy: 'auto' })
                     : { policy: 'auto', shouldAutoplay: true, source: 'fallback', reason: 'intent-missing' };
@@ -658,6 +666,61 @@
                         return;
                     }
                     window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
+                }
+
+                function setActiveSubtitleContentRef(nextRef) {
+                    if (typeof nextRef !== 'string') return;
+                    const trimmed = nextRef.trim();
+                    if (!trimmed) return;
+                    activeSubtitleContentRef = trimmed;
+                }
+
+                function ensureWordImageOverlayController() {
+                    if (wordImageOverlayController) return wordImageOverlayController;
+                    if (!wordImageOverlayApi || typeof wordImageOverlayApi.initController !== 'function') return null;
+                    wordImageOverlayController = wordImageOverlayApi.initController({
+                        window,
+                        document,
+                        sceneKey: CURRENT_SCENE_NAME,
+                        contentRef: activeSubtitleContentRef,
+                        cues: wordImageOverlayCueDefinitions,
+                        getDurationSec: () => {
+                            const playerRef = window.audioPlayer;
+                            return Number(playerRef && playerRef.audio && playerRef.audio.duration);
+                        }
+                    });
+                    return wordImageOverlayController;
+                }
+
+                function syncWordImageOverlayTimeline(tracks) {
+                    const controller = ensureWordImageOverlayController();
+                    if (!controller || typeof controller.setTimelineContext !== 'function') return [];
+                    const playerRef = window.audioPlayer;
+                    const duration = Number(playerRef && playerRef.audio && playerRef.audio.duration);
+                    return controller.setTimelineContext({
+                        sceneKey: CURRENT_SCENE_NAME,
+                        contentRef: activeSubtitleContentRef || (LIMINAL_SCENE.subtitleFile || 'assets/kapitel1b.txt'),
+                        tracks: Array.isArray(tracks) ? tracks : [],
+                        durationSec: Number.isFinite(duration) ? duration : NaN
+                    });
+                }
+
+                function updateWordImageOverlayTime(timeSec) {
+                    const controller = ensureWordImageOverlayController();
+                    if (!controller || typeof controller.onTimeUpdate !== 'function') return;
+                    controller.onTimeUpdate(timeSec);
+                }
+
+                function notifyWordImageOverlaySeek(timeSec) {
+                    const controller = ensureWordImageOverlayController();
+                    if (!controller || typeof controller.onSeek !== 'function') return;
+                    controller.onSeek(timeSec);
+                }
+
+                function clearWordImageOverlayTimeline() {
+                    const controller = ensureWordImageOverlayController();
+                    if (!controller || typeof controller.clear !== 'function') return;
+                    controller.clear();
                 }
 
                 const runtimeControllersModule = await import('./assets/js/shared/ui/runtime-controllers.js');
@@ -1042,6 +1105,7 @@
                     const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
                     p.currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
                     p.renderLines(p.currentSubtitleIndex);
+                    notifyWordImageOverlaySeek(effectiveTime);
                     liminalDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
                     if (!seekResult.ok) {
                         liminalCause('C10_SEEK_CONFIRM_FAILED', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)}`);
@@ -1284,6 +1348,7 @@
                         p.audio.src = getSCUrl('assets/kapitel1b.mp3');
                         liminalTrace('switch:restore-main:src-set', { switchToken, src: p.audio.src });
                         p.volume = readerTextVolume;
+                        setActiveSubtitleContentRef('assets/kapitel1b.txt');
                         const textLoaded = await p.loadText('assets/kapitel1b.txt');
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
                         markBlaetternPaginationDirty();
@@ -1373,6 +1438,7 @@
                         p.audio.src = getSCUrl(content.audio);
                         liminalTrace('switch:start-lore:src-set', { id, switchToken, src: p.audio.src });
                         const textPath = content.text || `assets/lore${id}.txt`;
+                        setActiveSubtitleContentRef(textPath);
                         const textLoaded = await p.loadText(textPath);
                         if (!textLoaded || switchToken !== contentSwitchToken) return;
                         markBlaetternPaginationDirty();
@@ -3221,6 +3287,15 @@
                     volume: readerTextVolume,
                     isReadingMode: isReadingMode, // Pass initial state
                     canSeek: () => !contentSwitchInProgress,
+                    onTracksParsed: ({ tracks, textUrl }) => {
+                        if (typeof textUrl === 'string' && textUrl.trim()) {
+                            setActiveSubtitleContentRef(textUrl);
+                        }
+                        syncWordImageOverlayTimeline(Array.isArray(tracks) ? tracks : []);
+                    },
+                    onSeek: (timeSec) => {
+                        notifyWordImageOverlaySeek(timeSec);
+                    },
                     onLineRender: (div, track) => {
                         // --- BOOKMARK BUTTON (mobile long-press / desktop right-click) ---
                         div.style.position = 'relative';
@@ -4375,7 +4450,7 @@
 
                 // Auto-Resume when Lore ends or Transition
                 // SharedAudioPlayer ruft this.onEnded() auf wenn Audio endet.
-                // ZusÃ¤tzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
+                // Zusätzlich addEventListener als Fallback falls SCAudioAdapter DOM-Events feuert.
                 let _endedHandled = false;
                 function handleAudioEnded() {
                     if (_endedHandled) return;
@@ -4390,8 +4465,8 @@
                     }
 
                     // MAIN CHAPTER ENDED
-                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurÃ¼cksetzen,
-                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd wÃ¼rde false liefern).
+                    // NOTE: SCAudioAdapter kann currentTime nach 'ended' auf 0 zurücksetzen,
+                    // daher isCurrentContentCompleted() NICHT verwenden (reachedAudioEnd würde false liefern).
                     const tracks = getActiveSubtitleTracks();
                     const subtitleIdx = getActiveSubtitleIndex();
                     const textFinished = tracks.length === 0 || subtitleIdx >= tracks.length - 1;
@@ -4411,11 +4486,12 @@
                         showNextChapterPrompt('main-ended');
                     }
                 }
-                // PrimÃ¤r: SharedAudioPlayer.onEnded (garantiert aufgerufen)
+                // Primär: SharedAudioPlayer.onEnded (garantiert aufgerufen)
                 player.onEnded = handleAudioEnded;
                 // Fallback: DOM-Event auf dem Audio-Element
                 player.audio.addEventListener('ended', handleAudioEnded);
                 player.audio.addEventListener('timeupdate', () => {
+                    updateWordImageOverlayTime(player.currentTime || 0);
                     maybeHideNextChapterPromptForBackSeek(player.currentTime || 0);
                     positionNextChapterPrompt();
                     positionBackToChapterPrompt();
@@ -5443,6 +5519,7 @@
 </body>
 
 </html>
+
 
 
 

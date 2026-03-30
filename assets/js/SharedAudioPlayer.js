@@ -14,6 +14,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this.currentSubtitleIndex = -1;
         this.renderVersion = 0;
         this.currentScrollAnimation = null;
+        this.currentTextUrl = textUrl || "";
         this.container = options.container || document.getElementById('subtitleContainer');
         if (this.container && window.SubtitleRichText && typeof window.SubtitleRichText.initOverlay === 'function') {
             window.SubtitleRichText.initOverlay({
@@ -22,6 +23,8 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         }
         this.isReadingMode = options.isReadingMode || false;
         this.onLineRender = options.onLineRender || null;
+        this.onTracksParsed = options.onTracksParsed || null;
+        this.onSeek = options.onSeek || null;
         this.canSeek = (typeof options.canSeek === 'function') ? options.canSeek : null;
         this._textLoadRequestId = 0;
         this._activeTextAbortController = null;
@@ -72,6 +75,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
             }
             const text = await response.text();
             if (requestId !== this._textLoadRequestId) return false;
+            this.currentTextUrl = url;
             this.parseSubtitles(text);
             return true;
         } catch (e) {
@@ -157,6 +161,13 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const effectiveTime = Number.isFinite(result.position) ? result.position : target;
         this.currentSubtitleIndex = this.subtitleTracks.length ? this.findSubtitleIndexForTime(effectiveTime) : 0;
         this.renderLines(this.currentSubtitleIndex);
+        if (typeof this.onSeek === "function") {
+            try {
+                this.onSeek(effectiveTime);
+            } catch (e) {
+                console.warn("SharedAudioPlayer onSeek callback failed:", e);
+            }
+        }
 
         if (autoplay && (!wasPlayingBeforeSeek || this.audio.paused)) {
             try {
@@ -229,6 +240,16 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         this.subtitleTracks.sort((a, b) => a.time - b.time);
         this.renderVersion += 1;
         this.renderLines(0);
+        if (typeof this.onTracksParsed === "function") {
+            try {
+                this.onTracksParsed({
+                    tracks: this.subtitleTracks.slice(),
+                    textUrl: this.currentTextUrl || ""
+                });
+            } catch (e) {
+                console.warn("SharedAudioPlayer onTracksParsed callback failed:", e);
+            }
+        }
         console.log(`SharedAudioPlayer: Parsed ${this.subtitleTracks.length} lines.`);
     }
 
@@ -452,7 +473,7 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
         const weakSentencePattern = new RegExp(`[:;]${closingTrail}$`);
         const pausePattern = new RegExp(`[,]${closingTrail}$`);
         const hyphenPattern = /(?:-|\u2010|\u2011|\u2012|\u2013|\u2014)$/;
-        const continuationPattern = /^[\"'\u00bb\u201c\u201d\u2018\u2019(\[]*[a-z\u00e4\u00f6\u00fc\u00df]/;
+        const continuationPattern = /^["'\u00bb\u201c\u201d\u2018\u2019(\[]*[a-z\u00e4\u00f6\u00fc\u00df]/;
         const tightLeadingPattern = /^[,.;:!?\u2026)\]\u201d\u2019]/;
 
         if (hyphenPattern.test(text) || tightLeadingPattern.test(nextTrimmed)) return 0;
@@ -997,6 +1018,13 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
             : (this.audio.currentTime || target);
         this.currentSubtitleIndex = this.subtitleTracks.length ? this.findSubtitleIndexForTime(effectiveTime) : 0;
         this.renderLines(this.currentSubtitleIndex);
+        if (typeof this.onSeek === "function") {
+            try {
+                this.onSeek(effectiveTime);
+            } catch (e) {
+                console.warn("SharedAudioPlayer onSeek callback failed:", e);
+            }
+        }
 
         if (wasPlaying && this.audio.paused) {
             try { await this.audio.play(); } catch (_) { /* ignored */ }
@@ -1025,4 +1053,3 @@ window.SharedAudioPlayer = class SharedAudioPlayer {
     get src() { return this.audio.src; }
     set src(val) { this.audio.src = val; }
 }
-

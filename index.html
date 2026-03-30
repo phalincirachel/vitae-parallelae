@@ -57,6 +57,7 @@
     <script src="assets/js/scenes/index2d/update-runtime.global.js"></script>
     <script src="assets/js/scenes/index2d/draw-runtime.global.js"></script>
     <script src="assets/js/shared/ui/reader-settings-controller.global.js"></script>
+    <script src="assets/js/shared/ui/word-image-overlay.global.js"></script>
     <script src="assets/js/LoadingTutorialCatalog.js"></script>
     <script src="assets/js/LoadingTutorialOverlay.js"></script>
     <!-- Main Stylesheet (extracted during refactoring) -->
@@ -65,6 +66,7 @@
     <link rel="preload" href="assets/fonts/reader-baroque-baskerville.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="preload" href="assets/fonts/reader-neoclassical-bodoni.ttf" as="font" type="font/ttf" crossorigin>
     <link rel="stylesheet" href="assets/css/main.css">
+    <link rel="stylesheet" href="assets/css/word-image-overlay.css">
     <!-- Critical inline CSS for loading screen (above-the-fold) -->
     <style>
         html,
@@ -691,6 +693,12 @@
         let audioPlayer = null;
         let ambientAudio = null;
         let uiContainer = null;
+        const wordImageOverlayApi = window.GameboyWordImageOverlay || null;
+        const wordImageOverlayCueDefinitions = (wordImageOverlayApi && typeof wordImageOverlayApi.getDefaultCueDefinitions === 'function')
+            ? wordImageOverlayApi.getDefaultCueDefinitions()
+            : [];
+        let wordImageOverlayController = null;
+        let activeSubtitleContentRef = LEVEL.subtitleFile;
 
         // ============================================
         // LORE SYSTEM & VARIABLES
@@ -733,6 +741,70 @@
                 return;
             }
             window.ChapterAutoplayIntent.markAuto(targetPageKey, MAIN_CONTENT_KEY, reason || 'auto-transition');
+        }
+
+
+        function resolveLoreTextRef(id) {
+            const numericId = Number(id);
+            if (!Number.isFinite(numericId) || numericId <= 0) return '';
+            const loreMeta = window.GameState && typeof window.GameState.getLore === 'function'
+                ? window.GameState.getLore(numericId)
+                : null;
+            if (loreMeta && typeof loreMeta.text === 'string' && loreMeta.text.trim()) {
+                return loreMeta.text.trim();
+            }
+            return `assets/lore${numericId}.txt`;
+        }
+
+        function setActiveSubtitleContentRef(nextRef) {
+            if (typeof nextRef !== 'string') return;
+            const trimmed = nextRef.trim();
+            if (!trimmed) return;
+            activeSubtitleContentRef = trimmed;
+        }
+
+        function ensureWordImageOverlayController() {
+            if (wordImageOverlayController) return wordImageOverlayController;
+            if (!wordImageOverlayApi || typeof wordImageOverlayApi.initController !== 'function') return null;
+            wordImageOverlayController = wordImageOverlayApi.initController({
+                window,
+                document,
+                sceneKey: SCENE_NAME,
+                contentRef: activeSubtitleContentRef || LEVEL.subtitleFile,
+                cues: wordImageOverlayCueDefinitions,
+                getDurationSec: () => Number(audioPlayer && audioPlayer.duration)
+            });
+            return wordImageOverlayController;
+        }
+
+        function syncWordImageOverlayTimeline() {
+            const controller = ensureWordImageOverlayController();
+            if (!controller || typeof controller.setTimelineContext !== 'function') return [];
+            const duration = Number(audioPlayer && audioPlayer.duration);
+            return controller.setTimelineContext({
+                sceneKey: SCENE_NAME,
+                contentRef: activeSubtitleContentRef || LEVEL.subtitleFile,
+                tracks: Array.isArray(subtitleTracks) ? subtitleTracks : [],
+                durationSec: Number.isFinite(duration) ? duration : NaN
+            });
+        }
+
+        function updateWordImageOverlayTime(timeSec) {
+            const controller = ensureWordImageOverlayController();
+            if (!controller || typeof controller.onTimeUpdate !== 'function') return;
+            controller.onTimeUpdate(timeSec);
+        }
+
+        function notifyWordImageOverlaySeek(timeSec) {
+            const controller = ensureWordImageOverlayController();
+            if (!controller || typeof controller.onSeek !== 'function') return;
+            controller.onSeek(timeSec);
+        }
+
+        function clearWordImageOverlayTimeline() {
+            const controller = ensureWordImageOverlayController();
+            if (!controller || typeof controller.clear !== 'function') return;
+            controller.clear();
         }
 
         const loreData = {
@@ -1851,6 +1923,7 @@
                 const text = await response.text();
                 // debugLog('Text length: ' + text.length);
                 window.mainTextContent = text;
+                setActiveSubtitleContentRef(LEVEL.subtitleFile);
                 parseSubtitles(text);
                 // debugLog('subtitleTracks: ' + subtitleTracks.length);
                 renderSubtitleLines(0);
@@ -1859,6 +1932,7 @@
                 debugLog('Chapter 1 Load ERROR: ' + e.message);
                 window.mainTextContent = "";
                 subtitleTracks = [];
+                clearWordImageOverlayTimeline();
             }
 
 
@@ -2696,6 +2770,7 @@
         subtitleTracks = []; // Array aus { time: sekunden, text: string }
         currentSubtitleIndex = -1;
         isReadingMode = false;
+        ensureWordImageOverlayController();
         const READER_LAYOUT_STORAGE_KEY = 'gameboy_reader_sentence_layout';
         const READER_FONT_SIZE_STORAGE_KEY = 'gameboy_reader_font_size_px';
         const READER_FONT_FAMILY_STORAGE_KEY = 'gameboy_reader_font_family';
@@ -6273,6 +6348,7 @@
 
             // Increment version to force re-render in Reading Mode
             window.subtitleVersion = (window.subtitleVersion || 0) + 1;
+            syncWordImageOverlayTimeline();
         }
 
         // 3. Update-Funktion für Anzeige
@@ -6422,6 +6498,7 @@
             }
 
             updateSubtitleDisplay(newIndex);
+            updateWordImageOverlayTime(t);
             maybeHideNextChapterPromptForBackSeek(t);
             positionNextChapterPrompt();
             positionBackToChapterPrompt();
@@ -7508,6 +7585,7 @@
             const effectiveTime = Number.isFinite(seekResult.position) ? seekResult.position : safeTarget;
             currentSubtitleIndex = findSubtitleIndexForTime(effectiveTime);
             renderSubtitleLines(currentSubtitleIndex);
+            notifyWordImageOverlaySeek(effectiveTime);
             indexDebugNote('seek', `${reason} target=${safeTarget.toFixed(2)} pos=${effectiveTime.toFixed(2)} ok=${seekResult.ok} tries=${seekResult.attempts}`);
             indexTrace('seek:end', {
                 reason,
@@ -7645,6 +7723,7 @@
 
                 const mainText = await ensureMainTextLoaded();
                 if (switchToken !== contentSwitchToken) return;
+                setActiveSubtitleContentRef(LEVEL.subtitleFile);
                 parseSubtitles(mainText);
                 indexTrace('switch:restore-main:text-parsed', { switchToken, tracks: subtitleTracks.length });
 
@@ -7765,6 +7844,7 @@
                 audioPlayer.src = loreAudioSrc;
                 indexTrace('switch:start-lore:src-set', { id, switchToken, src: loreAudioSrc });
 
+                setActiveSubtitleContentRef(resolveLoreTextRef(id));
                 parseSubtitles(loreText);
                 indexTrace('switch:start-lore:text-parsed', { id, switchToken, tracks: subtitleTracks.length });
                 const savedLore = window.PlayerStateManager ? window.PlayerStateManager.getState(`lore${id}`) : null;
@@ -7843,6 +7923,7 @@
 </body>
 
 </html>
+
 
 
 
