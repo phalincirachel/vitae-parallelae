@@ -27,9 +27,10 @@
   const DEFAULT_MAX_CONCURRENT_DESKTOP = 2;
   const DEFAULT_ESTIMATED_SIZE_BYTES = 4 * 1024 * 1024;
   const PRELOAD_THROTTLE_MS = 220;
-  const DEFAULT_FADE_IN_SECONDS = 3;
-  const DEFAULT_HOLD_SECONDS = 3;
-  const DEFAULT_FADE_OUT_SECONDS = 3;
+  const DEFAULT_FADE_IN_SECONDS = 0;
+  const DEFAULT_HOLD_SECONDS = 0.25;
+  const DEFAULT_FADE_OUT_SECONDS = 0;
+  const CUE_MEMORY_RELEASE_GRACE_SECONDS = 0.02;
 
   const DEFAULT_TEST_CUES = Object.freeze([
     Object.freeze({
@@ -686,6 +687,65 @@
       }
     }
 
+    function removeLayerForCue(cueId) {
+      const payload = state.layerByCueId.get(cueId);
+      if (!payload) return;
+      if (payload.layer && payload.layer.parentNode && typeof payload.layer.parentNode.removeChild === 'function') {
+        try {
+          payload.layer.parentNode.removeChild(payload.layer);
+        } catch (_) {
+          // ignore detached node errors
+        }
+      }
+      state.layerByCueId.delete(cueId);
+    }
+
+    function releaseCueAssets(cueId) {
+      if (!cueId) return;
+
+      for (let i = state.queue.length - 1; i >= 0; i -= 1) {
+        const pendingEntry = state.queue[i] && state.queue[i].entry;
+        if (pendingEntry && pendingEntry.id === cueId) {
+          state.queue.splice(i, 1);
+        }
+      }
+
+      removeLayerForCue(cueId);
+
+      const record = state.imageRecords.get(cueId);
+      if (!record) return;
+      record.queued = false;
+      record.status = 'idle';
+      record.image = null;
+      record.resolvedUrl = '';
+      record.error = null;
+      state.imageRecords.delete(cueId);
+    }
+
+    function releaseCueAssetsPast(currentTimeSec) {
+      if (!Number.isFinite(currentTimeSec)) return;
+      for (const entry of state.timelineEntries) {
+        if (!entry) continue;
+        if (currentTimeSec <= (entry.end + CUE_MEMORY_RELEASE_GRACE_SECONDS)) continue;
+        releaseCueAssets(entry.id);
+      }
+    }
+
+    function releaseAllCueAssets() {
+      state.queue.length = 0;
+      for (const cueId of Array.from(state.layerByCueId.keys())) {
+        removeLayerForCue(cueId);
+      }
+      for (const record of state.imageRecords.values()) {
+        record.queued = false;
+        record.status = 'idle';
+        record.image = null;
+        record.resolvedUrl = '';
+        record.error = null;
+      }
+      state.imageRecords.clear();
+    }
+
     function loadImageCandidate(url, priority) {
       const ImageCtor = windowObject && windowObject.Image ? windowObject.Image : null;
       if (!ImageCtor) return Promise.reject(new Error('Image constructor missing'));
@@ -766,6 +826,9 @@
         loadEntryImage(entry)
           .then((ok) => {
             record.status = ok ? 'ready' : 'error';
+            if (ok && state.lastTimeSec > (entry.end + CUE_MEMORY_RELEASE_GRACE_SECONDS)) {
+              releaseCueAssets(entry.id);
+            }
           })
           .catch((error) => {
             record.status = 'error';
@@ -797,7 +860,7 @@
 
       const pending = [];
       for (const entry of state.timelineEntries) {
-        if (entry.end < (currentTimeSec - 0.75)) continue;
+        if (entry.end <= currentTimeSec) continue;
         const record = ensureRecord(entry);
         if (record.status === 'ready' || record.status === 'loading' || record.queued) continue;
 
@@ -827,6 +890,7 @@
       const rootEl = state.overlayRoot || ensureOverlayRoot(documentObject);
       state.overlayRoot = rootEl;
       if (!rootEl) return;
+      releaseCueAssetsPast(currentTimeSec);
 
       const activeWeights = resolveActiveWeights(state.timelineEntries, currentTimeSec);
       const visibleCueIds = new Set();
@@ -866,6 +930,7 @@
         durationSec: Number.isFinite(context.durationSec) ? context.durationSec : getDurationSec()
       };
       state.timelineEntries = buildTimelineEntries(state.cues, nextContext);
+      releaseAllCueAssets();
       hideAllLayers();
       schedulePreloads(state.lastTimeSec || 0, true);
       return state.timelineEntries.slice();
@@ -895,12 +960,14 @@
       if (state.destroyed) return;
       state.cues = normalizeCueDefinitions(cues);
       state.timelineEntries = [];
+      releaseAllCueAssets();
       hideAllLayers();
     }
 
     function clear() {
       if (state.destroyed) return;
       state.timelineEntries = [];
+      releaseAllCueAssets();
       hideAllLayers();
     }
 
@@ -916,9 +983,7 @@
         }
       }
       state.overlayPassthroughCleanup = null;
-      for (const record of state.imageRecords.values()) {
-        record.queued = false;
-      }
+      releaseAllCueAssets();
       if (state.overlayRoot && state.overlayRoot.parentNode && typeof state.overlayRoot.parentNode.removeChild === 'function') {
         state.overlayRoot.parentNode.removeChild(state.overlayRoot);
       }

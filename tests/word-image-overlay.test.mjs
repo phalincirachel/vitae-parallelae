@@ -107,6 +107,12 @@ function createDocument(options = {}) {
   return { documentObject, body };
 }
 
+async function flushMicrotasks(turns = 1) {
+  for (let i = 0; i < turns; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
 test('word image overlay api is available', () => {
   assert.ok(overlayApi);
   assert.equal(typeof overlayApi.initController, 'function');
@@ -138,7 +144,9 @@ test('buildTimelineEntries resolves index test-balloon cues for marktplatz/kapit
     assert.ok(entry.holdStart <= entry.holdEnd);
     assert.ok(entry.holdEnd <= entry.end);
     assert.ok(entry.holdDuration > 0);
-    assert.ok(entry.holdDuration <= 3);
+    assert.ok(entry.holdDuration <= 0.25);
+    assert.equal(entry.fadeInDuration, 0);
+    assert.equal(entry.fadeOutDuration, 0);
   }
 });
 
@@ -198,7 +206,7 @@ test('resolveImageUrlCandidates expands Google Drive links with fallback URLs', 
   assert.ok(candidates.includes('https://drive.google.com/thumbnail?id=1oMDq1s3AA74V2VF3W3guQRm0C6TFgDHs&sz=w4096'));
 });
 
-test('buildTimelineEntries clamps early cue timings when there is no 3s pre-roll available', () => {
+test('buildTimelineEntries clamps early cue timings when there is no pre-roll available', () => {
   const cues = [
     {
       id: 'edge-start',
@@ -226,7 +234,95 @@ test('buildTimelineEntries clamps early cue timings when there is no 3s pre-roll
   assert.equal(entries[0].start, 0);
   assert.equal(entries[0].fadeInDuration, 0);
   assert.ok(entries[0].holdDuration > 0);
-  assert.ok(entries[0].holdDuration <= 0.6);
+  assert.ok(entries[0].holdDuration <= 0.25);
+  assert.equal(entries[0].fadeOutDuration, 0);
+});
+
+test('controller releases cue image memory shortly after the 0.25s visibility window', async () => {
+  class FakeImage {
+    constructor() {
+      this.onload = null;
+      this.onerror = null;
+      this.decoding = 'async';
+      this.loading = 'eager';
+      this.fetchPriority = 'high';
+      this.naturalWidth = 1920;
+      this.naturalHeight = 1080;
+      this.complete = true;
+      this._src = '';
+    }
+
+    set src(value) {
+      this._src = String(value || '');
+      const onload = this.onload;
+      if (typeof onload === 'function') {
+        setTimeout(() => onload(), 0);
+      }
+    }
+
+    get src() {
+      return this._src;
+    }
+
+    decode() {
+      return Promise.resolve();
+    }
+  }
+
+  const cues = [
+    {
+      id: 'memory-release-cue',
+      sceneKeys: ['marktplatz'],
+      contentRefs: ['assets/kapitel1.txt'],
+      word: '\u00c4rger',
+      sentenceHint: 'Du hast vielleicht \u00c4rger empfunden oder',
+      imageUrl: 'https://example.com/memory-release.jpg',
+      estimatedSizeBytes: 128000
+    }
+  ];
+
+  const tracks = [
+    { time: 10, text: 'Du hast vielleicht \u00c4rger empfunden oder' },
+    { time: 14, text: 'Unter der Versch\u00fcttung der Jahrzehnte lag ich und schrieb nicht' }
+  ];
+
+  const { documentObject } = createDocument();
+  const controller = overlayApi.initController({
+    document: documentObject,
+    window: { Image: FakeImage },
+    cues,
+    sceneKey: 'marktplatz',
+    contentRef: 'assets/kapitel1.txt',
+    getDurationSec: () => 40,
+    maxConcurrent: 1
+  });
+
+  const entries = controller.setTimelineContext({
+    sceneKey: 'marktplatz',
+    contentRef: 'assets/kapitel1.txt',
+    tracks,
+    durationSec: 40
+  });
+  assert.equal(entries.length, 1);
+  const entry = entries[0];
+  assert.ok(entry.holdDuration <= 0.25);
+
+  controller.onSeek(Math.max(0, entry.start - 0.05));
+  await flushMicrotasks(6);
+  assert.ok(controller.getDiagnostics().readyCount >= 1);
+
+  controller.onTimeUpdate(entry.start + 0.01);
+  await flushMicrotasks(2);
+  const overlayRoot = documentObject.getElementById('wordImageOverlayRoot');
+  assert.ok(overlayRoot);
+  assert.ok((overlayRoot.children || []).length >= 1);
+
+  controller.onTimeUpdate(entry.end + 0.1);
+  await flushMicrotasks(2);
+  assert.equal(controller.getDiagnostics().readyCount, 0);
+  assert.equal((overlayRoot.children || []).length, 0);
+
+  controller.destroy();
 });
 
 test('overlay passthrough guard reroutes blocked pointer events to underlying targets', () => {
